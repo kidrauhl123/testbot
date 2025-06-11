@@ -602,36 +602,52 @@ async def check_and_push_orders():
             logger.error(f"重新初始化机器人失败: {str(e)}", exc_info=True)
             return
     
-    # 测试发送消息功能
-    try:
-        if ADMIN_CHAT_IDS:
-            test_admin = ADMIN_CHAT_IDS[0]  # 获取第一个管理员ID
-            logger.info(f"尝试向管理员 {test_admin} 发送测试消息")
-            try:
-                await bot_application.bot.send_message(
-                    chat_id=test_admin,
-                    text=f"测试消息: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                )
-                logger.info(f"成功向管理员 {test_admin} 发送测试消息")
-            except Exception as e:
-                logger.error(f"发送测试消息失败: {str(e)}", exc_info=True)
-                # 如果是未初始化错误，直接返回
-                if "not initialized" in str(e).lower():
-                    logger.error("机器人未初始化，中断通知发送")
-                    return
-    except Exception as test_error:
-        logger.error(f"测试消息异常: {str(test_error)}", exc_info=True)
-        return
+    # 只在调试模式下偶尔发送测试消息（每10分钟一次）
+    current_minute = datetime.now().minute
+    if current_minute % 10 == 0 and datetime.now().second < 10:
+        try:
+            if ADMIN_CHAT_IDS:
+                test_admin = ADMIN_CHAT_IDS[0]  # 获取第一个管理员ID
+                logger.debug(f"定期检查机器人连接状态")
+                try:
+                    # 使用getMe来检查机器人状态而不是发送消息
+                    me = await bot_application.bot.get_me()
+                    logger.debug(f"机器人状态检查成功: @{me.username}")
+                except Exception as e:
+                    logger.error(f"机器人状态检查失败: {str(e)}", exc_info=True)
+                    # 如果是未初始化错误，直接返回
+                    if "not initialized" in str(e).lower():
+                        logger.error("机器人未初始化，中断通知发送")
+                        return
+        except Exception as test_error:
+            logger.error(f"检查机器人状态出错: {str(test_error)}", exc_info=True)
+            return
     
     try:
         # 获取未通知的新订单
         with constants.notified_orders_lock:
             logger.info("获取未通知订单")
-            new_orders = execute_query("""
+            
+            # 防止重复通知 - 检查当前内存中记录的已通知订单
+            recent_notified_str = ','.join(str(oid) for oid in notified_orders) if notified_orders else 'NULL'
+            
+            # 查询语句中添加对已通知订单的过滤
+            query = f"""
                 SELECT id, account, password, package, created_at, web_user_id FROM orders 
                 WHERE status = ? AND notified = 0
+                AND id NOT IN ({recent_notified_str})
                 ORDER BY id DESC
-            """, (STATUS['SUBMITTED'],), fetch=True)
+            """
+            
+            # 如果没有已通知订单，使用简化查询
+            if not notified_orders:
+                query = """
+                    SELECT id, account, password, package, created_at, web_user_id FROM orders 
+                    WHERE status = ? AND notified = 0
+                    ORDER BY id DESC
+                """
+            
+            new_orders = execute_query(query, (STATUS['SUBMITTED'],), fetch=True)
             
             if not new_orders:
                 logger.debug("没有新订单需要通知")
@@ -641,6 +657,10 @@ async def check_and_push_orders():
             
             # 暂时保存订单ID，仅当成功发送后才更新为已通知
             order_ids = [order[0] for order in new_orders]
+            
+            # 立即将这些订单ID添加到内存中的已通知集合，防止并发请求时的重复通知
+            for oid in order_ids:
+                notified_orders.add(oid)
         
         # 推送通知给所有管理员
         if not ADMIN_CHAT_IDS:
@@ -692,7 +712,14 @@ async def check_and_push_orders():
             with constants.notified_orders_lock:
                 for oid in notified_success:
                     logger.info(f"更新订单 #{oid} 为已通知状态")
-                    execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
+                    # 检查是否已经更新过，避免重复更新
+                    check_result = execute_query("SELECT notified FROM orders WHERE id = ?", (oid,), fetch=True)
+                    if check_result and check_result[0][0] == 0:
+                        execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
+                        logger.debug(f"订单 #{oid} 在数据库中标记为已通知")
+                    else:
+                        logger.debug(f"订单 #{oid} 已经被标记为通知，跳过更新")
+                    # 无论如何都在内存中标记为已通知
                     notified_orders.add(oid)
                 logger.info(f"成功更新 {len(notified_success)} 个订单为已通知状态")
     except Exception as e:
@@ -760,15 +787,22 @@ async def run_bot():
             async def order_check_job():
                 """定期检查新订单的任务"""
                 check_count = 0
+                last_full_check_time = 0  # 上次完整检查的时间
                 while True:
                     check_count += 1
-                    try:
-                        await check_and_push_orders()
-                    except Exception as e:
-                        logger.error(f"订单检查任务出错: {str(e)}", exc_info=True)
+                    current_time = time.time()
                     
-                    # 每隔15次检查，检查机器人是否仍在运行
-                    if check_count % 15 == 0:
+                    # 控制检查频率
+                    if current_time - last_full_check_time >= 15:  # 每15秒完整检查一次
+                        try:
+                            logger.debug("执行订单完整检查")
+                            await check_and_push_orders()
+                            last_full_check_time = current_time
+                        except Exception as e:
+                            logger.error(f"订单检查任务出错: {str(e)}", exc_info=True)
+                    
+                    # 每隔30次检查，检查机器人是否仍在运行 (约5分钟一次)
+                    if check_count % 30 == 0:
                         try:
                             # 简单测试机器人是否仍然响应
                             if bot_application and hasattr(bot_application, 'bot'):
@@ -779,7 +813,7 @@ async def run_bot():
                             # 如果检查失败，中断内部循环，让外部循环重启机器人
                             return
                     
-                    await asyncio.sleep(10)  # 每10秒检查一次
+                    await asyncio.sleep(10)  # 每10秒循环一次，但不一定每次都检查
             
             # 启动任务并保存引用，以便后续可以取消
             order_check_task = asyncio.create_task(order_check_job())
