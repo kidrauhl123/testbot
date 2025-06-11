@@ -19607,3 +19607,1103 @@ telegram.error.Conflict: Conflict: terminated by other getUpdates request; make 
 2025-06-11 20:12:44,708 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
 2025-06-11 20:12:44,709 - httpcore.http11 - DEBUG - send_request_body.complete
 2025-06-11 20:12:44,709 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 20:12:55,002 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 12:12:54 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 20:12:55,003 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getUpdates "HTTP/1.1 200 OK"
+2025-06-11 20:12:55,003 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 20:12:55,003 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 20:12:55,003 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 20:12:55,004 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 20:12:55,004 - telegram.ext.ExtBot - DEBUG - Call to Bot API endpoint `getUpdates` finished with return value `[]`
+2025-06-11 20:12:55,004 - telegram.ext.ExtBot - DEBUG - No new updates found.
+2025-06-11 20:12:55,004 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `getUpdates` with parameters `{'timeout': 10, 'offset': 0}`
+2025-06-11 20:12:55,005 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 20:12:55,005 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:12:55,005 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 20:12:55,006 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:12:55,006 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 20:13:02,012 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 409, b'Conflict', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 12:13:01 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'143'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 20:13:02,013 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getUpdates "HTTP/1.1 409 Conflict"
+2025-06-11 20:13:02,013 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 20:13:02,014 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 20:13:02,015 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 20:13:02,015 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 20:13:02,016 - telegram.ext.Updater - ERROR - Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 115, in network_retry_loop
+    if not await do_action():
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 108, in do_action
+    return action_cb_task.result()
+           ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_updater.py", line 335, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 669, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 4601, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 697, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 369, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 726, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 197, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 355, in _request_wrapper
+    raise Conflict(message)
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-06-11 20:13:02,023 - telegram.ext - DEBUG - Network Retry Loop (Polling Updates): Failed run number 1 of -1. Retrying.
+2025-06-11 20:13:03,037 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `getUpdates` with parameters `{'timeout': 10, 'offset': 0}`
+2025-06-11 20:13:03,038 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 20:13:03,038 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:13:03,039 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 20:13:03,039 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:13:03,039 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 20:13:04,080 - modules.telegram_bot - DEBUG - 执行订单完整检查
+2025-06-11 20:13:04,081 - modules.telegram_bot - INFO - 开始检查新订单...
+2025-06-11 20:13:04,081 - modules.telegram_bot - INFO - 当前管理员列表: [123456789, 1878943383]
+2025-06-11 20:13:04,082 - modules.telegram_bot - DEBUG - 订单检查锁状态: False
+2025-06-11 20:13:04,082 - modules.telegram_bot - DEBUG - 已通知订单集合: set()
+2025-06-11 20:13:04,082 - modules.telegram_bot - DEBUG - 机器人实例状态: True
+2025-06-11 20:13:04,082 - modules.telegram_bot - INFO - 获取未通知订单
+2025-06-11 20:13:04,082 - modules.database - DEBUG - 执行查询: 
+                    SELECT id, account, password,... 参数: ('submitted',)
+2025-06-11 20:13:04,083 - modules.database - DEBUG - 查询返回 0 条结果
+2025-06-11 20:13:04,083 - modules.telegram_bot - DEBUG - 没有新订单需要通知
+2025-06-11 20:13:13,336 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 12:13:13 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 20:13:13,337 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getUpdates "HTTP/1.1 200 OK"
+2025-06-11 20:13:13,337 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 20:13:13,338 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 20:13:13,338 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 20:13:13,338 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 20:13:13,338 - telegram.ext.ExtBot - DEBUG - Call to Bot API endpoint `getUpdates` finished with return value `[]`
+2025-06-11 20:13:13,338 - telegram.ext.ExtBot - DEBUG - No new updates found.
+2025-06-11 20:13:13,338 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `getUpdates` with parameters `{'timeout': 10, 'offset': 0}`
+2025-06-11 20:13:13,339 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 20:13:13,339 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:13:13,340 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 20:13:13,340 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:13:13,340 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 20:13:23,640 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 12:13:23 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 20:13:23,641 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getUpdates "HTTP/1.1 200 OK"
+2025-06-11 20:13:23,641 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 20:13:23,642 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 20:13:23,642 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 20:13:23,642 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 20:13:23,642 - telegram.ext.ExtBot - DEBUG - Call to Bot API endpoint `getUpdates` finished with return value `[]`
+2025-06-11 20:13:23,642 - telegram.ext.ExtBot - DEBUG - No new updates found.
+2025-06-11 20:13:23,642 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `getUpdates` with parameters `{'timeout': 10, 'offset': 0}`
+2025-06-11 20:13:23,643 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 20:13:23,643 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:13:23,643 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 20:13:23,643 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:13:23,643 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 20:13:24,085 - modules.telegram_bot - DEBUG - 执行订单完整检查
+2025-06-11 20:13:24,086 - modules.telegram_bot - INFO - 开始检查新订单...
+2025-06-11 20:13:24,086 - modules.telegram_bot - INFO - 当前管理员列表: [123456789, 1878943383]
+2025-06-11 20:13:24,086 - modules.telegram_bot - DEBUG - 订单检查锁状态: False
+2025-06-11 20:13:24,086 - modules.telegram_bot - DEBUG - 已通知订单集合: set()
+2025-06-11 20:13:24,086 - modules.telegram_bot - DEBUG - 机器人实例状态: True
+2025-06-11 20:13:24,087 - modules.telegram_bot - INFO - 获取未通知订单
+2025-06-11 20:13:24,087 - modules.database - DEBUG - 执行查询: 
+                    SELECT id, account, password,... 参数: ('submitted',)
+2025-06-11 20:13:24,087 - modules.database - DEBUG - 查询返回 0 条结果
+2025-06-11 20:13:24,088 - modules.telegram_bot - DEBUG - 没有新订单需要通知
+2025-06-11 20:13:25,871 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 409, b'Conflict', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 12:13:25 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'143'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 20:13:25,872 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getUpdates "HTTP/1.1 409 Conflict"
+2025-06-11 20:13:25,872 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 20:13:25,873 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 20:13:25,873 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 20:13:25,873 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 20:13:25,873 - telegram.ext.Updater - ERROR - Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 115, in network_retry_loop
+    if not await do_action():
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 108, in do_action
+    return action_cb_task.result()
+           ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_updater.py", line 335, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 669, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 4601, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 697, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 369, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 726, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 197, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 355, in _request_wrapper
+    raise Conflict(message)
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-06-11 20:13:25,876 - telegram.ext - DEBUG - Network Retry Loop (Polling Updates): Failed run number 4 of -1. Retrying.
+2025-06-11 20:13:26,882 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `getUpdates` with parameters `{'timeout': 10, 'offset': 0}`
+2025-06-11 20:13:26,885 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 20:13:26,886 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:13:26,886 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 20:13:26,887 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:13:26,887 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 20:13:36,838 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 409, b'Conflict', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 12:13:36 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'143'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 20:13:36,839 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getUpdates "HTTP/1.1 409 Conflict"
+2025-06-11 20:13:36,839 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 20:13:36,839 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 20:13:36,840 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 20:13:36,840 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 20:13:36,840 - telegram.ext.Updater - ERROR - Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 115, in network_retry_loop
+    if not await do_action():
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 108, in do_action
+    return action_cb_task.result()
+           ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_updater.py", line 335, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 669, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 4601, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 697, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 369, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 726, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 197, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 355, in _request_wrapper
+    raise Conflict(message)
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-06-11 20:13:36,843 - telegram.ext - DEBUG - Network Retry Loop (Polling Updates): Failed run number 5 of -1. Retrying.
+2025-06-11 20:13:38,357 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `getUpdates` with parameters `{'timeout': 10, 'offset': 0}`
+2025-06-11 20:13:38,357 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 20:13:38,358 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:13:38,358 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 20:13:38,358 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:13:38,358 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 20:13:44,071 - modules.telegram_bot - DEBUG - Telegram机器人仍在运行中
+2025-06-11 20:13:44,102 - modules.telegram_bot - DEBUG - 执行订单完整检查
+2025-06-11 20:13:44,102 - modules.telegram_bot - INFO - 开始检查新订单...
+2025-06-11 20:13:44,102 - modules.telegram_bot - INFO - 当前管理员列表: [123456789, 1878943383]
+2025-06-11 20:13:44,102 - modules.telegram_bot - DEBUG - 订单检查锁状态: False
+2025-06-11 20:13:44,103 - modules.telegram_bot - DEBUG - 已通知订单集合: set()
+2025-06-11 20:13:44,103 - modules.telegram_bot - DEBUG - 机器人实例状态: True
+2025-06-11 20:13:44,103 - modules.telegram_bot - INFO - 获取未通知订单
+2025-06-11 20:13:44,103 - modules.database - DEBUG - 执行查询: 
+                    SELECT id, account, password,... 参数: ('submitted',)
+2025-06-11 20:13:44,104 - modules.database - DEBUG - 查询返回 0 条结果
+2025-06-11 20:13:44,104 - modules.telegram_bot - DEBUG - 没有新订单需要通知
+2025-06-11 20:13:45,539 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 409, b'Conflict', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 12:13:45 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'143'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 20:13:45,540 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getUpdates "HTTP/1.1 409 Conflict"
+2025-06-11 20:13:45,540 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 20:13:45,540 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 20:13:45,540 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 20:13:45,541 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 20:13:45,541 - telegram.ext.Updater - ERROR - Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 115, in network_retry_loop
+    if not await do_action():
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 108, in do_action
+    return action_cb_task.result()
+           ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_updater.py", line 335, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 669, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 4601, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 697, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 369, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 726, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 197, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 355, in _request_wrapper
+    raise Conflict(message)
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-06-11 20:13:45,543 - telegram.ext - DEBUG - Network Retry Loop (Polling Updates): Failed run number 6 of -1. Retrying.
+2025-06-11 20:13:47,800 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `getUpdates` with parameters `{'timeout': 10, 'offset': 0}`
+2025-06-11 20:13:47,802 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 20:13:47,803 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:13:47,803 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 20:13:47,804 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:13:47,804 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 20:13:50,088 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 409, b'Conflict', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 12:13:49 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'143'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 20:13:50,089 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getUpdates "HTTP/1.1 409 Conflict"
+2025-06-11 20:13:50,090 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 20:13:50,091 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 20:13:50,091 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 20:13:50,092 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 20:13:50,092 - telegram.ext.Updater - ERROR - Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 115, in network_retry_loop
+    if not await do_action():
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 108, in do_action
+    return action_cb_task.result()
+           ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_updater.py", line 335, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 669, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 4601, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 697, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 369, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 726, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 197, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 355, in _request_wrapper
+    raise Conflict(message)
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-06-11 20:13:50,097 - telegram.ext - DEBUG - Network Retry Loop (Polling Updates): Failed run number 7 of -1. Retrying.
+2025-06-11 20:13:53,482 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `getUpdates` with parameters `{'timeout': 10, 'offset': 0}`
+2025-06-11 20:13:53,485 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 20:13:53,486 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:13:53,487 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 20:13:53,488 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:13:53,489 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 20:13:58,451 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 409, b'Conflict', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 12:13:58 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'143'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 20:13:58,453 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getUpdates "HTTP/1.1 409 Conflict"
+2025-06-11 20:13:58,454 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 20:13:58,455 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 20:13:58,456 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 20:13:58,456 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 20:13:58,457 - telegram.ext.Updater - ERROR - Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 115, in network_retry_loop
+    if not await do_action():
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 108, in do_action
+    return action_cb_task.result()
+           ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_updater.py", line 335, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 669, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 4601, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 697, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 369, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 726, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 197, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 355, in _request_wrapper
+    raise Conflict(message)
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-06-11 20:13:58,464 - telegram.ext - DEBUG - Network Retry Loop (Polling Updates): Failed run number 8 of -1. Retrying.
+2025-06-11 20:14:03,539 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `getUpdates` with parameters `{'timeout': 10, 'offset': 0}`
+2025-06-11 20:14:03,540 - httpcore.connection - DEBUG - connect_tcp.started host='127.0.0.1' port=7890 local_address=None timeout=5.0 socket_options=None
+2025-06-11 20:14:03,541 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001C32A0FD220>
+2025-06-11 20:14:03,541 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'CONNECT']>
+2025-06-11 20:14:03,541 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:14:03,541 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'CONNECT']>
+2025-06-11 20:14:03,541 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:14:03,542 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'CONNECT']>
+2025-06-11 20:14:03,542 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'Connection established', [])
+2025-06-11 20:14:03,542 - httpcore.proxy - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x000001C328F107A0> server_hostname='api.telegram.org' timeout=5.0
+2025-06-11 20:14:04,075 - httpcore.proxy - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001C328F517F0>
+2025-06-11 20:14:04,075 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 20:14:04,076 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:14:04,076 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 20:14:04,076 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:14:04,076 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 20:14:04,118 - modules.telegram_bot - DEBUG - 执行订单完整检查
+2025-06-11 20:14:04,118 - modules.telegram_bot - INFO - 开始检查新订单...
+2025-06-11 20:14:04,119 - modules.telegram_bot - INFO - 当前管理员列表: [123456789, 1878943383]
+2025-06-11 20:14:04,119 - modules.telegram_bot - DEBUG - 订单检查锁状态: False
+2025-06-11 20:14:04,119 - modules.telegram_bot - DEBUG - 已通知订单集合: set()
+2025-06-11 20:14:04,119 - modules.telegram_bot - DEBUG - 机器人实例状态: True
+2025-06-11 20:14:04,119 - modules.telegram_bot - INFO - 获取未通知订单
+2025-06-11 20:14:04,119 - modules.database - DEBUG - 执行查询: 
+                    SELECT id, account, password,... 参数: ('submitted',)
+2025-06-11 20:14:04,120 - modules.database - DEBUG - 查询返回 0 条结果
+2025-06-11 20:14:04,120 - modules.telegram_bot - DEBUG - 没有新订单需要通知
+2025-06-11 20:14:07,780 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 409, b'Conflict', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 12:14:07 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'143'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 20:14:07,781 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getUpdates "HTTP/1.1 409 Conflict"
+2025-06-11 20:14:07,781 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 20:14:07,781 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 20:14:07,781 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 20:14:07,781 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 20:14:07,782 - telegram.ext.Updater - ERROR - Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 115, in network_retry_loop
+    if not await do_action():
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 108, in do_action
+    return action_cb_task.result()
+           ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_updater.py", line 335, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 669, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 4601, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 697, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 369, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 726, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 197, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 355, in _request_wrapper
+    raise Conflict(message)
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-06-11 20:14:07,784 - telegram.ext - DEBUG - Network Retry Loop (Polling Updates): Failed run number 9 of -1. Retrying.
+2025-06-11 20:14:15,381 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `getUpdates` with parameters `{'timeout': 10, 'offset': 0}`
+2025-06-11 20:14:15,382 - httpcore.connection - DEBUG - connect_tcp.started host='127.0.0.1' port=7890 local_address=None timeout=5.0 socket_options=None
+2025-06-11 20:14:15,383 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001C32A0F5BF0>
+2025-06-11 20:14:15,383 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'CONNECT']>
+2025-06-11 20:14:15,383 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:14:15,383 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'CONNECT']>
+2025-06-11 20:14:15,384 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:14:15,384 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'CONNECT']>
+2025-06-11 20:14:15,384 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'Connection established', [])
+2025-06-11 20:14:15,384 - httpcore.proxy - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x000001C328F107A0> server_hostname='api.telegram.org' timeout=5.0
+2025-06-11 20:14:16,245 - httpcore.proxy - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001C32A0F59D0>
+2025-06-11 20:14:16,246 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 20:14:16,247 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:14:16,247 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 20:14:16,248 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:14:16,248 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 20:14:19,987 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 409, b'Conflict', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 12:14:19 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'143'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 20:14:19,988 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getUpdates "HTTP/1.1 409 Conflict"
+2025-06-11 20:14:19,988 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 20:14:19,988 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 20:14:19,988 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 20:14:19,989 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 20:14:19,989 - telegram.ext.Updater - ERROR - Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 115, in network_retry_loop
+    if not await do_action():
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 108, in do_action
+    return action_cb_task.result()
+           ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_updater.py", line 335, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 669, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 4601, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 697, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 369, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 726, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 197, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 355, in _request_wrapper
+    raise Conflict(message)
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-06-11 20:14:19,992 - telegram.ext - DEBUG - Network Retry Loop (Polling Updates): Failed run number 10 of -1. Retrying.
+2025-06-11 20:14:24,135 - modules.telegram_bot - DEBUG - 执行订单完整检查
+2025-06-11 20:14:24,135 - modules.telegram_bot - INFO - 开始检查新订单...
+2025-06-11 20:14:24,135 - modules.telegram_bot - INFO - 当前管理员列表: [123456789, 1878943383]
+2025-06-11 20:14:24,136 - modules.telegram_bot - DEBUG - 订单检查锁状态: False
+2025-06-11 20:14:24,136 - modules.telegram_bot - DEBUG - 已通知订单集合: set()
+2025-06-11 20:14:24,136 - modules.telegram_bot - DEBUG - 机器人实例状态: True
+2025-06-11 20:14:24,136 - modules.telegram_bot - INFO - 获取未通知订单
+2025-06-11 20:14:24,136 - modules.database - DEBUG - 执行查询: 
+                    SELECT id, account, password,... 参数: ('submitted',)
+2025-06-11 20:14:24,136 - modules.database - DEBUG - 查询返回 0 条结果
+2025-06-11 20:14:24,137 - modules.telegram_bot - DEBUG - 没有新订单需要通知
+2025-06-11 20:14:31,387 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `getUpdates` with parameters `{'timeout': 10, 'offset': 0}`
+2025-06-11 20:14:31,389 - httpcore.connection - DEBUG - connect_tcp.started host='127.0.0.1' port=7890 local_address=None timeout=5.0 socket_options=None
+2025-06-11 20:14:31,390 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001C32A0FB650>
+2025-06-11 20:14:31,390 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'CONNECT']>
+2025-06-11 20:14:31,391 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:14:31,391 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'CONNECT']>
+2025-06-11 20:14:31,391 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:14:31,392 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'CONNECT']>
+2025-06-11 20:14:31,392 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'Connection established', [])
+2025-06-11 20:14:31,392 - httpcore.proxy - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x000001C328F107A0> server_hostname='api.telegram.org' timeout=5.0
+2025-06-11 20:14:32,013 - httpcore.proxy - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001C32A0FBC50>
+2025-06-11 20:14:32,014 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 20:14:32,014 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:14:32,015 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 20:14:32,015 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:14:32,015 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 20:14:38,269 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 409, b'Conflict', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 12:14:38 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'143'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 20:14:38,271 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getUpdates "HTTP/1.1 409 Conflict"
+2025-06-11 20:14:38,272 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 20:14:38,272 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 20:14:38,273 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 20:14:38,273 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 20:14:38,273 - telegram.ext.Updater - ERROR - Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 115, in network_retry_loop
+    if not await do_action():
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 108, in do_action
+    return action_cb_task.result()
+           ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_updater.py", line 335, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 669, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 4601, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 697, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 369, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 726, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 197, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 355, in _request_wrapper
+    raise Conflict(message)
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-06-11 20:14:38,277 - telegram.ext - DEBUG - Network Retry Loop (Polling Updates): Failed run number 11 of -1. Retrying.
+2025-06-11 20:14:44,085 - modules.telegram_bot - DEBUG - Telegram机器人仍在运行中
+2025-06-11 20:14:44,147 - modules.telegram_bot - DEBUG - 执行订单完整检查
+2025-06-11 20:14:44,147 - modules.telegram_bot - INFO - 开始检查新订单...
+2025-06-11 20:14:44,147 - modules.telegram_bot - INFO - 当前管理员列表: [123456789, 1878943383]
+2025-06-11 20:14:44,147 - modules.telegram_bot - DEBUG - 订单检查锁状态: False
+2025-06-11 20:14:44,147 - modules.telegram_bot - DEBUG - 已通知订单集合: set()
+2025-06-11 20:14:44,148 - modules.telegram_bot - DEBUG - 机器人实例状态: True
+2025-06-11 20:14:44,148 - modules.telegram_bot - INFO - 获取未通知订单
+2025-06-11 20:14:44,148 - modules.database - DEBUG - 执行查询: 
+                    SELECT id, account, password,... 参数: ('submitted',)
+2025-06-11 20:14:44,148 - modules.database - DEBUG - 查询返回 0 条结果
+2025-06-11 20:14:44,148 - modules.telegram_bot - DEBUG - 没有新订单需要通知
+2025-06-11 20:14:55,378 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `getUpdates` with parameters `{'timeout': 10, 'offset': 0}`
+2025-06-11 20:14:55,380 - httpcore.connection - DEBUG - connect_tcp.started host='127.0.0.1' port=7890 local_address=None timeout=5.0 socket_options=None
+2025-06-11 20:14:55,381 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001C329F6F7A0>
+2025-06-11 20:14:55,382 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'CONNECT']>
+2025-06-11 20:14:55,383 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:14:55,383 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'CONNECT']>
+2025-06-11 20:14:55,384 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:14:55,384 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'CONNECT']>
+2025-06-11 20:14:55,385 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'Connection established', [])
+2025-06-11 20:14:55,385 - httpcore.proxy - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x000001C328F107A0> server_hostname='api.telegram.org' timeout=5.0
+2025-06-11 20:14:55,986 - httpcore.proxy - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001C32A10C140>
+2025-06-11 20:14:55,986 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 20:14:55,987 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:14:55,988 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 20:14:55,988 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:14:55,989 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 20:15:00,438 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 409, b'Conflict', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 12:15:00 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'143'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 20:15:00,440 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getUpdates "HTTP/1.1 409 Conflict"
+2025-06-11 20:15:00,440 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 20:15:00,441 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 20:15:00,442 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 20:15:00,442 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 20:15:00,443 - telegram.ext.Updater - ERROR - Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 115, in network_retry_loop
+    if not await do_action():
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 108, in do_action
+    return action_cb_task.result()
+           ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_updater.py", line 335, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 669, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 4601, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 697, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 369, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 726, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 197, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 355, in _request_wrapper
+    raise Conflict(message)
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-06-11 20:15:00,447 - telegram.ext - DEBUG - Network Retry Loop (Polling Updates): Failed run number 12 of -1. Retrying.
+2025-06-11 20:15:04,160 - modules.telegram_bot - DEBUG - 执行订单完整检查
+2025-06-11 20:15:04,160 - modules.telegram_bot - INFO - 开始检查新订单...
+2025-06-11 20:15:04,161 - modules.telegram_bot - INFO - 当前管理员列表: [123456789, 1878943383]
+2025-06-11 20:15:04,161 - modules.telegram_bot - DEBUG - 订单检查锁状态: False
+2025-06-11 20:15:04,161 - modules.telegram_bot - DEBUG - 已通知订单集合: set()
+2025-06-11 20:15:04,161 - modules.telegram_bot - DEBUG - 机器人实例状态: True
+2025-06-11 20:15:04,161 - modules.telegram_bot - INFO - 获取未通知订单
+2025-06-11 20:15:04,162 - modules.database - DEBUG - 执行查询: 
+                    SELECT id, account, password,... 参数: ('submitted',)
+2025-06-11 20:15:04,162 - modules.database - DEBUG - 查询返回 0 条结果
+2025-06-11 20:15:04,162 - modules.telegram_bot - DEBUG - 没有新订单需要通知
+2025-06-11 20:15:24,181 - modules.telegram_bot - DEBUG - 执行订单完整检查
+2025-06-11 20:15:24,181 - modules.telegram_bot - INFO - 开始检查新订单...
+2025-06-11 20:15:24,182 - modules.telegram_bot - INFO - 当前管理员列表: [123456789, 1878943383]
+2025-06-11 20:15:24,182 - modules.telegram_bot - DEBUG - 订单检查锁状态: False
+2025-06-11 20:15:24,182 - modules.telegram_bot - DEBUG - 已通知订单集合: set()
+2025-06-11 20:15:24,183 - modules.telegram_bot - DEBUG - 机器人实例状态: True
+2025-06-11 20:15:24,183 - modules.telegram_bot - INFO - 获取未通知订单
+2025-06-11 20:15:24,183 - modules.database - DEBUG - 执行查询: 
+                    SELECT id, account, password,... 参数: ('submitted',)
+2025-06-11 20:15:24,183 - modules.database - DEBUG - 查询返回 0 条结果
+2025-06-11 20:15:24,184 - modules.telegram_bot - DEBUG - 没有新订单需要通知
+2025-06-11 20:15:26,088 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `getUpdates` with parameters `{'timeout': 10, 'offset': 0}`
+2025-06-11 20:15:26,089 - httpcore.connection - DEBUG - connect_tcp.started host='127.0.0.1' port=7890 local_address=None timeout=5.0 socket_options=None
+2025-06-11 20:15:26,090 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001C32A128830>
+2025-06-11 20:15:26,091 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'CONNECT']>
+2025-06-11 20:15:26,091 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:15:26,091 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'CONNECT']>
+2025-06-11 20:15:26,091 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:15:26,091 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'CONNECT']>
+2025-06-11 20:15:26,092 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'Connection established', [])
+2025-06-11 20:15:26,092 - httpcore.proxy - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x000001C328F107A0> server_hostname='api.telegram.org' timeout=5.0
+2025-06-11 20:15:26,667 - httpcore.proxy - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001C32A128F30>
+2025-06-11 20:15:26,667 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 20:15:26,668 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:15:26,668 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 20:15:26,668 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:15:26,668 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 20:15:31,831 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 409, b'Conflict', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 12:15:31 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'143'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 20:15:31,833 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getUpdates "HTTP/1.1 409 Conflict"
+2025-06-11 20:15:31,834 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 20:15:31,835 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 20:15:31,836 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 20:15:31,836 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 20:15:31,837 - telegram.ext.Updater - ERROR - Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 115, in network_retry_loop
+    if not await do_action():
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 108, in do_action
+    return action_cb_task.result()
+           ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_updater.py", line 335, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 669, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 4601, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 697, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 369, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 726, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 197, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 355, in _request_wrapper
+    raise Conflict(message)
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-06-11 20:15:31,841 - telegram.ext - DEBUG - Network Retry Loop (Polling Updates): Failed run number 13 of -1. Retrying.
+2025-06-11 20:15:44,101 - modules.telegram_bot - DEBUG - Telegram机器人仍在运行中
+2025-06-11 20:15:44,194 - modules.telegram_bot - DEBUG - 执行订单完整检查
+2025-06-11 20:15:44,195 - modules.telegram_bot - INFO - 开始检查新订单...
+2025-06-11 20:15:44,196 - modules.telegram_bot - INFO - 当前管理员列表: [123456789, 1878943383]
+2025-06-11 20:15:44,196 - modules.telegram_bot - DEBUG - 订单检查锁状态: False
+2025-06-11 20:15:44,197 - modules.telegram_bot - DEBUG - 已通知订单集合: set()
+2025-06-11 20:15:44,197 - modules.telegram_bot - DEBUG - 机器人实例状态: True
+2025-06-11 20:15:44,197 - modules.telegram_bot - INFO - 获取未通知订单
+2025-06-11 20:15:44,198 - modules.database - DEBUG - 执行查询: 
+                    SELECT id, account, password,... 参数: ('submitted',)
+2025-06-11 20:15:44,199 - modules.database - DEBUG - 查询返回 0 条结果
+2025-06-11 20:15:44,199 - modules.telegram_bot - DEBUG - 没有新订单需要通知
+2025-06-11 20:16:01,845 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `getUpdates` with parameters `{'timeout': 10, 'offset': 0}`
+2025-06-11 20:16:01,847 - httpcore.connection - DEBUG - connect_tcp.started host='127.0.0.1' port=7890 local_address=None timeout=5.0 socket_options=None
+2025-06-11 20:16:01,849 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001C328F28050>
+2025-06-11 20:16:01,850 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'CONNECT']>
+2025-06-11 20:16:01,850 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:16:01,851 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'CONNECT']>
+2025-06-11 20:16:01,851 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:16:01,852 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'CONNECT']>
+2025-06-11 20:16:01,852 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'Connection established', [])
+2025-06-11 20:16:01,853 - httpcore.proxy - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x000001C328F107A0> server_hostname='api.telegram.org' timeout=5.0
+2025-06-11 20:16:02,409 - httpcore.proxy - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001C32A108DD0>
+2025-06-11 20:16:02,409 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 20:16:02,410 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:16:02,410 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 20:16:02,411 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:16:02,411 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 20:16:02,955 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 409, b'Conflict', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 12:16:02 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'143'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 20:16:02,957 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getUpdates "HTTP/1.1 409 Conflict"
+2025-06-11 20:16:02,958 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 20:16:02,959 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 20:16:02,959 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 20:16:02,960 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 20:16:02,960 - telegram.ext.Updater - ERROR - Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 115, in network_retry_loop
+    if not await do_action():
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 108, in do_action
+    return action_cb_task.result()
+           ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_updater.py", line 335, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 669, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 4601, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 697, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 369, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 726, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 197, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 355, in _request_wrapper
+    raise Conflict(message)
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-06-11 20:16:02,966 - telegram.ext - DEBUG - Network Retry Loop (Polling Updates): Failed run number 14 of -1. Retrying.
+2025-06-11 20:16:04,216 - modules.telegram_bot - DEBUG - 执行订单完整检查
+2025-06-11 20:16:04,217 - modules.telegram_bot - INFO - 开始检查新订单...
+2025-06-11 20:16:04,217 - modules.telegram_bot - INFO - 当前管理员列表: [123456789, 1878943383]
+2025-06-11 20:16:04,218 - modules.telegram_bot - DEBUG - 订单检查锁状态: False
+2025-06-11 20:16:04,219 - modules.telegram_bot - DEBUG - 已通知订单集合: set()
+2025-06-11 20:16:04,219 - modules.telegram_bot - DEBUG - 机器人实例状态: True
+2025-06-11 20:16:04,220 - modules.telegram_bot - INFO - 获取未通知订单
+2025-06-11 20:16:04,221 - modules.database - DEBUG - 执行查询: 
+                    SELECT id, account, password,... 参数: ('submitted',)
+2025-06-11 20:16:04,222 - modules.database - DEBUG - 查询返回 0 条结果
+2025-06-11 20:16:04,223 - modules.telegram_bot - DEBUG - 没有新订单需要通知
+2025-06-11 20:16:24,236 - modules.telegram_bot - DEBUG - 执行订单完整检查
+2025-06-11 20:16:24,237 - modules.telegram_bot - INFO - 开始检查新订单...
+2025-06-11 20:16:24,238 - modules.telegram_bot - INFO - 当前管理员列表: [123456789, 1878943383]
+2025-06-11 20:16:24,239 - modules.telegram_bot - DEBUG - 订单检查锁状态: False
+2025-06-11 20:16:24,240 - modules.telegram_bot - DEBUG - 已通知订单集合: set()
+2025-06-11 20:16:24,240 - modules.telegram_bot - DEBUG - 机器人实例状态: True
+2025-06-11 20:16:24,241 - modules.telegram_bot - INFO - 获取未通知订单
+2025-06-11 20:16:24,241 - modules.database - DEBUG - 执行查询: 
+                    SELECT id, account, password,... 参数: ('submitted',)
+2025-06-11 20:16:24,243 - modules.database - DEBUG - 查询返回 0 条结果
+2025-06-11 20:16:24,243 - modules.telegram_bot - DEBUG - 没有新订单需要通知
+2025-06-11 20:16:32,976 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `getUpdates` with parameters `{'timeout': 10, 'offset': 0}`
+2025-06-11 20:16:32,977 - httpcore.connection - DEBUG - connect_tcp.started host='127.0.0.1' port=7890 local_address=None timeout=5.0 socket_options=None
+2025-06-11 20:16:32,978 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001C328D6FA10>
+2025-06-11 20:16:32,978 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'CONNECT']>
+2025-06-11 20:16:32,978 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:16:32,978 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'CONNECT']>
+2025-06-11 20:16:32,978 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:16:32,979 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'CONNECT']>
+2025-06-11 20:16:32,979 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'Connection established', [])
+2025-06-11 20:16:32,979 - httpcore.proxy - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x000001C328F107A0> server_hostname='api.telegram.org' timeout=5.0
+2025-06-11 20:16:33,538 - httpcore.proxy - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001C32A1017B0>
+2025-06-11 20:16:33,539 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 20:16:33,539 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 20:16:33,539 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 20:16:33,540 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 20:16:33,540 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 20:16:38,504 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 409, b'Conflict', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 12:16:38 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'143'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 20:16:38,505 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getUpdates "HTTP/1.1 409 Conflict"
+2025-06-11 20:16:38,505 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 20:16:38,505 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 20:16:38,505 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 20:16:38,506 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 20:16:38,506 - telegram.ext.Updater - ERROR - Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 115, in network_retry_loop
+    if not await do_action():
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 108, in do_action
+    return action_cb_task.result()
+           ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_updater.py", line 335, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 669, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 4601, in get_updates
+    await self._post(
+    ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    ),
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 697, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 369, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 726, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 197, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 355, in _request_wrapper
+    raise Conflict(message)
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2025-06-11 20:16:38,508 - telegram.ext - DEBUG - Network Retry Loop (Polling Updates): Failed run number 15 of -1. Retrying.
+2025-06-11 20:16:44,103 - modules.telegram_bot - DEBUG - Telegram机器人仍在运行中
+2025-06-11 20:16:44,252 - modules.telegram_bot - DEBUG - 执行订单完整检查
+2025-06-11 20:16:44,253 - modules.telegram_bot - INFO - 开始检查新订单...
+2025-06-11 20:16:44,253 - modules.telegram_bot - INFO - 当前管理员列表: [123456789, 1878943383]
+2025-06-11 20:16:44,253 - modules.telegram_bot - DEBUG - 订单检查锁状态: False
+2025-06-11 20:16:44,253 - modules.telegram_bot - DEBUG - 已通知订单集合: set()
+2025-06-11 20:16:44,253 - modules.telegram_bot - DEBUG - 机器人实例状态: True
+2025-06-11 20:16:44,253 - modules.telegram_bot - INFO - 获取未通知订单
+2025-06-11 20:16:44,254 - modules.database - DEBUG - 执行查询: 
+                    SELECT id, account, password,... 参数: ('submitted',)
+2025-06-11 20:16:44,254 - modules.database - DEBUG - 查询返回 0 条结果
+2025-06-11 20:16:44,254 - modules.telegram_bot - DEBUG - 没有新订单需要通知
