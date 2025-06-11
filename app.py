@@ -688,7 +688,109 @@ def manual_backup():
 
 # ===== Bot 命令处理函数 =====
 async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🤖 Welcome! Use /stats to see reports.")
+    """处理 /start 命令"""
+    user_id = update.effective_user.id
+    username = update.effective_user.username or "No_Username"
+    first_name = update.effective_user.first_name or "Unknown"
+    
+    # 检查是否为卖家
+    if is_telegram_admin(user_id):
+        await update.message.reply_text(
+            f"👋 欢迎回来，{first_name}！\n\n"
+            "您可以使用以下命令：\n"
+            "/stats - 查看统计数据\n"
+            "/seller - 管理卖家"
+        )
+    else:
+        await update.message.reply_text(
+            "❌ 您不是授权卖家。\n"
+            "请联系管理员获取访问权限。"
+        )
+
+async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理卖家管理命令"""
+    user_id = update.effective_user.id
+    
+    # 检查是否为卖家
+    if not is_telegram_admin(user_id):
+        await update.message.reply_text("❌ 您没有权限使用此命令。")
+        return
+    
+    args = context.args
+    if not args:
+        # 显示卖家列表
+        admins = execute_query("""
+            SELECT telegram_id, username, first_name, is_active 
+            FROM telegram_admins 
+            ORDER BY added_at DESC
+        """, fetch=True)
+        
+        if not admins:
+            await update.message.reply_text("📋 暂无卖家记录。")
+            return
+        
+        text = "📋 **当前卖家列表：**\n\n"
+        for admin in admins:
+            if DATABASE_URL.startswith('postgresql://') or DATABASE_URL.startswith('postgres://'):
+                telegram_id, username, first_name, is_active = admin['telegram_id'], admin['username'], admin['first_name'], admin['is_active']
+            else:
+                telegram_id, username, first_name, is_active = admin
+            
+            status = "✅ 活跃" if is_active else "❌ 停用"
+            name = first_name or "未知"
+            username_text = f"@{username}" if username else "无用户名"
+            text += f"• **{name}** ({username_text})\n  ID: `{telegram_id}` - {status}\n\n"
+        
+        text += "**可用命令：**\n"
+        text += "`/seller add <telegram_id>` - 添加卖家\n"
+        text += "`/seller remove <telegram_id>` - 移除卖家\n"
+        text += "`/seller toggle <telegram_id>` - 切换卖家状态"
+        
+        await update.message.reply_text(text, parse_mode='Markdown')
+        return
+    
+    command = args[0].lower()
+    
+    if command == "add" and len(args) >= 2:
+        try:
+            new_admin_id = int(args[1])
+            success = add_telegram_admin(new_admin_id)
+            if success:
+                await update.message.reply_text(f"✅ 已添加卖家：{new_admin_id}")
+            else:
+                await update.message.reply_text(f"❌ 添加卖家失败（可能已存在）：{new_admin_id}")
+        except ValueError:
+            await update.message.reply_text("❌ 无效的 Telegram ID")
+    
+    elif command == "remove" and len(args) >= 2:
+        try:
+            admin_id = int(args[1])
+            remove_telegram_admin(admin_id)
+            await update.message.reply_text(f"✅ 已移除卖家：{admin_id}")
+        except ValueError:
+            await update.message.reply_text("❌ 无效的 Telegram ID")
+    
+    elif command == "toggle" and len(args) >= 2:
+        try:
+            admin_id = int(args[1])
+            current = execute_query("SELECT is_active FROM telegram_admins WHERE telegram_id = ?", 
+                                  (admin_id,), fetchone=True)
+            if current:
+                if DATABASE_URL.startswith('postgresql://') or DATABASE_URL.startswith('postgres://'):
+                    new_status = 0 if current['is_active'] else 1
+                else:
+                    new_status = 0 if current[0] else 1
+                execute_query("UPDATE telegram_admins SET is_active = ? WHERE telegram_id = ?", 
+                             (new_status, admin_id))
+                status_text = "启用" if new_status else "停用"
+                await update.message.reply_text(f"✅ 卖家 {admin_id} 已{status_text}")
+            else:
+                await update.message.reply_text(f"❌ 未找到卖家：{admin_id}")
+        except ValueError:
+            await update.message.reply_text("❌ 无效的 Telegram ID")
+    
+    else:
+        await update.message.reply_text("❌ 无效的命令。使用 `/seller` 查看可用命令。")
 
 async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
