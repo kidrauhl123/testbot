@@ -2042,3 +2042,198 @@ telegram.error.BadRequest: Chat not found
 2025-06-11 19:32:38,994 - telegram.ext.Application - INFO - Application.stop() complete
 2025-06-11 19:32:38,994 - telegram.ext.ExtBot - DEBUG - This Bot is already shut down. Returning.
 2025-06-11 19:32:38,995 - telegram.ext.Updater - DEBUG - Shut down of Updater complete
+2025-06-11 19:42:43,229 - werkzeug - INFO -  * Detected change in 'E:\\documents\\GitHub\\testbot\\app.py', reloading
+2025-06-11 19:42:43,290 - werkzeug - INFO -  * Restarting with stat
+2025-06-11 19:42:43,526 - __main__ - INFO - 环境变量:
+2025-06-11 19:42:43,526 - __main__ - INFO - BOT_TOKEN: 7952478409...
+2025-06-11 19:42:43,526 - __main__ - INFO - ADMIN_CHAT_IDS: 123456789
+2025-06-11 19:42:43,526 - __main__ - INFO - DATABASE_URL: 未设置...
+2025-06-11 19:42:43,526 - __main__ - INFO - FLASK_SECRET: 未设置...
+2025-06-11 19:42:43,526 - __main__ - INFO - PORT: 未设置
+2025-06-11 19:42:43,697 - __main__ - INFO - 正在初始化数据库...
+2025-06-11 19:42:43,697 - modules.database - INFO - 初始化数据库，使用连接: sqlite:///...
+2025-06-11 19:42:43,697 - modules.database - INFO - 使用SQLite数据库
+2025-06-11 19:42:43,698 - modules.database - INFO - SQLite数据库初始化完成
+2025-06-11 19:42:43,698 - __main__ - INFO - 数据库初始化完成
+2025-06-11 19:42:43,698 - __main__ - INFO - 正在启动Telegram机器人...
+2025-06-11 19:42:43,699 - modules.telegram_bot - INFO - 在单独的线程中启动Telegram机器人
+2025-06-11 19:42:43,699 - __main__ - INFO - Telegram机器人线程已启动
+2025-06-11 19:42:43,699 - asyncio - DEBUG - Using proactor: IocpProactor
+2025-06-11 19:42:43,699 - __main__ - INFO - 正在启动Flask服务器，端口：5000...
+2025-06-11 19:42:43,700 - modules.telegram_bot - INFO - 正在启动Telegram机器人，管理员ID: [123456789, 1878943383]
+2025-06-11 19:42:43,713 - werkzeug - WARNING -  * Debugger is active!
+2025-06-11 19:42:43,715 - werkzeug - INFO -  * Debugger PIN: 568-357-496
+2025-06-11 19:42:44,900 - telegram.ext.ExtBot - DEBUG - Set Bot API URL: https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk
+2025-06-11 19:42:44,900 - telegram.ext.ExtBot - DEBUG - Set Bot API File URL: https://api.telegram.org/file/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk
+2025-06-11 19:42:44,902 - modules.telegram_bot - INFO - 启动订单检查任务
+2025-06-11 19:42:44,902 - modules.telegram_bot - INFO - 开始检查新订单...
+2025-06-11 19:42:44,902 - modules.telegram_bot - INFO - 当前管理员列表: [123456789, 1878943383]
+2025-06-11 19:42:44,902 - modules.telegram_bot - DEBUG - 订单检查锁状态: False
+2025-06-11 19:42:44,902 - modules.telegram_bot - DEBUG - 已通知订单集合: set()
+2025-06-11 19:42:44,903 - modules.telegram_bot - DEBUG - 机器人实例状态: True
+2025-06-11 19:42:44,903 - modules.telegram_bot - INFO - 尝试向管理员 123456789 发送测试消息
+2025-06-11 19:42:44,903 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `sendMessage` with parameters `{'chat_id': 123456789, 'text': '测试消息: 2025-06-11 19:42:44'}`
+2025-06-11 19:42:44,908 - httpcore.connection - DEBUG - connect_tcp.started host='127.0.0.1' port=7890 local_address=None timeout=5.0 socket_options=None
+2025-06-11 19:42:44,908 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `getMe` with parameters `{}`
+2025-06-11 19:42:44,909 - httpcore.connection - DEBUG - connect_tcp.started host='127.0.0.1' port=7890 local_address=None timeout=5.0 socket_options=None
+2025-06-11 19:42:44,910 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002A711651400>
+2025-06-11 19:42:44,910 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'CONNECT']>
+2025-06-11 19:42:44,910 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 19:42:44,911 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'CONNECT']>
+2025-06-11 19:42:44,911 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 19:42:44,911 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'CONNECT']>
+2025-06-11 19:42:44,911 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002A711630190>
+2025-06-11 19:42:44,911 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'CONNECT']>
+2025-06-11 19:42:44,912 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 19:42:44,912 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'CONNECT']>
+2025-06-11 19:42:44,912 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 19:42:44,912 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'CONNECT']>
+2025-06-11 19:42:44,912 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'Connection established', [])
+2025-06-11 19:42:44,912 - httpcore.proxy - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x000002A7115F85F0> server_hostname='api.telegram.org' timeout=5.0
+2025-06-11 19:42:44,913 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'Connection established', [])
+2025-06-11 19:42:44,913 - httpcore.proxy - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x000002A7115F85F0> server_hostname='api.telegram.org' timeout=5.0
+2025-06-11 19:42:45,713 - httpcore.proxy - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002A711632990>
+2025-06-11 19:42:45,714 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 19:42:45,714 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 19:42:45,715 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 19:42:45,715 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 19:42:45,716 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 19:42:46,017 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 11:42:45 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'256'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 19:42:46,018 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getMe "HTTP/1.1 200 OK"
+2025-06-11 19:42:46,018 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 19:42:46,018 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 19:42:46,018 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 19:42:46,019 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 19:42:46,019 - telegram.ext.ExtBot - DEBUG - Call to Bot API endpoint `getMe` finished with return value `{'id': 7952478409, 'is_bot': True, 'first_name': '测试', 'username': 'jungtest755bot', 'can_join_groups': True, 'can_read_all_group_messages': False, 'supports_inline_queries': False, 'can_connect_to_business': False, 'has_main_web_app': False}`
+2025-06-11 19:42:46,019 - telegram.ext.ExtBot - DEBUG - This Bot is already initialized.
+2025-06-11 19:42:46,019 - telegram.ext.Application - INFO - Application started
+2025-06-11 19:42:46,020 - telegram.ext.Updater - DEBUG - Updater started (polling)
+2025-06-11 19:42:46,020 - telegram.ext - DEBUG - Network Retry Loop (Bootstrap delete Webhook): Starting
+2025-06-11 19:42:46,020 - telegram.ext.Updater - DEBUG - Deleting webhook
+2025-06-11 19:42:46,020 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `deleteWebhook` with parameters `{}`
+2025-06-11 19:42:46,020 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 19:42:46,021 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 19:42:46,021 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 19:42:46,021 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 19:42:46,021 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 19:42:46,410 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 11:42:46 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'68'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 19:42:46,411 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/deleteWebhook "HTTP/1.1 200 OK"
+2025-06-11 19:42:46,411 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 19:42:46,411 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 19:42:46,411 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 19:42:46,412 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 19:42:46,412 - telegram.ext.ExtBot - DEBUG - Call to Bot API endpoint `deleteWebhook` finished with return value `True`
+2025-06-11 19:42:46,412 - telegram.ext.Updater - DEBUG - Bootstrap done
+2025-06-11 19:42:46,412 - telegram.ext.Updater - DEBUG - Waiting for polling to start
+2025-06-11 19:42:46,412 - telegram.ext.Updater - DEBUG - Polling updates from Telegram started
+2025-06-11 19:42:46,412 - modules.telegram_bot - INFO - Telegram机器人启动成功
+2025-06-11 19:42:46,412 - telegram.ext.Updater - DEBUG - Stopping Updater
+2025-06-11 19:42:46,413 - telegram.ext.Updater - DEBUG - Waiting background polling task to finish up.
+2025-06-11 19:42:46,413 - telegram.ext - DEBUG - Network Retry Loop (Polling Updates): Starting
+2025-06-11 19:42:46,413 - telegram.ext.Updater - DEBUG - Calling `get_updates` one more time to mark all fetched updates as read.
+2025-06-11 19:42:46,413 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `getUpdates` with parameters `{'timeout': 0, 'offset': 0}`
+2025-06-11 19:42:46,414 - httpcore.connection - DEBUG - connect_tcp.started host='127.0.0.1' port=7890 local_address=None timeout=5.0 socket_options=None
+2025-06-11 19:42:46,414 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002A711629BA0>
+2025-06-11 19:42:46,415 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'CONNECT']>
+2025-06-11 19:42:46,415 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 19:42:46,415 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'CONNECT']>
+2025-06-11 19:42:46,415 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 19:42:46,415 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'CONNECT']>
+2025-06-11 19:42:46,416 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'Connection established', [])
+2025-06-11 19:42:46,416 - httpcore.proxy - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x000002A7115F87A0> server_hostname='api.telegram.org' timeout=5.0
+2025-06-11 19:42:46,637 - httpcore.proxy - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002A71162A2C0>
+2025-06-11 19:42:46,638 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 19:42:46,639 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 19:42:46,639 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 19:42:46,639 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 19:42:46,639 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 19:42:47,295 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 400, b'Bad Request', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 11:42:47 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'73'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 19:42:47,296 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/sendMessage "HTTP/1.1 400 Bad Request"
+2025-06-11 19:42:47,296 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 19:42:47,297 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 19:42:47,297 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 19:42:47,297 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 19:42:47,297 - modules.telegram_bot - ERROR - 发送测试消息失败: Chat not found
+Traceback (most recent call last):
+  File "E:\documents\GitHub\testbot\modules\telegram_bot.py", line 532, in check_and_push_orders
+    await bot_application.bot.send_message(
+    ...<2 lines>...
+    )
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 2988, in send_message
+    return await super().send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<21 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 1099, in send_message
+    return await self._send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<19 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 629, in _send_message
+    result = await super()._send_message(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<21 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 809, in _send_message
+    result = await self._post(
+             ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 697, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\ext\_extbot.py", line 369, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\_bot.py", line 726, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 197, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Program Files\Python313\Lib\site-packages\telegram\request\_baserequest.py", line 353, in _request_wrapper
+    raise BadRequest(message)
+telegram.error.BadRequest: Chat not found
+2025-06-11 19:42:47,303 - modules.telegram_bot - INFO - 获取未通知订单
+2025-06-11 19:42:47,304 - modules.database - DEBUG - 执行查询: 
+                SELECT id, account, password, pac... 参数: ('submitted',)
+2025-06-11 19:42:47,304 - modules.database - DEBUG - 查询返回 0 条结果
+2025-06-11 19:42:47,304 - modules.telegram_bot - DEBUG - 没有新订单需要通知
+2025-06-11 19:42:47,322 - httpcore.proxy - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002A71163D130>
+2025-06-11 19:42:47,323 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-11 19:42:47,323 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-11 19:42:47,323 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-11 19:42:47,324 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-11 19:42:47,324 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-11 19:42:48,312 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 11 Jun 2025 11:42:47 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'4591'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-11 19:42:48,313 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getUpdates "HTTP/1.1 200 OK"
+2025-06-11 19:42:48,313 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-11 19:42:48,313 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-11 19:42:48,314 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-11 19:42:48,314 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-11 19:42:48,314 - telegram.ext.ExtBot - DEBUG - Call to Bot API endpoint `getUpdates` finished with return value `[{'update_id': 275246995, 'message': {'message_id': 3, 'from': {'id': 1878943383, 'is_bot': False, 'first_name': 'Djungle', 'username': 'jung755', 'language_code': 'zh-hans', 'is_premium': True}, 'chat': {'id': 1878943383, 'first_name': 'Djungle', 'username': 'jung755', 'type': 'private'}, 'date': 1749630676, 'text': '222'}}, {'update_id': 275246996, 'message': {'message_id': 4, 'from': {'id': 1878943383, 'is_bot': False, 'first_name': 'Djungle', 'username': 'jung755', 'language_code': 'zh-hans', 'is_premium': True}, 'chat': {'id': 1878943383, 'first_name': 'Djungle', 'username': 'jung755', 'type': 'private'}, 'date': 1749630732, 'text': '/start', 'entities': [{'offset': 0, 'length': 6, 'type': 'bot_command'}]}}, {'update_id': 275246997, 'message': {'message_id': 5, 'from': {'id': 1878943383, 'is_bot': False, 'first_name': 'Djungle', 'username': 'jung755', 'language_code': 'zh-hans', 'is_premium': True}, 'chat': {'id': 1878943383, 'first_name': 'Djungle', 'username': 'jung755', 'type': 'private'}, 'date': 1749630736, 'text': '/start', 'entities': [{'offset': 0, 'length': 6, 'type': 'bot_command'}]}}, {'update_id': 275246998, 'message': {'message_id': 6, 'from': {'id': 1878943383, 'is_bot': False, 'first_name': 'Djungle', 'username': 'jung755', 'language_code': 'zh-hans', 'is_premium': True}, 'chat': {'id': 1878943383, 'first_name': 'Djungle', 'username': 'jung755', 'type': 'private'}, 'date': 1749634087, 'text': '/start', 'entities': [{'offset': 0, 'length': 6, 'type': 'bot_command'}]}}, {'update_id': 275246999, 'message': {'message_id': 7, 'from': {'id': 1878943383, 'is_bot': False, 'first_name': 'Djungle', 'username': 'jung755', 'language_code': 'zh-hans', 'is_premium': True}, 'chat': {'id': 1878943383, 'first_name': 'Djungle', 'username': 'jung755', 'type': 'private'}, 'date': 1749634091, 'text': 'stats'}}, {'update_id': 275247000, 'edited_message': {'message_id': 7, 'from': {'id': 1878943383, 'is_bot': False, 'first_name': 'Djungle', 'username': 'jung755', 'language_code': 'zh-hans', 'is_premium': True}, 'chat': {'id': 1878943383, 'first_name': 'Djungle', 'username': 'jung755', 'type': 'private'}, 'date': 1749634091, 'edit_date': 1749634095, 'text': '/stats', 'entities': [{'offset': 0, 'length': 6, 'type': 'bot_command'}]}}, {'update_id': 275247001, 'message': {'message_id': 8, 'from': {'id': 1878943383, 'is_bot': False, 'first_name': 'Djungle', 'username': 'jung755', 'language_code': 'zh-hans', 'is_premium': True}, 'chat': {'id': 1878943383, 'first_name': 'Djungle', 'username': 'jung755', 'type': 'private'}, 'date': 1749634096, 'text': '/stats', 'entities': [{'offset': 0, 'length': 6, 'type': 'bot_command'}]}}, {'update_id': 275247002, 'message': {'message_id': 9, 'from': {'id': 1878943383, 'is_bot': False, 'first_name': 'Djungle', 'username': 'jung755', 'language_code': 'zh-hans', 'is_premium': True}, 'chat': {'id': 1878943383, 'first_name': 'Djungle', 'username': 'jung755', 'type': 'private'}, 'date': 1749634571, 'text': '/start', 'entities': [{'offset': 0, 'length': 6, 'type': 'bot_command'}]}}, {'update_id': 275247003, 'message': {'message_id': 10, 'from': {'id': 1878943383, 'is_bot': False, 'first_name': 'Djungle', 'username': 'jung755', 'language_code': 'zh-hans', 'is_premium': True}, 'chat': {'id': 1878943383, 'first_name': 'Djungle', 'username': 'jung755', 'type': 'private'}, 'date': 1749634572, 'text': '/stats', 'entities': [{'offset': 0, 'length': 6, 'type': 'bot_command'}]}}, {'update_id': 275247004, 'message': {'message_id': 11, 'from': {'id': 1878943383, 'is_bot': False, 'first_name': 'Djungle', 'username': 'jung755', 'language_code': 'zh-hans', 'is_premium': True}, 'chat': {'id': 1878943383, 'first_name': 'Djungle', 'username': 'jung755', 'type': 'private'}, 'date': 1749639861, 'text': '/stats', 'entities': [{'offset': 0, 'length': 6, 'type': 'bot_command'}]}}, {'update_id': 275247005, 'message': {'message_id': 12, 'from': {'id': 1878943383, 'is_bot': False, 'first_name': 'Djungle', 'username': 'jung755', 'language_code': 'zh-hans', 'is_premium': True}, 'chat': {'id': 1878943383, 'first_name': 'Djungle', 'username': 'jung755', 'type': 'private'}, 'date': 1749640885, 'text': '/stats', 'entities': [{'offset': 0, 'length': 6, 'type': 'bot_command'}]}}, {'update_id': 275247006, 'message': {'message_id': 13, 'from': {'id': 1878943383, 'is_bot': False, 'first_name': 'Djungle', 'username': 'jung755', 'language_code': 'zh-hans', 'is_premium': True}, 'chat': {'id': 1878943383, 'first_name': 'Djungle', 'username': 'jung755', 'type': 'private'}, 'date': 1749640887, 'text': '/stats', 'entities': [{'offset': 0, 'length': 6, 'type': 'bot_command'}]}}, {'update_id': 275247007, 'message': {'message_id': 14, 'from': {'id': 1878943383, 'is_bot': False, 'first_name': 'Djungle', 'username': 'jung755', 'language_code': 'zh-hans', 'is_premium': True}, 'chat': {'id': 1878943383, 'first_name': 'Djungle', 'username': 'jung755', 'type': 'private'}, 'date': 1749640887, 'text': '/start', 'entities': [{'offset': 0, 'length': 6, 'type': 'bot_command'}]}}]`
+2025-06-11 19:42:48,315 - telegram.ext.ExtBot - DEBUG - Getting updates: [275246995, 275246996, 275246997, 275246998, 275246999, 275247000, 275247001, 275247002, 275247003, 275247004, 275247005, 275247006, 275247007]
+2025-06-11 19:42:48,316 - telegram.ext.Updater - DEBUG - Updater.stop() is complete
+2025-06-11 19:42:48,316 - telegram.ext.Application - INFO - Application is stopping. This might take a moment.
+2025-06-11 19:42:48,317 - telegram.ext.Application - DEBUG - Waiting for update_queue to join
+2025-06-11 19:42:48,317 - telegram.ext.Application - DEBUG - Application stopped fetching of updates.
+2025-06-11 19:42:48,317 - telegram.ext.Application - DEBUG - Waiting for `create_task` calls to be processed
+2025-06-11 19:42:48,317 - telegram.ext.Application - INFO - Application.stop() complete
+2025-06-11 19:42:48,317 - telegram.ext.ExtBot - DEBUG - This Bot is already shut down. Returning.
+2025-06-11 19:42:48,317 - telegram.ext.Updater - DEBUG - Shut down of Updater complete
