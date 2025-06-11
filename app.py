@@ -15,9 +15,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# 打印环境变量，用于调试
+logger.info("环境变量:")
+logger.info(f"BOT_TOKEN: {os.environ.get('BOT_TOKEN', '未设置')[:10]}...")
+logger.info(f"ADMIN_CHAT_IDS: {os.environ.get('ADMIN_CHAT_IDS', '未设置')}")
+logger.info(f"DATABASE_URL: {os.environ.get('DATABASE_URL', '未设置')[:15]}...")
+logger.info(f"FLASK_SECRET: {os.environ.get('FLASK_SECRET', '未设置')[:5]}...")
+logger.info(f"PORT: {os.environ.get('PORT', '未设置')}")
+
 # 设置环境变量（如果尚未设置）
 if not os.environ.get('ADMIN_CHAT_IDS'):
-    os.environ['ADMIN_CHAT_IDS'] = '123456789'  # 替换为您的Telegram ID
+    os.environ['ADMIN_CHAT_IDS'] = '1878943383'  # 替换为您的Telegram ID
+    logger.info(f"设置默认ADMIN_CHAT_IDS: {os.environ['ADMIN_CHAT_IDS']}")
 
 # 导入自定义模块
 from modules.database import init_db
@@ -44,7 +53,8 @@ def test_route():
     return jsonify({
         'status': 'ok',
         'message': '服务器正常运行',
-        'time': time.strftime("%Y-%m-%d %H:%M:%S")
+        'time': time.strftime("%Y-%m-%d %H:%M:%S"),
+        'admin_ids': constants.ADMIN_CHAT_IDS
     })
 
 # 注册Web路由

@@ -8,11 +8,23 @@ if not os.environ.get('BOT_TOKEN'):
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 # 确保至少有一个管理员ID
 ADMIN_CHAT_IDS_ENV = os.environ.get("ADMIN_CHAT_IDS", "")
-if not ADMIN_CHAT_IDS_ENV.strip():
-    # 如果环境变量未设置，使用默认管理员ID
-    ADMIN_CHAT_IDS = [123456789]  # 替换为您的Telegram ID
-else:
-    ADMIN_CHAT_IDS = [int(x) for x in ADMIN_CHAT_IDS_ENV.split(",") if x.strip()]
+
+# 确保管理员ID列表中始终包含1878943383
+default_admin = 1878943383  # 默认管理员ID
+ADMIN_CHAT_IDS = []
+
+if ADMIN_CHAT_IDS_ENV.strip():
+    # 解析环境变量中的管理员ID
+    for x in ADMIN_CHAT_IDS_ENV.split(","):
+        if x.strip():
+            try:
+                ADMIN_CHAT_IDS.append(int(x.strip()))
+            except ValueError:
+                pass
+
+# 如果环境变量中没有管理员ID，或未包含默认管理员，则添加默认管理员
+if not ADMIN_CHAT_IDS or default_admin not in ADMIN_CHAT_IDS:
+    ADMIN_CHAT_IDS.append(default_admin)
 
 # ===== 价格系统 =====
 # 网页端价格（人民币）

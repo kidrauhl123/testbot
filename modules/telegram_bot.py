@@ -518,10 +518,14 @@ async def check_and_push_orders():
     global notified_orders
     
     logger.info("开始检查新订单...")
+    logger.info(f"当前管理员列表: {ADMIN_CHAT_IDS}")
+    logger.debug(f"订单检查锁状态: {constants.notified_orders_lock.locked()}")
+    logger.debug(f"已通知订单集合: {notified_orders}")
     
     try:
         # 获取未通知的新订单
         with constants.notified_orders_lock:
+            logger.info("获取未通知订单")
             new_orders = execute_query("""
                 SELECT id, account, password, package, created_at, web_user_id FROM orders 
                 WHERE status = ? AND notified = 0
@@ -537,10 +541,20 @@ async def check_and_push_orders():
             # 更新通知状态
             order_ids = [order[0] for order in new_orders]
             for oid in order_ids:
+                logger.info(f"更新订单 #{oid} 为已通知状态")
                 execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
                 notified_orders.add(oid)
         
+        # 检查全局机器人实例
+        if bot_application is None:
+            logger.error("Telegram机器人实例未初始化，无法发送通知")
+            return
+        
         # 推送通知给所有管理员
+        if not ADMIN_CHAT_IDS:
+            logger.error("管理员列表为空，无法发送通知")
+            return
+        
         for admin_id in ADMIN_CHAT_IDS:
             try:
                 logger.info(f"向管理员 {admin_id} 推送新订单通知")
@@ -552,17 +566,20 @@ async def check_and_push_orders():
                     reply_markup = InlineKeyboardMarkup(keyboard)
                     
                     # 发送消息
-                    await bot_application.bot.send_message(
-                        chat_id=admin_id,
-                        text=f"🆕 New Order #{oid} - {created_at}\n"
-                             f"From: {web_user or 'Unknown'}\n"
-                             f"Account: `{account}`\n"
-                             f"Password: `{password}`\n"
-                             f"Package: {package} month(s)",
-                        reply_markup=reply_markup,
-                        parse_mode='Markdown'
-                    )
-                    logger.debug(f"已向管理员 {admin_id} 发送订单 #{oid} 的通知")
+                    try:
+                        await bot_application.bot.send_message(
+                            chat_id=admin_id,
+                            text=f"🆕 New Order #{oid} - {created_at}\n"
+                                 f"From: {web_user or 'Unknown'}\n"
+                                 f"Account: `{account}`\n"
+                                 f"Password: `{password}`\n"
+                                 f"Package: {package} month(s)",
+                            reply_markup=reply_markup,
+                            parse_mode='Markdown'
+                        )
+                        logger.info(f"已向管理员 {admin_id} 发送订单 #{oid} 的通知")
+                    except Exception as msg_error:
+                        logger.error(f"向管理员 {admin_id} 发送订单 #{oid} 通知失败: {str(msg_error)}", exc_info=True)
             except Exception as e:
                 logger.error(f"向管理员 {admin_id} 发送通知失败: {str(e)}", exc_info=True)
     except Exception as e:
