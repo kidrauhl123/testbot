@@ -120,9 +120,9 @@ async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # 如果已达到接单上限，不显示Accept按钮
             if active_orders_count >= 2:
-                keyboard = [[InlineKeyboardButton("❌ You have 2 active orders", callback_data="noop")]]
+                keyboard = [[InlineKeyboardButton("⚠️ You have 2 active orders", callback_data="noop")]]
             else:
-                keyboard = [[InlineKeyboardButton("Accept", callback_data=f"accept_{oid}")]]
+                keyboard = [[InlineKeyboardButton("🔄 Accept", callback_data=f"accept_{oid}")]]
             
             reply_markup = InlineKeyboardMarkup(keyboard)
             
@@ -247,7 +247,7 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if "2 active orders" in message:
                         await query.answer(message, show_alert=True)
                     elif "already been taken" in message:
-                        await query.edit_message_text(f"❌ Order #{oid} has already been taken by someone else.")
+                        await query.edit_message_text(f"⚠️ Order #{oid} has already been taken by someone else.")
                     else:
                         await query.answer(f"Error: {message}", show_alert=True)
                 except Exception as e:
@@ -354,20 +354,20 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 发送统计选择按钮
     keyboard = [
         [
-            InlineKeyboardButton("Today", callback_data="stats_today_personal"),
-            InlineKeyboardButton("Yesterday", callback_data="stats_yesterday_personal"),
+            InlineKeyboardButton("📅 Today", callback_data="stats_today_personal"),
+            InlineKeyboardButton("📅 Yesterday", callback_data="stats_yesterday_personal"),
         ],
         [
-            InlineKeyboardButton("This Week", callback_data="stats_week_personal"),
-            InlineKeyboardButton("This Month", callback_data="stats_month_personal")
+            InlineKeyboardButton("📊 This Week", callback_data="stats_week_personal"),
+            InlineKeyboardButton("📊 This Month", callback_data="stats_month_personal")
         ]
     ]
     
     # 如果是总管理员，添加查看所有人统计的选项
     if user_id in ADMIN_CHAT_IDS and ADMIN_CHAT_IDS.index(user_id) == 0:
         keyboard.append([
-            InlineKeyboardButton("All Sellers Today", callback_data="stats_today_all"),
-            InlineKeyboardButton("All Sellers This Month", callback_data="stats_month_all")
+            InlineKeyboardButton("👥 All Sellers Today", callback_data="stats_today_all"),
+            InlineKeyboardButton("👥 All Sellers This Month", callback_data="stats_month_all")
         ])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -635,8 +635,9 @@ async def check_and_push_orders():
         logger.warning("Telegram Bot尚未初始化，无法推送订单")
         return
         
-    # 初始化 new_orders
+    # 初始化 new_orders 和 cancelled_orders
     new_orders = None
+    cancelled_orders = None
     
     try:
         # 查询状态为 'submitted' 且未通知的订单
@@ -646,8 +647,46 @@ async def check_and_push_orders():
                 WHERE status = ? AND notified = 0
             """, (STATUS['SUBMITTED'],), fetch=True)
             
+            # 查询状态为 'cancelled' 且未通知的订单
+            cancelled_orders = execute_query("""
+                SELECT id FROM orders 
+                WHERE status = ? AND notified = 0
+            """, (STATUS['CANCELLED'],), fetch=True)
+            
             # 更新通知状态
-            execute_query("UPDATE orders SET notified = 1 WHERE status = ?", (STATUS['SUBMITTED'],))
+            execute_query("UPDATE orders SET notified = 1 WHERE status IN (?, ?) AND notified = 0", 
+                         (STATUS['SUBMITTED'], STATUS['CANCELLED']))
+        
+        # 处理已取消的订单
+        if cancelled_orders and bot_application:
+            logger.info(f"发现 {len(cancelled_orders)} 个已取消订单，准备更新消息...")
+            
+            for order in cancelled_orders:
+                oid = order[0]
+                
+                # 尝试为所有管理员更新消息
+                for admin_id in ADMIN_CHAT_IDS:
+                    try:
+                        # 查找包含该订单ID的消息
+                        # 注意：这里无法直接找到特定消息，只能通过轮询最近消息来处理
+                        # 实际应用中可能需要存储消息ID以便直接更新
+                        
+                        # 创建已取消按钮
+                        cancelled_keyboard = [[InlineKeyboardButton("🚫 Cancelled", callback_data="noop")]]
+                        cancelled_markup = InlineKeyboardMarkup(cancelled_keyboard)
+                        
+                        # 发送新消息通知订单已取消
+                        try:
+                            await bot_application.bot.send_message(
+                                chat_id=admin_id,
+                                text=f"⚠️ Order #{oid} has been cancelled by the customer.",
+                                parse_mode='Markdown'
+                            )
+                            logger.info(f"已通知卖家 {admin_id} 订单 #{oid} 已被取消")
+                        except Exception as msg_error:
+                            logger.error(f"向卖家 {admin_id} 发送订单取消通知失败: {str(msg_error)}")
+                    except Exception as e:
+                        logger.error(f"处理已取消订单 #{oid} 时出错: {str(e)}")
             
         # 推送新订单
         if new_orders:
@@ -670,7 +709,7 @@ async def check_and_push_orders():
                         )
                         
                         # 创建接单按钮
-                        keyboard = [[InlineKeyboardButton("Accept", callback_data=f"accept_{oid}")]]
+                        keyboard = [[InlineKeyboardButton("🔄 Accept", callback_data=f"accept_{oid}")]]
                         reply_markup = InlineKeyboardMarkup(keyboard)
                         
                         # 发送消息时隐藏密码

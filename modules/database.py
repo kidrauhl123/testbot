@@ -325,7 +325,7 @@ def accept_order_atomic(oid, user_id):
             if active_count >= 2:
                 conn.rollback()
                 conn.close()
-                return False, "You already have 2 active orders. Please complete them first."
+                return False, "You already have 2 active orders. Please complete your current orders first before accepting new ones."
             
             # 更新订单
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
