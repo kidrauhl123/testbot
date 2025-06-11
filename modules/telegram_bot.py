@@ -24,7 +24,7 @@ import modules.constants as constants
 from modules.database import execute_query, accept_order_atomic, get_order_details
 
 # 设置日志
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # ===== 全局 Bot 实例 =====
@@ -514,109 +514,113 @@ async def show_all_stats(query, date_str, period_text):
 
 # ===== 推送通知 =====
 async def check_and_push_orders():
-    """检查新订单并推送通知"""
-    from modules.database import get_unnotified_orders
-    global notified_orders, bot_application
+    """检查新订单并推送给管理员"""
+    global notified_orders
     
-    if not bot_application:
-        return
+    logger.info("开始检查新订单...")
     
-    with constants.notified_orders_lock:
+    try:
         # 获取未通知的新订单
-        new_orders = get_unnotified_orders()
+        with constants.notified_orders_lock:
+            new_orders = execute_query("""
+                SELECT id, account, password, package, created_at, web_user_id FROM orders 
+                WHERE status = ? AND notified = 0
+                ORDER BY id DESC
+            """, (STATUS['SUBMITTED'],), fetch=True)
+            
+            if not new_orders:
+                logger.debug("没有新订单需要通知")
+                return
+                
+            logger.info(f"发现 {len(new_orders)} 个新订单需要通知")
+            
+            # 更新通知状态
+            order_ids = [order[0] for order in new_orders]
+            for oid in order_ids:
+                execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
+                notified_orders.add(oid)
         
-        if not new_orders:
-            return
-        
-        for order in new_orders:
-            oid, account, password, package = order
-            
-            # 避免重复通知
-            if oid in notified_orders:
-                continue
-            
-            # 先标记为已通知，防止重复处理
-            notified_orders.add(oid)
-            
-            # 向所有管理员发送通知
-            for admin_id in ADMIN_CHAT_IDS:
-                try:
+        # 推送通知给所有管理员
+        for admin_id in ADMIN_CHAT_IDS:
+            try:
+                logger.info(f"向管理员 {admin_id} 推送新订单通知")
+                for order in new_orders:
+                    oid, account, password, package, created_at, web_user = order
+                    
+                    # 创建接单按钮
                     keyboard = [[InlineKeyboardButton("Accept", callback_data=f"accept_{oid}")]]
                     reply_markup = InlineKeyboardMarkup(keyboard)
                     
+                    # 发送消息
                     await bot_application.bot.send_message(
                         chat_id=admin_id,
-                        text=(
-                            f"🔔 New Order #{oid}\n"
-                            f"Account: `{account}`\n"
-                            f"Password: `{password}`\n"
-                            f"Package: {package} month(s)"
-                        ),
+                        text=f"🆕 New Order #{oid} - {created_at}\n"
+                             f"From: {web_user or 'Unknown'}\n"
+                             f"Account: `{account}`\n"
+                             f"Password: `{password}`\n"
+                             f"Package: {package} month(s)",
                         reply_markup=reply_markup,
                         parse_mode='Markdown'
                     )
-                    logger.info(f"Sent notification for order #{oid} to admin {admin_id}")
-                except Exception as e:
-                    logger.error(f"Failed to notify admin {admin_id} for order #{oid}: {e}")
-            
-            # 更新数据库，标记为已通知
-            execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
-            logger.info(f"Marked order #{oid} as notified in database")
+                    logger.debug(f"已向管理员 {admin_id} 发送订单 #{oid} 的通知")
+            except Exception as e:
+                logger.error(f"向管理员 {admin_id} 发送通知失败: {str(e)}", exc_info=True)
+    except Exception as e:
+        logger.error(f"检查和推送订单时出错: {str(e)}", exc_info=True)
 
 # ===== 主函数 =====
 async def run_bot():
     """运行Telegram机器人"""
     global bot_application
     
+    logger.info(f"正在启动Telegram机器人，管理员ID: {ADMIN_CHAT_IDS}")
+    
     try:
-        # 打印管理员ID列表
-        logger.info(f"Starting Telegram bot with admin IDs: {ADMIN_CHAT_IDS}")
+        # 创建应用
+        bot_application = ApplicationBuilder().token(BOT_TOKEN).build()
         
-        # 创建机器人实例
-        application = ApplicationBuilder().token(BOT_TOKEN).build()
-        bot_application = application
+        # 添加处理程序
+        bot_application.add_handler(CommandHandler("start", on_start))
+        bot_application.add_handler(CommandHandler("seller", on_admin_command))
+        bot_application.add_handler(CommandHandler("stats", on_stats))
+        bot_application.add_handler(CallbackQueryHandler(on_accept, pattern="^accept_"))
+        bot_application.add_handler(CallbackQueryHandler(on_feedback_button, pattern="^(done|fail)_"))
+        bot_application.add_handler(CallbackQueryHandler(on_stats_callback, pattern="^stats_"))
+        bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
         
-        # 注册命令处理器
-        application.add_handler(CommandHandler("start", on_start))
-        application.add_handler(CommandHandler("seller", on_admin_command))
-        application.add_handler(CommandHandler("stats", on_stats))
+        # 启动订单检查任务
+        logger.info("启动订单检查任务")
         
-        # 注册按钮回调
-        application.add_handler(CallbackQueryHandler(on_accept, pattern="^accept_"))
-        application.add_handler(CallbackQueryHandler(on_feedback_button, pattern="^(done_|fail_)"))
-        application.add_handler(CallbackQueryHandler(on_stats_callback, pattern="^stats_"))
-        
-        # 注册消息处理器
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
-        
-        # 启动通知检查定时任务
         async def order_check_job():
-            logger.info("Starting order check job")
+            """定期检查新订单的任务"""
             while True:
                 try:
                     await check_and_push_orders()
                 except Exception as e:
-                    logger.error(f"Error in order check job: {e}")
+                    logger.error(f"订单检查任务出错: {str(e)}", exc_info=True)
                 await asyncio.sleep(10)  # 每10秒检查一次
-                
-        # 启动异步任务
+        
+        # 启动任务
         asyncio.create_task(order_check_job())
         
         # 启动机器人
-        await application.initialize()
-        await application.start()
-        await application.updater.start_polling()
+        await bot_application.initialize()
+        await bot_application.start()
+        await bot_application.updater.start_polling()
         
-        logger.info("Telegram bot started successfully")
+        logger.info("Telegram机器人启动成功")
         
-        # 保持运行状态
-        await application.updater.stop()
-        await application.stop()
-        
+        # 保持运行
+        await bot_application.updater.stop()
+        await bot_application.stop()
+        await bot_application.shutdown()
     except Exception as e:
-        logger.error(f"Error starting Telegram bot: {e}")
-        bot_application = None
+        logger.error(f"启动Telegram机器人时出错: {str(e)}", exc_info=True)
 
 def run_bot_in_thread():
     """在线程中运行机器人"""
-    asyncio.run(run_bot()) 
+    try:
+        logger.info("在单独的线程中启动Telegram机器人")
+        asyncio.run(run_bot())
+    except Exception as e:
+        logger.error(f"Telegram机器人线程出错: {str(e)}", exc_info=True) 

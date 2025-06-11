@@ -2,6 +2,7 @@ import os
 import time
 import sqlite3
 import hashlib
+import logging
 import psycopg2
 from functools import wraps
 from datetime import datetime
@@ -9,9 +10,13 @@ from urllib.parse import urlparse
 
 from modules.constants import DATABASE_URL
 
+# 设置日志
+logger = logging.getLogger(__name__)
+
 # ===== 数据库 =====
 def init_db():
     """根据环境配置初始化数据库"""
+    logger.info(f"初始化数据库，使用连接: {DATABASE_URL[:10]}...")
     if DATABASE_URL.startswith('postgres'):
         init_postgres_db()
     else:
@@ -19,6 +24,7 @@ def init_db():
         
 def init_sqlite_db():
     """初始化SQLite数据库"""
+    logger.info("使用SQLite数据库")
     conn = sqlite3.connect("orders.db")
     c = conn.cursor()
     
@@ -59,12 +65,14 @@ def init_sqlite_db():
     c.execute("PRAGMA table_info(orders)")
     columns = [column[1] for column in c.fetchall()]
     if 'user_id' not in columns:
+        logger.info("为orders表添加user_id列")
         c.execute("ALTER TABLE orders ADD COLUMN user_id INTEGER")
     
     # 创建超级管理员账号（如果不存在）
     admin_hash = hashlib.sha256("755439".encode()).hexdigest()
     c.execute("SELECT id FROM users WHERE username = ?", ("755439",))
     if not c.fetchone():
+        logger.info("创建默认管理员账号")
         c.execute("""
             INSERT INTO users (username, password_hash, is_admin, created_at) 
             VALUES (?, ?, 1, ?)
@@ -72,6 +80,7 @@ def init_sqlite_db():
     
     conn.commit()
     conn.close()
+    logger.info("SQLite数据库初始化完成")
 
 def init_postgres_db():
     """初始化PostgreSQL数据库"""
@@ -144,6 +153,7 @@ def init_postgres_db():
 # 数据库执行函数
 def execute_query(query, params=(), fetch=False):
     """执行数据库查询并返回结果"""
+    logger.debug(f"执行查询: {query[:50]}... 参数: {params}")
     if DATABASE_URL.startswith('postgres'):
         return execute_postgres_query(query, params, fetch)
     else:
@@ -151,17 +161,24 @@ def execute_query(query, params=(), fetch=False):
 
 def execute_sqlite_query(query, params=(), fetch=False):
     """执行SQLite查询并返回结果"""
-    conn = sqlite3.connect("orders.db")
-    cursor = conn.cursor()
-    cursor.execute(query, params)
-    
-    result = None
-    if fetch:
-        result = cursor.fetchall()
-    
-    conn.commit()
-    conn.close()
-    return result
+    try:
+        conn = sqlite3.connect("orders.db")
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        
+        result = None
+        if fetch:
+            result = cursor.fetchall()
+            logger.debug(f"查询返回 {len(result)} 条结果")
+        else:
+            logger.debug(f"查询影响 {cursor.rowcount} 行")
+        
+        conn.commit()
+        conn.close()
+        return result
+    except Exception as e:
+        logger.error(f"SQLite查询执行失败: {str(e)}", exc_info=True)
+        raise
 
 def execute_postgres_query(query, params=(), fetch=False):
     """执行PostgreSQL查询并返回结果"""

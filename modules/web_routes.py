@@ -1,5 +1,6 @@
 import os
 import time
+import logging
 from datetime import datetime
 from functools import wraps
 
@@ -7,6 +8,9 @@ from flask import Flask, request, render_template, jsonify, session, redirect, u
 
 from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS
 from modules.database import execute_query, hash_password
+
+# 设置日志
+logger = logging.getLogger(__name__)
 
 # ===== 登录装饰器 =====
 def login_required(f):
@@ -43,8 +47,10 @@ def register_routes(app):
                 execute_query("UPDATE users SET last_login=? WHERE id=?",
                             (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user_id))
                 
+                logger.info(f"用户 {username} 登录成功")
                 return redirect(url_for('index'))
             else:
+                logger.warning(f"用户 {username} 登录失败 - 密码错误")
                 return render_template('login.html', error='用户名或密码错误')
         
         return render_template('login.html')
@@ -88,18 +94,34 @@ def register_routes(app):
     @login_required
     def index():
         # 显示订单创建表单和最近订单
-        orders = execute_query("SELECT id, account, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
-        return render_template('index.html', orders=orders, prices=WEB_PRICES, plan_options=PLAN_OPTIONS)
+        logger.info("访问首页")
+        logger.info(f"当前会话: {session}")
+        
+        try:
+            orders = execute_query("SELECT id, account, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
+            logger.info(f"获取到最近订单: {orders}")
+            return render_template('index.html', orders=orders, prices=WEB_PRICES, plan_options=PLAN_OPTIONS)
+        except Exception as e:
+            logger.error(f"获取订单失败: {str(e)}", exc_info=True)
+            return render_template('index.html', error='获取订单失败', prices=WEB_PRICES, plan_options=PLAN_OPTIONS)
 
     @app.route('/', methods=['POST'])
     @login_required
     def create_order():
+        # 记录请求内容
+        logger.info("收到POST请求到根路径")
+        logger.info(f"请求表单数据: {request.form}")
+        logger.info(f"请求头: {request.headers}")
+        
         account = request.form.get('account')
         password = request.form.get('password')
         package = request.form.get('package', '1')
         remark = request.form.get('remark', '')
         
+        logger.info(f"收到订单提交请求: 账号={account}, 套餐={package}")
+        
         if not account or not password:
+            logger.warning("订单提交失败: 账号或密码为空")
             return render_template('index.html', error='账号和密码不能为空', prices=WEB_PRICES, plan_options=PLAN_OPTIONS)
         
         try:
@@ -107,8 +129,12 @@ def register_routes(app):
             user_id = session.get('user_id')
             username = session.get('username')
             
+            logger.info(f"当前会话信息: user_id={user_id}, username={username}")
+            
             # 记录当前时间
             timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            
+            logger.debug(f"准备插入订单: 用户={username}, 时间={timestamp}")
             
             # 插入订单
             execute_query("""
@@ -116,12 +142,15 @@ def register_routes(app):
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (account, password, package, remark, STATUS['SUBMITTED'], timestamp, username, user_id, 0))
             
+            logger.info(f"订单提交成功: 用户={username}, 套餐={package}")
+            
             # 获取最新订单列表
             orders = execute_query("SELECT id, account, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
+            logger.info(f"查询到的最新订单: {orders}")
             
             return render_template('index.html', orders=orders, success='订单已提交成功！', prices=WEB_PRICES, plan_options=PLAN_OPTIONS)
         except Exception as e:
-            app.logger.error(f"创建订单失败: {str(e)}")
+            logger.error(f"创建订单失败: {str(e)}", exc_info=True)
             return render_template('index.html', error=f'订单提交失败: {str(e)}', prices=WEB_PRICES, plan_options=PLAN_OPTIONS)
 
     @app.route('/orders/stats/web/<user_id>')
