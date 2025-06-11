@@ -569,6 +569,9 @@ async def run_bot():
     global bot_application
     
     try:
+        # 打印管理员ID列表
+        logger.info(f"Starting Telegram bot with admin IDs: {ADMIN_CHAT_IDS}")
+        
         # 创建机器人实例
         application = ApplicationBuilder().token(BOT_TOKEN).build()
         bot_application = application

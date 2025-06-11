@@ -4,6 +4,10 @@ import logging
 import time
 from flask import Flask
 
+# 设置环境变量（如果尚未设置）
+if not os.environ.get('ADMIN_CHAT_IDS'):
+    os.environ['ADMIN_CHAT_IDS'] = '123456789'  # 替换为您的Telegram ID
+
 # 导入自定义模块
 from modules.database import init_db
 # 导入整个constants模块
