@@ -269,9 +269,10 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"接单处理出错: {str(e)}", exc_info=True)
         finally:
             # 清理处理标记
-            if 'accept_key' in locals():
-                processing_accepts.discard(accept_key)async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理完成/失败回调"""
+            processing_accepts.discard(accept_key)
+
+async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理反馈按钮回调"""
     query = update.callback_query
     user_id = query.from_user.id
     data = query.data
@@ -673,6 +674,7 @@ async def check_and_push_orders():
                     logger.error(f"向卖家 {admin_id} 发送订单 #{oid} 通知失败: {str(msg_error)}")
         except Exception as e:
             logger.error(f"向卖家 {admin_id} 发送通知失败: {str(e)}", exc_info=True)
+
 # ===== 主函数 =====
 async def run_bot():
     """运行Telegram机器人"""
