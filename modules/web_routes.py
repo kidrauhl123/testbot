@@ -103,10 +103,20 @@ def register_routes(app):
         try:
             orders = execute_query("SELECT id, account, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             logger.info(f"获取到最近订单: {orders}")
-            return render_template('index.html', orders=orders, prices=WEB_PRICES, plan_options=PLAN_OPTIONS)
+            return render_template('index.html', 
+                                   orders=orders, 
+                                   prices=WEB_PRICES, 
+                                   plan_options=PLAN_OPTIONS,
+                                   username=session.get('username'),
+                                   is_admin=session.get('is_admin'))
         except Exception as e:
             logger.error(f"获取订单失败: {str(e)}", exc_info=True)
-            return render_template('index.html', error='获取订单失败', prices=WEB_PRICES, plan_options=PLAN_OPTIONS)
+            return render_template('index.html', 
+                                   error='获取订单失败', 
+                                   prices=WEB_PRICES, 
+                                   plan_options=PLAN_OPTIONS,
+                                   username=session.get('username'),
+                                   is_admin=session.get('is_admin'))
 
     @app.route('/', methods=['POST'])
     @login_required

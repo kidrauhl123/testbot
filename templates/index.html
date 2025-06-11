@@ -359,8 +359,8 @@
 <div class="navbar">
   <div class="navbar-brand">破天充值系统</div>
   <div class="navbar-user">
-    <span>欢迎，<span class="username">{{ username }}</span></span>
-    {% if is_admin %}
+    <span>欢迎，<span class="username">{{ session.username }}</span></span>
+    {% if session.is_admin %}
     <span class="admin-badge">超级管理员</span>
     {% endif %}
     <button class="logout-btn" onclick="window.location.href='/logout'">退出登录</button>
@@ -409,7 +409,7 @@
     </div>
     <div class="right">
       <h3>
-        {% if is_admin %}
+        {% if session.is_admin %}
         系统订单状态<br><small style="font-weight:normal;color:#666;">（显示全部最新订单，每5秒自动更新）</small>
         {% else %}
         我的订单<br><small style="font-weight:normal;color:#666;">（显示您提交的订单，每5秒自动更新）</small>
@@ -442,9 +442,8 @@
   let searchKeyword = ''; // 搜索关键词
   let autoRefreshInterval = null;
   let userId = '{{ session.user_id }}'; // 当前用户ID
-  let isAdmin = {{ 'true' if is_admin else 'false' }}; // 是否是管理员
+  let isAdmin = {{ 'true' if session.is_admin else 'false' }}; // 是否是管理员
   let lastOrdersHash = ''; // 用于检测订单变化的哈希
-// 套餐价格（人民币），必须和后端 WEB_PRICES 保持一致
   const WEB_PRICES = {
     '1': 12,
     '2': 18,
@@ -681,7 +680,8 @@
           ${isAdmin && o.creator ? `<p class="creator">创建者：${escapeHtml(o.creator)}</p>` : ''}
           ${isAdmin && o.accepted_by ? `<p class="creator">接单者：@${escapeHtml(o.accepted_by)}</p>` : ''}
           <p><strong>账号：</strong>${escapeHtml(o.account)}</p>
-          <p><strong>套餐：</strong>${escapeHtml(o.package)}</p>
+          <p><strong>套餐：</strong>${escapeHtml(o.package)}个月</p>
+          <p><strong>价格：</strong>¥${WEB_PRICES[o.package] || 'N/A'}</p>
           ${o.remark ? `<p><strong>备注：</strong>${escapeHtml(o.remark)}</p>` : ''}
           <p class="time"><strong>提交时间：</strong>${o.created_at}</p>
           ${o.accepted_at ? `<p class="time"><strong>接单时间：</strong>${o.accepted_at}</p>` : ''}
