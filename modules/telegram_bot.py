@@ -139,11 +139,8 @@ async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for order in new_orders:
             oid, account, password, package, created_at = order
             
-            # 如果已达到接单上限，不显示Accept按钮
-            if active_orders_count >= 2:
-                keyboard = [[InlineKeyboardButton("⚠️ You have 2 active orders", callback_data="noop")]]
-            else:
-                keyboard = [[InlineKeyboardButton("🔄 Accept", callback_data=f"accept_{oid}")]]
+            # 无论是否达到接单上限，都显示Accept按钮
+            keyboard = [[InlineKeyboardButton("🔄 Accept", callback_data=f"accept_{oid}")]]
             
             reply_markup = InlineKeyboardMarkup(keyboard)
             
@@ -270,11 +267,17 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try:
                     # 根据不同的失败原因显示不同的消息
                     if "2 active orders" in message:
-                        # 显示弹窗提示，并更新按钮文本以显示错误信息
-                        await query.answer("You already have 2 active orders. Please complete your current orders first.", show_alert=True)
-                        await query.edit_message_reply_markup(
-                            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⚠️ Cannot accept (2 active orders)", callback_data="noop")]])
-                        )
+                        # 只显示弹窗提示，不修改原始按钮
+                        await query.answer("You already have 2 active orders. Please complete your current orders first before accepting new ones.", show_alert=True)
+                        # 发送额外的提醒消息
+                        try:
+                            await bot_application.bot.send_message(
+                                chat_id=user_id,
+                                text=f"⚠️ You cannot accept Order #{oid} now because you already have 2 active orders.\nPlease complete your current orders first, then you can come back to accept this order.",
+                                parse_mode='Markdown'
+                            )
+                        except Exception as msg_error:
+                            logger.error(f"发送额外提醒消息失败: {str(msg_error)}")
                     elif "already been taken" in message:
                         await query.edit_message_text(f"⚠️ Order #{oid} has already been taken by someone else.")
                     else:
