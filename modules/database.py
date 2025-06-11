@@ -42,6 +42,7 @@ def init_sqlite_db():
             completed_at TEXT,
             accepted_by TEXT,
             accepted_by_username TEXT,
+            accepted_by_first_name TEXT,
             notified INTEGER DEFAULT 0,
             web_user_id TEXT,
             user_id INTEGER,
@@ -67,6 +68,16 @@ def init_sqlite_db():
     if 'user_id' not in columns:
         logger.info("为orders表添加user_id列")
         c.execute("ALTER TABLE orders ADD COLUMN user_id INTEGER")
+    
+    # 检查是否需要添加accepted_by_username列（Telegram用户名）
+    if 'accepted_by_username' not in columns:
+        logger.info("为orders表添加accepted_by_username列")
+        c.execute("ALTER TABLE orders ADD COLUMN accepted_by_username TEXT")
+    
+    # 检查是否需要添加accepted_by_first_name列（Telegram昵称）
+    if 'accepted_by_first_name' not in columns:
+        logger.info("为orders表添加accepted_by_first_name列")
+        c.execute("ALTER TABLE orders ADD COLUMN accepted_by_first_name TEXT")
     
     # 创建超级管理员账号（如果不存在）
     admin_hash = hashlib.sha256("755439".encode()).hexdigest()
@@ -115,6 +126,7 @@ def init_postgres_db():
             completed_at TEXT,
             accepted_by TEXT,
             accepted_by_username TEXT,
+            accepted_by_first_name TEXT,
             notified INTEGER DEFAULT 0,
             web_user_id TEXT,
             user_id INTEGER
@@ -138,6 +150,20 @@ def init_postgres_db():
         c.execute("SELECT user_id FROM orders LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
         c.execute("ALTER TABLE orders ADD COLUMN user_id INTEGER")
+    
+    # 检查是否需要添加accepted_by_username列（Telegram用户名）
+    try:
+        c.execute("SELECT accepted_by_username FROM orders LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为orders表添加accepted_by_username列")
+        c.execute("ALTER TABLE orders ADD COLUMN accepted_by_username TEXT")
+    
+    # 检查是否需要添加accepted_by_first_name列（Telegram昵称）
+    try:
+        c.execute("SELECT accepted_by_first_name FROM orders LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为orders表添加accepted_by_first_name列")
+        c.execute("ALTER TABLE orders ADD COLUMN accepted_by_first_name TEXT")
     
     # 创建超级管理员账号（如果不存在）
     admin_hash = hashlib.sha256("755439".encode()).hexdigest()
@@ -238,7 +264,6 @@ def get_unnotified_orders():
     return execute_query("SELECT id, account, password, package FROM orders WHERE notified = 0 AND status = 'submitted'", fetch=True)
 
 # 接单原子操作
-# 接单原子操作
 def accept_order_atomic(oid, user_id):
     # 使用事务确保操作的原子性
     if DATABASE_URL.startswith('postgres'):
@@ -283,10 +308,26 @@ def accept_order_atomic(oid, user_id):
                 conn.close()
                 return False, "You already have 2 active orders. Please complete your current orders first before accepting new ones."
             
-            # 更新订单
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = %s, accepted_by = %s WHERE id = %s",
-                          (timestamp, str(user_id), oid))
+            # 获取用户信息
+            try:
+                # 从缓存中获取用户名和昵称
+                from modules.constants import user_info_cache
+                username = None
+                first_name = None
+                if user_id in user_info_cache:
+                    username = user_info_cache[user_id].get('username')
+                    first_name = user_info_cache[user_id].get('first_name')
+                
+                # 更新订单
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = %s, accepted_by = %s, accepted_by_username = %s, accepted_by_first_name = %s WHERE id = %s",
+                            (timestamp, str(user_id), username, first_name, oid))
+            except Exception as e:
+                logger.error(f"获取用户信息失败: {str(e)}")
+                # 如果获取用户信息失败，仍然更新订单，但不设置用户名和昵称
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = %s, accepted_by = %s WHERE id = %s",
+                            (timestamp, str(user_id), oid))
             
             # 提交事务
             conn.commit()
@@ -327,10 +368,26 @@ def accept_order_atomic(oid, user_id):
                 conn.close()
                 return False, "You already have 2 active orders. Please complete your current orders first before accepting new ones."
             
-            # 更新订单
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = ?, accepted_by = ? WHERE id = ?",
-                          (timestamp, str(user_id), oid))
+            # 获取用户信息
+            try:
+                # 从缓存中获取用户名和昵称
+                from modules.constants import user_info_cache
+                username = None
+                first_name = None
+                if user_id in user_info_cache:
+                    username = user_info_cache[user_id].get('username')
+                    first_name = user_info_cache[user_id].get('first_name')
+                
+                # 更新订单
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = ?, accepted_by = ?, accepted_by_username = ?, accepted_by_first_name = ? WHERE id = ?",
+                            (timestamp, str(user_id), username, first_name, oid))
+            except Exception as e:
+                logger.error(f"获取用户信息失败: {str(e)}")
+                # 如果获取用户信息失败，仍然更新订单，但不设置用户名和昵称
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = ?, accepted_by = ? WHERE id = ?",
+                            (timestamp, str(user_id), oid))
             
             # 提交事务
             conn.commit()
@@ -342,6 +399,7 @@ def accept_order_atomic(oid, user_id):
             conn.close()
             logger.error(f"Error in accept_order_atomic: {str(e)}")
             return False, "Database error"
+
 # 获取订单详情
 def get_order_details(oid):
     return execute_query("SELECT id, account, password, package, status, remark FROM orders WHERE id = ?", (oid,), fetch=True) 

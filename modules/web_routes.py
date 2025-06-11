@@ -265,7 +265,7 @@ def register_routes(app):
         # 查询订单
         orders = execute_query(f"""
             SELECT id, account, package, status, created_at, accepted_at, completed_at,
-                   remark, web_user_id, user_id, accepted_by, accepted_by_username
+                   remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name
             FROM orders 
             {user_filter}
             ORDER BY id DESC LIMIT ? OFFSET ?
@@ -276,10 +276,10 @@ def register_routes(app):
         # 格式化数据
         formatted_orders = []
         for order in orders:
-            oid, account, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by, accepted_by_username = order
+            oid, account, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name = order
             
-            # 如果有卖家用户名，直接使用；否则使用ID
-            seller_display = accepted_by_username if accepted_by_username else accepted_by
+            # 优先使用昵称，其次是用户名，最后是ID
+            seller_display = accepted_by_first_name or accepted_by_username or accepted_by
             
             order_data = {
                 "id": oid,
