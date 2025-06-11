@@ -26,7 +26,7 @@ from telegram.ext import (
 
 # ✅ 写死变量（优先）
 if not os.environ.get('BOT_TOKEN'):
-    os.environ['BOT_TOKEN'] = '8120638144:AAHsC9o_juZ0dQB8YVdcN7fAJFTzX0mo_L4'
+    os.environ['BOT_TOKEN'] = '7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk'
 if not os.environ.get('ADMIN_CHAT_IDS'):
     os.environ['ADMIN_CHAT_IDS'] = '1878943383,7164554273'
 
