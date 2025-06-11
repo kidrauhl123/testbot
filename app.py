@@ -298,6 +298,12 @@ def admin_required(f):
     return decorated_function
 
 # ===== Telegram管理员管理API =====
+@app.route('/admin')
+@login_required
+@admin_required
+def admin():
+    return render_template('admin.html')
+
 @app.route('/admin/telegram-admins', methods=['GET'])
 @admin_required
 def get_telegram_admins():
@@ -786,8 +792,12 @@ if __name__ == "__main__":
         if bot_thread and bot_thread.is_alive():
             logger.info("Stopping existing bot instance...")
             if bot_application:
-                asyncio.run(bot_application.stop())
-            bot_thread.join()
+                try:
+                    asyncio.run(bot_application.stop())
+                except Exception as e:
+                    logger.error(f"Error stopping bot: {e}")
+            # 不等待线程结束，让它自然结束
+            bot_thread = None
         
         async def run_bot():
             """运行 Telegram Bot"""
