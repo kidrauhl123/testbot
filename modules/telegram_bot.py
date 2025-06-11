@@ -516,13 +516,16 @@ async def show_all_stats(query, date_str, period_text):
 async def check_and_push_orders():
     """检查新订单并推送通知"""
     from modules.database import get_unnotified_orders
-    global notified_orders
+    global notified_orders, bot_application
+    
+    if not bot_application:
+        return
     
     with constants.notified_orders_lock:
         # 获取未通知的新订单
         new_orders = get_unnotified_orders()
         
-        if not new_orders or not bot_application:
+        if not new_orders:
             return
         
         for order in new_orders:
@@ -532,6 +535,7 @@ async def check_and_push_orders():
             if oid in notified_orders:
                 continue
             
+            # 先标记为已通知，防止重复处理
             notified_orders.add(oid)
             
             # 向所有管理员发送通知
@@ -551,11 +555,13 @@ async def check_and_push_orders():
                         reply_markup=reply_markup,
                         parse_mode='Markdown'
                     )
+                    logger.info(f"Sent notification for order #{oid} to admin {admin_id}")
                 except Exception as e:
-                    logger.error(f"Failed to notify admin {admin_id}: {e}")
+                    logger.error(f"Failed to notify admin {admin_id} for order #{oid}: {e}")
             
             # 更新数据库，标记为已通知
             execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
+            logger.info(f"Marked order #{oid} as notified in database")
 
 # ===== 主函数 =====
 async def run_bot():
@@ -582,8 +588,12 @@ async def run_bot():
         
         # 启动通知检查定时任务
         async def order_check_job():
+            logger.info("Starting order check job")
             while True:
-                await check_and_push_orders()
+                try:
+                    await check_and_push_orders()
+                except Exception as e:
+                    logger.error(f"Error in order check job: {e}")
                 await asyncio.sleep(10)  # 每10秒检查一次
                 
         # 启动异步任务

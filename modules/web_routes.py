@@ -97,18 +97,32 @@ def register_routes(app):
         account = request.form.get('account')
         password = request.form.get('password')
         package = request.form.get('package', '1')
+        remark = request.form.get('remark', '')
         
         if not account or not password:
             return render_template('index.html', error='账号和密码不能为空', prices=WEB_PRICES, plan_options=PLAN_OPTIONS)
         
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        execute_query("""
-            INSERT INTO orders (account, password, package, status, created_at, web_user_id, user_id) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (account, password, package, STATUS['SUBMITTED'], timestamp, session.get('username'), session.get('user_id')))
-        
-        orders = execute_query("SELECT id, account, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
-        return render_template('index.html', orders=orders, success='订单已提交成功！', prices=WEB_PRICES, plan_options=PLAN_OPTIONS)
+        try:
+            # 获取当前用户信息
+            user_id = session.get('user_id')
+            username = session.get('username')
+            
+            # 记录当前时间
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            
+            # 插入订单
+            execute_query("""
+                INSERT INTO orders (account, password, package, remark, status, created_at, web_user_id, user_id, notified) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (account, password, package, remark, STATUS['SUBMITTED'], timestamp, username, user_id, 0))
+            
+            # 获取最新订单列表
+            orders = execute_query("SELECT id, account, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
+            
+            return render_template('index.html', orders=orders, success='订单已提交成功！', prices=WEB_PRICES, plan_options=PLAN_OPTIONS)
+        except Exception as e:
+            app.logger.error(f"创建订单失败: {str(e)}")
+            return render_template('index.html', error=f'订单提交失败: {str(e)}', prices=WEB_PRICES, plan_options=PLAN_OPTIONS)
 
     @app.route('/orders/stats/web/<user_id>')
     @login_required
