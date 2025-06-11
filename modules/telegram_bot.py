@@ -64,6 +64,27 @@ async def get_user_info(user_id):
 
 # ===== TG 命令处理 =====
 processing_accepts = set()
+processing_accepts_time = {}  # 记录每个接单请求的开始时间
+
+# 清理超时的处理中请求
+async def cleanup_processing_accepts():
+    """定期清理超时的处理中请求"""
+    global processing_accepts, processing_accepts_time
+    current_time = time.time()
+    timeout_keys = []
+    
+    for key, start_time in list(processing_accepts_time.items()):
+        # 如果请求处理时间超过30秒，认为超时
+        if current_time - start_time > 30:
+            timeout_keys.append(key)
+    
+    # 从集合中移除超时的请求
+    for key in timeout_keys:
+        if key in processing_accepts:
+            processing_accepts.remove(key)
+        if key in processing_accepts_time:
+            del processing_accepts_time[key]
+        logger.warning(f"清理超时的接单请求: {key}")
 
 async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """开始命令处理"""
@@ -163,12 +184,15 @@ async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ===== TG 回调处理 =====
 async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理接单回调"""
-    global processing_accepts
+    global processing_accepts, processing_accepts_time
     
     query = update.callback_query
     user_id = query.from_user.id
     
     logger.info(f"收到接单回调: 用户={user_id}, 数据={query.data}")
+    
+    # 清理超时的处理中请求
+    await cleanup_processing_accepts()
     
     if not is_telegram_admin(user_id):
         logger.warning(f"非卖家 {user_id} 尝试接单")
@@ -191,6 +215,7 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # 标记为正在处理
             processing_accepts.add(accept_key)
+            processing_accepts_time[accept_key] = time.time()  # 记录开始时间
             
             # 先确认回调，避免超时
             try:
@@ -245,7 +270,11 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try:
                     # 根据不同的失败原因显示不同的消息
                     if "2 active orders" in message:
-                        await query.answer(message, show_alert=True)
+                        # 显示弹窗提示，并更新按钮文本以显示错误信息
+                        await query.answer("You already have 2 active orders. Please complete your current orders first.", show_alert=True)
+                        await query.edit_message_reply_markup(
+                            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⚠️ Cannot accept (2 active orders)", callback_data="noop")]])
+                        )
                     elif "already been taken" in message:
                         await query.edit_message_text(f"⚠️ Order #{oid} has already been taken by someone else.")
                     else:
@@ -255,14 +284,19 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # 无论成功或失败，最后都从集合中移除
             processing_accepts.remove(accept_key)
-            
+            if accept_key in processing_accepts_time:
+                del processing_accepts_time[accept_key]
+
         except ValueError:
             logger.error("无效的回调数据")
         except Exception as e:
             logger.error(f"处理接单时发生未知错误: {str(e)}", exc_info=True)
             # 如果 accept_key 已定义，则从集合中移除
-            if 'accept_key' in locals() and accept_key in processing_accepts:
-                processing_accepts.remove(accept_key)
+            if 'accept_key' in locals():
+                if accept_key in processing_accepts:
+                    processing_accepts.remove(accept_key)
+                if accept_key in processing_accepts_time:
+                    del processing_accepts_time[accept_key]
 
 async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理反馈按钮回调"""
@@ -806,6 +840,10 @@ async def run_bot():
                     try:
                         logger.debug(f"执行第 {check_count} 次订单检查")
                         await check_and_push_orders()
+                        
+                        # 每次检查订单时，也清理一下超时的处理中请求
+                        await cleanup_processing_accepts()
+                        
                         last_check_time = current_time
                     except Exception as e:
                         logger.error(f"订单检查任务出错: {str(e)}", exc_info=True)
