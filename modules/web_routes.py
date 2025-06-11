@@ -251,17 +251,21 @@ def register_routes(app):
         
         # 查询订单
         orders = execute_query(f"""
-            SELECT id, account, package, status, created_at, accepted_at, completed_at 
+            SELECT id, account, package, status, created_at, accepted_at, completed_at,
+                   remark, web_user_id, user_id, accepted_by
             FROM orders 
             {user_filter}
             ORDER BY id DESC LIMIT ? OFFSET ?
         """, params + [limit, offset], fetch=True)
         
+        logger.info(f"查询到 {len(orders)} 条订单记录")
+        
         # 格式化数据
         formatted_orders = []
         for order in orders:
-            oid, account, package, status, created_at, accepted_at, completed_at = order
-            formatted_orders.append({
+            oid, account, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by = order
+            
+            order_data = {
                 "id": oid,
                 "account": account,
                 "package": package,
@@ -269,17 +273,16 @@ def register_routes(app):
                 "status_text": STATUS_TEXT_ZH.get(status, status),
                 "created_at": created_at,
                 "accepted_at": accepted_at or "",
-                "completed_at": completed_at or ""
-            })
-        
-        return jsonify({
-            "orders": formatted_orders,
-            "pagination": {
-                "limit": limit,
-                "offset": offset,
-                "has_more": len(formatted_orders) == limit
+                "completed_at": completed_at or "",
+                "remark": remark or "",
+                "creator": web_user_id,
+                "accepted_by": accepted_by or "",
+                "can_cancel": status == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == user_id)
             }
-        })
+            formatted_orders.append(order_data)
+        
+        # 直接返回订单列表，而不是嵌套在orders字段中
+        return jsonify(formatted_orders)
 
     @app.route('/orders/cancel/<int:oid>', methods=['POST'])
     @login_required
