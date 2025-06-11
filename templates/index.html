@@ -79,7 +79,7 @@
     }
     .left, .right { padding: 20px; }
     .left { 
-      width: 50%; 
+      width: 40%; 
       display: flex; 
       justify-content: center; 
       align-items: center; 
@@ -136,7 +136,7 @@
       box-shadow: 0 5px 15px rgba(102,126,234,0.4);
     }
     .right { 
-      width: 50%; 
+      width: 60%; 
       background: rgba(255,255,255,0.95); 
       border-radius: 15px;
       margin: 20px 0;
@@ -194,9 +194,9 @@
     
     .order { 
       background: #f8f9fa; 
-      padding: 20px; 
-      margin: 15px 20px; 
-      border-radius: 12px; 
+      padding: 15px; 
+      margin: 10px 15px; 
+      border-radius: 10px; 
       border-left: 4px solid #667eea;
       transition: all 0.3s ease;
       opacity: 1;
@@ -206,14 +206,14 @@
       box-shadow: 0 5px 15px rgba(0,0,0,0.1);
     }
     .order h4 { 
-      margin: 0 0 12px; 
+      margin: 0 0 8px; 
       color: #333;
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 600;
     }
     .order p { 
-      margin: 8px 0; 
-      font-size: 14px; 
+      margin: 6px 0; 
+      font-size: 13px; 
       color: #666;
     }
     .order .time { 
@@ -437,7 +437,7 @@
 
 <script>
   // 全局变量
-  let displayedOrders = 5; // 初始显示5个订单
+  let displayedOrders = 8; // 初始显示8个订单
   let allOrders = []; // 存储所有订单
   let searchKeyword = ''; // 搜索关键词
   let autoRefreshInterval = null;
@@ -614,7 +614,7 @@
       
       // 重置表单和状态
       e.target.reset();
-      displayedOrders = 5;
+      displayedOrders = 8;
       searchKeyword = '';
       document.getElementById('searchInput').value = '';
       
@@ -701,9 +701,9 @@
       return;
     }
     
-    // 确保 displayedOrders 至少为 5
-    if (displayedOrders < 5) {
-      displayedOrders = Math.min(5, orders.length);
+    // 确保 displayedOrders 至少为 8
+    if (displayedOrders < 8) {
+      displayedOrders = Math.min(8, orders.length);
     }
     
     // 只显示指定数量的订单
@@ -754,7 +754,7 @@
   // 搜索订单
   function searchOrders() {
     searchKeyword = document.getElementById('searchInput').value.trim();
-    displayedOrders = 5; // 重置显示数量
+    displayedOrders = 8; // 重置显示数量
     
     if (!searchKeyword) {
       renderOrders(allOrders);
@@ -773,7 +773,7 @@
   function clearSearch() {
     searchKeyword = '';
     document.getElementById('searchInput').value = '';
-    displayedOrders = 5;
+    displayedOrders = 8;
     renderOrders(allOrders);
   }
 
