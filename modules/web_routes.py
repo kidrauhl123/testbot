@@ -265,7 +265,7 @@ def register_routes(app):
         # 查询订单
         orders = execute_query(f"""
             SELECT id, account, package, status, created_at, accepted_at, completed_at,
-                   remark, web_user_id, user_id, accepted_by
+                   remark, web_user_id, user_id, accepted_by, accepted_by_username
             FROM orders 
             {user_filter}
             ORDER BY id DESC LIMIT ? OFFSET ?
@@ -276,7 +276,10 @@ def register_routes(app):
         # 格式化数据
         formatted_orders = []
         for order in orders:
-            oid, account, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by = order
+            oid, account, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by, accepted_by_username = order
+            
+            # 如果有卖家用户名，直接使用；否则使用ID
+            seller_display = accepted_by_username if accepted_by_username else accepted_by
             
             order_data = {
                 "id": oid,
@@ -289,7 +292,7 @@ def register_routes(app):
                 "completed_at": completed_at or "",
                 "remark": remark or "",
                 "creator": web_user_id,
-                "accepted_by": accepted_by or "",
+                "accepted_by": seller_display or "",
                 "can_cancel": status == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == user_id)
             }
             formatted_orders.append(order_data)
