@@ -238,6 +238,7 @@ def get_unnotified_orders():
     return execute_query("SELECT id, account, password, package FROM orders WHERE notified = 0 AND status = 'submitted'", fetch=True)
 
 # 接单原子操作
+# 接单原子操作
 def accept_order_atomic(oid, user_id):
     # 使用事务确保操作的原子性
     if DATABASE_URL.startswith('postgres'):
@@ -258,39 +259,89 @@ def accept_order_atomic(oid, user_id):
         )
         cursor = conn.cursor()
         
-        # 检查订单状态
-        cursor.execute("SELECT status FROM orders WHERE id = %s", (oid,))
-        order = cursor.fetchone()
-        if not order or order[0] != 'submitted':
+        try:
+            # 开始事务
+            cursor.execute("BEGIN")
+            
+            # 检查订单状态
+            cursor.execute("SELECT status FROM orders WHERE id = %s FOR UPDATE", (oid,))
+            order = cursor.fetchone()
+            if not order or order[0] != 'submitted':
+                conn.rollback()
+                conn.close()
+                return False, "Order already taken or not found"
+            
+            # 检查该用户当前接单数量（状态为accepted的订单）
+            cursor.execute("""
+                SELECT COUNT(*) FROM orders 
+                WHERE accepted_by = %s AND status = 'accepted'
+            """, (str(user_id),))
+            active_count = cursor.fetchone()[0]
+            
+            if active_count >= 2:
+                conn.rollback()
+                conn.close()
+                return False, "You already have 2 active orders. Please complete them first."
+            
+            # 更新订单
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = %s, accepted_by = %s WHERE id = %s",
+                          (timestamp, str(user_id), oid))
+            
+            # 提交事务
+            conn.commit()
             conn.close()
-            return False
-        
-        # 更新订单
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = %s, accepted_by = %s WHERE id = %s",
-                      (timestamp, str(user_id), oid))
+            return True, "Success"
+            
+        except Exception as e:
+            conn.rollback()
+            conn.close()
+            logger.error(f"Error in accept_order_atomic: {str(e)}")
+            return False, "Database error"
     else:
         # SQLite版本
         conn = sqlite3.connect("orders.db")
         cursor = conn.cursor()
         
-        # 检查订单状态
-        cursor.execute("SELECT status FROM orders WHERE id = ?", (oid,))
-        order = cursor.fetchone()
-        if not order or order[0] != 'submitted':
+        try:
+            # 开始独占事务
+            cursor.execute("BEGIN EXCLUSIVE")
+            
+            # 检查订单状态
+            cursor.execute("SELECT status FROM orders WHERE id = ?", (oid,))
+            order = cursor.fetchone()
+            if not order or order[0] != 'submitted':
+                conn.rollback()
+                conn.close()
+                return False, "Order already taken or not found"
+            
+            # 检查该用户当前接单数量（状态为accepted的订单）
+            cursor.execute("""
+                SELECT COUNT(*) FROM orders 
+                WHERE accepted_by = ? AND status = 'accepted'
+            """, (str(user_id),))
+            active_count = cursor.fetchone()[0]
+            
+            if active_count >= 2:
+                conn.rollback()
+                conn.close()
+                return False, "You already have 2 active orders. Please complete them first."
+            
+            # 更新订单
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = ?, accepted_by = ? WHERE id = ?",
+                          (timestamp, str(user_id), oid))
+            
+            # 提交事务
+            conn.commit()
             conn.close()
-            return False
-        
-        # 更新订单
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = ?, accepted_by = ? WHERE id = ?",
-                      (timestamp, str(user_id), oid))
-    
-    # 提交并关闭
-    conn.commit()
-    conn.close()
-    return True
-
+            return True, "Success"
+            
+        except Exception as e:
+            conn.rollback()
+            conn.close()
+            logger.error(f"Error in accept_order_atomic: {str(e)}")
+            return False, "Database error"
 # 获取订单详情
 def get_order_details(oid):
     return execute_query("SELECT id, account, password, package, status, remark FROM orders WHERE id = ?", (oid,), fetch=True) 

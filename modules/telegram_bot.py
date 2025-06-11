@@ -164,7 +164,9 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"管理员 {user_id} 尝试接单 #{oid}")
             
             # 尝试接单
-            if accept_order_atomic(oid, user_id):
+            success, message = accept_order_atomic(oid, user_id)
+            
+            if success:
                 logger.info(f"管理员 {user_id} 成功接单 #{oid}")
                 
                 # 更新消息展示
@@ -202,18 +204,25 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except:
                         pass
             else:
-                logger.warning(f"订单 #{oid} 已被其他管理员接单")
+                logger.warning(f"订单 #{oid} 接单失败: {message}")
                 try:
-                    await query.edit_message_reply_markup(
-                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Already taken by another admin", callback_data="noop")]])
-                    )
+                    # 根据不同的失败原因显示不同的消息
+                    if "2 active orders" in message:
+                        await query.edit_message_reply_markup(
+                            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ " + message, callback_data="noop")]])
+                        )
+                        # 同时发送一条单独的消息提醒
+                        await query.message.reply_text(message)
+                    else:
+                        await query.edit_message_reply_markup(
+                            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Already taken by another admin", callback_data="noop")]])
+                        )
                 except Exception as markup_error:
-                    logger.error(f"更新已接单标记时出错: {str(markup_error)}")
+                    logger.error(f"更新失败标记时出错: {str(markup_error)}")
         except ValueError as ve:
             logger.error(f"解析订单ID出错: {str(ve)}")
         except Exception as e:
             logger.error(f"接单处理出错: {str(e)}", exc_info=True)
-
 async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理完成/失败回调"""
     query = update.callback_query
