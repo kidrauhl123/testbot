@@ -634,46 +634,62 @@ async def show_all_stats(query, date_str, period_text):
 
 # ===== 推送通知 =====
 async def check_and_push_orders():
-    """检查新订单并推送给卖家"""
-    global notified_orders, bot_application
+    """定期检查新订单并推送给所有管理员"""
+    global bot_application
+    logger.info("正在检查新订单...")
     
-    logger.info("开始检查新订单...")
-    logger.info(f"当前卖家列表: {ADMIN_CHAT_IDS}")
-    
-    # ... (保持原有的检查逻辑不变)
-    
-    # 推送通知给所有卖家
-    if not ADMIN_CHAT_IDS:
-        logger.error("卖家列表为空，无法发送通知")
+    if bot_application is None:
+        logger.warning("Telegram Bot尚未初始化，无法推送订单")
         return
+        
+    # 初始化 new_orders
+    new_orders = None
     
-    for admin_id in ADMIN_CHAT_IDS:
-        try:
-            logger.info(f"向卖家 {admin_id} 推送新订单通知")
-            for order in new_orders:
-                oid, account, password, package, created_at, web_user = order
-                
-                # 创建接单按钮
-                keyboard = [[InlineKeyboardButton("Accept", callback_data=f"accept_{oid}")]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                # 发送消息时隐藏密码
+    try:
+        # 查询状态为 'submitted' 且未通知的订单
+        with constants.notified_orders_lock:
+            new_orders = execute_query("""
+                SELECT id, account, password, package, created_at, web_user FROM orders 
+                WHERE status = ? AND notified = 0
+            """, (STATUS['SUBMITTED'],), fetch=True)
+            
+            # 更新通知状态
+            execute_query("UPDATE orders SET notified = 1 WHERE status = ?", (STATUS['SUBMITTED'],))
+            
+        # 推送新订单
+        if new_orders:
+            logger.info(f"发现 {len(new_orders)} 个新订单，准备推送...")
+            
+            # 获取所有管理员
+            for admin_id in ADMIN_CHAT_IDS:
                 try:
-                    await bot_application.bot.send_message(
-                        chat_id=admin_id,
-                        text=f"🆕 New Order #{oid} - {created_at}\n"
-                             f"From: {web_user or 'Unknown'}\n"
-                             f"Account: `{account}`\n"
-                             f"Password: `********` (hidden until accepted)\n"
-                             f"Package: {package} month(s)",
-                        reply_markup=reply_markup,
-                        parse_mode='Markdown'
-                    )
-                    logger.info(f"已向卖家 {admin_id} 发送订单 #{oid} 的通知")
-                except Exception as msg_error:
-                    logger.error(f"向卖家 {admin_id} 发送订单 #{oid} 通知失败: {str(msg_error)}")
-        except Exception as e:
-            logger.error(f"向卖家 {admin_id} 发送通知失败: {str(e)}", exc_info=True)
+                    logger.info(f"向卖家 {admin_id} 推送新订单通知")
+                    for order in new_orders:
+                        oid, account, password, package, created_at, web_user = order
+                        
+                        # 创建接单按钮
+                        keyboard = [[InlineKeyboardButton("Accept", callback_data=f"accept_{oid}")]]
+                        reply_markup = InlineKeyboardMarkup(keyboard)
+                        
+                        # 发送消息时隐藏密码
+                        try:
+                            await bot_application.bot.send_message(
+                                chat_id=admin_id,
+                                text=f"🆕 New Order #{oid} - {created_at}\n"
+                                     f"From: {web_user or 'Unknown'}\n"
+                                     f"Account: `{account}`\n"
+                                     f"Password: `********` (hidden until accepted)\n"
+                                     f"Package: {package} month(s)",
+                                reply_markup=reply_markup,
+                                parse_mode='Markdown'
+                            )
+                            logger.info(f"已向卖家 {admin_id} 发送订单 #{oid} 的通知")
+                        except Exception as msg_error:
+                            logger.error(f"向卖家 {admin_id} 发送订单 #{oid} 通知失败: {str(msg_error)}")
+                except Exception as e:
+                    logger.error(f"向卖家 {admin_id} 发送通知失败: {str(e)}", exc_info=True)
+    except Exception as e:
+        logger.error(f"检查新订单时出错: {str(e)}", exc_info=True)
 
 # ===== 主函数 =====
 async def run_bot():
