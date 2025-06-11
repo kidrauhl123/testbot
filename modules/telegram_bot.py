@@ -40,7 +40,7 @@ async def get_user_info(user_id):
     global bot_application, user_info_cache
     
     if not bot_application:
-        return {"id": user_id, "username": "Unknown", "first_name": "Unknown"}
+        return {"id": user_id, "username": "Unknown", "first_name": "Unknown", "last_name": ""}
     
     # 检查缓存
     if user_id in user_info_cache:
@@ -58,7 +58,7 @@ async def get_user_info(user_id):
         return user_info
     except Exception as e:
         logger.error(f"Failed to get user info for {user_id}: {e}")
-        default_info = {"id": user_id, "username": "Unknown", "first_name": "Unknown"}
+        default_info = {"id": user_id, "username": "Unknown", "first_name": "Unknown", "last_name": ""}
         user_info_cache[user_id] = default_info
         return default_info
 

@@ -314,14 +314,25 @@ def accept_order_atomic(oid, user_id):
                 from modules.constants import user_info_cache
                 username = None
                 first_name = None
+                last_name = None
+                full_name = None
+                
                 if user_id in user_info_cache:
                     username = user_info_cache[user_id].get('username')
                     first_name = user_info_cache[user_id].get('first_name')
+                    last_name = user_info_cache[user_id].get('last_name', '')
+                    
+                    # 组合完整昵称
+                    if first_name:
+                        if last_name:
+                            full_name = f"{first_name} {last_name}".strip()
+                        else:
+                            full_name = first_name
                 
                 # 更新订单
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = %s, accepted_by = %s, accepted_by_username = %s, accepted_by_first_name = %s WHERE id = %s",
-                            (timestamp, str(user_id), username, first_name, oid))
+                            (timestamp, str(user_id), username, full_name, oid))
             except Exception as e:
                 logger.error(f"获取用户信息失败: {str(e)}")
                 # 如果获取用户信息失败，仍然更新订单，但不设置用户名和昵称
@@ -374,14 +385,25 @@ def accept_order_atomic(oid, user_id):
                 from modules.constants import user_info_cache
                 username = None
                 first_name = None
+                last_name = None
+                full_name = None
+                
                 if user_id in user_info_cache:
                     username = user_info_cache[user_id].get('username')
                     first_name = user_info_cache[user_id].get('first_name')
+                    last_name = user_info_cache[user_id].get('last_name', '')
+                    
+                    # 组合完整昵称
+                    if first_name:
+                        if last_name:
+                            full_name = f"{first_name} {last_name}".strip()
+                        else:
+                            full_name = first_name
                 
                 # 更新订单
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = ?, accepted_by = ?, accepted_by_username = ?, accepted_by_first_name = ? WHERE id = ?",
-                            (timestamp, str(user_id), username, first_name, oid))
+                            (timestamp, str(user_id), username, full_name, oid))
             except Exception as e:
                 logger.error(f"获取用户信息失败: {str(e)}")
                 # 如果获取用户信息失败，仍然更新订单，但不设置用户名和昵称
