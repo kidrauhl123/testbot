@@ -525,20 +525,31 @@
       if (!map.has(username)) {
         map.set(username, {
           username,
-          total_orders: 0,
+          total_orders: 0,        // 完成的订单总数
+          total_submitted: 0,     // 提交的订单总数
           total_amount: 0,
-          package_counts: {}
+          package_counts: {},     // 每个套餐的总提交数
+          completed_counts: {}    // 每个套餐的完成数
         });
       }
   
       const stats = map.get(username);
-      stats.total_orders += 1;
-  
+      
+      // 计算提交订单总数
+      stats.total_submitted += 1;
+      
+      // 只统计已完成的订单
       if (order.status === 'completed') {
+        stats.total_orders += 1;
         const price = WEB_PRICES[order.package] || 0;
         stats.total_amount += price;
+        
+        // 记录每个套餐的完成数
+        const pkg = order.package;
+        stats.completed_counts[pkg] = (stats.completed_counts[pkg] || 0) + 1;
       }
   
+      // 记录每个套餐的总提交数
       const pkg = order.package;
       stats.package_counts[pkg] = (stats.package_counts[pkg] || 0) + 1;
     }
@@ -570,8 +581,11 @@
           总金额：¥${stat.total_amount.toFixed(2)}<br>`;
   
       for (const [pkg, count] of Object.entries(stat.package_counts)) {
-        const amount = (WEB_PRICES[pkg] || 0) * count;
-        html += `<div style="font-size:13px;">• ${pkg}个月：${count} 单 (¥${amount.toFixed(2)})</div>`;
+        // 获取该套餐完成的订单数
+        const completedCount = stat.completed_counts[pkg] || 0;
+        // 金额只计算已完成的订单
+        const amount = (WEB_PRICES[pkg] || 0) * completedCount;
+        html += `<div style="font-size:13px;">• ${pkg}个月：${completedCount} 单 (¥${amount.toFixed(2)})</div>`;
       }
   
       html += `</div>`;
