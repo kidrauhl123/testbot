@@ -63,7 +63,7 @@ def register_routes(app):
         if request.method == 'POST':
             username = request.form.get('username')
             password = request.form.get('password')
-            confirm_password = request.form.get('confirm_password')
+            confirm_password = request.form.get('password_confirm')  # 修正字段名称
             
             # 验证输入
             if not username or not password or not confirm_password:
