@@ -3,11 +3,14 @@ import time
 import logging
 from datetime import datetime
 from functools import wraps
+import asyncio
 
 from flask import Flask, request, render_template, jsonify, session, redirect, url_for
 
 from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS
 from modules.database import execute_query, hash_password
+from modules.telegram_bot import bot_application, check_and_push_orders
+import modules.constants as constants
 
 # 设置日志
 logger = logging.getLogger(__name__)
@@ -308,4 +311,46 @@ def register_routes(app):
         execute_query("UPDATE orders SET status=?, completed_at=? WHERE id=?",
                      (STATUS['CANCELLED'], timestamp, oid))
         
-        return jsonify({"success": True, "message": "订单已取消"}) 
+        return jsonify({"success": True, "message": "订单已取消"})
+
+    # 添加一个测试路由
+    @app.route('/test')
+    def test_route():
+        logger.info("访问测试路由")
+        return jsonify({
+            'status': 'ok',
+            'message': '服务器正常运行',
+            'time': time.strftime("%Y-%m-%d %H:%M:%S"),
+            'admin_ids': constants.ADMIN_CHAT_IDS
+        })
+
+    # 添加一个路由用于手动触发订单检查
+    @app.route('/check-orders')
+    def manual_check_orders():
+        logger.info("手动触发订单检查")
+        
+        try:
+            # 导入asyncio和机器人实例
+            from modules.telegram_bot import bot_application
+            
+            # 检查机器人实例
+            if bot_application is None:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Telegram机器人实例未初始化'
+                })
+            
+            # 创建事件循环并执行订单检查
+            asyncio.run(check_and_push_orders())
+            
+            return jsonify({
+                'status': 'ok',
+                'message': '订单检查已触发',
+                'time': time.strftime("%Y-%m-%d %H:%M:%S")
+            })
+        except Exception as e:
+            logger.error(f"手动触发订单检查失败: {str(e)}", exc_info=True)
+            return jsonify({
+                'status': 'error',
+                'message': f'触发失败: {str(e)}'
+            }) 

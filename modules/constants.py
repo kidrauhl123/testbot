@@ -1,18 +1,18 @@
 import os
 from collections import defaultdict
+import threading
 
 # ✅ 写死变量（优先）
 if not os.environ.get('BOT_TOKEN'):
     os.environ['BOT_TOKEN'] = '7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk'
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
-# 确保至少有一个管理员ID
-ADMIN_CHAT_IDS_ENV = os.environ.get("ADMIN_CHAT_IDS", "")
 
 # 确保管理员ID列表中始终包含1878943383
-default_admin = 1878943383  # 默认管理员ID
-ADMIN_CHAT_IDS = []
+default_admin = 1878943383
+ADMIN_CHAT_IDS_ENV = os.environ.get("ADMIN_CHAT_IDS", str(default_admin))
 
+ADMIN_CHAT_IDS = []
 if ADMIN_CHAT_IDS_ENV.strip():
     # 解析环境变量中的管理员ID
     for x in ADMIN_CHAT_IDS_ENV.split(","):
@@ -22,9 +22,12 @@ if ADMIN_CHAT_IDS_ENV.strip():
             except ValueError:
                 pass
 
-# 如果环境变量中没有管理员ID，或未包含默认管理员，则添加默认管理员
-if not ADMIN_CHAT_IDS or default_admin not in ADMIN_CHAT_IDS:
+# 如果默认管理员不在列表中，则添加
+if default_admin not in ADMIN_CHAT_IDS:
     ADMIN_CHAT_IDS.append(default_admin)
+
+# 同步回环境变量，以确保一致性
+os.environ['ADMIN_CHAT_IDS'] = ",".join(map(str, ADMIN_CHAT_IDS))
 
 # ===== 价格系统 =====
 # 网页端价格（人民币）
@@ -52,7 +55,7 @@ PLAN_LABELS_EN = {'1': '1 Month', '2': '2 Months', '3': '3 Months', '6': '6 Mont
 user_languages = defaultdict(lambda: 'en')
 feedback_waiting = {}
 notified_orders = set()
-notified_orders_lock = None  # 在主应用中初始化
+notified_orders_lock = threading.Lock()  # 在主应用中初始化
 
 # 数据库连接URL（用于PostgreSQL判断，默认为SQLite）
 DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///orders.db')
