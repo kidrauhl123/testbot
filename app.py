@@ -75,6 +75,7 @@ logger = logging.getLogger(__name__)
 
 # ===== 全局 Bot 实例 =====
 bot_application = None
+bot_thread = None
 
 # ===== 数据库连接函数 =====
 def get_db_connection():
@@ -779,35 +780,46 @@ if __name__ == "__main__":
     # 启动 Bot 线程
     def run_bot_in_thread():
         """在独立线程中运行 Bot"""
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        global bot_application, bot_thread
+        
+        # 如果已经有实例在运行，先停止它
+        if bot_thread and bot_thread.is_alive():
+            logger.info("Stopping existing bot instance...")
+            if bot_application:
+                asyncio.run(bot_application.stop())
+            bot_thread.join()
         
         async def run_bot():
             """运行 Telegram Bot"""
             global bot_application
-            
-            bot_application = ApplicationBuilder().token(BOT_TOKEN).build()
-            
-            # 注册处理器
-            bot_application.add_handler(CommandHandler("start", on_start))
-            bot_application.add_handler(CommandHandler("admin", on_admin_command))  # 新增管理员管理命令
-            bot_application.add_handler(CommandHandler("stats", on_stats))
-            bot_application.add_handler(CallbackQueryHandler(on_accept, pattern=r"^accept_\d+$"))
-            bot_application.add_handler(CallbackQueryHandler(on_feedback_button, pattern=r"^(done|fail)_\d+$"))
-            bot_application.add_handler(CallbackQueryHandler(on_stats_callback, pattern=r"^stats_"))
-            bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
-            
-            await bot_application.bot.delete_webhook(drop_pending_updates=True)
-            await bot_application.initialize()
-            await bot_application.start()
-            await bot_application.updater.start_polling()
-            
-            # 启动推送任务
-            asyncio.create_task(check_and_push_orders())
-            
-            await asyncio.Event().wait()
+            try:
+                bot_application = ApplicationBuilder().token(BOT_TOKEN).build()
+                
+                # 添加处理器
+                bot_application.add_handler(CommandHandler("start", on_start))
+                bot_application.add_handler(CommandHandler("admin", on_admin_command))
+                bot_application.add_handler(CommandHandler("stats", on_stats))
+                bot_application.add_handler(CallbackQueryHandler(on_accept, pattern="^accept_"))
+                bot_application.add_handler(CallbackQueryHandler(on_stats_callback, pattern="^stats_"))
+                bot_application.add_handler(CallbackQueryHandler(on_feedback_button, pattern="^feedback_"))
+                bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+                
+                # 启动机器人
+                await bot_application.initialize()
+                await bot_application.start()
+                await bot_application.run_polling(allowed_updates=Update.ALL_TYPES)
+            except Exception as e:
+                logger.error(f"Error in bot thread: {e}")
+                raise e
+
+        # 创建新的事件循环
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         
-        loop.run_until_complete(run_bot())
+        # 启动机器人
+        bot_thread = threading.Thread(target=lambda: loop.run_until_complete(run_bot()))
+        bot_thread.daemon = True
+        bot_thread.start()
     
     bot_thread = threading.Thread(target=run_bot_in_thread, daemon=True)
     bot_thread.start()
