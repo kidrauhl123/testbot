@@ -126,11 +126,11 @@
       display: block;
     }
     
-    .admin-list {
+    .seller-list {
       margin-top: 30px;
     }
     
-    .admin-item {
+    .seller-item {
       background: #f8f9fa;
       padding: 20px;
       margin-bottom: 15px;
@@ -142,25 +142,25 @@
       transition: all 0.3s ease;
     }
     
-    .admin-item:hover {
+    .seller-item:hover {
       transform: translateX(5px);
       box-shadow: 0 5px 15px rgba(0,0,0,0.1);
     }
     
-    .admin-info h4 {
+    .seller-info h4 {
       margin: 0 0 8px;
       color: #333;
       font-size: 18px;
       font-weight: 600;
     }
     
-    .admin-info p {
+    .seller-info p {
       margin: 4px 0;
       font-size: 14px;
       color: #666;
     }
     
-    .admin-info .telegram-id {
+    .seller-info .telegram-id {
       font-family: 'Courier New', monospace;
       background: #e9ecef;
       padding: 2px 6px;
@@ -168,7 +168,7 @@
       font-size: 13px;
     }
     
-    .admin-actions {
+    .seller-actions {
       display: flex;
       gap: 10px;
       align-items: center;
@@ -218,6 +218,7 @@
       border-radius: 8px;
       margin-bottom: 20px;
       font-size: 14px;
+      display: none;
     }
     
     .success-message {
@@ -227,6 +228,7 @@
       border-radius: 8px;
       margin-bottom: 20px;
       font-size: 14px;
+      display: none;
     }
     
     .instructions {
@@ -270,12 +272,12 @@
         flex-direction: column;
         align-items: stretch;
       }
-      .admin-item {
+      .seller-item {
         flex-direction: column;
         align-items: stretch;
         gap: 15px;
       }
-      .admin-actions {
+      .seller-actions {
         justify-content: flex-end;
       }
     }
@@ -287,7 +289,7 @@
   <div class="navbar-brand">破天充值系统 - 卖家管理</div>
   <div class="navbar-user">
     <a href="/" class="btn btn-primary">返回主页</a>
-    <span>欢迎，<span class="username" id="username">管理员</span></span>
+    <span>欢迎，<span class="username">超级管理员</span></span>
     <span class="admin-badge">超级管理员</span>
     <button class="btn btn-danger" onclick="window.location.href='/logout'">退出登录</button>
   </div>
@@ -296,7 +298,7 @@
 <div class="main-container">
   <!-- 使用说明 -->
   <div class="instructions">
-    <h3>📋 Telegram卖家管理说明</h3>
+    <h3>📋 卖家管理说明</h3>
     <ul>
       <li><strong>添加卖家：</strong>输入要添加的Telegram用户ID，点击添加按钮</li>
       <li><strong>获取Telegram ID：</strong>可以让用户发送 <code>/start</code> 给 <code>@userinfobot</code> 获取自己的ID</li>
@@ -308,7 +310,7 @@
   
   <!-- 添加新卖家 -->
   <div class="card">
-    <h2>➕ 添加新的Telegram卖家</h2>
+    <h2>➕ 添加新的卖家</h2>
     
     <div id="message"></div>
     
@@ -333,7 +335,7 @@
   
   <!-- 现有卖家列表 -->
   <div class="card">
-    <h2>现有Telegram卖家</h2>
+    <h2>👥 现有卖家</h2>
     
     <div id="sellersList">
       <div class="loading">加载卖家列表中</div>
@@ -369,7 +371,7 @@ async function loadSellers() {
   } catch (error) {
     console.error('Error loading sellers:', error);
     document.getElementById('sellersList').innerHTML = 
-      '<div class="error-message">加载失败，请刷新重试</div>';
+      '<div class="error-message" style="display: block;">加载失败，请刷新重试</div>';
   }
 }
 
@@ -386,7 +388,7 @@ function renderSellers() {
   
   sellers.forEach(seller => {
     const sellerDiv = document.createElement('div');
-    sellerDiv.className = 'admin-item';
+    sellerDiv.className = 'seller-item';
     
     const name = seller.first_name || 'Unknown';
     const username = seller.username ? `@${seller.username}` : '无用户名';
@@ -395,19 +397,19 @@ function renderSellers() {
     const addedDate = new Date(seller.added_at).toLocaleString('zh-CN');
     
     sellerDiv.innerHTML = `
-      <div class="admin-info">
+      <div class="seller-info">
         <h4>${escapeHtml(name)} <span class="status-badge ${statusClass}">${statusText}</span></h4>
         <p><strong>用户名：</strong>${escapeHtml(username)}</p>
         <p><strong>Telegram ID：</strong><span class="telegram-id">${seller.telegram_id}</span></p>
         <p><strong>添加时间：</strong>${addedDate}</p>
         ${seller.added_by ? `<p><strong>添加者：</strong>${escapeHtml(seller.added_by)}</p>` : ''}
       </div>
-      <div class="admin-actions">
+      <div class="seller-actions">
         <button class="btn ${seller.is_active ? 'btn-warning' : 'btn-success'}" 
-                onclick="toggleSellerStatus(${seller.telegram_id})">
+                onclick="toggleSeller(${seller.telegram_id})">
           ${seller.is_active ? '停用' : '启用'}
         </button>
-        <button class="btn btn-danger" onclick="deleteSeller(${seller.telegram_id})">
+        <button class="btn btn-danger" onclick="removeSeller(${seller.telegram_id})">
           删除
         </button>
       </div>
@@ -429,9 +431,9 @@ function escapeHtml(unsafe) {
 
 // 添加卖家
 async function addSeller() {
-  const telegramId = document.getElementById('telegramId').value;
-  const username = document.getElementById('username').value;
-  const firstName = document.getElementById('firstName').value;
+  const telegramId = document.getElementById('telegramId').value.trim();
+  const username = document.getElementById('username').value.trim();
+  const firstName = document.getElementById('firstName').value.trim();
   
   if (!telegramId) {
     showMessage('请输入Telegram用户ID', 'error');
@@ -484,7 +486,7 @@ async function addSeller() {
 }
 
 // 切换卖家状态
-async function toggleSellerStatus(telegramId) {
+async function toggleSeller(telegramId) {
   if (!confirm('确定要切换此卖家的状态吗？')) {
     return;
   }
@@ -503,13 +505,13 @@ async function toggleSellerStatus(telegramId) {
       showMessage(result.error || '操作失败', 'error');
     }
   } catch (error) {
-    console.error('Error toggling seller status:', error);
+    console.error('Error toggling seller:', error);
     showMessage('操作失败，请重试', 'error');
   }
 }
 
 // 删除卖家
-async function deleteSeller(telegramId) {
+async function removeSeller(telegramId) {
   if (!confirm('确定要删除此卖家吗？此操作不可恢复！')) {
     return;
   }
@@ -528,7 +530,7 @@ async function deleteSeller(telegramId) {
       showMessage(result.error || '删除失败', 'error');
     }
   } catch (error) {
-    console.error('Error deleting seller:', error);
+    console.error('Error removing seller:', error);
     showMessage('删除失败，请重试', 'error');
   }
 }
