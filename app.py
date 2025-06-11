@@ -628,6 +628,150 @@ async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ===== 其他现有函数保持不变，但需要更新数据库查询方式 =====
 # [这里包含其他现有的路由和函数，需要根据新的数据库函数进行相应更新]
 
+# ===== Bot 命令处理函数 =====
+async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /start 命令"""
+    user = update.effective_user
+    user_id = user.id
+    username = user.username
+    first_name = user.first_name
+    
+    # 检查是否是管理员
+    is_admin = is_telegram_admin(user_id)
+    
+    # 构建欢迎消息
+    welcome_text = f"👋 你好 {first_name}！\n\n"
+    if is_admin:
+        welcome_text += "✅ 你是系统管理员，可以使用以下命令：\n"
+        welcome_text += "/admin - 查看管理员列表\n"
+        welcome_text += "/stats - 查看统计数据\n"
+    else:
+        welcome_text += "❌ 你不是系统管理员，无法使用管理命令。"
+    
+    await update.message.reply_text(welcome_text)
+
+async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /stats 命令"""
+    user_id = update.effective_user.id
+    
+    # 检查是否是管理员
+    if not is_telegram_admin(user_id):
+        await update.message.reply_text("❌ 你不是系统管理员，无法使用此命令。")
+        return
+    
+    # 获取统计数据
+    stats = execute_query("""
+        SELECT 
+            COUNT(*) as total_orders,
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_orders,
+            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_orders,
+            SUM(CASE WHEN status = 'submitted' THEN 1 ELSE 0 END) as pending_orders
+        FROM orders
+    """, fetchone=True)
+    
+    if DATABASE_URL.startswith('postgresql://') or DATABASE_URL.startswith('postgres://'):
+        total = stats['total_orders'] or 0
+        completed = stats['completed_orders'] or 0
+        failed = stats['failed_orders'] or 0
+        pending = stats['pending_orders'] or 0
+    else:
+        total = stats[0] or 0
+        completed = stats[1] or 0
+        failed = stats[2] or 0
+        pending = stats[3] or 0
+    
+    text = "📊 **订单统计**\n\n"
+    text += f"总订单数：{total}\n"
+    text += f"✅ 已完成：{completed}\n"
+    text += f"❌ 失败：{failed}\n"
+    text += f"⏳ 待处理：{pending}"
+    
+    await update.message.reply_text(text, parse_mode='Markdown')
+
+async def on_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理统计数据的回调查询"""
+    query = update.callback_query
+    await query.answer()
+    
+    # 这里可以添加更多统计数据的处理逻辑
+    await query.edit_message_text("统计功能开发中...")
+
+async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理订单反馈按钮"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    # 检查是否是管理员
+    if not is_telegram_admin(user_id):
+        await query.answer("你不是系统管理员，无法使用此功能。", show_alert=True)
+        return
+    
+    action, oid = query.data.split('_')
+    oid = int(oid)
+    
+    # 更新订单状态
+    status = 'completed' if action == 'done' else 'failed'
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    execute_query("""
+        UPDATE orders 
+        SET status = ?, completed_at = ? 
+        WHERE id = ?
+    """, (status, timestamp, oid))
+    
+    # 更新消息
+    status_text = "✅ 已完成" if action == 'done' else "❌ 失败"
+    await query.edit_message_text(
+        f"{query.message.text}\n\n{status_text}",
+        reply_markup=None
+    )
+
+async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理文本消息"""
+    # 这里可以添加文本消息的处理逻辑
+    pass
+
+# ===== Flask 路由 =====
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if not username or not password:
+            return render_template('login.html', error='请输入用户名和密码')
+        
+        user = execute_query(
+            "SELECT * FROM users WHERE username = ?", 
+            (username,), 
+            fetchone=True
+        )
+        
+        if not user:
+            return render_template('login.html', error='用户不存在')
+        
+        if DATABASE_URL.startswith('postgresql://') or DATABASE_URL.startswith('postgres://'):
+            password_hash = user['password_hash']
+        else:
+            password_hash = user[2]
+        
+        if hash_password(password) != password_hash:
+            return render_template('login.html', error='密码错误')
+        
+        session['user_id'] = user[0] if not DATABASE_URL.startswith('postgresql://') else user['id']
+        session['username'] = username
+        
+        # 更新最后登录时间
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        execute_query(
+            "UPDATE users SET last_login = ? WHERE id = ?",
+            (timestamp, user[0] if not DATABASE_URL.startswith('postgresql://') else user['id'])
+        )
+        
+        return redirect(url_for('admin'))
+    
+    return render_template('login.html')
+
 # ===== 主程序 =====
 if __name__ == "__main__":
     init_db()
