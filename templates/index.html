@@ -513,10 +513,14 @@
   }
   function buildUserStatsFromOrders(allOrders) {
     const map = new Map();
+    const currentUsername = '{{ session.username }}'; // 获取当前登录用户名
   
     for (const order of allOrders) {
       const username = order.creator;
       if (!username) continue;
+      
+      // 如果不是管理员，只处理当前用户的订单
+      if (!isAdmin && username !== currentUsername) continue;
   
       if (!map.has(username)) {
         map.set(username, {
@@ -544,25 +548,37 @@
 
   function renderAdminStatsList() {
     const statsDiv = document.getElementById('userStats');
-    const toShow = userStatResults.slice(0, showStatLimit);
+    
+    // 如果没有统计数据
+    if (!userStatResults || userStatResults.length === 0) {
+      statsDiv.innerHTML = '<div style="color: #999;">今天还没有订单</div>';
+      return;
+    }
+    
+    // 管理员可以查看所有用户，普通用户只看自己的
+    const toShow = isAdmin ? userStatResults.slice(0, showStatLimit) : userStatResults;
   
     let html = '';
     for (const stat of toShow) {
+      // 如果是管理员，显示用户名标题
+      const userHeader = isAdmin ? `<strong>@${stat.username}</strong><br>` : '';
+      
       html += `
         <div style="margin-bottom:15px;">
-          <strong>@${stat.username}</strong><br>
+          ${userHeader}
           订单数：${stat.total_orders} 单<br>
           总金额：¥${stat.total_amount.toFixed(2)}<br>`;
   
       for (const [pkg, count] of Object.entries(stat.package_counts)) {
         const amount = (WEB_PRICES[pkg] || 0) * count;
-        html += `<div style="font-size:13px;">• ${pkg}月：${count} 单 (¥${amount.toFixed(2)})</div>`;
+        html += `<div style="font-size:13px;">• ${pkg}个月：${count} 单 (¥${amount.toFixed(2)})</div>`;
       }
   
       html += `</div>`;
     }
   
-    if (userStatResults.length > showStatLimit) {
+    // 只有管理员需要"显示更多"按钮
+    if (isAdmin && userStatResults.length > showStatLimit) {
       html += `<button onclick="showStatLimit += 3; renderAdminStatsList()" style="margin-top:10px;">显示更多</button>`;
     }
   
@@ -820,12 +836,9 @@
   // 初始化
   window.addEventListener('load', async () => {
     await loadOrders();
-    if (isAdmin) {
-      userStatResults = buildUserStatsFromOrders(allOrders);
-      renderAdminStatsList();
-    } else {
-      await loadUserStats();
-    }
+    // 对所有用户都使用相同的统计逻辑
+    userStatResults = buildUserStatsFromOrders(allOrders);
+    renderAdminStatsList();
     startAutoRefresh();
   });
 
