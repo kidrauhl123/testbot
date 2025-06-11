@@ -649,7 +649,7 @@ async def check_and_push_orders():
         # 查询状态为 'submitted' 且未通知的订单
         with constants.notified_orders_lock:
             new_orders = execute_query("""
-                SELECT id, account, password, package, created_at, web_user FROM orders 
+                SELECT id, account, password, package, created_at, web_user_id FROM orders 
                 WHERE status = ? AND notified = 0
             """, (STATUS['SUBMITTED'],), fetch=True)
             
@@ -665,7 +665,16 @@ async def check_and_push_orders():
                 try:
                     logger.info(f"向卖家 {admin_id} 推送新订单通知")
                     for order in new_orders:
-                        oid, account, password, package, created_at, web_user = order
+                        oid, account, password, package, created_at, web_user_id = order
+                        
+                        user_info = f" from web user: {web_user_id}" if web_user_id else ""
+                        
+                        message = (
+                            f"📢 New Order #{oid}{user_info}\n"
+                            f"Account: `{account}`\n"
+                            f"Password: `********` (hidden until accepted)\n"
+                            f"Package: {package} month(s)"
+                        )
                         
                         # 创建接单按钮
                         keyboard = [[InlineKeyboardButton("Accept", callback_data=f"accept_{oid}")]]
@@ -675,11 +684,7 @@ async def check_and_push_orders():
                         try:
                             await bot_application.bot.send_message(
                                 chat_id=admin_id,
-                                text=f"🆕 New Order #{oid} - {created_at}\n"
-                                     f"From: {web_user or 'Unknown'}\n"
-                                     f"Account: `{account}`\n"
-                                     f"Password: `********` (hidden until accepted)\n"
-                                     f"Package: {package} month(s)",
+                                text=message,
                                 reply_markup=reply_markup,
                                 parse_mode='Markdown'
                             )

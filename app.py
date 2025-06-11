@@ -23,7 +23,7 @@ from modules.web_routes import register_routes
 # ===== Flask 应用 =====
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET', 'secret_' + str(time.time()))
-app.config['DEBUG'] = True
+app.config['DEBUG'] = False
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 # 注册Web路由
@@ -45,4 +45,4 @@ if __name__ == "__main__":
     # 启动 Flask
     port = int(os.environ.get("PORT", 5000))
     logger.info(f"正在启动Flask服务器，端口：{port}...")
-    app.run(host="0.0.0.0", port=port, debug=True, use_reloader=False)
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
