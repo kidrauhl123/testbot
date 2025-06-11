@@ -477,22 +477,31 @@
       const stats = await resp.json();
       
       const statsDiv = document.getElementById('userStats');
-      if (stats.total_orders === 0) {
+      const total = stats.total || {};
+      const totalOrders = (total.submitted || 0) + (total.completed || 0) + (total.failed || 0) + (total.cancelled || 0);
+      
+      if (totalOrders === 0) {
         statsDiv.innerHTML = '<div style="color: #999;">今天还没有订单</div>';
       } else {
         let html = `
           <div style="margin-bottom: 8px;">
-            <strong>订单数：</strong>${stats.total_orders} 单
+            <strong>订单数：</strong>${totalOrders} 单
           </div>
           <div style="margin-bottom: 8px;">
-            <strong>总金额：</strong>¥${stats.total_amount.toFixed(2)}
+            <strong>总金额：</strong>¥${total.amount ? total.amount.toFixed(2) : '0.00'}
           </div>`;
         
-        if (stats.details.length > 0) {
+        // 处理包月详情
+        const packages = stats.stats || {};
+        if (Object.keys(packages).length > 0) {
           html += '<div style="margin-top: 10px; font-size: 13px;">';
-          stats.details.forEach(item => {
-            html += `<div>• ${item.package}：${item.count}单 (¥${item.amount.toFixed(2)})</div>`;
-          });
+          for (const [pkg, details] of Object.entries(packages)) {
+            const count = (details.submitted || 0) + (details.completed || 0);
+            if (count > 0) {
+              const amount = (details.price || 0) * (details.completed || 0);
+              html += `<div>• ${pkg}个月：${count}单 (¥${amount.toFixed(2)})</div>`;
+            }
+          }
           html += '</div>';
         }
         
