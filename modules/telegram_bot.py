@@ -245,31 +245,24 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try:
                     # 根据不同的失败原因显示不同的消息
                     if "2 active orders" in message:
-                        await query.edit_message_reply_markup(
-                            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ " + message, callback_data="noop")]])
-                        )
-                        # 同时发送一条单独的消息提醒
-                        await query.message.reply_text(message)
+                        await query.answer(message, show_alert=True)
+                    elif "already been taken" in message:
+                        await query.edit_message_text(f"❌ Order #{oid} has already been taken by someone else.")
                     else:
-                        # 检查订单的实际接单人
-                        order_info = execute_query("SELECT accepted_by FROM orders WHERE id = ?", (oid,), fetch=True)
-                        if order_info and order_info[0][0] == str(user_id):
-                            # 如果实际上是自己接的单，显示正确的信息
-                            await query.edit_message_text("⚠️ You have already accepted this order. Please check your active orders.")
-                        else:
-                            await query.edit_message_reply_markup(
-                                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Already taken by another seller", callback_data="noop")]])
-                            )
-                except Exception as markup_error:
-                    logger.error(f"更新失败标记时出错: {str(markup_error)}")
-                    
-        except ValueError as ve:
-            logger.error(f"解析订单ID出错: {str(ve)}")
+                        await query.answer(f"Error: {message}", show_alert=True)
+                except Exception as e:
+                    logger.error(f"编辑接单失败消息时出错: {str(e)}")
+            
+            # 无论成功或失败，最后都从集合中移除
+            processing_accepts.remove(accept_key)
+            
+        except ValueError:
+            logger.error("无效的回调数据")
         except Exception as e:
-            logger.error(f"接单处理出错: {str(e)}", exc_info=True)
-        finally:
-            # 清理处理标记
-            processing_accepts.discard(accept_key)
+            logger.error(f"处理接单时发生未知错误: {str(e)}", exc_info=True)
+            # 如果 accept_key 已定义，则从集合中移除
+            if 'accept_key' in locals() and accept_key in processing_accepts:
+                processing_accepts.remove(accept_key)
 
 async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理反馈按钮回调"""
