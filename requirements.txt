@@ -1,0 +1,5 @@
+flask
+gunicorn
+python-telegram-bot>=20.0
+requests
+schedule
