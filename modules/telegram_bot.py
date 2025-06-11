@@ -144,40 +144,75 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
     
+    logger.info(f"收到接单回调: 用户={user_id}, 数据={query.data}")
+    
     if not is_telegram_admin(user_id):
+        logger.warning(f"非管理员 {user_id} 尝试接单")
         await query.answer("You are not an admin and cannot accept orders")
         return
     
-    await query.answer()
+    # 先确认回调
+    try:
+        await query.answer()
+    except Exception as e:
+        logger.error(f"确认回调时出错: {str(e)}")
     
     data = query.data
     if data.startswith('accept_'):
-        oid = int(data.split('_')[1])
-        
-        # 尝试接单
-        if accept_order_atomic(oid, user_id):
-            # 更新消息展示
-            order = get_order_details(oid)[0]
-            account, password, package = order[1], order[2], order[3]
+        try:
+            oid = int(data.split('_')[1])
+            logger.info(f"管理员 {user_id} 尝试接单 #{oid}")
             
-            keyboard = [
-                [InlineKeyboardButton("✅ Complete", callback_data=f"done_{oid}"),
-                 InlineKeyboardButton("❌ Failed", callback_data=f"fail_{oid}")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await query.edit_message_text(
-                f"Order #{oid} - You've accepted this order\n"
-                f"Account: `{account}`\n"
-                f"Password: `{password}`\n"
-                f"Package: {package} month(s)",
-                reply_markup=reply_markup,
-                parse_mode='Markdown'
-            )
-        else:
-            await query.edit_message_reply_markup(
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Already taken by another admin", callback_data="noop")]])
-            )
+            # 尝试接单
+            if accept_order_atomic(oid, user_id):
+                logger.info(f"管理员 {user_id} 成功接单 #{oid}")
+                
+                # 更新消息展示
+                try:
+                    order = get_order_details(oid)
+                    if not order:
+                        logger.error(f"找不到订单 #{oid} 的详情")
+                        await query.edit_message_text(f"Error: Order #{oid} details not found")
+                        return
+                        
+                    order = order[0]
+                    account, password, package = order[1], order[2], order[3]
+                    
+                    keyboard = [
+                        [InlineKeyboardButton("✅ Complete", callback_data=f"done_{oid}"),
+                         InlineKeyboardButton("❌ Failed", callback_data=f"fail_{oid}")]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
+                    await query.edit_message_text(
+                        f"Order #{oid} - You've accepted this order\n"
+                        f"Account: `{account}`\n"
+                        f"Password: `{password}`\n"
+                        f"Package: {package} month(s)",
+                        reply_markup=reply_markup,
+                        parse_mode='Markdown'
+                    )
+                    logger.info(f"已更新订单 #{oid} 的消息显示为已接单状态")
+                except Exception as update_error:
+                    logger.error(f"更新接单消息时出错: {str(update_error)}", exc_info=True)
+                    try:
+                        await query.edit_message_text(
+                            f"Order #{oid} accepted, but there was an error updating the message. The order is still assigned to you."
+                        )
+                    except:
+                        pass
+            else:
+                logger.warning(f"订单 #{oid} 已被其他管理员接单")
+                try:
+                    await query.edit_message_reply_markup(
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Already taken by another admin", callback_data="noop")]])
+                    )
+                except Exception as markup_error:
+                    logger.error(f"更新已接单标记时出错: {str(markup_error)}")
+        except ValueError as ve:
+            logger.error(f"解析订单ID出错: {str(ve)}")
+        except Exception as e:
+            logger.error(f"接单处理出错: {str(e)}", exc_info=True)
 
 async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理完成/失败回调"""
@@ -185,36 +220,64 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_id = query.from_user.id
     data = query.data
     
+    logger.info(f"收到反馈按钮回调: 用户={user_id}, 数据={data}")
+    
     if not is_telegram_admin(user_id):
+        logger.warning(f"非管理员 {user_id} 尝试提交反馈")
         await query.answer("You are not an admin")
         return
-        
-    await query.answer()
     
-    if data.startswith('done_'):
-        oid = int(data.split('_')[1])
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        execute_query("UPDATE orders SET status=?, completed_at=? WHERE id=? AND accepted_by=?",
-                     (STATUS['COMPLETED'], timestamp, oid, str(user_id)))
-        await query.edit_message_reply_markup(
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Completed", callback_data="noop")]]))
+    # 先确认回调
+    try:    
+        await query.answer()
+    except Exception as e:
+        logger.error(f"确认反馈回调时出错: {str(e)}")
     
-    elif data.startswith('fail_'):
-        oid = int(data.split('_')[1])
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        execute_query("UPDATE orders SET status=?, completed_at=? WHERE id=? AND accepted_by=?",
-                     (STATUS['FAILED'], timestamp, oid, str(user_id)))
+    try:
+        if data.startswith('done_'):
+            oid = int(data.split('_')[1])
+            logger.info(f"管理员 {user_id} 标记订单 #{oid} 为已完成")
+            
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            execute_query("UPDATE orders SET status=?, completed_at=? WHERE id=? AND accepted_by=?",
+                        (STATUS['COMPLETED'], timestamp, oid, str(user_id)))
+                        
+            try:
+                await query.edit_message_reply_markup(
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Completed", callback_data="noop")]]))
+                logger.info(f"已更新订单 #{oid} 的消息显示为已完成状态")
+            except Exception as markup_error:
+                logger.error(f"更新已完成标记时出错: {str(markup_error)}")
         
-        # 获取原始订单信息并请求反馈
-        order = get_order_details(oid)
-        if order:
-            feedback_waiting[user_id] = oid
-            await query.edit_message_reply_markup(
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Failed", callback_data="noop")]])
-            )
-            await query.message.reply_text(
-                "Please provide a reason for the failure. Your next message will be recorded as feedback."
-            )
+        elif data.startswith('fail_'):
+            oid = int(data.split('_')[1])
+            logger.info(f"管理员 {user_id} 标记订单 #{oid} 为失败")
+            
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            execute_query("UPDATE orders SET status=?, completed_at=? WHERE id=? AND accepted_by=?",
+                        (STATUS['FAILED'], timestamp, oid, str(user_id)))
+            
+            # 获取原始订单信息并请求反馈
+            order = get_order_details(oid)
+            if order:
+                feedback_waiting[user_id] = oid
+                
+                try:
+                    await query.edit_message_reply_markup(
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Failed", callback_data="noop")]])
+                    )
+                    await query.message.reply_text(
+                        "Please provide a reason for the failure. Your next message will be recorded as feedback."
+                    )
+                    logger.info(f"已请求管理员 {user_id} 为失败订单 #{oid} 提供反馈")
+                except Exception as reply_error:
+                    logger.error(f"请求反馈时出错: {str(reply_error)}")
+            else:
+                logger.error(f"找不到订单 #{oid} 的详情，无法请求反馈")
+    except ValueError as ve:
+        logger.error(f"解析订单ID出错: {str(ve)}")
+    except Exception as e:
+        logger.error(f"处理反馈按钮回调时出错: {str(e)}", exc_info=True)
 
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理文本消息"""
@@ -523,9 +586,25 @@ async def check_and_push_orders():
     logger.debug(f"已通知订单集合: {notified_orders}")
     logger.debug(f"机器人实例状态: {bot_application is not None}")
     
+    # 检查机器人实例是否初始化
+    if bot_application is None or not hasattr(bot_application, 'bot'):
+        logger.error("Telegram机器人未初始化或实例不完整")
+        return
+    
+    # 检查是否有有效的request对象
+    if not hasattr(bot_application.bot, 'request') or bot_application.bot.request is None:
+        logger.error("Telegram机器人request对象不可用，尝试重新连接")
+        try:
+            # 尝试重新连接
+            await bot_application.bot.initialize()
+            logger.info("重新初始化机器人成功")
+        except Exception as e:
+            logger.error(f"重新初始化机器人失败: {str(e)}", exc_info=True)
+            return
+    
     # 测试发送消息功能
     try:
-        if bot_application is not None and ADMIN_CHAT_IDS:
+        if ADMIN_CHAT_IDS:
             test_admin = ADMIN_CHAT_IDS[0]  # 获取第一个管理员ID
             logger.info(f"尝试向管理员 {test_admin} 发送测试消息")
             try:
@@ -536,8 +615,13 @@ async def check_and_push_orders():
                 logger.info(f"成功向管理员 {test_admin} 发送测试消息")
             except Exception as e:
                 logger.error(f"发送测试消息失败: {str(e)}", exc_info=True)
+                # 如果是未初始化错误，直接返回
+                if "not initialized" in str(e).lower():
+                    logger.error("机器人未初始化，中断通知发送")
+                    return
     except Exception as test_error:
         logger.error(f"测试消息异常: {str(test_error)}", exc_info=True)
+        return
     
     try:
         # 获取未通知的新订单
@@ -555,22 +639,16 @@ async def check_and_push_orders():
                 
             logger.info(f"发现 {len(new_orders)} 个新订单需要通知")
             
-            # 更新通知状态
+            # 暂时保存订单ID，仅当成功发送后才更新为已通知
             order_ids = [order[0] for order in new_orders]
-            for oid in order_ids:
-                logger.info(f"更新订单 #{oid} 为已通知状态")
-                execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
-                notified_orders.add(oid)
-        
-        # 检查全局机器人实例
-        if bot_application is None:
-            logger.error("Telegram机器人实例未初始化，无法发送通知")
-            return
         
         # 推送通知给所有管理员
         if not ADMIN_CHAT_IDS:
             logger.error("管理员列表为空，无法发送通知")
             return
+        
+        # 用于记录成功通知的订单ID
+        notified_success = []
         
         for admin_id in ADMIN_CHAT_IDS:
             try:
@@ -582,6 +660,11 @@ async def check_and_push_orders():
                     keyboard = [[InlineKeyboardButton("Accept", callback_data=f"accept_{oid}")]]
                     reply_markup = InlineKeyboardMarkup(keyboard)
                     
+                    # 发送消息前检查机器人状态
+                    if bot_application is None or not hasattr(bot_application, 'bot'):
+                        logger.error(f"向管理员 {admin_id} 发送订单 #{oid} 通知失败: 机器人实例不可用")
+                        continue
+                        
                     # 发送消息
                     try:
                         await bot_application.bot.send_message(
@@ -595,10 +678,23 @@ async def check_and_push_orders():
                             parse_mode='Markdown'
                         )
                         logger.info(f"已向管理员 {admin_id} 发送订单 #{oid} 的通知")
+                        
+                        # 添加到成功通知列表
+                        if oid not in notified_success:
+                            notified_success.append(oid)
                     except Exception as msg_error:
                         logger.error(f"向管理员 {admin_id} 发送订单 #{oid} 通知失败: {str(msg_error)}", exc_info=True)
             except Exception as e:
                 logger.error(f"向管理员 {admin_id} 发送通知失败: {str(e)}", exc_info=True)
+        
+        # 更新成功通知的订单状态
+        if notified_success:
+            with constants.notified_orders_lock:
+                for oid in notified_success:
+                    logger.info(f"更新订单 #{oid} 为已通知状态")
+                    execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
+                    notified_orders.add(oid)
+                logger.info(f"成功更新 {len(notified_success)} 个订单为已通知状态")
     except Exception as e:
         logger.error(f"检查和推送订单时出错: {str(e)}", exc_info=True)
 
@@ -609,47 +705,113 @@ async def run_bot():
     
     logger.info(f"正在启动Telegram机器人，管理员ID: {ADMIN_CHAT_IDS}")
     
-    try:
-        # 创建应用
-        bot_application = ApplicationBuilder().token(BOT_TOKEN).build()
-        
-        # 添加处理程序
-        bot_application.add_handler(CommandHandler("start", on_start))
-        bot_application.add_handler(CommandHandler("seller", on_admin_command))
-        bot_application.add_handler(CommandHandler("stats", on_stats))
-        bot_application.add_handler(CallbackQueryHandler(on_accept, pattern="^accept_"))
-        bot_application.add_handler(CallbackQueryHandler(on_feedback_button, pattern="^(done|fail)_"))
-        bot_application.add_handler(CallbackQueryHandler(on_stats_callback, pattern="^stats_"))
-        bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
-        
-        # 启动订单检查任务
-        logger.info("启动订单检查任务")
-        
-        async def order_check_job():
-            """定期检查新订单的任务"""
-            while True:
+    # 主循环，确保即使出错也会尝试重启
+    restart_count = 0
+    max_restarts = 5
+    
+    while restart_count < max_restarts:
+        try:
+            # 如果不是第一次启动，等待一段时间再重试
+            if restart_count > 0:
+                wait_time = min(30, restart_count * 5)  # 最多等待30秒
+                logger.info(f"正在尝试第 {restart_count} 次重新启动，等待 {wait_time} 秒...")
+                await asyncio.sleep(wait_time)
+            
+            # 确保之前的实例已清理
+            if bot_application is not None:
                 try:
-                    await check_and_push_orders()
-                except Exception as e:
-                    logger.error(f"订单检查任务出错: {str(e)}", exc_info=True)
-                await asyncio.sleep(10)  # 每10秒检查一次
+                    logger.info("尝试清理之前的机器人实例")
+                    if hasattr(bot_application, 'updater') and bot_application.updater:
+                        await bot_application.updater.stop()
+                    if hasattr(bot_application, 'stop'):
+                        await bot_application.stop()
+                    if hasattr(bot_application, 'shutdown'):
+                        await bot_application.shutdown()
+                except Exception as cleanup_error:
+                    logger.error(f"清理之前的机器人实例时出错: {str(cleanup_error)}")
+                bot_application = None
+            
+            # 创建应用
+            logger.info("创建新的机器人应用实例")
+            bot_application = ApplicationBuilder().token(BOT_TOKEN).build()
+            
+            # 添加处理程序
+            bot_application.add_handler(CommandHandler("start", on_start))
+            bot_application.add_handler(CommandHandler("seller", on_admin_command))
+            bot_application.add_handler(CommandHandler("stats", on_stats))
+            bot_application.add_handler(CallbackQueryHandler(on_accept, pattern="^accept_"))
+            bot_application.add_handler(CallbackQueryHandler(on_feedback_button, pattern="^(done|fail)_"))
+            bot_application.add_handler(CallbackQueryHandler(on_stats_callback, pattern="^stats_"))
+            bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+            
+            # 启动机器人
+            logger.info("初始化机器人...")
+            await bot_application.initialize()
+            logger.info("启动机器人...")
+            await bot_application.start()
+            logger.info("启动轮询...")
+            await bot_application.updater.start_polling()
+            
+            logger.info("Telegram机器人启动成功")
+            
+            # 启动订单检查任务
+            logger.info("启动订单检查任务")
+            
+            async def order_check_job():
+                """定期检查新订单的任务"""
+                check_count = 0
+                while True:
+                    check_count += 1
+                    try:
+                        await check_and_push_orders()
+                    except Exception as e:
+                        logger.error(f"订单检查任务出错: {str(e)}", exc_info=True)
+                    
+                    # 每隔15次检查，检查机器人是否仍在运行
+                    if check_count % 15 == 0:
+                        try:
+                            # 简单测试机器人是否仍然响应
+                            if bot_application and hasattr(bot_application, 'bot'):
+                                test_response = await bot_application.bot.get_me()
+                                logger.debug(f"机器人状态检查: {test_response.username if test_response else None}")
+                        except Exception as check_error:
+                            logger.error(f"机器人状态检查失败: {str(check_error)}")
+                            # 如果检查失败，中断内部循环，让外部循环重启机器人
+                            return
+                    
+                    await asyncio.sleep(10)  # 每10秒检查一次
+            
+            # 启动任务并保存引用，以便后续可以取消
+            order_check_task = asyncio.create_task(order_check_job())
+            
+            logger.info("进入主循环保持运行")
+            
+            # 保持运行，不要停止
+            while True:
+                await asyncio.sleep(60)  # 每分钟检查一次
+                logger.debug("Telegram机器人仍在运行中")
+                
+                # 检查订单检查任务是否仍在运行
+                if order_check_task.done():
+                    exception = order_check_task.exception()
+                    if exception:
+                        logger.error(f"订单检查任务异常退出: {str(exception)}")
+                    else:
+                        logger.error("订单检查任务已退出但没有异常")
+                    # 退出内部循环，让外部循环重启机器人
+                    break
+            
+        except Exception as e:
+            restart_count += 1
+            logger.error(f"Telegram机器人运行出错 (尝试 {restart_count}/{max_restarts}): {str(e)}", exc_info=True)
+            # 不立即退出，让外层循环尝试重启
+            continue
         
-        # 启动任务
-        asyncio.create_task(order_check_job())
-        
-        # 启动机器人
-        await bot_application.initialize()
-        await bot_application.start()
-        await bot_application.updater.start_polling()
-        
-        logger.info("Telegram机器人启动成功")
-        
-        # 保持运行，不要停止
-        while True:
-            await asyncio.sleep(60)  # 每分钟检查一次
-            logger.debug("Telegram机器人仍在运行中")
-    except Exception as e:
-        logger.error(f"启动Telegram机器人时出错: {str(e)}", exc_info=True)
+        # 如果正常退出内部循环，也增加重启计数
+        restart_count += 1
+    
+    logger.error(f"达到最大重启次数 ({max_restarts})，停止Telegram机器人")
+    return
 
 def run_bot_in_thread():
     """在线程中运行机器人"""
