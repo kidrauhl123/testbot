@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>卖家管理 - 破天充值系统</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; }
+    body { 
+      font-family: 'Microsoft YaHei', Arial, sans-serif; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      margin: 0; padding: 0; min-height: 100vh;
+    }
+    
+    /* 顶部导航栏 */
+    .navbar {
+      background: rgba(255,255,255,0.95);
+      padding: 15px 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .navbar-brand {
+      font-size: 24px;
+      font-weight: bold;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .navbar-user {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .navbar-user span {
+      color: #666;
+      font-size: 14px;
+    }
+    .navbar-user .username {
+      color: #333;
+      font-weight: 600;
+    }
+    .admin-badge {
+      background: #ffc107;
+      color: #333;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .btn {
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+    .btn-primary { background: #667eea; color: white; }
+    .btn-primary:hover { background: #5a67d8; }
+    .btn-danger { background: #dc3545; color: white; }
+    .btn-danger:hover { background: #c82333; }
+    .btn-success { background: #28a745; color: white; }
+    .btn-success:hover { background: #218838; }
+    .btn-warning { background: #ffc107; color: #333; }
+    .btn-warning:hover { background: #e0a800; }
+    .btn-secondary { background: #6c757d; color: white; }
+    .btn-secondary:hover { background: #5a6268; }
+    
+    .main-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    .card {
+      background: rgba(255,255,255,0.95);
+      border-radius: 15px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      backdrop-filter: blur(10px);
+    }
+    
+    .card h2 {
+      color: #333;
+      font-weight: 300;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #f0f0f0;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+      display: flex;
+      gap: 15px;
+      align-items: end;
+    }
+    
+    .form-group input {
+      flex: 1;
+      padding: 12px 15px;
+      border: 2px solid #e1e5e9;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: all 0.3s ease;
+    }
+    
+    .form-group input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
+    }
+    
+    .form-group label {
+      font-weight: 600;
+      color: #555;
+      font-size: 14px;
+      margin-bottom: 5px;
+      display: block;
+    }
+    
+    .admin-list {
+      margin-top: 30px;
+    }
+    
+    .admin-item {
+      background: #f8f9fa;
+      padding: 20px;
+      margin-bottom: 15px;
+      border-radius: 12px;
+      border-left: 4px solid #667eea;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.3s ease;
+    }
+    
+    .admin-item:hover {
+      transform: translateX(5px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    
+    .admin-info h4 {
+      margin: 0 0 8px;
+      color: #333;
+      font-size: 18px;
+      font-weight: 600;
+    }
+    
+    .admin-info p {
+      margin: 4px 0;
+      font-size: 14px;
+      color: #666;
+    }
+    
+    .admin-info .telegram-id {
+      font-family: 'Courier New', monospace;
+      background: #e9ecef;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    
+    .admin-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 15px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-right: 15px;
+    }
+    
+    .status-active {
+      background: #28a745;
+      color: white;
+    }
+    
+    .status-inactive {
+      background: #6c757d;
+      color: white;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #667eea;
+    }
+    
+    .loading::after {
+      content: '...';
+      animation: dots 1.5s steps(4, end) infinite;
+    }
+    
+    @keyframes dots {
+      0%, 20% { content: ''; }
+      40% { content: '.'; }
+      60% { content: '..'; }
+      80%, 100% { content: '...'; }
+    }
+    
+    .error-message {
+      background: #fee;
+      color: #c33;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    
+    .success-message {
+      background: #efe;
+      color: #3c3;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    
+    .instructions {
+      background: #e3f2fd;
+      border: 1px solid #2196f3;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 30px;
+    }
+    
+    .instructions h3 {
+      color: #1976d2;
+      margin-top: 0;
+      margin-bottom: 15px;
+    }
+    
+    .instructions ul {
+      margin-bottom: 0;
+      padding-left: 20px;
+    }
+    
+    .instructions li {
+      margin-bottom: 8px;
+      color: #555;
+    }
+    
+    .instructions code {
+      background: #fff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+    }
+    
+    @media (max-width: 768px) {
+      .navbar {
+        flex-direction: column;
+        gap: 10px;
+      }
+      .form-group {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .admin-item {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 15px;
+      }
+      .admin-actions {
+        justify-content: flex-end;
+      }
+    }
+  </style>
+</head>
+<body>
+<!-- 顶部导航栏 -->
+<div class="navbar">
+  <div class="navbar-brand">破天充值系统 - 卖家管理</div>
+  <div class="navbar-user">
+    <a href="/" class="btn btn-primary">返回主页</a>
+    <span>欢迎，<span class="username" id="username">管理员</span></span>
+    <span class="admin-badge">超级管理员</span>
+    <button class="btn btn-danger" onclick="window.location.href='/logout'">退出登录</button>
+  </div>
+</div>
+
+<div class="main-container">
+  <!-- 使用说明 -->
+  <div class="instructions">
+    <h3>📋 Telegram卖家管理说明</h3>
+    <ul>
+      <li><strong>添加卖家：</strong>输入要添加的Telegram用户ID，点击添加按钮</li>
+      <li><strong>获取Telegram ID：</strong>可以让用户发送 <code>/start</code> 给 <code>@userinfobot</code> 获取自己的ID</li>
+      <li><strong>停用/启用：</strong>点击切换按钮可以临时停用或重新启用卖家权限</li>
+      <li><strong>删除卖家：</strong>点击删除按钮永久移除卖家（谨慎操作）</li>
+      <li><strong>实时生效：</strong>所有操作立即生效，无需重新部署</li>
+    </ul>
+  </div>
+  
+  <!-- 添加新卖家 -->
+  <div class="card">
+    <h2>➕ 添加新的Telegram卖家</h2>
+    
+    <div id="message"></div>
+    
+    <div class="form-group">
+      <div style="flex: 1;">
+        <label>Telegram用户ID *</label>
+        <input type="number" id="telegramId" placeholder="例如: 1234567890" required>
+      </div>
+      <div style="flex: 1;">
+        <label>用户名（可选）</label>
+        <input type="text" id="username" placeholder="例如: john_doe">
+      </div>
+      <div style="flex: 1;">
+        <label>姓名（可选）</label>
+        <input type="text" id="firstName" placeholder="例如: John">
+      </div>
+      <button class="btn btn-success" onclick="addSeller()" id="addBtn">
+        添加卖家
+      </button>
+    </div>
+  </div>
+  
+  <!-- 现有卖家列表 -->
+  <div class="card">
+    <h2>现有Telegram卖家</h2>
+    
+    <div id="sellersList">
+      <div class="loading">加载卖家列表中</div>
+    </div>
+  </div>
+</div>
+
+<script>
+let sellers = [];
+
+// 显示消息
+function showMessage(text, type = 'success') {
+  const messageDiv = document.getElementById('message');
+  messageDiv.className = type === 'success' ? 'success-message' : 'error-message';
+  messageDiv.textContent = text;
+  messageDiv.style.display = 'block';
+  
+  setTimeout(() => {
+    messageDiv.style.display = 'none';
+  }, 5000);
+}
+
+// 加载卖家列表
+async function loadSellers() {
+  try {
+    const response = await fetch('/admin/sellers');
+    if (!response.ok) {
+      throw new Error('Failed to load sellers');
+    }
+    
+    sellers = await response.json();
+    renderSellers();
+  } catch (error) {
+    console.error('Error loading sellers:', error);
+    document.getElementById('sellersList').innerHTML = 
+      '<div class="error-message">加载失败，请刷新重试</div>';
+  }
+}
+
+// 渲染卖家列表
+function renderSellers() {
+  const container = document.getElementById('sellersList');
+  
+  if (!sellers.length) {
+    container.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">暂无卖家</div>';
+    return;
+  }
+  
+  container.innerHTML = '';
+  
+  sellers.forEach(seller => {
+    const sellerDiv = document.createElement('div');
+    sellerDiv.className = 'admin-item';
+    
+    const name = seller.first_name || 'Unknown';
+    const username = seller.username ? `@${seller.username}` : '无用户名';
+    const statusClass = seller.is_active ? 'status-active' : 'status-inactive';
+    const statusText = seller.is_active ? '✅ 活跃' : '❌ 已停用';
+    const addedDate = new Date(seller.added_at).toLocaleString('zh-CN');
+    
+    sellerDiv.innerHTML = `
+      <div class="admin-info">
+        <h4>${escapeHtml(name)} <span class="status-badge ${statusClass}">${statusText}</span></h4>
+        <p><strong>用户名：</strong>${escapeHtml(username)}</p>
+        <p><strong>Telegram ID：</strong><span class="telegram-id">${seller.telegram_id}</span></p>
+        <p><strong>添加时间：</strong>${addedDate}</p>
+        ${seller.added_by ? `<p><strong>添加者：</strong>${escapeHtml(seller.added_by)}</p>` : ''}
+      </div>
+      <div class="admin-actions">
+        <button class="btn ${seller.is_active ? 'btn-warning' : 'btn-success'}" 
+                onclick="toggleSellerStatus(${seller.telegram_id})">
+          ${seller.is_active ? '停用' : '启用'}
+        </button>
+        <button class="btn btn-danger" onclick="deleteSeller(${seller.telegram_id})">
+          删除
+        </button>
+      </div>
+    `;
+    
+    container.appendChild(sellerDiv);
+  });
+}
+
+// HTML转义
+function escapeHtml(unsafe) {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// 添加卖家
+async function addSeller() {
+  const telegramId = document.getElementById('telegramId').value;
+  const username = document.getElementById('username').value;
+  const firstName = document.getElementById('firstName').value;
+  
+  if (!telegramId) {
+    showMessage('请输入Telegram用户ID', 'error');
+    return;
+  }
+  
+  if (!/^\d+$/.test(telegramId)) {
+    showMessage('Telegram ID必须是数字', 'error');
+    return;
+  }
+  
+  const addBtn = document.getElementById('addBtn');
+  const originalText = addBtn.textContent;
+  addBtn.textContent = '添加中...';
+  addBtn.disabled = true;
+  
+  try {
+    const response = await fetch('/admin/sellers', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        telegram_id: parseInt(telegramId),
+        username: username || null,
+        first_name: firstName || null
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      showMessage('卖家添加成功！', 'success');
+      // 清空表单
+      document.getElementById('telegramId').value = '';
+      document.getElementById('username').value = '';
+      document.getElementById('firstName').value = '';
+      // 重新加载列表
+      await loadSellers();
+    } else {
+      showMessage(result.error || '添加失败', 'error');
+    }
+  } catch (error) {
+    console.error('Error adding seller:', error);
+    showMessage('添加失败，请重试', 'error');
+  } finally {
+    addBtn.textContent = originalText;
+    addBtn.disabled = false;
+  }
+}
+
+// 切换卖家状态
+async function toggleSellerStatus(telegramId) {
+  if (!confirm('确定要切换此卖家的状态吗？')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/admin/sellers/${telegramId}/toggle`, {
+      method: 'POST'
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      showMessage('状态切换成功！', 'success');
+      await loadSellers();
+    } else {
+      showMessage(result.error || '操作失败', 'error');
+    }
+  } catch (error) {
+    console.error('Error toggling seller status:', error);
+    showMessage('操作失败，请重试', 'error');
+  }
+}
+
+// 删除卖家
+async function deleteSeller(telegramId) {
+  if (!confirm('确定要删除此卖家吗？此操作不可恢复！')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/admin/sellers/${telegramId}`, {
+      method: 'DELETE'
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      showMessage('卖家删除成功！', 'success');
+      await loadSellers();
+    } else {
+      showMessage(result.error || '删除失败', 'error');
+    }
+  } catch (error) {
+    console.error('Error deleting seller:', error);
+    showMessage('删除失败，请重试', 'error');
+  }
+}
+
+// 监听回车键
+document.getElementById('telegramId').addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') {
+    addSeller();
+  }
+});
+
+document.getElementById('username').addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') {
+    addSeller();
+  }
+});
+
+document.getElementById('firstName').addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') {
+    addSeller();
+  }
+});
+
+// 页面加载时初始化
+window.addEventListener('load', () => {
+  loadSellers();
+});
+</script>
+
+</body>
+</html>
