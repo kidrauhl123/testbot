@@ -32,7 +32,7 @@ if not os.environ.get('ADMIN_CHAT_IDS'):
 from modules.database import init_db
 # 导入整个constants模块
 import modules.constants as constants
-from modules.telegram_bot import run_bot_in_thread
+from modules.telegram_bot import run_bot_in_thread, check_and_push_orders
 from modules.web_routes import register_routes
 
 # ===== 初始化锁 =====
@@ -56,6 +56,41 @@ def test_route():
         'time': time.strftime("%Y-%m-%d %H:%M:%S"),
         'admin_ids': constants.ADMIN_CHAT_IDS
     })
+
+# 添加一个路由用于手动触发订单检查
+@app.route('/check-orders')
+def manual_check_orders():
+    logger.info("手动触发订单检查")
+    
+    try:
+        # 导入asyncio和机器人实例
+        import asyncio
+        from modules.telegram_bot import bot_application
+        
+        # 检查机器人实例
+        if bot_application is None:
+            return jsonify({
+                'status': 'error',
+                'message': 'Telegram机器人实例未初始化'
+            })
+        
+        # 创建事件循环并执行订单检查
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(check_and_push_orders())
+        loop.close()
+        
+        return jsonify({
+            'status': 'ok',
+            'message': '订单检查已触发',
+            'time': time.strftime("%Y-%m-%d %H:%M:%S")
+        })
+    except Exception as e:
+        logger.error(f"手动触发订单检查失败: {str(e)}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'message': f'触发失败: {str(e)}'
+        })
 
 # 注册Web路由
 register_routes(app)

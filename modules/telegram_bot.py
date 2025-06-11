@@ -515,12 +515,29 @@ async def show_all_stats(query, date_str, period_text):
 # ===== 推送通知 =====
 async def check_and_push_orders():
     """检查新订单并推送给管理员"""
-    global notified_orders
+    global notified_orders, bot_application
     
     logger.info("开始检查新订单...")
     logger.info(f"当前管理员列表: {ADMIN_CHAT_IDS}")
     logger.debug(f"订单检查锁状态: {constants.notified_orders_lock.locked()}")
     logger.debug(f"已通知订单集合: {notified_orders}")
+    logger.debug(f"机器人实例状态: {bot_application is not None}")
+    
+    # 测试发送消息功能
+    try:
+        if bot_application is not None and ADMIN_CHAT_IDS:
+            test_admin = ADMIN_CHAT_IDS[0]  # 获取第一个管理员ID
+            logger.info(f"尝试向管理员 {test_admin} 发送测试消息")
+            try:
+                await bot_application.bot.send_message(
+                    chat_id=test_admin,
+                    text=f"测试消息: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                )
+                logger.info(f"成功向管理员 {test_admin} 发送测试消息")
+            except Exception as e:
+                logger.error(f"发送测试消息失败: {str(e)}", exc_info=True)
+    except Exception as test_error:
+        logger.error(f"测试消息异常: {str(test_error)}", exc_info=True)
     
     try:
         # 获取未通知的新订单

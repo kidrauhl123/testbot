@@ -164,6 +164,25 @@ def execute_sqlite_query(query, params=(), fetch=False):
     try:
         conn = sqlite3.connect("orders.db")
         cursor = conn.cursor()
+        
+        # 检查是否为INSERT语句，确保notified字段被正确设置
+        if "INSERT INTO orders" in query and "notified" not in query:
+            logger.warning("检测到INSERT订单但未包含notified字段，自动添加notified=0")
+            # 修改查询添加notified字段
+            if ")" in query and "VALUES" in query:
+                parts = query.split(")")
+                values_part = parts[1].strip()
+                if values_part.startswith("VALUES"):
+                    # 在字段列表末尾添加notified
+                    parts[0] = parts[0] + ", notified"
+                    # 在值列表末尾添加0
+                    values_start = values_part.find("(")
+                    if values_start >= 0:
+                        values_part = values_part[:values_start+1] + "?, " + values_part[values_start+1:]
+                        parts[1] = values_part
+                        query = ")".join(parts)
+                        params = params + (0,)
+        
         cursor.execute(query, params)
         
         result = None
