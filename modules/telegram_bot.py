@@ -644,10 +644,10 @@ async def run_bot():
         
         logger.info("Telegram机器人启动成功")
         
-        # 保持运行
-        await bot_application.updater.stop()
-        await bot_application.stop()
-        await bot_application.shutdown()
+        # 保持运行，不要停止
+        while True:
+            await asyncio.sleep(60)  # 每分钟检查一次
+            logger.debug("Telegram机器人仍在运行中")
     except Exception as e:
         logger.error(f"启动Telegram机器人时出错: {str(e)}", exc_info=True)
 
