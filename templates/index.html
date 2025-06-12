@@ -345,6 +345,23 @@
         .left, .right { width: 100%; }
         .left { position: static; }
     }
+
+    .failed-reason {
+      background-color: rgba(255, 0, 0, 0.1);
+      border-left: 3px solid #ff3b30;
+      padding: 5px 8px;
+      margin: 5px 0;
+      border-radius: 4px;
+      color: #d32f2f;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+    }
+    
+    .failed-icon {
+      margin-right: 5px;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
@@ -669,7 +686,10 @@
     // 只显示指定数量的订单
     const ordersToShow = orders.slice(0, displayedOrders);
     
-    container.innerHTML = '';
+    // 创建网格容器
+    container.innerHTML = '<div class="order-list-container"></div>';
+    const gridContainer = container.querySelector('.order-list-container');
+    
     ordersToShow.forEach(o => {
       const cls = 'status-' + o.status.replace('已','').toLowerCase();
       
@@ -682,7 +702,7 @@
           <p class="package"><strong>套餐：</strong>${escapeHtml(o.package)}个月</p>
           <p class="price"><strong>价格：</strong>¥${WEB_PRICES[o.package] || 'N/A'}</p>
           ${o.status === 'failed' ? 
-            `<p class="reason"><strong>失败原因：</strong>${escapeHtml(o.remark || '未提供')}</p>` : 
+            `<p class="failed-reason"><span class="failed-icon">❌</span> <strong>失败原因：</strong>${escapeHtml(o.remark || '未提供')}</p>` : 
             (o.remark ? `<p class="remark"><strong>备注：</strong>${escapeHtml(o.remark)}</p>` : '')
           }
           <p class="time"><strong>提交时间：</strong>${o.created_at}</p>
@@ -690,7 +710,7 @@
           ${o.completed_at ? `<p class="time"><strong>完成时间：</strong>${o.completed_at}</p>` : ''}
           ${o.can_cancel ? `<button class="cancel-btn" onclick="cancelOrder(${o.id}, this)">撤销订单</button>` : ''}
         </div>`;
-      container.insertAdjacentHTML('beforeend', html);
+      gridContainer.insertAdjacentHTML('beforeend', html);
     });
     
     // 显示或隐藏"加载更多"按钮
