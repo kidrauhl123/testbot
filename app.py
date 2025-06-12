@@ -4,12 +4,14 @@ import logging
 import time
 from flask import Flask
 
-# 设置日志
+# 根据环境变量确定是否为生产环境
+is_production = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('PRODUCTION')
+
+# 日志配置
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO if is_production else logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("app.log"),
         logging.StreamHandler()
     ]
 )

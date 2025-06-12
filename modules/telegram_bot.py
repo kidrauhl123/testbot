@@ -96,13 +96,19 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if is_seller(user_id):
         await update.message.reply_text(
-            "Welcome back, Seller! Use the following commands:\n"
-            "/seller - Show seller specific commands\n"
-            "/stats - View statistics"
+            "🌟 *Welcome to the Premium Recharge System!* 🌟\n\n"
+            "As a verified seller, you have access to:\n"
+            "• `/seller` - View available orders and your active orders\n"
+            "• `/stats` - Check your performance statistics\n\n"
+            "Need assistance? Feel free to contact the administrator.",
+            parse_mode='Markdown'
         )
     else:
         await update.message.reply_text(
-            "Welcome! You are not a seller and cannot use this bot's features."
+            "⚠️ *Access Restricted* ⚠️\n\n"
+            "This bot is exclusively available to authorized sellers.\n"
+            "For account inquiries, please contact the administrator.",
+            parse_mode='Markdown'
         )
 
 async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -110,7 +116,11 @@ async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
     if not is_seller(user_id):
-        await update.message.reply_text("You are not a seller and cannot use this command.")
+        await update.message.reply_text(
+            "⚠️ *Access Denied* ⚠️\n\n"
+            "You are not authorized to use this command.",
+            parse_mode='Markdown'
+        )
         return
     
     # 首先检查当前用户的活跃订单数
@@ -120,11 +130,17 @@ async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """, (str(user_id), STATUS['ACCEPTED']), fetch=True)[0][0]
     
     # 发送当前状态
-    status_message = f"📊 Your current status: {active_orders_count}/2 active orders"
     if active_orders_count >= 2:
-        status_message += "\n⚠️ You have reached the maximum limit of 2 active orders."
+        status_icon = "🔴"
+        status_message = f"{status_icon} *Seller Status:* {active_orders_count}/2 active orders\n⚠️ *Maximum limit reached.* Please complete existing orders first."
+    else:
+        status_icon = "🟢" 
+        status_message = f"{status_icon} *Seller Status:* {active_orders_count}/2 active orders\n✅ *You can accept new orders.*"
     
-    await update.message.reply_text(status_message)
+    await update.message.reply_text(
+        status_message,
+        parse_mode='Markdown'
+    )
     
     # 查询待处理订单
     new_orders = execute_query("""
@@ -139,45 +155,53 @@ async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 发送订单信息
     if new_orders:
-        await update.message.reply_text("📋 Pending Orders:")
+        await update.message.reply_text(
+            "📋 *Available Orders*",
+            parse_mode='Markdown'
+        )
         for order in new_orders:
             oid, account, password, package, created_at = order
             
-            # 无论是否达到接单上限，都显示Accept按钮
-            keyboard = [[InlineKeyboardButton("🔄 Accept", callback_data=f"accept_{oid}")]]
-            
+            keyboard = [[InlineKeyboardButton("✅ Accept Order", callback_data=f"accept_{oid}")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             # 接单前不显示密码
             await update.message.reply_text(
-                f"Order #{oid} - {created_at}\n"
-                f"Account: `{account}`\n"
-                f"Password: `********` (hidden until accepted)\n"
-                f"Package: {package} month(s)",
+                f"🔹 *Order #{oid}* - {created_at}\n\n"
+                f"• Account: `{account}`\n"
+                f"• Package: *{PLAN_LABELS_EN[package]}*\n"
+                f"• Payment: *${TG_PRICES[package]}*",
                 reply_markup=reply_markup,
                 parse_mode='Markdown'
             )
     else:
-        await update.message.reply_text("No pending orders at the moment.")
+        await update.message.reply_text(
+            "📭 *No pending orders available at this time.*",
+            parse_mode='Markdown'
+        )
     
     # 发送我的订单
     if my_orders:
-        await update.message.reply_text("🔄 My Active Orders:")
+        await update.message.reply_text(
+            "🔄 *Your Active Orders*", 
+            parse_mode='Markdown'
+        )
         for order in my_orders:
             oid, account, password, package, status = order
             
             if status == STATUS['ACCEPTED']:
                 keyboard = [
-                    [InlineKeyboardButton("✅ Complete", callback_data=f"done_{oid}"),
-                     InlineKeyboardButton("❌ Failed", callback_data=f"fail_{oid}")]
+                    [InlineKeyboardButton("✅ Mark Complete", callback_data=f"done_{oid}"),
+                     InlineKeyboardButton("❌ Mark Failed", callback_data=f"fail_{oid}")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 await update.message.reply_text(
-                    f"Order #{oid}\n"
-                    f"Account: `{account}`\n"
-                    f"Password: `{password}`\n"
-                    f"Package: {package} month(s)",
+                    f"🔸 *Order #{oid}*\n\n"
+                    f"• Account: `{account}`\n"
+                    f"• Password: `{password}`\n"
+                    f"• Package: *{PLAN_LABELS_EN[package]}*\n"
+                    f"• Payment: *${TG_PRICES[package]}*",
                     reply_markup=reply_markup,
                     parse_mode='Markdown'
                 )
