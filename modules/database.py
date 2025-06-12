@@ -9,7 +9,7 @@ from datetime import datetime
 from urllib.parse import urlparse
 import pytz
 
-from modules.constants import DATABASE_URL, STATUS
+from modules.constants import DATABASE_URL, STATUS, ADMIN_USERNAME, ADMIN_PASSWORD
 
 # 设置日志
 logger = logging.getLogger(__name__)
@@ -126,14 +126,14 @@ def init_sqlite_db():
         c.execute("ALTER TABLE users ADD COLUMN credit_limit REAL DEFAULT 0")
     
     # 创建超级管理员账号（如果不存在）
-    admin_hash = hashlib.sha256("755439".encode()).hexdigest()
-    c.execute("SELECT id FROM users WHERE username = ?", ("755439",))
+    admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
+    c.execute("SELECT id FROM users WHERE username = ?", (ADMIN_USERNAME,))
     if not c.fetchone():
-        logger.info("创建默认管理员账号")
+        logger.info(f"创建默认管理员账号: {ADMIN_USERNAME}")
         c.execute("""
             INSERT INTO users (username, password_hash, is_admin, created_at) 
             VALUES (?, ?, 1, ?)
-        """, ("755439", admin_hash, get_china_time()))
+        """, (ADMIN_USERNAME, admin_hash, get_china_time()))
     
     conn.commit()
     conn.close()
@@ -248,13 +248,13 @@ def init_postgres_db():
         c.execute("ALTER TABLE orders ADD COLUMN accepted_by_first_name TEXT")
     
     # 创建超级管理员账号（如果不存在）
-    admin_hash = hashlib.sha256("755439".encode()).hexdigest()
-    c.execute("SELECT id FROM users WHERE username = %s", ("755439",))
+    admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
+    c.execute("SELECT id FROM users WHERE username = %s", (ADMIN_USERNAME,))
     if not c.fetchone():
         c.execute("""
             INSERT INTO users (username, password_hash, is_admin, created_at) 
             VALUES (%s, %s, 1, %s)
-        """, ("755439", admin_hash, get_china_time()))
+        """, (ADMIN_USERNAME, admin_hash, get_china_time()))
     
     conn.close()
 
@@ -669,4 +669,62 @@ def refund_order(order_id):
     execute_query("UPDATE orders SET refunded=1 WHERE id=?", (order_id,))
     
     logger.info(f"订单退款成功: ID={order_id}, 用户ID={user_id}, 金额={price}, 新余额={new_balance}")
-    return True, new_balance 
+    return True, new_balance
+
+def create_order_with_deduction_atomic(account, password, package, remark, username, user_id):
+    """
+    在一个事务中创建订单并扣除用户余额。
+    这是保证数据一致性的关键操作。
+    返回 (bool: success, str: message, float: new_balance, float: credit_limit)
+    """
+    from .constants import WEB_PRICES, STATUS
+
+    price = WEB_PRICES.get(str(package))
+    if price is None:
+        return False, "无效的套餐", None, None
+
+    conn = None
+    if DATABASE_URL.startswith('postgres'):
+        # PostgreSQL-specific connection logic can be added here if needed
+        # For now, we focus on the SQLite implementation which is what the project uses
+        raise NotImplementedError("PostgreSQL atomic order creation not implemented")
+    else:
+        conn = sqlite3.connect("orders.db", timeout=10)
+
+    try:
+        with conn:
+            # Set isolation_level to EXCLUSIVE for the transaction
+            conn.isolation_level = 'EXCLUSIVE'
+            c = conn.cursor()
+
+            # 1. 检查余额
+            c.execute("SELECT balance, credit_limit FROM users WHERE id = ?", (user_id,))
+            user_data = c.fetchone()
+            if not user_data:
+                return False, "用户不存在", None, None
+            
+            balance, credit_limit = user_data
+            if (balance + credit_limit) < price:
+                return False, f'余额和透支额度不足，当前余额: {balance}，透支额度: {credit_limit}，套餐价格: {price}', balance, credit_limit
+
+            # 2. 插入订单
+            timestamp = datetime.now(CN_TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
+            c.execute("""
+                INSERT INTO orders (account, password, package, remark, status, created_at, web_user_id, user_id, notified, refunded)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (account, password, package, remark, STATUS['SUBMITTED'], timestamp, username, user_id, 0, 0))
+            order_id = c.lastrowid
+
+            # 3. 扣除余额
+            new_balance = balance - price
+            c.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
+
+        # The 'with conn:' block handles the commit.
+        return True, "订单创建成功", new_balance, credit_limit
+
+    except sqlite3.Error as e:
+        logger.error(f"创建订单事务失败: {e}", exc_info=True)
+        return False, "数据库操作失败，订单未创建", None, None
+    finally:
+        if conn:
+            conn.close() 

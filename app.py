@@ -37,36 +37,40 @@ notification_queue = queue.Queue()
 # 锁目录路径
 lock_dir = 'bot.lock'
 
-# 清理锁目录的函数
-def cleanup_lock_directory():
-    """清理SQLite锁目录，防止应用重启时因锁文件残留导致数据库访问错误"""
-    try:
-        db_path = "orders.db"
-        lock_dir = f"{db_path}-journal"
-        if os.path.exists(lock_dir):
+# 清理锁目录和数据库 journal 文件的函数
+def cleanup_resources():
+    """清理应用锁目录和数据库 journal 文件。"""
+    # 清理应用锁目录
+    if os.path.exists(lock_dir):
+        try:
             if os.path.isdir(lock_dir):
-                shutil.rmtree(lock_dir)
+                os.rmdir(lock_dir)
                 logger.info(f"已清理锁目录: {lock_dir}")
-                print(f"INFO: 已清理锁目录: {lock_dir}")
             else:
-                os.remove(lock_dir)
-                logger.info(f"已删除锁文件: {lock_dir}")
-                print(f"INFO: 已删除锁文件: {lock_dir}")
+                os.remove(lock_dir) # 如果意外地成了文件
+                logger.info(f"已清理锁文件: {lock_dir}")
+        except Exception as e:
+            logger.error(f"清理锁目录时出错: {str(e)}", exc_info=True)
+
+    # 清理数据库 journal 文件
+    try:
+        journal_path = "orders.db-journal"
+        if os.path.exists(journal_path):
+            os.remove(journal_path)
+            logger.info(f"已清理残留的 journal 文件: {journal_path}")
     except Exception as e:
-        logger.error(f"清理锁目录时出错: {str(e)}", exc_info=True)
-        print(f"ERROR: 清理锁目录时出错: {str(e)}")
-        traceback.print_exc()
+        logger.error(f"清理 journal 文件时出错: {str(e)}", exc_info=True)
 
 # 信号处理函数
 def signal_handler(sig, frame):
     logger.info(f"收到信号 {sig}，正在清理资源...")
-    print(f"INFO: 收到信号 {sig}，正在清理资源...")
-    cleanup_lock_directory()
+    cleanup_resources()
     sys.exit(0)
 
-# 注册信号处理器
+# 注册信号处理器和退出钩子
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
+atexit.register(cleanup_resources)
 
 # ===== Flask 应用 =====
 app = Flask(__name__)
@@ -134,24 +138,18 @@ def handle_exception(e):
 
 # ===== 主程序 =====
 if __name__ == "__main__":
-    # 在启动前先尝试清理可能存在的锁目录
-    if os.path.exists(lock_dir):
-        logger.warning("检测到锁目录已存在，可能是上次异常退出导致。尝试清理...")
-        try:
-            os.rmdir(lock_dir)
-            logger.info("成功清理旧的锁目录")
-        except Exception as e:
-            logger.error(f"清理锁目录失败: {str(e)}")
-            sys.exit(1)
+    # 在启动前先尝试清理可能存在的锁文件和目录
+    cleanup_resources()
             
     # 使用锁目录确保只有一个实例运行
     try:
         os.mkdir(lock_dir)
         logger.info("成功获取锁，启动主程序。")
-        # 注册一个清理函数，在程序正常退出时删除锁目录
-        atexit.register(cleanup_lock_directory)
     except FileExistsError:
         logger.error("锁目录已存在，另一个实例可能正在运行。程序退出。")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"创建锁目录时发生未知错误: {e}")
         sys.exit(1)
 
     # 初始化数据库

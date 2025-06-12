@@ -9,9 +9,11 @@ import pytz
 from flask import Flask, request, render_template, jsonify, session, redirect, url_for, flash
 
 from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH
-from modules.database import execute_query, hash_password, get_all_sellers, add_seller, remove_seller, toggle_seller_status
-from modules.database import check_balance_for_package, update_user_balance, get_user_balance, set_user_balance
-from modules.database import get_user_credit_limit, set_user_credit_limit, refund_order
+from modules.database import (
+    execute_query, hash_password, get_all_sellers, add_seller, remove_seller, toggle_seller_status,
+    get_user_balance, get_user_credit_limit, set_user_credit_limit, refund_order, 
+    create_order_with_deduction_atomic
+)
 import modules.constants as constants
 
 # 设置日志
@@ -141,11 +143,6 @@ def register_routes(app, notification_queue):
     @app.route('/', methods=['POST'])
     @login_required
     def create_order():
-        # 记录请求内容
-        logger.info("收到POST请求到根路径")
-        logger.info(f"请求表单数据: {request.form}")
-        logger.info(f"请求头: {request.headers}")
-        
         account = request.form.get('account')
         password = request.form.get('password')
         package = request.form.get('package', '1')
@@ -155,60 +152,29 @@ def register_routes(app, notification_queue):
         
         if not account or not password:
             logger.warning("订单提交失败: 账号或密码为空")
-            return jsonify({
-                "success": False,
-                "error": "账号和密码不能为空"
-            }), 400
+            return jsonify({"success": False, "error": "账号和密码不能为空"}), 400
         
         try:
-            # 获取当前用户信息
             user_id = session.get('user_id')
             username = session.get('username')
             
-            logger.info(f"当前会话信息: user_id={user_id}, username={username}")
+            # 使用原子操作创建订单和扣款
+            success, message, new_balance, credit_limit = create_order_with_deduction_atomic(
+                account, password, package, remark, username, user_id
+            )
             
-            # 检查用户余额是否足够
-            sufficient, balance, price, credit_limit = check_balance_for_package(user_id, package)
-            
-            if not sufficient:
-                logger.warning(f"订单提交失败: 用户余额不足 (用户={username}, 余额={balance}, 透支额度={credit_limit}, 价格={price})")
-                return jsonify({
-                    "success": False,
-                    "error": f'余额和透支额度不足，当前余额: {balance}，透支额度: {credit_limit}，套餐价格: {price}',
-                    "balance": balance,
-                    "credit_limit": credit_limit
-                }), 400
-            
-            # 记录当前时间
-            timestamp = get_china_time()
-            
-            logger.debug(f"准备插入订单: 用户={username}, 时间={timestamp}")
-            
-            # 插入订单
-            execute_query("""
-                INSERT INTO orders (account, password, package, remark, status, created_at, web_user_id, user_id, notified, refunded) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (account, password, package, remark, STATUS['SUBMITTED'], timestamp, username, user_id, 0, 0))
-            
-            # 扣除用户余额
-            success, new_balance = update_user_balance(user_id, -price)
             if not success:
-                logger.error(f"余额扣除失败: 用户={username}, 金额={price}")
-                # 撤销订单插入
-                # 为了简化，这里可以标记订单为失败，或者直接删除，但需要获取刚插入的ID
-                # 更好的做法是在事务中处理
+                logger.warning(f"订单创建失败: {message} (用户={username})")
                 return jsonify({
                     "success": False,
-                    "error": f'扣款失败，订单未提交，请联系管理员',
-                    "balance": balance,
+                    "error": message,
+                    "balance": new_balance, # Might be None, but client-side should handle
                     "credit_limit": credit_limit
                 }), 400
-            else:
-                logger.info(f"余额扣除成功: 用户={username}, 金额={price}, 新余额={new_balance}")
+
+            logger.info(f"订单提交成功: 用户={username}, 套餐={package}, 新余额={new_balance}")
             
-            logger.info(f"订单提交成功: 用户={username}, 套餐={package}")
-            
-            # 获取最新订单列表并格式化，使其与 /orders/recent 接口返回的格式一致
+            # 获取最新订单列表并格式化
             orders_raw = execute_query("SELECT id, account, password, package, status, created_at, user_id FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             orders = []
             for o in orders_raw:
@@ -223,40 +189,22 @@ def register_routes(app, notification_queue):
                     "accepted_at": "",
                     "completed_at": "",
                     "remark": "",
-                    "creator": username,
+                    "creator": username, # Simplification, actual creator might differ if admin creates for others
                     "accepted_by": "",
                     "can_cancel": o[4] == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == o[6])
                 })
             
-            # 计算是否使用了透支额度
-            used_credit = 0
-            if balance < price:
-                # 如果原始余额小于价格，说明使用了透支额度
-                if balance >= 0:
-                    # 余额为正数，使用的透支额度 = 价格 - 余额
-                    used_credit = price - balance
-                else:
-                    # 余额为负数，使用的透支额度 = 价格
-                    used_credit = price
-            
-            success_message = '订单已提交成功！'
-            if used_credit > 0:
-                success_message = f'订单已提交成功！已使用透支额度 {used_credit} 元'
-            
             return jsonify({
                 "success": True,
-                "message": success_message,
+                "message": '订单已提交成功！',
                 "balance": new_balance,
                 "credit_limit": credit_limit,
-                "orders": orders,
-                "used_credit": used_credit
+                "orders": orders
             })
+
         except Exception as e:
-            logger.error(f"创建订单失败: {str(e)}", exc_info=True)
-            return jsonify({
-                "success": False,
-                "error": f'订单提交失败: {str(e)}'
-            }), 500
+            logger.error(f"创建订单时发生意外错误: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": "服务器内部错误，请联系管理员。"}), 500
 
     @app.route('/orders/stats/web/<user_id>')
     @login_required

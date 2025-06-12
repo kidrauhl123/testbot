@@ -13,6 +13,13 @@ if not os.environ.get('BOT_TOKEN'):
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 
+# ✅ 管理员默认凭证（优先从环境变量读取）
+ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', '755439')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '755439')
+
+if ADMIN_USERNAME == '755439' or ADMIN_PASSWORD == '755439':
+    logger.warning("正在使用默认的管理员凭证。为了安全，请设置 ADMIN_USERNAME 和 ADMIN_PASSWORD 环境变量。")
+
 # 支持通过环境变量设置卖家ID
 SELLER_CHAT_IDS = []
 if os.environ.get('SELLER_CHAT_IDS'):

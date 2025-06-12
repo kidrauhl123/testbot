@@ -1026,8 +1026,7 @@ async def bot_main(notification_queue):
             print("DEBUG: Webhook已设置")
             
             # 启动webhook服务器
-            from telegram.ext import Updater
-            await bot_application.updater.start_webhook(
+            await bot_application.start_webhook(
                 listen="0.0.0.0",
                 port=int(os.environ.get("PORT", 8080)),
                 url_path="telegram-webhook",
@@ -1041,7 +1040,7 @@ async def bot_main(notification_queue):
             print("DEBUG: 在本地环境中，使用轮询")
             
             # 使用更明确的配置启动轮询
-            await bot_application.updater.start_polling(
+            await bot_application.start_polling(
                 allowed_updates=["message", "callback_query", "chat_member", "edited_message"],
                 drop_pending_updates=False,
                 timeout=30,
