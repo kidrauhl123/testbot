@@ -407,16 +407,12 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             
             # 设置失败状态和原因（添加emoji）
             reason_text = ""
-            button_text = ""
             if reason_type == "wrong_password":
                 reason_text = "Wrong password"
-                button_text = "🔑 Wrong Password"
             elif reason_type == "not_expired":
                 reason_text = "Membership not expired"
-                button_text = "⏱️ Membership Not Expired"
             elif reason_type == "other":
                 reason_text = "Other reason (details pending)"
-                button_text = "❓ Other Reason"
                 # 标记需要额外反馈
                 feedback_waiting[user_id] = oid
             
@@ -424,18 +420,22 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             execute_query("UPDATE orders SET status=?, completed_at=?, remark=? WHERE id=? AND accepted_by=?",
                         (STATUS['FAILED'], timestamp, reason_text, oid, str(user_id)))
             
-            # 更新UI - 确保显示完整的按钮文本
+            # 获取原始消息内容
+            original_text = query.message.text
+            
+            # 更新UI - 保留原始消息，仅更改按钮
             try:
-                # 使用单行按钮以确保完整显示
-                await query.edit_message_text(
-                    text=f"🎉 Order #{oid} - You've accepted this order\n\n"
-                         f"👤 Account: `{query.message.text.split('Account:')[1].split('\n')[0].strip()}`\n"
-                         f"🔑 Password: `{query.message.text.split('Password:')[1].split('\n')[0].strip()}`\n"
-                         f"📦 Package: {query.message.text.split('Package:')[1].split('\n')[0].strip()}\n"
-                         f"💰 Payment: ${query.message.text.split('Payment:')[1].strip() if 'Payment:' in query.message.text else ''}",
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(button_text, callback_data="noop")]]),
-                    parse_mode='Markdown'
-                )
+                if reason_type == "wrong_password":
+                    keyboard = [[InlineKeyboardButton("🔑 Failed: Wrong Password", callback_data="noop")]]
+                elif reason_type == "not_expired":
+                    keyboard = [[InlineKeyboardButton("⏱️ Failed: Membership Not Expired", callback_data="noop")]]
+                elif reason_type == "other":
+                    keyboard = [[InlineKeyboardButton("❓ Failed: Other Reason", callback_data="noop")]]
+                
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                # 保留原始消息文本，只更新按钮
+                await query.edit_message_reply_markup(reply_markup=reply_markup)
                 
                 # 如果是"其他原因"，请求详细反馈
                 if reason_type == "other":
