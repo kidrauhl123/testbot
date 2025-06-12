@@ -113,6 +113,62 @@ def is_seller(chat_id):
     # 只从数据库中获取卖家信息，因为环境变量中的卖家已经同步到数据库
     return chat_id in get_active_seller_ids()
 
+# 添加处理 Telegram webhook 更新的函数
+async def process_telegram_update_async(update_data, notification_queue):
+    """异步处理来自Telegram webhook的更新"""
+    global bot_application
+    
+    try:
+        if not bot_application:
+            logger.error("机器人应用未初始化，无法处理webhook更新")
+            print("ERROR: 机器人应用未初始化，无法处理webhook更新")
+            return
+        
+        # 将JSON数据转换为Update对象
+        update = Update.de_json(data=update_data, bot=bot_application.bot)
+        
+        if not update:
+            logger.error("无法将webhook数据转换为Update对象")
+            print("ERROR: 无法将webhook数据转换为Update对象")
+            return
+        
+        # 处理更新
+        logger.info(f"正在处理webhook更新: {update.update_id}")
+        print(f"DEBUG: 正在处理webhook更新: {update.update_id}")
+        
+        # 将更新分派给应用程序处理
+        await bot_application.process_update(update)
+        
+        logger.info(f"webhook更新 {update.update_id} 处理完成")
+        print(f"DEBUG: webhook更新 {update.update_id} 处理完成")
+    
+    except Exception as e:
+        logger.error(f"处理webhook更新时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 处理webhook更新时出错: {str(e)}")
+
+def process_telegram_update(update_data, notification_queue):
+    """处理来自Telegram webhook的更新（同步包装器）"""
+    global BOT_LOOP
+    
+    try:
+        if not BOT_LOOP:
+            logger.error("机器人事件循环未初始化，无法处理webhook更新")
+            print("ERROR: 机器人事件循环未初始化，无法处理webhook更新")
+            return
+        
+        # 在机器人的事件循环中运行异步处理函数
+        asyncio.run_coroutine_threadsafe(
+            process_telegram_update_async(update_data, notification_queue),
+            BOT_LOOP
+        )
+        
+        logger.info("已将webhook更新提交到机器人事件循环处理")
+        print("DEBUG: 已将webhook更新提交到机器人事件循环处理")
+    
+    except Exception as e:
+        logger.error(f"提交webhook更新到事件循环时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 提交webhook更新到事件循环时出错: {str(e)}")
+
 async def get_user_info(user_id):
     """获取Telegram用户信息并缓存"""
     global bot_application, user_info_cache
@@ -163,6 +219,23 @@ async def cleanup_processing_accepts():
         if key in processing_accepts_time:
             del processing_accepts_time[key]
         logger.warning(f"清理超时的接单请求: {key}")
+
+async def on_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """测试命令处理函数"""
+    user_id = update.effective_user.id
+    
+    if not is_seller(user_id):
+        await update.message.reply_text("⚠️ 您没有权限使用此命令。")
+        return
+    
+    await update.message.reply_text(
+        "✅ 机器人正常运行中！\n\n"
+        f"• 当前时间: {get_china_time()}\n"
+        f"• 您的用户ID: {user_id}\n"
+        "• 机器人状态: 在线\n\n"
+        "如需帮助，请使用 /start 命令查看可用功能。"
+    )
+    logger.info(f"用户 {user_id} 执行了测试命令")
 
 async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """开始命令处理"""
