@@ -298,15 +298,6 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if "2 active orders" in message:
                         # 只显示弹窗提示，不修改原始按钮
                         await query.answer("You already have 2 active orders. Please complete your current orders first before accepting new ones.", show_alert=True)
-                        # 发送额外的提醒消息
-                        try:
-                            await bot_application.bot.send_message(
-                                chat_id=user_id,
-                                text=f"⚠️ You cannot accept Order #{oid} now because you already have 2 active orders.\nPlease complete your current orders first, then you can come back to accept this order.",
-                                parse_mode='Markdown'
-                            )
-                        except Exception as msg_error:
-                            logger.error(f"发送额外提醒消息失败: {str(msg_error)}")
                     elif "already been taken" in message:
                         await query.edit_message_text(f"⚠️ Order #{oid} has already been taken by someone else.")
                     else:
@@ -448,10 +439,8 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
                         "📝 Please provide more details about the failure reason. Your next message will be recorded as feedback."
                     )
                 else:
+                    # 只显示回调确认，不发送额外消息
                     await query.answer(f"Order marked as failed: {reason_text}")
-                    await query.message.reply_text(
-                        f"❌ Order #{oid} marked as failed.\nReason: {button_text}"
-                    )
                 
                 logger.info(f"已更新订单 #{oid} 的消息显示为失败状态，原因: {reason_text}")
             except Exception as markup_error:
