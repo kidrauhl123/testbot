@@ -134,6 +134,26 @@
     }
     .order-list-item h4 { margin: 0 0 10px; font-size: 16px; }
     .order-list-item p { margin: 5px 0; font-size: 14px; color: #666; }
+    
+    /* 刷新指示器样式 */
+    #refreshIndicator {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(102,126,234,0.9);
+      color: white;
+      padding: 8px 15px;
+      border-radius: 20px;
+      font-size: 14px;
+      opacity: 0;
+      transform: translateY(-20px);
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+    #refreshIndicator.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
 
     @media (max-width: 992px) {
         .container { flex-direction: column; }
@@ -154,6 +174,9 @@
     <a href="/logout" class="btn btn-danger">退出登录</a>
   </div>
 </div>
+
+<!-- 刷新指示器 -->
+<div id="refreshIndicator">正在刷新...</div>
 
 <div class="main-container">
     <div class="container">
@@ -505,36 +528,20 @@
 
   // 搜索订单
   function searchOrders() {
-    searchKeyword = document.getElementById('searchInput').value.trim();
+    searchKeyword = '';
     displayedOrders = 12; // 重置显示数量
-    
-    if (!searchKeyword) {
-      renderOrders(allOrders);
-      return;
-    }
-    
-    const filteredOrders = allOrders.filter(order => 
-      order.id.toString().includes(searchKeyword) || 
-      order.account.toLowerCase().includes(searchKeyword.toLowerCase())
-    );
-    
-    renderOrders(filteredOrders);
+    renderOrders(allOrders);
   }
 
   // 清除搜索
   function clearSearch() {
     searchKeyword = '';
-    document.getElementById('searchInput').value = '';
     displayedOrders = 12;
     renderOrders(allOrders);
   }
 
   // 监听回车键搜索
-  document.getElementById('searchInput').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-      searchOrders();
-    }
-  });
+  // 移除了对不存在的searchInput元素的引用
 
   // HTML转义函数
   function escapeHtml(unsafe) {
