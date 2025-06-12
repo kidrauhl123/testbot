@@ -391,7 +391,7 @@
     <div class="modal">
       <div class="modal-header">
         <h3>编辑订单</h3>
-        <button class="modal-close" onclick="hideModal('edit-order-modal')">&times;</button>
+        <button class="modal-close" data-dismiss="modal">&times;</button>
       </div>
       <div class="modal-body">
         <div id="edit-order-error" class="error-message" style="display:none;"></div>
@@ -430,7 +430,7 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="hideModal('edit-order-modal')">取消</button>
+        <button class="btn btn-secondary" data-dismiss="modal">取消</button>
         <button class="btn btn-primary" onclick="saveOrderEdit()">保存</button>
       </div>
     </div>
@@ -469,22 +469,26 @@
 </div>
 
 <script>
-  function showTab(tabName) {
-    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-    document.getElementById(tabName).classList.add('active');
+  function showTab(tabId) {
+    // 隐藏所有标签内容
+    document.querySelectorAll('.tab-content').forEach(tab => {
+      tab.classList.remove('active');
+    });
     
-    document.querySelectorAll('.sidebar-menu a').forEach(link => link.classList.remove('active'));
-    document.querySelector(`.sidebar-menu a[href="#${tabName}"]`).classList.add('active');
+    // 取消所有标签按钮激活状态
+    document.querySelectorAll('.sidebar-menu a').forEach(link => {
+      link.classList.remove('active');
+    });
+    
+    // 激活选中的标签
+    document.getElementById(`${tabId}-tab`).classList.add('active');
+    document.querySelector(`.sidebar-menu a[href="#${tabId}"]`).classList.add('active');
   }
 
-  function renderLoading(tbodyId) {
-    const tbody = document.getElementById(tbodyId);
-    const colCount = tbody.parentElement.querySelector('thead tr').childElementCount;
-    tbody.innerHTML = `<tr><td colspan="${colCount}" class="loading">加载中...</td></tr>`;
-  }
-
-  function escapeHtml(unsafe) {
-    return unsafe
+  // 转义HTML
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
@@ -492,6 +496,12 @@
       .replace(/'/g, "&#039;");
   }
 
+  // 显示加载中
+  function renderLoading(elementId) {
+    document.getElementById(elementId).innerHTML = '<tr><td colspan="12" class="loading">加载中...</td></tr>';
+  }
+
+  // 用户管理
   async function loadUsers() {
     try {
       const resp = await fetch('/admin/api/users');
@@ -578,26 +588,7 @@
     });
   }
 
-  function showModal(modalId) {
-    console.log("显示模态框:", modalId);
-    const modal = document.getElementById(modalId);
-    if (!modal) {
-      console.error("找不到模态框元素:", modalId);
-      return;
-    }
-    modal.classList.add('show');
-    console.log("模态框已添加show类:", modal);
-  }
-
-  function hideModal(modalId) {
-    console.log("隐藏模态框:", modalId);
-    const modal = document.getElementById(modalId);
-    if (!modal) {
-      console.error("找不到模态框元素:", modalId);
-      return;
-    }
-    modal.classList.remove('show');
-  }
+  // 已被替换为openModal和closeModal函数
 
   function showAddSellerModal() {
     console.log("点击了添加卖家按钮");
@@ -618,7 +609,7 @@
     firstnameInput.value = '';
     errorDiv.style.display = 'none';
     
-    showModal('add-seller-modal');
+    openModal('add-seller-modal');
   }
 
   async function loadSellers() {
@@ -736,7 +727,7 @@
       document.getElementById('edit-order-remark').value = order.remark || '';
       
       // 显示模态框
-      showModal('edit-order-modal');
+      openModal('edit-order-modal');
     } catch (error) {
       console.error('获取订单详情失败:', error);
       alert('获取订单详情失败');
@@ -770,7 +761,7 @@
       });
       
       if (response.ok) {
-        hideModal('edit-order-modal');
+        closeModal('edit-order-modal');
         loadOrders(); // 重新加载订单列表
         alert('订单更新成功');
       } else {
@@ -784,6 +775,38 @@
       errorDiv.style.display = 'block';
     }
   }
+
+  // 模态框操作函数
+  function openModal(modalId) {
+    console.log("显示模态框:", modalId);
+    const modal = document.getElementById(modalId);
+    if (!modal) {
+      console.error("找不到模态框元素:", modalId);
+      return;
+    }
+    modal.classList.add('show');
+    console.log("模态框已添加show类:", modal);
+  }
+  
+  function closeModal(modalId) {
+    console.log("隐藏模态框:", modalId);
+    const modal = document.getElementById(modalId);
+    if (!modal) {
+      console.error("找不到模态框元素:", modalId);
+      return;
+    }
+    modal.classList.remove('show');
+  }
+  
+  // 为所有关闭按钮添加事件
+  document.querySelectorAll('[data-dismiss="modal"]').forEach(button => {
+    button.addEventListener('click', function() {
+      const modal = this.closest('.modal-backdrop');
+      if (modal) {
+        modal.classList.remove('show');
+      }
+    });
+  });
 
   // 保存余额修改
   document.getElementById('saveBalanceBtn').addEventListener('click', async function() {
