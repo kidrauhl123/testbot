@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <title>用户后台 - 破天充值系统</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     * { box-sizing: border-box; }
     body { 
@@ -33,6 +33,7 @@
       display: flex;
       align-items: center;
       gap: 20px;
+      position: relative;
     }
     .btn {
       border: none;
@@ -49,6 +50,135 @@
     }
     .btn-primary { background: #667eea; color: white; }
     .btn-danger { background: #dc3545; color: white; }
+    
+    /* 用户下拉菜单样式 */
+    .user-dropdown {
+      position: relative;
+      display: inline-block;
+      cursor: pointer;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background-color: rgba(0,0,0,0.05);
+      transition: all 0.3s ease;
+    }
+
+    .user-info:hover {
+      background-color: rgba(0,0,0,0.1);
+    }
+
+    .user-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background-color: #764ba2;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .user-name {
+      font-weight: 600;
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      width: 200px;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+      padding: 10px 0;
+      margin-top: 10px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+
+    .user-dropdown:hover .dropdown-menu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .dropdown-menu::before {
+      content: '';
+      position: absolute;
+      top: -6px;
+      right: 20px;
+      width: 12px;
+      height: 12px;
+      background-color: white;
+      transform: rotate(45deg);
+      border-radius: 2px;
+    }
+
+    .dropdown-menu-item {
+      padding: 8px 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #333;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    .dropdown-menu-item:hover {
+      background-color: rgba(0,0,0,0.05);
+    }
+
+    .dropdown-menu-item.danger {
+      color: #e74c3c;
+    }
+
+    .dropdown-menu-item.danger:hover {
+      background-color: rgba(231,76,60,0.1);
+    }
+
+    .dropdown-divider {
+      height: 1px;
+      background-color: rgba(0,0,0,0.1);
+      margin: 5px 0;
+    }
+
+    .dropdown-menu-header {
+      padding: 8px 15px;
+      font-size: 12px;
+      color: #666;
+      font-weight: 600;
+    }
+    
+    .balance-badge {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 2px 5px rgba(56,239,125,0.3);
+      display: flex;
+      align-items: center;
+    }
+    
+    .balance-badge.negative {
+      background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+    }
+    
+    .balance-badge::before {
+      content: '💰';
+      margin-right: 5px;
+    }
     
     .main-container {
       max-width: 1400px;
@@ -125,35 +255,42 @@
       color: #666;
     }
     
-    .order-list {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-      gap: 15px;
+    /* 订单表格样式 */
+    .orders-table-container {
+      overflow-x: auto;
     }
     
-    .order-item {
-      background: #fff;
-      border-radius: 10px;
-      padding: 15px;
-      transition: all 0.3s ease;
-      border-left: 4px solid #667eea;
-      box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+    .orders-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+      font-size: 14px;
     }
     
-    .order-item:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    }
-    
-    .order-id {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
+    .orders-table th {
+      background-color: #f8f9fa;
+      padding: 12px 15px;
+      text-align: left;
       font-weight: 600;
+      color: #333;
+      border-bottom: 2px solid #e9ecef;
     }
     
-    .order-status {
+    .orders-table td {
+      padding: 12px 15px;
+      border-bottom: 1px solid #e9ecef;
+      vertical-align: middle;
+    }
+    
+    .orders-table tr:hover {
+      background-color: #f8f9fa;
+    }
+    
+    .orders-table tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .status-badge {
       display: inline-block;
       padding: 3px 10px;
       border-radius: 20px;
@@ -165,26 +302,7 @@
     .status-accepted { background: #fef2e5; color: #f39c12; }
     .status-completed { background: #e6f8f1; color: #2ecc71; }
     .status-failed { background: #feeaea; color: #e74c3c; }
-    
-    .order-info {
-      margin-bottom: 15px;
-    }
-    
-    .info-row {
-      display: flex;
-      margin-bottom: 5px;
-    }
-    
-    .info-label {
-      width: 70px;
-      color: #666;
-      font-size: 13px;
-    }
-    
-    .info-value {
-      flex: 1;
-      font-weight: 500;
-    }
+    .status-cancelled { background: #f4f4f4; color: #7f8c8d; }
     
     .no-orders {
       text-align: center;
@@ -230,52 +348,37 @@
       .stats-container {
         grid-template-columns: repeat(2, 1fr);
       }
-      .order-list {
-        grid-template-columns: 1fr;
+      .orders-table {
+        display: block;
       }
-    }
-    
-    .balance-badge {
-      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-      color: white;
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 600;
-      box-shadow: 0 2px 5px rgba(56,239,125,0.3);
-      display: flex;
-      align-items: center;
-    }
-    .balance-badge::before {
-      content: '💰';
-      margin-right: 5px;
-    }
-    
-    .credit-badge {
-      background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%);
-      color: white;
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 600;
-      box-shadow: 0 2px 5px rgba(243,156,18,0.3);
-      display: flex;
-      align-items: center;
-    }
-    
-    .credit-badge::before {
-      content: '💳';
-      margin-right: 5px;
-    }
-    
-    .admin-badge {
-      background: linear-gradient(135deg, #ffb347 0%, #ffcc33 100%);
-      color: #333;
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 600;
-      box-shadow: 0 2px 5px rgba(255,195,51,0.3);
+      .orders-table thead {
+        display: none;
+      }
+      .orders-table tbody,
+      .orders-table tr,
+      .orders-table td {
+        display: block;
+        width: 100%;
+      }
+      .orders-table tr {
+        margin-bottom: 15px;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 10px;
+      }
+      .orders-table td {
+        text-align: right;
+        padding: 8px 10px;
+        position: relative;
+        border-bottom: none;
+      }
+      .orders-table td::before {
+        content: attr(data-label);
+        position: absolute;
+        left: 10px;
+        font-weight: 600;
+        color: #666;
+      }
     }
   </style>
 </head>
@@ -285,18 +388,44 @@
     Spotify充值系统
   </div>
   <div class="navbar-user">
-    {% if is_admin %}
-    <span class="admin-badge">管理员</span>
-    <a href="/admin" class="btn btn-primary">管理后台</a>
-    {% endif %}
+    <div class="user-dropdown">
+      <div class="user-info">
+        <div class="user-avatar">{{ username[0]|upper }}</div>
+        <span class="user-name">{{ username }}</span>
+        {% if is_admin %}
+          <span class="admin-badge">管理员</span>
+        {% endif %}
+      </div>
+      <div class="dropdown-menu">
+        <div class="dropdown-menu-header">账户信息</div>
+        {% if balance is defined %}
+        <div class="dropdown-menu-item">
+          <span>账户余额：</span>
+          <span class="{% if balance < 0 %}text-danger{% else %}text-success{% endif %}">
+            {{ balance }}{% if credit_limit is defined and credit_limit > 0 %} (额度：{{ credit_limit }}){% endif %}
+          </span>
+        </div>
+        {% endif %}
+        <div class="dropdown-divider"></div>
+        {% if is_admin %}
+          <a href="/admin" class="dropdown-menu-item">
+            <i class="fas fa-cog"></i>管理后台
+          </a>
+        {% endif %}
+        <a href="/" class="dropdown-menu-item">
+          <i class="fas fa-home"></i>返回首页
+        </a>
+        <a href="/logout" class="dropdown-menu-item danger">
+          <i class="fas fa-sign-out-alt"></i>退出登录
+        </a>
+      </div>
+    </div>
+    
     {% if balance is defined %}
-    <span class="balance-badge">余额: {{ balance }} 元</span>
+    <div class="balance-badge {% if balance < 0 %}negative{% endif %}">
+      余额: {{ balance }}元{% if credit_limit is defined and credit_limit > 0 %} (额度: {{ credit_limit }}元){% endif %}
+    </div>
     {% endif %}
-    {% if credit_limit is defined and credit_limit > 0 %}
-    <span class="credit-badge">透支额度: {{ credit_limit }} 元</span>
-    {% endif %}
-    <a href="/" class="btn btn-primary">返回首页</a>
-    <a href="/logout" class="btn btn-danger">退出登录</a>
   </div>
 </div>
 
@@ -349,7 +478,7 @@
       <div class="card-header">
         <h2>我的所有订单</h2>
       </div>
-      <div id="orders-container" class="order-list">
+      <div id="orders-container" class="orders-table-container">
         <div class="loading">加载中...</div>
       </div>
     </div>
@@ -381,8 +510,8 @@
       const stats = calculateStats(orders);
       updateStatsDisplay(stats);
       
-      // 渲染订单列表
-      renderOrders(orders);
+      // 渲染订单列表 - 使用表格视图
+      renderOrdersTable(orders);
     } catch (e) {
       console.error('加载数据失败', e);
       document.getElementById('orders-container').innerHTML = '<div class="no-orders">加载失败，请刷新重试</div>';
@@ -434,7 +563,7 @@
   
   // 更新统计显示
   function updateStatsDisplay(stats) {
-    document.getElementById('total-orders').textContent = stats.total;
+    document.getElementById('total-orders').querySelector('.stat-value').textContent = stats.total;
     document.getElementById('completed-orders').textContent = stats.completed;
     document.getElementById('failed-orders').textContent = stats.failed;
     document.getElementById('total-amount').textContent = '¥' + stats.totalAmount.toFixed(2);
@@ -462,65 +591,54 @@
     packageStatsContainer.innerHTML = packageStatsHtml;
   }
   
-  // 渲染订单列表
-  function renderOrders(orders) {
+  // 渲染订单表格
+  function renderOrdersTable(orders) {
     const container = document.getElementById('orders-container');
-    container.innerHTML = '';
+    
+    let tableHtml = `
+      <table class="orders-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>账号</th>
+            <th>套餐</th>
+            <th>价格</th>
+            <th>状态</th>
+            <th>提交时间</th>
+            <th>完成时间</th>
+            <th>备注</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
     
     for (const order of orders) {
       const statusClass = 'status-' + order.status;
+      const price = WEB_PRICES[order.package] || 'N/A';
       
-      const orderHtml = `
-        <div class="order-item">
-          <div class="order-id">
-            订单 #${order.id}
-            <span class="order-status ${statusClass}">${order.status_text}</span>
-          </div>
-          <div class="order-info">
-            <div class="info-row">
-              <div class="info-label">账号:</div>
-              <div class="info-value">${escapeHtml(order.account)}</div>
-            </div>
-            <div class="info-row">
-              <div class="info-label">套餐:</div>
-              <div class="info-value">${order.package}个月</div>
-            </div>
-            <div class="info-row">
-              <div class="info-label">价格:</div>
-              <div class="info-value">¥${WEB_PRICES[order.package] || 'N/A'}</div>
-            </div>
-            ${order.status === 'failed' ? 
-              `<div class="info-row" style="color: #e74c3c;">
-                <div class="info-label">失败原因:</div>
-                <div class="info-value">${escapeHtml(order.remark || '未提供')}</div>
-              </div>` : 
-              (order.remark ? `<div class="info-row">
-                <div class="info-label">备注:</div>
-                <div class="info-value">${escapeHtml(order.remark)}</div>
-              </div>` : '')
-            }
-            <div class="info-row">
-              <div class="info-label">提交时间:</div>
-              <div class="info-value">${order.created_at}</div>
-            </div>
-            ${order.accepted_at ? `
-              <div class="info-row">
-                <div class="info-label">接单时间:</div>
-                <div class="info-value">${order.accepted_at}</div>
-              </div>` : ''
-            }
-            ${order.completed_at ? `
-              <div class="info-row">
-                <div class="info-label">完成时间:</div>
-                <div class="info-value">${order.completed_at}</div>
-              </div>` : ''
-            }
-          </div>
-        </div>
+      tableHtml += `
+        <tr>
+          <td data-label="ID">${order.id}</td>
+          <td data-label="账号">${escapeHtml(order.account)}</td>
+          <td data-label="套餐">${order.package}个月</td>
+          <td data-label="价格">¥${price}</td>
+          <td data-label="状态"><span class="status-badge ${statusClass}">${order.status_text}</span></td>
+          <td data-label="提交时间">${order.created_at}</td>
+          <td data-label="完成时间">${order.completed_at || '-'}</td>
+          <td data-label="备注">${order.status === 'failed' ? 
+            `<span style="color: #e74c3c;">${escapeHtml(order.remark || '未提供')}</span>` : 
+            escapeHtml(order.remark || '-')}
+          </td>
+        </tr>
       `;
-      
-      container.insertAdjacentHTML('beforeend', orderHtml);
     }
+    
+    tableHtml += `
+        </tbody>
+      </table>
+    `;
+    
+    container.innerHTML = tableHtml;
   }
   
   // HTML转义函数

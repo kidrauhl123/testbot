@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <title>Spotify充值系统</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- 添加Font Awesome图标库 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     * { box-sizing: border-box; }
     body { 
@@ -46,6 +48,7 @@
       display: flex;
       align-items: center;
       gap: 15px;
+      position: relative;
     }
     .admin-badge {
       background: linear-gradient(135deg, #ffb347 0%, #ffcc33 100%);
@@ -66,6 +69,9 @@
       box-shadow: 0 2px 5px rgba(56,239,125,0.3);
       display: flex;
       align-items: center;
+    }
+    .balance-badge.negative {
+      background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
     }
     .balance-badge::before {
       content: '💰';
@@ -464,26 +470,159 @@
       display: flex;
       gap: 10px;
     }
+
+    /* 用户下拉菜单样式 */
+    .user-dropdown {
+      position: relative;
+      display: inline-block;
+      cursor: pointer;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background-color: rgba(0,0,0,0.05);
+      transition: all 0.3s ease;
+    }
+
+    .user-info:hover {
+      background-color: rgba(0,0,0,0.1);
+    }
+
+    .user-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background-color: #764ba2;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .user-name {
+      font-weight: 600;
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      width: 200px;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+      padding: 10px 0;
+      margin-top: 10px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+
+    .user-dropdown:hover .dropdown-menu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .dropdown-menu::before {
+      content: '';
+      position: absolute;
+      top: -6px;
+      right: 20px;
+      width: 12px;
+      height: 12px;
+      background-color: white;
+      transform: rotate(45deg);
+      border-radius: 2px;
+    }
+
+    .dropdown-menu-item {
+      padding: 8px 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #333;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    .dropdown-menu-item:hover {
+      background-color: rgba(0,0,0,0.05);
+    }
+
+    .dropdown-menu-item.danger {
+      color: #e74c3c;
+    }
+
+    .dropdown-menu-item.danger:hover {
+      background-color: rgba(231,76,60,0.1);
+    }
+
+    .dropdown-divider {
+      height: 1px;
+      background-color: rgba(0,0,0,0.1);
+      margin: 5px 0;
+    }
+
+    .dropdown-menu-header {
+      padding: 8px 15px;
+      font-size: 12px;
+      color: #666;
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
 <div class="navbar">
   <div class="navbar-brand">破天充值系统</div>
   <div class="navbar-user">
-    <span>欢迎, <span class="username">{{ session.username }}</span></span>
-    {% if session.is_admin %}
-      <span class="admin-badge">超级管理员</span>
-      <a href="/admin" class="btn btn-primary">管理后台</a>
-    {% else %}
-      <a href="/dashboard" class="btn btn-primary">我的后台</a>
-    {% endif %}
+    <div class="user-dropdown">
+      <div class="user-info">
+        <div class="user-avatar">{{ session.username[0]|upper }}</div>
+        <span class="user-name">{{ session.username }}</span>
+        {% if session.is_admin %}
+          <span class="admin-badge">管理员</span>
+        {% endif %}
+      </div>
+      <div class="dropdown-menu">
+        <div class="dropdown-menu-header">账户信息</div>
+        {% if balance is defined %}
+        <div class="dropdown-menu-item">
+          <span>账户余额：</span>
+          <span class="{% if balance < 0 %}text-danger{% else %}text-success{% endif %}">
+            {{ balance }}{% if credit_limit is defined and credit_limit > 0 %} (额度：{{ credit_limit }}){% endif %}
+          </span>
+        </div>
+        {% endif %}
+        <div class="dropdown-divider"></div>
+        {% if session.is_admin %}
+          <a href="/admin" class="dropdown-menu-item">
+            <i class="fas fa-cog"></i>管理后台
+          </a>
+        {% else %}
+          <a href="/dashboard" class="dropdown-menu-item">
+            <i class="fas fa-user"></i>我的后台
+          </a>
+        {% endif %}
+        <a href="/logout" class="dropdown-menu-item danger">
+          <i class="fas fa-sign-out-alt"></i>退出登录
+        </a>
+      </div>
+    </div>
+    
     {% if balance is defined %}
-    <span class="balance-badge">余额: {{ balance }} 元</span>
+    <div class="balance-badge {% if balance < 0 %}negative{% endif %}">
+      余额: {{ balance }}元{% if credit_limit is defined and credit_limit > 0 %} (额度: {{ credit_limit }}元){% endif %}
+    </div>
     {% endif %}
-    {% if credit_limit is defined and credit_limit > 0 %}
-    <span class="credit-badge">透支额度: {{ credit_limit }} 元</span>
-    {% endif %}
-    <a href="/logout" class="btn btn-danger">退出登录</a>
   </div>
 </div>
 
@@ -695,13 +834,30 @@
     // 更新导航栏的余额显示
     const balanceBadge = document.querySelector('.balance-badge');
     if (balanceBadge) {
-      balanceBadge.textContent = `余额: ${balance} 元`;
+      // 更新余额和透支额度的显示
+      balanceBadge.textContent = `余额: ${balance}元${creditLimit > 0 ? ` (额度: ${creditLimit}元)` : ''}`;
+      
+      // 根据余额正负设置不同的样式
+      if (balance < 0) {
+        balanceBadge.classList.add('negative');
+      } else {
+        balanceBadge.classList.remove('negative');
+      }
     }
     
-    // 更新透支额度显示
-    const creditBadge = document.querySelector('.credit-badge');
-    if (creditBadge && creditLimit !== undefined) {
-      creditBadge.textContent = `透支额度: ${creditLimit} 元`;
+    // 更新下拉菜单中的余额显示
+    const dropdownBalance = document.querySelector('.dropdown-menu-item .text-success, .dropdown-menu-item .text-danger');
+    if (dropdownBalance) {
+      dropdownBalance.textContent = `${balance}${creditLimit > 0 ? ` (额度：${creditLimit})` : ''}`;
+      
+      // 根据余额正负设置不同的样式
+      if (balance < 0) {
+        dropdownBalance.classList.remove('text-success');
+        dropdownBalance.classList.add('text-danger');
+      } else {
+        dropdownBalance.classList.remove('text-danger');
+        dropdownBalance.classList.add('text-success');
+      }
     }
     
     // 更新账户余额卡片

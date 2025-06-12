@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <title>系统管理后台 - 破天充值系统</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     * { box-sizing: border-box; }
     body { 
@@ -33,14 +33,16 @@
       display: flex;
       align-items: center;
       gap: 20px;
+      position: relative;
     }
     .admin-badge {
-      background: #ffc107;
+      background: linear-gradient(135deg, #ffb347 0%, #ffcc33 100%);
       color: #333;
-      padding: 2px 8px;
+      padding: 4px 10px;
       border-radius: 12px;
       font-size: 12px;
       font-weight: 600;
+      box-shadow: 0 2px 5px rgba(255,195,51,0.3);
     }
     .btn {
       border: none;
@@ -263,16 +265,172 @@
       background: #6c757d;
       color: white;
     }
+
+    /* 用户下拉菜单样式 */
+    .user-dropdown {
+      position: relative;
+      display: inline-block;
+      cursor: pointer;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background-color: rgba(0,0,0,0.05);
+      transition: all 0.3s ease;
+    }
+
+    .user-info:hover {
+      background-color: rgba(0,0,0,0.1);
+    }
+
+    .user-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background-color: #764ba2;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .user-name {
+      font-weight: 600;
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      width: 200px;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+      padding: 10px 0;
+      margin-top: 10px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+
+    .user-dropdown:hover .dropdown-menu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .dropdown-menu::before {
+      content: '';
+      position: absolute;
+      top: -6px;
+      right: 20px;
+      width: 12px;
+      height: 12px;
+      background-color: white;
+      transform: rotate(45deg);
+      border-radius: 2px;
+    }
+
+    .dropdown-menu-item {
+      padding: 8px 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #333;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    .dropdown-menu-item:hover {
+      background-color: rgba(0,0,0,0.05);
+    }
+
+    .dropdown-menu-item.danger {
+      color: #e74c3c;
+    }
+
+    .dropdown-menu-item.danger:hover {
+      background-color: rgba(231,76,60,0.1);
+    }
+
+    .dropdown-divider {
+      height: 1px;
+      background-color: rgba(0,0,0,0.1);
+      margin: 5px 0;
+    }
+
+    .dropdown-menu-header {
+      padding: 8px 15px;
+      font-size: 12px;
+      color: #666;
+      font-weight: 600;
+    }
+    
+    .balance-badge {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 2px 5px rgba(56,239,125,0.3);
+      display: flex;
+      align-items: center;
+    }
+    
+    .balance-badge.negative {
+      background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+    }
+    
+    .balance-badge::before {
+      content: '💰';
+      margin-right: 5px;
+    }
   </style>
 </head>
 <body>
 <div class="navbar">
   <div class="navbar-brand">破天充值系统 - 管理后台</div>
   <div class="navbar-user">
-    <a href="/" class="btn btn-primary">返回主页</a>
-    <span>欢迎, <span class="username">{{ session.username }}</span></span>
-    <span class="admin-badge">超级管理员</span>
-    <a href="/logout" class="btn btn-danger">退出登录</a>
+    <div class="user-dropdown">
+      <div class="user-info">
+        <div class="user-avatar">{{ session.username[0]|upper }}</div>
+        <span class="user-name">{{ session.username }}</span>
+        <span class="admin-badge">管理员</span>
+      </div>
+      <div class="dropdown-menu">
+        <div class="dropdown-menu-header">账户信息</div>
+        {% if balance is defined %}
+        <div class="dropdown-menu-item">
+          <span>账户余额：</span>
+          <span class="{% if balance < 0 %}text-danger{% else %}text-success{% endif %}">
+            {{ balance }}{% if credit_limit is defined and credit_limit > 0 %} (额度：{{ credit_limit }}){% endif %}
+          </span>
+        </div>
+        {% endif %}
+        <div class="dropdown-divider"></div>
+        <a href="/" class="dropdown-menu-item">
+          <i class="fas fa-home"></i>返回主页
+        </a>
+        <a href="/logout" class="dropdown-menu-item danger">
+          <i class="fas fa-sign-out-alt"></i>退出登录
+        </a>
+      </div>
+    </div>
+    
+    {% if balance is defined %}
+    <div class="balance-badge {% if balance < 0 %}negative{% endif %}">
+      余额: {{ balance }}元{% if credit_limit is defined and credit_limit > 0 %} (额度: {{ credit_limit }}元){% endif %}
+    </div>
+    {% endif %}
   </div>
 </div>
 
