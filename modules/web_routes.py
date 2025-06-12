@@ -1,11 +1,12 @@
 import os
 import time
 import logging
-from datetime import datetime
-from functools import wraps
 import asyncio
+from functools import wraps
+from datetime import datetime, timedelta
+import pytz
 
-from flask import Flask, request, render_template, jsonify, session, redirect, url_for
+from flask import Flask, request, render_template, jsonify, session, redirect, url_for, flash
 
 from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH
 from modules.database import execute_query, hash_password, get_all_sellers, add_seller, remove_seller, toggle_seller_status
@@ -16,6 +17,16 @@ import modules.constants as constants
 
 # 设置日志
 logger = logging.getLogger(__name__)
+
+# 中国时区
+CN_TIMEZONE = pytz.timezone('Asia/Shanghai')
+
+# 获取中国时间的函数
+def get_china_time():
+    """获取当前中国时间（UTC+8）"""
+    utc_now = datetime.now(pytz.utc)
+    china_now = utc_now.astimezone(CN_TIMEZONE)
+    return china_now.strftime("%Y-%m-%d %H:%M:%S")
 
 # ===== 登录装饰器 =====
 def login_required(f):
@@ -50,7 +61,7 @@ def register_routes(app):
                 
                 # 更新最后登录时间
                 execute_query("UPDATE users SET last_login=? WHERE id=?",
-                            (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user_id))
+                            (get_china_time(), user_id))
                 
                 logger.info(f"用户 {username} 登录成功")
                 return redirect(url_for('index'))
@@ -170,7 +181,7 @@ def register_routes(app):
                 }), 400
             
             # 记录当前时间
-            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = get_china_time()
             
             logger.debug(f"准备插入订单: 用户={username}, 时间={timestamp}")
             
@@ -412,6 +423,179 @@ def register_routes(app):
         
         return jsonify({"success": True})
 
+    @app.route('/orders/dispute/<int:oid>', methods=['POST'])
+    @login_required
+    def dispute_order(oid):
+        """质疑已完成的订单（用户发现充值未成功）"""
+        user_id = session.get('user_id')
+        is_admin = session.get('is_admin', 0)
+        
+        # 获取订单信息
+        order = execute_query("""
+            SELECT id, user_id, status, package, accepted_by, account, password
+            FROM orders 
+            WHERE id=?
+        """, (oid,), fetch=True)
+        
+        if not order:
+            return jsonify({"error": "订单不存在"}), 404
+            
+        order_id, order_user_id, status, package, accepted_by, account, password = order[0]
+        
+        # 验证权限：只能质疑自己的订单，或者管理员可以质疑任何人的订单
+        if user_id != order_user_id and not is_admin:
+            return jsonify({"error": "权限不足"}), 403
+            
+        # 只能质疑"已完成"状态的订单
+        if status != STATUS['COMPLETED']:
+            return jsonify({"error": "只能质疑已完成的订单"}), 400
+            
+        # 更新订单状态为已接单（回退状态）
+        execute_query("UPDATE orders SET status=? WHERE id=?", 
+                      (STATUS['ACCEPTED'], oid))
+        
+        logger.info(f"订单已被质疑: ID={oid}, 用户ID={user_id}")
+        
+        # 如果有接单人，尝试通过Telegram通知接单人
+        if accepted_by:
+            try:
+                # 导入异步函数
+                from modules.telegram_bot import bot_application
+                
+                if bot_application:
+                    # 创建一个异步任务来发送通知
+                    async def send_dispute_notification():
+                        try:
+                            message = (
+                                f"⚠️ *订单质疑通知* ⚠️\n\n"
+                                f"订单 #{oid} 被买家质疑未成功充值\n"
+                                f"账号: `{account}`\n"
+                                f"密码: `{password}`\n"
+                                f"套餐: {package}个月\n\n"
+                                f"请尽快处理此问题并更新订单状态。"
+                            )
+                            
+                            # 创建按钮
+                            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                            keyboard = [
+                                [InlineKeyboardButton("✅ 标记完成", callback_data=f"done_{oid}"),
+                                 InlineKeyboardButton("❌ 标记失败", callback_data=f"fail_{oid}")]
+                            ]
+                            reply_markup = InlineKeyboardMarkup(keyboard)
+                            
+                            await bot_application.bot.send_message(
+                                chat_id=accepted_by,
+                                text=message,
+                                reply_markup=reply_markup,
+                                parse_mode='Markdown'
+                            )
+                            logger.info(f"已向接单人 {accepted_by} 发送订单质疑通知: 订单ID={oid}")
+                        except Exception as e:
+                            logger.error(f"发送订单质疑通知失败: {str(e)}")
+                    
+                    # 执行异步任务
+                    import asyncio
+                    asyncio.run(send_dispute_notification())
+            except Exception as e:
+                logger.error(f"处理订单质疑通知时出错: {str(e)}")
+        
+        return jsonify({"success": True})
+
+    @app.route('/orders/urge/<int:oid>', methods=['POST'])
+    @login_required
+    def urge_order(oid):
+        """催促已接单但未完成的订单（超过20分钟未处理）"""
+        user_id = session.get('user_id')
+        is_admin = session.get('is_admin', 0)
+        
+        # 获取订单信息
+        order = execute_query("""
+            SELECT id, user_id, status, package, accepted_by, accepted_at, account, password
+            FROM orders 
+            WHERE id=?
+        """, (oid,), fetch=True)
+        
+        if not order:
+            return jsonify({"error": "订单不存在"}), 404
+            
+        order_id, order_user_id, status, package, accepted_by, accepted_at, account, password = order[0]
+        
+        # 验证权限：只能催促自己的订单，或者管理员可以催促任何人的订单
+        if user_id != order_user_id and not is_admin:
+            return jsonify({"error": "权限不足"}), 403
+            
+        # 只能催促"已接单"状态的订单
+        if status != STATUS['ACCEPTED']:
+            return jsonify({"error": "只能催促已接单的订单"}), 400
+            
+        # 检查是否已经过了20分钟
+        if accepted_at:
+            accepted_time = datetime.strptime(accepted_at, "%Y-%m-%d %H:%M:%S")
+            # 将接单时间转换为aware datetime
+            if accepted_time.tzinfo is None:
+                accepted_time = CN_TIMEZONE.localize(accepted_time)
+            
+            # 获取当前中国时间
+            now = datetime.now(CN_TIMEZONE)
+            
+            # 如果接单时间不足20分钟，不允许催单
+            if now - accepted_time < timedelta(minutes=20):
+                return jsonify({"error": "接单未满20分钟，暂不能催单"}), 400
+        
+        logger.info(f"订单催促: ID={oid}, 用户ID={user_id}")
+        
+        # 如果有接单人，尝试通过Telegram通知接单人
+        if accepted_by:
+            try:
+                # 导入异步函数
+                from modules.telegram_bot import bot_application
+                
+                if bot_application:
+                    # 创建一个异步任务来发送通知
+                    async def send_urge_notification():
+                        try:
+                            message = (
+                                f"🔔 *催单通知* 🔔\n\n"
+                                f"订单 #{oid} 买家催促处理\n"
+                                f"账号: `{account}`\n"
+                                f"密码: `{password}`\n"
+                                f"套餐: {package}个月\n"
+                                f"接单时间: {accepted_at}\n\n"
+                                f"请尽快处理此订单并更新状态。"
+                            )
+                            
+                            # 创建按钮
+                            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                            keyboard = [
+                                [InlineKeyboardButton("✅ 标记完成", callback_data=f"done_{oid}"),
+                                 InlineKeyboardButton("❌ 标记失败", callback_data=f"fail_{oid}")]
+                            ]
+                            reply_markup = InlineKeyboardMarkup(keyboard)
+                            
+                            await bot_application.bot.send_message(
+                                chat_id=accepted_by,
+                                text=message,
+                                reply_markup=reply_markup,
+                                parse_mode='Markdown'
+                            )
+                            logger.info(f"已向接单人 {accepted_by} 发送催单通知: 订单ID={oid}")
+                        except Exception as e:
+                            logger.error(f"发送催单通知失败: {str(e)}")
+                    
+                    # 执行异步任务
+                    import asyncio
+                    asyncio.run(send_urge_notification())
+                    
+                    return jsonify({"success": True})
+                else:
+                    logger.error("Telegram机器人实例未初始化，无法发送催单通知")
+                    return jsonify({"error": "系统错误，无法发送催单通知"}), 500
+            except Exception as e:
+                logger.error(f"处理催单通知时出错: {str(e)}")
+                return jsonify({"error": "发送催单通知失败"}), 500
+        else:
+            return jsonify({"error": "该订单没有接单人信息，无法催单"}), 400
+
     # 添加一个测试路由
     @app.route('/test')
     def test_route():
@@ -419,7 +603,7 @@ def register_routes(app):
         return jsonify({
             'status': 'ok',
             'message': '服务器正常运行',
-            'time': time.strftime("%Y-%m-%d %H:%M:%S"),
+            'time': get_china_time(),
         })
 
     # 添加一个路由用于手动触发订单检查
@@ -444,7 +628,7 @@ def register_routes(app):
             return jsonify({
                 'status': 'ok',
                 'message': '订单检查已触发',
-                'time': time.strftime("%Y-%m-%d %H:%M:%S")
+                'time': get_china_time()
             })
         except Exception as e:
             logger.error(f"手动触发订单检查失败: {str(e)}", exc_info=True)
