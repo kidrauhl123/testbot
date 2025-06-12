@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 from modules.database import init_db
 from modules.telegram_bot import run_bot_in_thread
 from modules.web_routes import register_routes
+from modules.constants import sync_env_sellers_to_db
 
 # ===== Flask 应用 =====
 app = Flask(__name__)
@@ -35,6 +36,11 @@ if __name__ == "__main__":
     logger.info("正在初始化数据库...")
     init_db()
     logger.info("数据库初始化完成")
+    
+    # 同步环境变量中的卖家到数据库
+    logger.info("同步环境变量卖家到数据库...")
+    sync_env_sellers_to_db()
+    logger.info("环境变量卖家同步完成")
     
     # 启动 Bot 线程
     logger.info("正在启动Telegram机器人...")

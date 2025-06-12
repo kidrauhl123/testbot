@@ -8,7 +8,7 @@ from functools import wraps
 from datetime import datetime
 from urllib.parse import urlparse
 
-from modules.constants import DATABASE_URL
+from modules.constants import DATABASE_URL, STATUS
 
 # 设置日志
 logger = logging.getLogger(__name__)
@@ -285,7 +285,18 @@ def hash_password(password):
 
 # 获取未通知订单
 def get_unnotified_orders():
-    return execute_query("SELECT id, account, password, package FROM orders WHERE notified = 0 AND status = 'submitted'", fetch=True)
+    """获取未通知的订单"""
+    orders = execute_query("""
+        SELECT id, account, password, package, created_at, web_user_id 
+        FROM orders 
+        WHERE notified = 0 AND status = ?
+    """, (STATUS['SUBMITTED'],), fetch=True)
+    
+    # 记录获取到的未通知订单
+    if orders:
+        logger.info(f"获取到 {len(orders)} 个未通知订单")
+    
+    return orders
 
 # 接单原子操作
 def accept_order_atomic(oid, user_id):

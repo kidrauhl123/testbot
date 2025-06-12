@@ -36,10 +36,7 @@ bot_application = None
 # ===== TG 辅助函数 =====
 def is_seller(chat_id):
     """检查用户是否为已授权的卖家"""
-    # 首先检查环境变量中的卖家ID
-    if chat_id in SELLER_CHAT_IDS:
-        return True
-    # 然后检查数据库中的卖家ID
+    # 只从数据库中获取卖家信息，因为环境变量中的卖家已经同步到数据库
     return chat_id in get_active_seller_ids()
 
 async def get_user_info(user_id):
@@ -676,37 +673,51 @@ async def check_and_push_orders():
     
     if not unnotified_orders:
         return
-        
+    
+    logger.info(f"发现 {len(unnotified_orders)} 个未通知订单，准备推送")
+    
     seller_ids = get_active_seller_ids()
     if not seller_ids:
         logger.warning("没有活跃的卖家，无法推送新订单。")
         return
-        
+    
+    logger.info(f"找到 {len(seller_ids)} 个活跃卖家")
+    
     for order in unnotified_orders:
-        oid, account, password, package, created_at, web_user_id = order
-        
-        user_info = f" from web user: {web_user_id}" if web_user_id else ""
-        
-        message = (
-            f"📢 New Order #{oid}{user_info}\n"
-            f"Account: `{account}`\n"
-            f"Password: `********` (hidden until accepted)\n"
-            f"Package: {package} month(s)"
-        )
-        
-        # 创建接单按钮
-        keyboard = [[InlineKeyboardButton("接单", callback_data=f'accept_order_{oid}')]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        # 向所有卖家发送通知
-        for seller_id in seller_ids:
-            try:
-                await bot_application.bot.send_message(chat_id=seller_id, text=message, reply_markup=reply_markup)
-            except Exception as e:
-                logger.error(f"向卖家 {seller_id} 发送订单 #{oid} 通知失败: {str(e)}")
-        
-        # 标记为已通知
-        execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
+        try:
+            oid, account, password, package, created_at, web_user_id = order
+            
+            user_info = f" from web user: {web_user_id}" if web_user_id else ""
+            
+            message = (
+                f"📢 New Order #{oid}{user_info}\n"
+                f"Account: `{account}`\n"
+                f"Password: `********` (hidden until accepted)\n"
+                f"Package: {package} month(s)"
+            )
+            
+            # 创建接单按钮
+            keyboard = [[InlineKeyboardButton("接单", callback_data=f'accept_order_{oid}')]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            # 向所有卖家发送通知
+            success_count = 0
+            for seller_id in seller_ids:
+                try:
+                    await bot_application.bot.send_message(chat_id=seller_id, text=message, reply_markup=reply_markup)
+                    success_count += 1
+                    logger.debug(f"成功向卖家 {seller_id} 推送订单 #{oid}")
+                except Exception as e:
+                    logger.error(f"向卖家 {seller_id} 发送订单 #{oid} 通知失败: {str(e)}")
+            
+            if success_count > 0:
+                # 只有成功推送给至少一个卖家时才标记为已通知
+                execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
+                logger.info(f"订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家")
+            else:
+                logger.error(f"订单 #{oid} 未能成功推送给任何卖家")
+        except Exception as e:
+            logger.error(f"处理订单通知时出错: {str(e)}", exc_info=True)
 
 # ===== 主函数 =====
 async def run_bot():

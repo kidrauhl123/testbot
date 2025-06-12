@@ -1,6 +1,11 @@
 import os
 from collections import defaultdict
 import threading
+import logging
+import time
+
+# 设置日志
+logger = logging.getLogger(__name__)
 
 # ✅ 写死变量（优先）
 if not os.environ.get('BOT_TOKEN'):
@@ -15,9 +20,9 @@ if os.environ.get('SELLER_CHAT_IDS'):
         # 格式: "123456789,987654321"
         seller_ids_str = os.environ.get('SELLER_CHAT_IDS', '')
         SELLER_CHAT_IDS = [int(x.strip()) for x in seller_ids_str.split(',') if x.strip()]
-        print(f"从环境变量加载卖家ID: {SELLER_CHAT_IDS}")
+        logger.info(f"从环境变量加载卖家ID: {SELLER_CHAT_IDS}")
     except Exception as e:
-        print(f"解析SELLER_CHAT_IDS环境变量出错: {e}")
+        logger.error(f"解析SELLER_CHAT_IDS环境变量出错: {e}")
 
 # 向后兼容ADMIN_CHAT_IDS环境变量
 if os.environ.get('ADMIN_CHAT_IDS') and not os.environ.get('SELLER_CHAT_IDS'):
@@ -25,9 +30,35 @@ if os.environ.get('ADMIN_CHAT_IDS') and not os.environ.get('SELLER_CHAT_IDS'):
         # 格式: "123456789,987654321"
         admin_ids_str = os.environ.get('ADMIN_CHAT_IDS', '')
         SELLER_CHAT_IDS = [int(x.strip()) for x in admin_ids_str.split(',') if x.strip()]
-        print(f"从ADMIN_CHAT_IDS环境变量加载卖家ID: {SELLER_CHAT_IDS}")
+        logger.info(f"从ADMIN_CHAT_IDS环境变量加载卖家ID: {SELLER_CHAT_IDS}")
     except Exception as e:
-        print(f"解析ADMIN_CHAT_IDS环境变量出错: {e}")
+        logger.error(f"解析ADMIN_CHAT_IDS环境变量出错: {e}")
+
+# 将环境变量中的卖家ID同步到数据库
+def sync_env_sellers_to_db():
+    """将环境变量中的卖家ID同步到数据库"""
+    if not SELLER_CHAT_IDS:
+        return
+    
+    # 导入放在函数内部，避免循环导入
+    from modules.database import execute_query
+    
+    # 获取数据库中已存在的卖家ID
+    try:
+        db_seller_ids = execute_query("SELECT telegram_id FROM sellers", fetch=True)
+        db_seller_ids = [row[0] for row in db_seller_ids] if db_seller_ids else []
+        
+        # 将环境变量中的卖家ID添加到数据库
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        for seller_id in SELLER_CHAT_IDS:
+            if seller_id not in db_seller_ids:
+                logger.info(f"将环境变量中的卖家ID {seller_id} 同步到数据库")
+                execute_query(
+                    "INSERT INTO sellers (telegram_id, username, first_name, is_active, added_at, added_by) VALUES (?, ?, ?, ?, ?, ?)",
+                    (seller_id, f"env_seller_{seller_id}", f"环境变量卖家 {seller_id}", 1, timestamp, "环境变量")
+                )
+    except Exception as e:
+        logger.error(f"同步环境变量卖家到数据库失败: {e}")
 
 # ===== 价格系统 =====
 # 网页端价格（人民币）
