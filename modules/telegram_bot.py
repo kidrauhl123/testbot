@@ -311,14 +311,9 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 logger.warning(f"订单 #{oid} 接单失败: {message}")
                 try:
-                    # 根据不同的失败原因显示不同的消息
-                    if "2 active orders" in message:
-                        # 只显示弹窗提示，不修改原始按钮
-                        await query.answer("You already have 2 active orders. Please complete your current orders first before accepting new ones.", show_alert=True)
-                    elif "already been taken" in message:
+                    await query.answer(message, show_alert=True)
+                    if "already been taken" in message:
                         await query.edit_message_text(f"⚠️ Order #{oid} has already been taken by someone else.")
-                    else:
-                        await query.answer(f"Error: {message}", show_alert=True)
                 except Exception as e:
                     logger.error(f"编辑接单失败消息时出错: {str(e)}")
             
@@ -845,8 +840,17 @@ async def run_bot():
     
     logger.info("正在启动Telegram机器人...")
     
-    # 初始化
-    bot_application = ApplicationBuilder().token(BOT_TOKEN).build()
+    # 初始化，增加连接池大小和超时设置
+    bot_application = (
+        ApplicationBuilder()
+        .token(BOT_TOKEN)
+        .connection_pool_size(16)
+        .connect_timeout(30.0)
+        .read_timeout(30.0)
+        .write_timeout(30.0)
+        .pool_timeout(30.0)
+        .build()
+    )
     
     # 添加处理程序
     bot_application.add_handler(CommandHandler("start", on_start))

@@ -458,47 +458,45 @@ def register_routes(app):
         
         # 如果有接单人，尝试通过Telegram通知接单人
         if accepted_by:
-            try:
-                # 导入异步函数
-                from modules.telegram_bot import bot_application
+            # 使用 run_coroutine_threadsafe 在主事件循环中运行异步任务
+            if bot_application and bot_application.loop:
+                async def send_dispute_notification():
+                    try:
+                        message = (
+                            f"⚠️ *Order Dispute Notification* ⚠️\n\n"
+                            f"Order #{oid} has been disputed by the buyer for not being topped up successfully.\n"
+                            f"Account: `{account}`\n"
+                            f"Password: `{password}`\n"
+                            f"Package: {package} month(s)\n\n"
+                            f"Please handle this issue promptly and update the order status."
+                        )
+                        
+                        # 创建按钮
+                        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                        keyboard = [
+                            [InlineKeyboardButton("✅ Mark as Complete", callback_data=f"done_{oid}"),
+                             InlineKeyboardButton("❌ Mark as Failed", callback_data=f"fail_{oid}")]
+                        ]
+                        reply_markup = InlineKeyboardMarkup(keyboard)
+                        
+                        await bot_application.bot.send_message(
+                            chat_id=accepted_by,
+                            text=message,
+                            reply_markup=reply_markup,
+                            parse_mode='Markdown'
+                        )
+                        logger.info(f"已向接单人 {accepted_by} 发送订单质疑通知: 订单ID={oid}")
+                    except Exception as e:
+                        logger.error(f"发送订单质疑通知失败: {str(e)}")
                 
-                if bot_application:
-                    # 创建一个异步任务来发送通知
-                    async def send_dispute_notification():
-                        try:
-                            message = (
-                                f"⚠️ *订单质疑通知* ⚠️\n\n"
-                                f"订单 #{oid} 被买家质疑未成功充值\n"
-                                f"账号: `{account}`\n"
-                                f"密码: `{password}`\n"
-                                f"套餐: {package}个月\n\n"
-                                f"请尽快处理此问题并更新订单状态。"
-                            )
-                            
-                            # 创建按钮
-                            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-                            keyboard = [
-                                [InlineKeyboardButton("✅ 标记完成", callback_data=f"done_{oid}"),
-                                 InlineKeyboardButton("❌ 标记失败", callback_data=f"fail_{oid}")]
-                            ]
-                            reply_markup = InlineKeyboardMarkup(keyboard)
-                            
-                            await bot_application.bot.send_message(
-                                chat_id=accepted_by,
-                                text=message,
-                                reply_markup=reply_markup,
-                                parse_mode='Markdown'
-                            )
-                            logger.info(f"已向接单人 {accepted_by} 发送订单质疑通知: 订单ID={oid}")
-                        except Exception as e:
-                            logger.error(f"发送订单质疑通知失败: {str(e)}")
-                    
-                    # 执行异步任务
-                    import asyncio
-                    asyncio.run(send_dispute_notification())
-            except Exception as e:
-                logger.error(f"处理订单质疑通知时出错: {str(e)}")
-        
+                future = asyncio.run_coroutine_threadsafe(send_dispute_notification(), bot_application.loop)
+                try:
+                    future.result(timeout=10) # 设置10秒超时
+                except Exception as e:
+                    logger.error(f"发送订单质疑通知任务失败: {e}")
+            else:
+                logger.error("无法发送Telegram通知，因为机器人实例或事件循环不可用")
+
         return jsonify({"success": True})
 
     @app.route('/orders/urge/<int:oid>', methods=['POST'])
@@ -546,53 +544,47 @@ def register_routes(app):
         
         # 如果有接单人，尝试通过Telegram通知接单人
         if accepted_by:
-            try:
-                # 导入异步函数
-                from modules.telegram_bot import bot_application
+            if bot_application and bot_application.loop:
+                async def send_urge_notification():
+                    try:
+                        message = (
+                            f"🔔 *Order Urge Notification* 🔔\n\n"
+                            f"The buyer is urging for the completion of order #{oid}.\n"
+                            f"Account: `{account}`\n"
+                            f"Password: `{password}`\n"
+                            f"Package: {package} month(s)\n"
+                            f"Accepted at: {accepted_at}\n\n"
+                            f"Please process this order as soon as possible and update its status."
+                        )
+                        
+                        # 创建按钮
+                        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                        keyboard = [
+                            [InlineKeyboardButton("✅ Mark as Complete", callback_data=f"done_{oid}"),
+                             InlineKeyboardButton("❌ Mark as Failed", callback_data=f"fail_{oid}")]
+                        ]
+                        reply_markup = InlineKeyboardMarkup(keyboard)
+                        
+                        await bot_application.bot.send_message(
+                            chat_id=accepted_by,
+                            text=message,
+                            reply_markup=reply_markup,
+                            parse_mode='Markdown'
+                        )
+                        logger.info(f"已向接单人 {accepted_by} 发送催单通知: 订单ID={oid}")
+                    except Exception as e:
+                        logger.error(f"发送催单通知失败: {str(e)}")
                 
-                if bot_application:
-                    # 创建一个异步任务来发送通知
-                    async def send_urge_notification():
-                        try:
-                            message = (
-                                f"🔔 *催单通知* 🔔\n\n"
-                                f"订单 #{oid} 买家催促处理\n"
-                                f"账号: `{account}`\n"
-                                f"密码: `{password}`\n"
-                                f"套餐: {package}个月\n"
-                                f"接单时间: {accepted_at}\n\n"
-                                f"请尽快处理此订单并更新状态。"
-                            )
-                            
-                            # 创建按钮
-                            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-                            keyboard = [
-                                [InlineKeyboardButton("✅ 标记完成", callback_data=f"done_{oid}"),
-                                 InlineKeyboardButton("❌ 标记失败", callback_data=f"fail_{oid}")]
-                            ]
-                            reply_markup = InlineKeyboardMarkup(keyboard)
-                            
-                            await bot_application.bot.send_message(
-                                chat_id=accepted_by,
-                                text=message,
-                                reply_markup=reply_markup,
-                                parse_mode='Markdown'
-                            )
-                            logger.info(f"已向接单人 {accepted_by} 发送催单通知: 订单ID={oid}")
-                        except Exception as e:
-                            logger.error(f"发送催单通知失败: {str(e)}")
-                    
-                    # 执行异步任务
-                    import asyncio
-                    asyncio.run(send_urge_notification())
-                    
-                    return jsonify({"success": True})
-                else:
-                    logger.error("Telegram机器人实例未初始化，无法发送催单通知")
-                    return jsonify({"error": "系统错误，无法发送催单通知"}), 500
-            except Exception as e:
-                logger.error(f"处理催单通知时出错: {str(e)}")
-                return jsonify({"error": "发送催单通知失败"}), 500
+                future = asyncio.run_coroutine_threadsafe(send_urge_notification(), bot_application.loop)
+                try:
+                    future.result(timeout=10) # 设置10秒超时
+                except Exception as e:
+                    logger.error(f"发送催单通知任务失败: {e}")
+                
+                return jsonify({"success": True})
+            else:
+                logger.error("Telegram机器人实例或事件循环未初始化，无法发送催单通知")
+                return jsonify({"error": "系统错误，无法发送催单通知"}), 500
         else:
             return jsonify({"error": "该订单没有接单人信息，无法催单"}), 400
 
