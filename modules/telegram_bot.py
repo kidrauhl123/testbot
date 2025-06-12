@@ -26,7 +26,7 @@ from modules.constants import (
 )
 from modules.database import (
     get_order_details, accept_order_atomic, execute_query, 
-    get_unnotified_orders, get_active_seller_ids
+    get_unnotified_orders, get_active_seller_ids, get_db_connection
 )
 
 # 设置日志
@@ -232,114 +232,65 @@ async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
 
 # ===== TG 回调处理 =====
+@error_handler
 async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理接单回调"""
-    global processing_accepts, processing_accepts_time
+    query = update.callback_query
+    user_id = query.from_user.id
     
-    try:
-        query = update.callback_query
-        user_id = query.from_user.id
-        data = query.data
+    logger.info(f"收到接单回调: 用户ID={user_id}")
+    print(f"DEBUG: 收到接单回调: 用户ID={user_id}")
+    
+    # 解析回调数据
+    data = query.data.split("_")
+    if len(data) >= 3:
+        order_id = data[2]
+        logger.info(f"接单回调解析: 订单ID={order_id}")
+        print(f"DEBUG: 接单回调解析: 订单ID={order_id}")
         
-        # 添加更详细的日志
-        logger.info(f"收到接单回调: 用户ID={user_id}, 回调数据={data}, 消息ID={query.message.message_id}")
-        print(f"DEBUG: 收到接单回调: 用户ID={user_id}, 回调数据={data}")
-        
-        # 立即确认回调，避免Telegram显示等待状态
-        try:
-            await query.answer("Processing your request...")
-            logger.info("已确认回调请求")
-        except Exception as e:
-            logger.error(f"确认回调时出错: {str(e)}", exc_info=True)
-            print(f"ERROR: 确认回调时出错: {str(e)}")
-        
-        # 清理超时的处理中请求
-        await cleanup_processing_accepts()
-        
-        # 检查用户是否为卖家
-        if not is_seller(user_id):
-            logger.warning(f"非卖家 {user_id} 尝试接单")
-            try:
-                await query.answer("You are not a seller and cannot accept orders", show_alert=True)
-            except Exception as e:
-                logger.error(f"回复非卖家时出错: {str(e)}")
+        # 检查订单状态
+        order = get_order_by_id(order_id)
+        if not order:
+            await query.answer("订单不存在或已被删除", show_alert=True)
+            logger.warning(f"接单失败: 订单 {order_id} 不存在")
+            print(f"WARNING: 接单失败: 订单 {order_id} 不存在")
             return
         
-        # 检查是否是接单回调
-        if not data.startswith('accept_'):
-            logger.warning(f"无效的接单回调数据: {data}")
+        if order['status'] != 'pending':
+            await query.answer("此订单已被接受或已完成", show_alert=True)
+            logger.warning(f"接单失败: 订单 {order_id} 状态为 {order['status']}")
+            print(f"WARNING: 接单失败: 订单 {order_id} 状态为 {order['status']}")
             return
         
-        # 简化流程，使用更直接的方式处理接单
-        try:
-            # 解析订单ID
-            oid = int(data.split('_')[1])
-            logger.info(f"解析订单ID: {oid}")
-            print(f"DEBUG: 解析订单ID: {oid}")
-            
-            # 尝试接单
-            logger.info(f"卖家 {user_id} 尝试接单 #{oid}")
-            print(f"DEBUG: 卖家 {user_id} 尝试接单 #{oid}")
-            success, message = accept_order_atomic(oid, user_id)
-            logger.info(f"接单结果: 成功={success}, 消息={message}")
-            print(f"DEBUG: 接单结果: 成功={success}, 消息={message}")
-            
-            if success:
-                # 接单成功
-                logger.info(f"卖家 {user_id} 成功接单 #{oid}")
-                print(f"DEBUG: 卖家 {user_id} 成功接单 #{oid}")
-                
-                # 获取订单详情
-                order = get_order_details(oid)
-                if not order or len(order) == 0:
-                    logger.error(f"找不到订单 #{oid} 的详情")
-                    print(f"ERROR: 找不到订单 #{oid} 的详情")
-                    await query.edit_message_text(f"Error: Order #{oid} details not found")
-                    return
-                
-                # 发送成功提示
-                await query.answer("Order accepted successfully!", show_alert=True)
-                
-                # 更新消息
-                order = order[0]
-                account, password, package = order[1], order[2], order[3]
-                
-                keyboard = [
-                    [InlineKeyboardButton("✅ Complete", callback_data=f"done_{oid}"),
-                     InlineKeyboardButton("❌ Failed", callback_data=f"fail_{oid}")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                await query.edit_message_text(
-                    f"🎉 Order #{oid} - You've accepted this order\n\n"
-                    f"👤 Account: `{account}`\n"
-                    f"🔑 Password: `{password}`\n"
-                    f"📦 Package: {package} month(s)\n"
-                    f"💰 Payment: ${TG_PRICES[package]}",
-                    reply_markup=reply_markup,
-                    parse_mode='Markdown'
-                )
-                logger.info(f"已更新订单 #{oid} 的消息显示为已接单状态")
-                print(f"DEBUG: 已更新订单 #{oid} 的消息显示为已接单状态")
-            else:
-                # 接单失败
-                logger.warning(f"订单 #{oid} 接单失败: {message}")
-                print(f"DEBUG: 订单 #{oid} 接单失败: {message}")
-                await query.answer(message, show_alert=True)
-                
-                if "already taken" in message or "not found" in message:
-                    await query.edit_message_text(f"⚠️ Order #{oid} has already been taken by someone else or does not exist.")
-        except ValueError as ve:
-            logger.error(f"解析订单ID出错: {str(ve)}", exc_info=True)
-            print(f"ERROR: 解析订单ID出错: {str(ve)}")
-            await query.answer("Invalid order ID", show_alert=True)
-        except Exception as e:
-            logger.error(f"处理接单时发生未知错误: {str(e)}", exc_info=True)
-            print(f"ERROR: 处理接单时发生未知错误: {str(e)}")
-            await query.answer("An error occurred. Please try again.", show_alert=True)
-    except Exception as outer_error:
-        logger.critical(f"接单回调函数外层出错: {str(outer_error)}", exc_info=True)
-        print(f"CRITICAL: 接单回调函数外层出错: {str(outer_error)}")
+        # 更新订单状态
+        update_order_status(order_id, 'accepted', user_id)
+        
+        # 确认回调
+        await query.answer("您已成功接单！", show_alert=True)
+        
+        # 更新消息
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ 已被接单", callback_data=f"order_accepted_{order_id}")]
+        ])
+        
+        await query.edit_message_text(
+            f"📦 *订单 #{order_id}*\n\n"
+            f"• 商品: {order['product']}\n"
+            f"• 数量: {order['quantity']}\n"
+            f"• 地址: {order['address']}\n"
+            f"• 联系方式: {order['contact']}\n\n"
+            f"*✅ 此订单已被接受*\n"
+            f"接单人ID: `{user_id}`",
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
+        
+        logger.info(f"订单 {order_id} 已被用户 {user_id} 接受")
+        print(f"INFO: 订单 {order_id} 已被用户 {user_id} 接受")
+    else:
+        await query.answer("无效的订单数据", show_alert=True)
+        logger.error(f"接单回调数据无效: {query.data}")
+        print(f"ERROR: 接单回调数据无效: {query.data}")
 
 async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理反馈按钮回调"""
@@ -1309,6 +1260,55 @@ def process_telegram_update(update_data, notification_queue):
     except Exception as e:
         logger.error(f"在线程中处理Telegram更新时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 在线程中处理Telegram更新时出错: {str(e)}")
+
+def get_order_by_id(order_id):
+    """根据ID获取订单信息"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
+        order = cursor.fetchone()
+        
+        if order:
+            # 将结果转换为字典
+            columns = [column[0] for column in cursor.description]
+            result = {columns[i]: order[i] for i in range(len(columns))}
+            conn.close()
+            return result
+        conn.close()
+        return None
+    except Exception as e:
+        logger.error(f"获取订单 {order_id} 信息时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 获取订单 {order_id} 信息时出错: {str(e)}")
+        return None
+
+def update_order_status(order_id, status, handler_id=None):
+    """更新订单状态"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        if handler_id:
+            cursor.execute(
+                "UPDATE orders SET status = ?, handler_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (status, handler_id, order_id)
+            )
+        else:
+            cursor.execute(
+                "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (status, order_id)
+            )
+        
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"已更新订单 {order_id} 状态为 {status}")
+        print(f"INFO: 已更新订单 {order_id} 状态为 {status}")
+        return True
+    except Exception as e:
+        logger.error(f"更新订单 {order_id} 状态时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 更新订单 {order_id} 状态时出错: {str(e)}")
+        return False
 
 def error_handler(func):
     """装饰器：捕获并处理回调函数中的异常"""
