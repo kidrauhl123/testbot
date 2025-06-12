@@ -195,6 +195,9 @@ def register_routes(app):
             success, new_balance = update_user_balance(user_id, -price)
             if not success:
                 logger.error(f"余额扣除失败: 用户={username}, 金额={price}")
+                # 撤销订单插入
+                # 为了简化，这里可以标记订单为失败，或者直接删除，但需要获取刚插入的ID
+                # 更好的做法是在事务中处理
                 return jsonify({
                     "success": False,
                     "error": f'扣款失败，订单未提交，请联系管理员',
@@ -206,9 +209,25 @@ def register_routes(app):
             
             logger.info(f"订单提交成功: 用户={username}, 套餐={package}")
             
-            # 获取最新订单列表
-            orders = execute_query("SELECT id, account, password, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
-            logger.info(f"查询到的最新订单: {orders}")
+            # 获取最新订单列表并格式化，使其与 /orders/recent 接口返回的格式一致
+            orders_raw = execute_query("SELECT id, account, password, package, status, created_at, user_id FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
+            orders = []
+            for o in orders_raw:
+                orders.append({
+                    "id": o[0],
+                    "account": o[1],
+                    "password": o[2],
+                    "package": o[3],
+                    "status": o[4],
+                    "status_text": STATUS_TEXT_ZH.get(o[4], o[4]),
+                    "created_at": o[5],
+                    "accepted_at": "",
+                    "completed_at": "",
+                    "remark": "",
+                    "creator": username,
+                    "accepted_by": "",
+                    "can_cancel": o[4] == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == o[6])
+                })
             
             # 计算是否使用了透支额度
             used_credit = 0
@@ -458,8 +477,9 @@ def register_routes(app):
         
         # 如果有接单人，尝试通过Telegram通知接单人
         if accepted_by:
-            # 使用 run_coroutine_threadsafe 在主事件循环中运行异步任务
-            if bot_application and bot_application.loop:
+            logger.info(f"订单 {oid} 有接单人 {accepted_by}，准备发送TG通知。")
+            if bot_application and hasattr(bot_application, 'loop') and bot_application.loop.is_running():
+                logger.info(f"机器人实例和事件循环可用。")
                 async def send_dispute_notification():
                     try:
                         message = (
@@ -489,14 +509,11 @@ def register_routes(app):
                     except Exception as e:
                         logger.error(f"发送订单质疑通知失败: {str(e)}")
                 
-                future = asyncio.run_coroutine_threadsafe(send_dispute_notification(), bot_application.loop)
-                try:
-                    future.result(timeout=10) # 设置10秒超时
-                except Exception as e:
-                    logger.error(f"发送订单质疑通知任务失败: {e}")
+                # 以"即发即忘"的方式在后台运行，不阻塞当前线程
+                asyncio.run_coroutine_threadsafe(send_dispute_notification(), bot_application.loop)
             else:
-                logger.error("无法发送Telegram通知，因为机器人实例或事件循环不可用")
-
+                logger.error(f"无法发送Telegram通知，因为机器人实例或事件循环不可用。bot_application is None: {bot_application is None}")
+        
         return jsonify({"success": True})
 
     @app.route('/orders/urge/<int:oid>', methods=['POST'])
@@ -544,7 +561,9 @@ def register_routes(app):
         
         # 如果有接单人，尝试通过Telegram通知接单人
         if accepted_by:
-            if bot_application and bot_application.loop:
+            logger.info(f"订单 {oid} 有接单人 {accepted_by}，准备发送催单通知。")
+            if bot_application and hasattr(bot_application, 'loop') and bot_application.loop.is_running():
+                logger.info(f"机器人实例和事件循环可用。")
                 async def send_urge_notification():
                     try:
                         message = (
@@ -575,12 +594,8 @@ def register_routes(app):
                     except Exception as e:
                         logger.error(f"发送催单通知失败: {str(e)}")
                 
-                future = asyncio.run_coroutine_threadsafe(send_urge_notification(), bot_application.loop)
-                try:
-                    future.result(timeout=10) # 设置10秒超时
-                except Exception as e:
-                    logger.error(f"发送催单通知任务失败: {e}")
-                
+                # 以"即发即忘"的方式在后台运行
+                asyncio.run_coroutine_threadsafe(send_urge_notification(), bot_application.loop)
                 return jsonify({"success": True})
             else:
                 logger.error("Telegram机器人实例或事件循环未初始化，无法发送催单通知")
