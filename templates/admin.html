@@ -279,9 +279,9 @@
   <div class="admin-container">
     <div class="sidebar">
       <ul class="sidebar-menu">
-        <li><a href="#users" class="active" onclick="showTab('users')"><i class="fas fa-users"></i> 用户管理</a></li>
-        <li><a href="#orders" onclick="showTab('orders')"><i class="fas fa-file-invoice-dollar"></i> 订单管理</a></li>
-        <li><a href="#sellers" onclick="showTab('sellers')"><i class="fas fa-user-tie"></i> 卖家管理</a></li>
+        <li><a href="#users" class="active" onclick="showTab('users'); return false;"><i class="fas fa-users"></i> 用户管理</a></li>
+        <li><a href="#orders" onclick="showTab('orders'); return false;"><i class="fas fa-file-invoice-dollar"></i> 订单管理</a></li>
+        <li><a href="#sellers" onclick="showTab('sellers'); return false;"><i class="fas fa-user-tie"></i> 卖家管理</a></li>
       </ul>
     </div>
     
@@ -481,7 +481,7 @@
     });
     
     // 激活选中的标签
-    document.getElementById(`${tabId}-tab`).classList.add('active');
+    document.getElementById(tabId).classList.add('active');
     document.querySelector(`.sidebar-menu a[href="#${tabId}"]`).classList.add('active');
   }
 
@@ -504,11 +504,31 @@
   // 用户管理
   async function loadUsers() {
     try {
-      const resp = await fetch('/admin/api/users');
-      const users = await resp.json();
-      
+      console.log("开始加载用户数据...");
       const tbody = document.getElementById('users-table-body');
+      if (!tbody) {
+        console.error("找不到users-table-body元素");
+        return;
+      }
+      
+      tbody.innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
+      
+      const resp = await fetch('/admin/api/users');
+      if (!resp.ok) {
+        console.error("加载用户数据失败:", resp.status, resp.statusText);
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
+        return;
+      }
+      
+      const users = await resp.json();
+      console.log("成功获取用户数据:", users);
+      
       tbody.innerHTML = '';
+      
+      if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">暂无用户数据</td></tr>';
+        return;
+      }
       
       users.forEach(user => {
         const tr = document.createElement('tr');
@@ -535,12 +555,16 @@
         tbody.appendChild(tr);
       });
       
+      console.log("用户数据渲染完成，开始绑定按钮事件");
+      
       // 绑定修改余额按钮事件
       document.querySelectorAll('.edit-balance-btn').forEach(btn => {
         btn.addEventListener('click', function() {
           const userId = this.getAttribute('data-id');
           const username = this.getAttribute('data-username');
           const balance = this.getAttribute('data-balance');
+          
+          console.log("点击修改余额按钮:", userId, username, balance);
           
           document.getElementById('edit-balance-user-id').value = userId;
           document.getElementById('edit-balance-username').value = username;
@@ -550,42 +574,78 @@
           openModal('editBalanceModal');
         });
       });
+      
+      console.log("用户管理加载完成");
     } catch (e) {
       console.error('加载用户失败', e);
-      document.getElementById('users-table-body').innerHTML = 
-        '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
+      const tbody = document.getElementById('users-table-body');
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
+      }
     }
   }
 
   async function loadOrders() {
-    renderLoading('orders-table-body');
-    const response = await fetch('/admin/api/orders');
-    const orders = await response.json();
-    const tbody = document.getElementById('orders-table-body');
-    tbody.innerHTML = '';
-    const statusBadges = {
-      'submitted': 'badge-info',
-      'accepted': 'badge-warning',
-      'completed': 'badge-success',
-      'failed': 'badge-danger',
-      'cancelled': 'badge-secondary'
-    };
-    orders.forEach(order => {
-      const statusClass = statusBadges[order.status] || 'badge-secondary';
-      const row = `
-        <tr>
-          <td>${order.id}</td>
-          <td>${escapeHtml(order.account)}</td>
-          <td>${order.package}个月</td>
-          <td><span class="badge ${statusClass}">${escapeHtml(order.status_text)}</span></td>
-          <td>${escapeHtml(order.creator || 'N/A')}</td>
-          <td>${escapeHtml(order.accepted_by || 'N/A')}</td>
-          <td>${order.created_at}</td>
-          <td><button class="btn btn-primary btn-sm" onclick="editOrder(${order.id})">编辑</button></td>
-        </tr>
-      `;
-      tbody.innerHTML += row;
-    });
+    try {
+      console.log("开始加载订单数据...");
+      const tbody = document.getElementById('orders-table-body');
+      if (!tbody) {
+        console.error("找不到orders-table-body元素");
+        return;
+      }
+      
+      tbody.innerHTML = '<tr><td colspan="8" class="loading">加载中...</td></tr>';
+      
+      const response = await fetch('/admin/api/orders');
+      if (!response.ok) {
+        console.error("加载订单数据失败:", response.status, response.statusText);
+        tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
+        return;
+      }
+      
+      const orders = await response.json();
+      console.log("成功获取订单数据:", orders);
+      
+      tbody.innerHTML = '';
+      
+      if (orders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="loading">暂无订单数据</td></tr>';
+        return;
+      }
+      
+      const statusBadges = {
+        'submitted': 'badge-info',
+        'accepted': 'badge-warning',
+        'completed': 'badge-success',
+        'failed': 'badge-danger',
+        'cancelled': 'badge-secondary'
+      };
+      
+      orders.forEach(order => {
+        const statusClass = statusBadges[order.status] || 'badge-secondary';
+        const row = `
+          <tr>
+            <td>${order.id}</td>
+            <td>${escapeHtml(order.account)}</td>
+            <td>${order.package}个月</td>
+            <td><span class="badge ${statusClass}">${escapeHtml(order.status_text)}</span></td>
+            <td>${escapeHtml(order.creator || 'N/A')}</td>
+            <td>${escapeHtml(order.accepted_by || 'N/A')}</td>
+            <td>${order.created_at}</td>
+            <td><button class="btn btn-primary btn-sm" onclick="editOrder(${order.id})">编辑</button></td>
+          </tr>
+        `;
+        tbody.innerHTML += row;
+      });
+      
+      console.log("订单数据加载完成");
+    } catch (e) {
+      console.error('加载订单失败', e);
+      const tbody = document.getElementById('orders-table-body');
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
+      }
+    }
   }
 
   // 已被替换为openModal和closeModal函数
@@ -614,38 +674,65 @@
   }
 
   async function loadSellers() {
-    renderLoading('sellers-table-body');
-    const response = await fetch('/admin/api/sellers');
-    const sellers = await response.json();
-    const tbody = document.getElementById('sellers-table-body');
-    tbody.innerHTML = '';
-    if (sellers.length === 0) {
-      const colCount = tbody.parentElement.querySelector('thead tr').childElementCount;
-      tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding: 40px;">暂无卖家</td></tr>`;
-      return;
+    try {
+      console.log("开始加载卖家数据...");
+      const tbody = document.getElementById('sellers-table-body');
+      if (!tbody) {
+        console.error("找不到sellers-table-body元素");
+        return;
+      }
+      
+      tbody.innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
+      
+      const response = await fetch('/admin/api/sellers');
+      if (!response.ok) {
+        console.error("加载卖家数据失败:", response.status, response.statusText);
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
+        return;
+      }
+      
+      const sellers = await response.json();
+      console.log("成功获取卖家数据:", sellers);
+      
+      tbody.innerHTML = '';
+      
+      if (sellers.length === 0) {
+        const colCount = tbody.parentElement.querySelector('thead tr').childElementCount || 7;
+        tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding: 40px;">暂无卖家</td></tr>`;
+        return;
+      }
+      
+      sellers.forEach(seller => {
+        const statusBadge = seller.is_active 
+          ? '<span class="badge badge-success">活跃</span>' 
+          : '<span class="badge badge-secondary">停用</span>';
+        const toggleButtonText = seller.is_active ? '停用' : '启用';
+        const toggleButtonClass = seller.is_active ? 'btn-warning' : 'btn-success';
+        const row = `
+          <tr>
+            <td>${seller.telegram_id}</td>
+            <td>${escapeHtml(seller.username || '')}</td>
+            <td>${escapeHtml(seller.first_name || '')}</td>
+            <td>${statusBadge}</td>
+            <td>${seller.added_at}</td>
+            <td>${escapeHtml(seller.added_by || '')}</td>
+            <td class="actions">
+              <button class="btn ${toggleButtonClass} btn-sm" onclick="toggleSeller(${seller.telegram_id})">${toggleButtonText}</button>
+              <button class="btn btn-danger btn-sm" onclick="removeSeller(${seller.telegram_id})">删除</button>
+            </td>
+          </tr>
+        `;
+        tbody.innerHTML += row;
+      });
+      
+      console.log("卖家数据加载完成");
+    } catch (e) {
+      console.error('加载卖家失败', e);
+      const tbody = document.getElementById('sellers-table-body');
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
+      }
     }
-    sellers.forEach(seller => {
-      const statusBadge = seller.is_active 
-        ? '<span class="badge badge-success">活跃</span>' 
-        : '<span class="badge badge-secondary">停用</span>';
-      const toggleButtonText = seller.is_active ? '停用' : '启用';
-      const toggleButtonClass = seller.is_active ? 'btn-warning' : 'btn-success';
-      const row = `
-        <tr>
-          <td>${seller.telegram_id}</td>
-          <td>${escapeHtml(seller.username || '')}</td>
-          <td>${escapeHtml(seller.first_name || '')}</td>
-          <td>${statusBadge}</td>
-          <td>${seller.added_at}</td>
-          <td>${escapeHtml(seller.added_by || '')}</td>
-          <td class="actions">
-            <button class="btn ${toggleButtonClass} btn-sm" onclick="toggleSeller(${seller.telegram_id})">${toggleButtonText}</button>
-            <button class="btn btn-danger btn-sm" onclick="removeSeller(${seller.telegram_id})">删除</button>
-          </td>
-        </tr>
-      `;
-      tbody.innerHTML += row;
-    });
   }
 
   async function addSeller() {
@@ -848,10 +935,39 @@
     console.log("editBalanceModal:", document.getElementById('editBalanceModal'));
     console.log("edit-order-modal:", document.getElementById('edit-order-modal'));
     
-    showTab('users');
-    loadUsers();
-    loadOrders();
-    loadSellers();
+    // 检查标签页元素
+    console.log("检查标签页元素:");
+    console.log("users标签页:", document.getElementById('users'));
+    console.log("orders标签页:", document.getElementById('orders'));
+    console.log("sellers标签页:", document.getElementById('sellers'));
+    
+    try {
+      showTab('users');
+      console.log("显示用户标签页成功");
+    } catch (e) {
+      console.error("显示用户标签页失败:", e);
+    }
+    
+    try {
+      loadUsers();
+      console.log("加载用户数据成功");
+    } catch (e) {
+      console.error("加载用户数据失败:", e);
+    }
+    
+    try {
+      loadOrders();
+      console.log("加载订单数据成功");
+    } catch (e) {
+      console.error("加载订单数据失败:", e);
+    }
+    
+    try {
+      loadSellers();
+      console.log("加载卖家数据成功");
+    } catch (e) {
+      console.error("加载卖家数据失败:", e);
+    }
 
     document.querySelector('.sidebar-menu a[href="#users"]').addEventListener('click', loadUsers);
     document.querySelector('.sidebar-menu a[href="#orders"]').addEventListener('click', loadOrders);
