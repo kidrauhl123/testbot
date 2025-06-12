@@ -830,9 +830,75 @@ async def check_and_push_orders():
         except Exception as e:
             logger.error(f"处理订单通知时出错: {str(e)}", exc_info=True)
 
+# ===== 通知发送函数 =====
+async def send_notification_from_queue(data):
+    """根据队列中的数据发送通知"""
+    global bot_application
+    if not bot_application:
+        logger.error("机器人未初始化，无法发送通知")
+        return
+
+    try:
+        notification_type = data.get('type')
+        seller_id = data.get('seller_id')
+        oid = data.get('order_id')
+        account = data.get('account')
+        password = data.get('password')
+        package = data.get('package')
+
+        message = ""
+        if notification_type == 'dispute':
+            message = (
+                f"⚠️ *Order Dispute Notification* ⚠️\n\n"
+                f"Order #{oid} has been disputed by the buyer.\n"
+                f"Account: `{account}`\n"
+                f"Password: `{password}`\n"
+                f"Package: {package} month(s)\n\n"
+                f"Please handle this issue and update the status."
+            )
+        elif notification_type == 'urge':
+            accepted_at = data.get('accepted_at')
+            message = (
+                f"🔔 *Order Urge Notification* 🔔\n\n"
+                f"The buyer is urging for the completion of order #{oid}.\n"
+                f"Account: `{account}`\n"
+                f"Password: `{password}`\n"
+                f"Package: {package} month(s)\n"
+                f"Accepted at: {accepted_at}\n\n"
+                f"Please process this order quickly."
+            )
+        else:
+            logger.warning(f"未知的通知类型: {notification_type}")
+            return
+        
+        keyboard = [
+            [InlineKeyboardButton("✅ Mark as Complete", callback_data=f"done_{oid}"),
+             InlineKeyboardButton("❌ Mark as Failed", callback_data=f"fail_{oid}")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await bot_application.bot.send_message(
+            chat_id=seller_id,
+            text=message,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+        logger.info(f"成功向 {seller_id} 发送了 {notification_type} 通知 (订单 #{oid})")
+
+    except Exception as e:
+        logger.error(f"从队列发送通知时出错: {e}", exc_info=True)
+
+
 # ===== 主函数 =====
-async def run_bot():
-    """运行Telegram机器人"""
+def run_bot(notification_queue):
+    """在一个新事件循环中运行Telegram机器人"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(bot_main(notification_queue))
+
+
+async def bot_main(notification_queue):
+    """机器人的主异步函数"""
     global bot_application
     
     logger.info("正在启动Telegram机器人...")
@@ -862,89 +928,59 @@ async def run_bot():
     logger.info("初始化机器人...")
     await bot_application.initialize()
     logger.info("启动机器人...")
-    await bot_application.start()
-    logger.info("启动轮询...")
     await bot_application.updater.start_polling()
     
     logger.info("Telegram机器人启动成功")
     
-    # 启动订单检查任务
-    logger.info("启动订单检查任务")
-    
-    async def order_check_job():
-        """定期检查新订单的任务"""
-        check_count = 0
-        last_check_time = 0  # 上次检查的时间
-        min_check_interval = 5  # 最小检查间隔（秒）
-        
-        while True:
-            check_count += 1
-            current_time = time.time()
-            
-            # 确保两次检查之间至少间隔 min_check_interval 秒
-            time_since_last_check = current_time - last_check_time
-            if time_since_last_check < min_check_interval:
-                await asyncio.sleep(min_check_interval - time_since_last_check)
-                current_time = time.time()
-            
-            try:
-                logger.debug(f"执行第 {check_count} 次订单检查")
-                await check_and_push_orders()
-                
-                # 每次检查订单时，也清理一下超时的处理中请求
-                await cleanup_processing_accepts()
-                
-                last_check_time = current_time
-            except Exception as e:
-                logger.error(f"订单检查任务出错: {str(e)}", exc_info=True)
-                # 出错后等待更长时间再重试
-                await asyncio.sleep(10)
-                continue
-            
-            # 每隔30次检查（约2.5分钟），检查机器人是否仍在运行
-            if check_count % 30 == 0:
-                try:
-                    if bot_application and hasattr(bot_application, 'bot'):
-                        test_response = await bot_application.bot.get_me()
-                        logger.debug(f"机器人状态检查: @{test_response.username if test_response else 'Unknown'}")
-                    else:
-                        logger.error("机器人实例不可用")
-                        return
-                except Exception as check_error:
-                    logger.error(f"机器人状态检查失败: {str(check_error)}")
-                    return
-            
-            # 正常情况下每5秒检查一次
-            await asyncio.sleep(5)
-    # 启动任务并保存引用，以便后续可以取消
-    order_check_task = asyncio.create_task(order_check_job())
+    # 启动后台任务
+    order_check_task = asyncio.create_task(periodic_order_check())
+    notification_task = asyncio.create_task(process_notification_queue(notification_queue))
     
     logger.info("进入主循环保持运行")
     
-    # 保持运行，不要停止
-    while True:
-        await asyncio.sleep(60)  # 每分钟检查一次
-        logger.debug("Telegram机器人仍在运行中")
-        
-        # 检查订单检查任务是否仍在运行
-        if order_check_task.done():
-            exception = order_check_task.exception()
-            if exception:
-                logger.error(f"订单检查任务异常退出: {str(exception)}")
-            else:
-                logger.error("订单检查任务已退出但没有异常")
-            # 退出内部循环，让外部循环重启机器人
-            break
-    
-    logger.error(f"达到最大重启次数 ({max_restarts})，停止Telegram机器人")
-    return
+    # 等待任务完成
+    await asyncio.gather(order_check_task, notification_task)
 
+
+async def periodic_order_check():
+    """定期检查新订单的任务"""
+    check_count = 0
+    while True:
+        try:
+            logger.debug(f"执行第 {check_count + 1} 次订单检查")
+            await check_and_push_orders()
+            await cleanup_processing_accepts()
+            check_count += 1
+        except Exception as e:
+            logger.error(f"订单检查任务出错: {e}", exc_info=True)
+        
+        await asyncio.sleep(5) # 每5秒检查一次
+
+
+async def process_notification_queue(queue):
+    """处理来自Flask的通知队列"""
+    while True:
+        try:
+            # 使用 get_nowait 立即获取或在队列为空时引发异常
+            # 这使得我们可以使用 asyncio.sleep 来避免阻塞整个循环
+            data = queue.get_nowait()
+            logger.info(f"从队列中获取到通知任务: {data.get('type')}")
+            await send_notification_from_queue(data)
+            queue.task_done()
+        except asyncio.CancelledError:
+            logger.info("通知队列处理器被取消。")
+            break
+        except Exception as e:
+            # 如果队列为空，则等待一小段时间
+            if "Empty" not in str(e):
+                 logger.error(f"处理通知队列时出错: {e}")
+            await asyncio.sleep(1) # 队列为空时等待1秒
+    
 def run_bot_in_thread():
     """在单独的线程中运行机器人"""
-    global bot_application
-    
-    logger.info("在单独的线程中启动Telegram机器人")
-    asyncio.run(run_bot())
+    # 这个函数现在可以被废弃或重构，因为启动逻辑已移至app.py
+    logger.warning("run_bot_in_thread 已被调用，但可能已废弃。")
+    pass
 
 def restricted(func):
     """限制只有卖家才能访问的装饰器"""

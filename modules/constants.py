@@ -62,11 +62,12 @@ STATUS = {
     'ACCEPTED': 'accepted',
     'COMPLETED': 'completed',
     'FAILED': 'failed',
-    'CANCELLED': 'cancelled'
+    'CANCELLED': 'cancelled',
+    'DISPUTING': 'disputing'
 }
 STATUS_TEXT_ZH = {
     'submitted': '已提交', 'accepted': '已接单', 'completed': '充值成功',
-    'failed': '充值失败', 'cancelled': '已撤销'
+    'failed': '充值失败', 'cancelled': '已撤销', 'disputing': '正在质疑'
 }
 PLAN_OPTIONS = [('1', '1个月'), ('2', '2个月'), ('3', '3个月'), ('6', '6个月'), ('12', '12个月')]
 PLAN_LABELS_ZH = {v: l for v, l in PLAN_OPTIONS}
