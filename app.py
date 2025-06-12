@@ -6,7 +6,8 @@ import queue
 import sys
 import atexit
 import signal
-from flask import Flask
+import json
+from flask import Flask, request, jsonify
 
 # 根据环境变量确定是否为生产环境
 is_production = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('PRODUCTION')
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # 导入自定义模块
 from modules.database import init_db
-from modules.telegram_bot import run_bot
+from modules.telegram_bot import run_bot, process_telegram_update
 from modules.web_routes import register_routes
 from modules.constants import sync_env_sellers_to_db
 
@@ -60,6 +61,32 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 # 注册Web路由，并将队列传递给它
 register_routes(app, notification_queue)
+
+# 添加Telegram webhook路由
+@app.route('/telegram-webhook', methods=['POST'])
+def telegram_webhook():
+    try:
+        # 获取更新数据
+        update_data = request.json
+        logger.info(f"收到Telegram webhook更新: {update_data}")
+        print(f"DEBUG: 收到Telegram webhook更新: {update_data}")
+        
+        # 处理更新
+        if update_data:
+            threading.Thread(
+                target=process_telegram_update,
+                args=(update_data, notification_queue),
+                daemon=True
+            ).start()
+            return jsonify({"status": "success"}), 200
+        else:
+            logger.warning("收到空的Telegram webhook更新")
+            print("WARNING: 收到空的Telegram webhook更新")
+            return jsonify({"status": "error", "message": "Empty update"}), 400
+    except Exception as e:
+        logger.error(f"处理Telegram webhook时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 处理Telegram webhook时出错: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # ===== 主程序 =====
 if __name__ == "__main__":

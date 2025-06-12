@@ -1003,19 +1003,55 @@ async def bot_main(notification_queue):
         print("DEBUG: 初始化机器人...")
         await bot_application.initialize()
         
-        logger.info("启动机器人轮询...")
-        print("DEBUG: 启动机器人轮询...")
+        # 获取Railway应用URL
+        import os
+        railway_url = os.environ.get('RAILWAY_STATIC_URL')
+        if not railway_url:
+            railway_url = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
+            if railway_url:
+                railway_url = f"https://{railway_url}"
         
-        # 使用更明确的配置启动轮询
-        await bot_application.updater.start_polling(
-            allowed_updates=["message", "callback_query", "chat_member", "edited_message"],
-            drop_pending_updates=False,
-            timeout=30,
-            read_timeout=30,
-            write_timeout=30,
-            connect_timeout=30,
-            pool_timeout=30
-        )
+        # 如果在Railway环境中，使用webhook
+        if railway_url:
+            webhook_url = f"{railway_url}/telegram-webhook"
+            logger.info(f"在Railway环境中，使用webhook: {webhook_url}")
+            print(f"DEBUG: 在Railway环境中，使用webhook: {webhook_url}")
+            
+            # 设置webhook
+            await bot_application.bot.set_webhook(
+                url=webhook_url,
+                allowed_updates=["message", "callback_query", "chat_member", "edited_message"]
+            )
+            logger.info("Webhook已设置")
+            print("DEBUG: Webhook已设置")
+            
+            # 启动webhook服务器
+            from telegram.ext import Updater
+            await bot_application.updater.start_webhook(
+                listen="0.0.0.0",
+                port=int(os.environ.get("PORT", 8080)),
+                url_path="telegram-webhook",
+                webhook_url=webhook_url
+            )
+            logger.info("Webhook服务器已启动")
+            print("DEBUG: Webhook服务器已启动")
+        else:
+            # 在本地环境中，使用轮询
+            logger.info("在本地环境中，使用轮询")
+            print("DEBUG: 在本地环境中，使用轮询")
+            
+            # 使用更明确的配置启动轮询
+            await bot_application.updater.start_polling(
+                allowed_updates=["message", "callback_query", "chat_member", "edited_message"],
+                drop_pending_updates=False,
+                timeout=30,
+                read_timeout=30,
+                write_timeout=30,
+                connect_timeout=30,
+                pool_timeout=30
+            )
+            logger.info("轮询已启动")
+            print("DEBUG: 轮询已启动")
         
         logger.info("Telegram机器人启动成功")
         print("DEBUG: Telegram机器人启动成功")
@@ -1179,4 +1215,54 @@ async def on_test_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     logger.info(f"已处理测试按钮回调，用户 {user_id}")
-    print(f"DEBUG: 已处理测试按钮回调，用户 {user_id}") 
+    print(f"DEBUG: 已处理测试按钮回调，用户 {user_id}")
+
+async def process_telegram_update_async(update_data, notification_queue):
+    """处理从webhook接收的Telegram更新"""
+    global bot_application
+    
+    try:
+        logger.info(f"处理webhook更新: {update_data}")
+        print(f"DEBUG: 处理webhook更新: {update_data}")
+        
+        if not bot_application:
+            logger.error("机器人应用未初始化，无法处理更新")
+            print("ERROR: 机器人应用未初始化，无法处理更新")
+            return
+        
+        # 从更新数据创建Update对象
+        from telegram import Update
+        update = Update.de_json(update_data, bot_application.bot)
+        
+        # 记录更新类型
+        if update.callback_query:
+            logger.info(f"收到回调查询: 用户ID={update.callback_query.from_user.id}, 数据={update.callback_query.data}")
+            print(f"DEBUG: 收到回调查询: 用户ID={update.callback_query.from_user.id}, 数据={update.callback_query.data}")
+        elif update.message:
+            logger.info(f"收到消息: 用户ID={update.message.from_user.id}, 文本={update.message.text}")
+            print(f"DEBUG: 收到消息: 用户ID={update.message.from_user.id}, 文本={update.message.text}")
+        
+        # 处理更新
+        await bot_application.process_update(update)
+        logger.info("更新处理完成")
+        print("DEBUG: 更新处理完成")
+    except Exception as e:
+        logger.error(f"处理Telegram更新时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 处理Telegram更新时出错: {str(e)}")
+
+# 同步版本的处理函数，用于在线程中调用
+def process_telegram_update(update_data, notification_queue):
+    """同步版本的处理函数，用于在线程中调用"""
+    try:
+        # 创建新的事件循环
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # 运行异步处理函数
+        loop.run_until_complete(process_telegram_update_async(update_data, notification_queue))
+        
+        # 清理
+        loop.close()
+    except Exception as e:
+        logger.error(f"在线程中处理Telegram更新时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 在线程中处理Telegram更新时出错: {str(e)}") 
