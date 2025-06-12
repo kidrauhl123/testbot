@@ -327,7 +327,7 @@ def register_routes(app):
         
         # 查询订单
         orders = execute_query(f"""
-            SELECT id, account, package, status, created_at, accepted_at, completed_at,
+            SELECT id, account, password, package, status, created_at, accepted_at, completed_at,
                    remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name
             FROM orders 
             {user_filter}
@@ -339,7 +339,7 @@ def register_routes(app):
         # 格式化数据
         formatted_orders = []
         for order in orders:
-            oid, account, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name = order
+            oid, account, password, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name = order
             
             # 优先使用昵称，其次是用户名，最后是ID
             seller_display = accepted_by_first_name or accepted_by_username or accepted_by
@@ -352,6 +352,7 @@ def register_routes(app):
             order_data = {
                 "id": oid,
                 "account": account,
+                "password": password,
                 "package": package,
                 "status": status,
                 "status_text": STATUS_TEXT_ZH.get(status, status),
