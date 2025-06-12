@@ -910,10 +910,8 @@
         }
         
         // 显示成功消息，如果使用了透支额度，使用更醒目的样式
-        if (result.used_credit > 0) {
-          const message = result.message || `订单提交成功！已使用透支额度 ${result.used_credit} 元`;
-          // 使用自定义样式的alert
-          showCustomAlert(message, 'warning');
+        if (result.used_credit && result.used_credit > 0) {
+          showCustomAlert(result.message || `订单提交成功！已使用透支额度 ${result.used_credit} 元`, 'warning');
         } else {
           alert(result.message || '订单提交成功！');
         }
