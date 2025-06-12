@@ -68,23 +68,21 @@
       max-width: 1200px;
       margin: 0 auto;
       padding: 10px 20px;
-      height: calc(100vh - 70px); /* 适应整个视口高度减去导航栏 */
     }
     .container { 
       display: flex; 
-      min-height: calc(100vh - 80px);
-      height: calc(100vh - 80px); /* 固定高度 */
       background: rgba(255,255,255,0.1);
       backdrop-filter: blur(10px);
       border-radius: 15px;
       overflow: hidden;
+      margin: 20px 0;
     }
     .left, .right { padding: 20px; }
     .left { 
       width: 40%; 
       display: flex; 
       justify-content: center; 
-      align-items: center; 
+      align-items: flex-start; 
     }
     .form-box { 
       background: rgba(255,255,255,0.95); 
@@ -94,8 +92,6 @@
       width: 100%; 
       max-width: 420px;
       backdrop-filter: blur(10px);
-      max-height: calc(100vh - 120px);
-      overflow-y: auto;
     }
     .form-box h2 { 
       text-align: center; 
@@ -144,10 +140,7 @@
       background: rgba(255,255,255,0.95); 
       border-radius: 15px;
       margin: 20px 0;
-      overflow-y: auto; 
       backdrop-filter: blur(10px);
-      max-height: calc(100vh - 100px); /* 增加高度 */
-      height: calc(100vh - 100px); /* 固定高度 */
     }
     .right h3 {
       color: #333;
