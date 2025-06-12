@@ -7,11 +7,22 @@ import psycopg2
 from functools import wraps
 from datetime import datetime
 from urllib.parse import urlparse
+import pytz
 
 from modules.constants import DATABASE_URL, STATUS
 
 # 设置日志
 logger = logging.getLogger(__name__)
+
+# 中国时区
+CN_TIMEZONE = pytz.timezone('Asia/Shanghai')
+
+# 获取中国时间的函数
+def get_china_time():
+    """获取当前中国时间（UTC+8）"""
+    utc_now = datetime.now(pytz.utc)
+    china_now = utc_now.astimezone(CN_TIMEZONE)
+    return china_now.strftime("%Y-%m-%d %H:%M:%S")
 
 # ===== 数据库 =====
 def init_db():
@@ -122,7 +133,7 @@ def init_sqlite_db():
         c.execute("""
             INSERT INTO users (username, password_hash, is_admin, created_at) 
             VALUES (?, ?, 1, ?)
-        """, ("755439", admin_hash, time.strftime("%Y-%m-%d %H:%M:%S")))
+        """, ("755439", admin_hash, get_china_time()))
     
     conn.commit()
     conn.close()
@@ -243,7 +254,7 @@ def init_postgres_db():
         c.execute("""
             INSERT INTO users (username, password_hash, is_admin, created_at) 
             VALUES (%s, %s, 1, %s)
-        """, ("755439", admin_hash, time.strftime("%Y-%m-%d %H:%M:%S")))
+        """, ("755439", admin_hash, get_china_time()))
     
     conn.close()
 
@@ -412,13 +423,13 @@ def accept_order_atomic(oid, user_id):
                             full_name = first_name
                 
                 # 更新订单
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                timestamp = get_china_time()
                 cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = %s, accepted_by = %s, accepted_by_username = %s, accepted_by_first_name = %s WHERE id = %s",
                             (timestamp, str(user_id), username, full_name, oid))
             except Exception as e:
                 logger.error(f"获取用户信息失败: {str(e)}")
                 # 如果获取用户信息失败，仍然更新订单，但不设置用户名和昵称
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                timestamp = get_china_time()
                 cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = %s, accepted_by = %s WHERE id = %s",
                             (timestamp, str(user_id), oid))
             
@@ -483,13 +494,13 @@ def accept_order_atomic(oid, user_id):
                             full_name = first_name
                 
                 # 更新订单
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                timestamp = get_china_time()
                 cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = ?, accepted_by = ?, accepted_by_username = ?, accepted_by_first_name = ? WHERE id = ?",
                             (timestamp, str(user_id), username, full_name, oid))
             except Exception as e:
                 logger.error(f"获取用户信息失败: {str(e)}")
                 # 如果获取用户信息失败，仍然更新订单，但不设置用户名和昵称
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                timestamp = get_china_time()
                 cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = ?, accepted_by = ? WHERE id = ?",
                             (timestamp, str(user_id), oid))
             
@@ -523,7 +534,7 @@ def get_active_seller_ids():
 
 def add_seller(telegram_id, username, first_name, added_by):
     """添加新卖家"""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = get_china_time()
     execute_query(
         "INSERT INTO sellers (telegram_id, username, first_name, added_at, added_by) VALUES (?, ?, ?, ?, ?)",
         (telegram_id, username, first_name, timestamp, added_by)
