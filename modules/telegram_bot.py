@@ -415,6 +415,9 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 reason_text = "Other reason (details pending)"
                 # 标记需要额外反馈
                 feedback_waiting[user_id] = oid
+            else:
+                # 处理未知的原因类型
+                reason_text = f"Unknown reason: {reason_type}"
             
             # 更新数据库
             execute_query("UPDATE orders SET status=?, completed_at=?, remark=? WHERE id=? AND accepted_by=?",
@@ -425,6 +428,9 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             
             # 更新UI - 保留原始消息，仅更改按钮
             try:
+                # 初始化keyboard变量，确保在所有情况下都有定义
+                keyboard = [[InlineKeyboardButton("❓ Failed", callback_data="noop")]]
+                
                 if reason_type == "wrong_password":
                     keyboard = [[InlineKeyboardButton("🔑 Failed: Wrong Password", callback_data="noop")]]
                 elif reason_type == "not_expired":
