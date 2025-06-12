@@ -196,7 +196,7 @@ def register_routes(app):
             logger.info(f"订单提交成功: 用户={username}, 套餐={package}")
             
             # 获取最新订单列表
-            orders = execute_query("SELECT id, account, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
+            orders = execute_query("SELECT id, account, password, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             logger.info(f"查询到的最新订单: {orders}")
             
             # 计算是否使用了透支额度
@@ -566,34 +566,77 @@ def register_routes(app):
     @login_required
     @admin_required
     def admin_api_orders():
-        orders = execute_query("""
-            SELECT o.id, o.account, o.package, o.status, u.username, o.accepted_by_first_name, o.created_at, o.remark
-            FROM orders o
-            LEFT JOIN users u ON o.user_id = u.id
-            ORDER BY o.id DESC
-        """, fetch=True)
-
+        """获取所有订单"""
+        # 获取查询参数
+        limit = int(request.args.get('limit', 50))
+        offset = int(request.args.get('offset', 0))
+        status = request.args.get('status')
+        search = request.args.get('search', '')
+        
+        # 构建查询条件
+        conditions = []
+        params = []
+        
+        if status:
+            conditions.append("status = ?")
+            params.append(status)
+        
+        if search:
+            conditions.append("(account LIKE ? OR web_user_id LIKE ? OR id LIKE ?)")
+            search_param = f"%{search}%"
+            params.extend([search_param, search_param, search_param])
+        
+        where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+        
+        # 查询订单
+        orders = execute_query(f"""
+            SELECT id, account, password, package, status, remark, created_at, accepted_at, completed_at, 
+                   web_user_id as creator, accepted_by, accepted_by_username, accepted_by_first_name, refunded
+            FROM orders
+            {where_clause}
+            ORDER BY id DESC
+            LIMIT ? OFFSET ?
+        """, params + [limit, offset], fetch=True)
+        
+        # 查询订单总数
+        count = execute_query(f"""
+            SELECT COUNT(*) FROM orders {where_clause}
+        """, params, fetch=True)[0][0]
+        
+        # 格式化订单数据
         formatted_orders = []
-        for row in orders:
-            # 如果是失败状态，翻译失败原因
-            remark = row[7] or ""
-            if row[3] == STATUS['FAILED'] and remark:
-                translated_remark = REASON_TEXT_ZH.get(remark, remark)
-            else:
-                translated_remark = remark
-                
+        for order in orders:
+            order_id, account, password, package, status, remark, created_at, accepted_at, completed_at, creator, accepted_by, accepted_by_username, accepted_by_first_name, refunded = order
+            
+            # 格式化卖家信息
+            seller_info = None
+            if accepted_by:
+                seller_info = {
+                    "telegram_id": accepted_by,
+                    "username": accepted_by_username,
+                    "name": accepted_by_first_name
+                }
+            
             formatted_orders.append({
-                "id": row[0],
-                "account": row[1],
-                "package": row[2],
-                "status": row[3],
-                "status_text": STATUS_TEXT_ZH.get(row[3], row[3]),
-                "creator": row[4],
-                "accepted_by": row[5],
-                "created_at": row[6],
-                "remark": translated_remark
+                "id": order_id,
+                "account": account,
+                "password": password,
+                "package": package,
+                "status": status,
+                "status_text": STATUS_TEXT_ZH.get(status, status),
+                "remark": remark,
+                "created_at": created_at,
+                "accepted_at": accepted_at,
+                "completed_at": completed_at,
+                "creator": creator,
+                "seller": seller_info,
+                "refunded": bool(refunded)
             })
-        return jsonify(formatted_orders)
+        
+        return jsonify({
+            "orders": formatted_orders,
+            "total": count
+        })
         
     @app.route('/admin/api/sellers', methods=['GET'])
     @login_required
@@ -659,13 +702,16 @@ def register_routes(app):
             "password": o[2],
             "package": o[3],
             "status": o[4],
+            "status_text": STATUS_TEXT_ZH.get(o[4], o[4]),
             "remark": o[5],
             "created_at": o[6],
-            "accepted_by": o[7],
-            "web_user_id": o[8],
-            "user_id": o[9],
-            "accepted_at": o[10],
-            "completed_at": o[11]
+            "accepted_at": o[7],
+            "completed_at": o[8],
+            "accepted_by": o[9],
+            "web_user_id": o[10],
+            "user_id": o[11],
+            "accepted_by_username": o[12],
+            "accepted_by_first_name": o[13]
         })
     
     # 编辑订单的API

@@ -451,25 +451,25 @@
           <h2><i class="fas fa-users"></i> 用户管理</h2>
         </div>
         <div class="users-container">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>用户名</th>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>用户名</th>
                 <th>注册时间</th>
-                <th>最后登录</th>
+              <th>最后登录</th>
                 <th>余额</th>
                 <th>透支额度</th>
                 <th>角色</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody id="users-table-body">
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="users-table-body">
               <tr>
                 <td colspan="7" class="loading">加载中...</td>
               </tr>
-            </tbody>
-          </table>
+          </tbody>
+        </table>
         </div>
       </div>
       
@@ -547,12 +547,12 @@
 
 <!-- 修改余额模态框 -->
 <div class="modal-backdrop" id="editBalanceModal">
-  <div class="modal">
-    <div class="modal-header">
+    <div class="modal">
+      <div class="modal-header">
       <h3>修改用户余额</h3>
       <button class="modal-close" data-dismiss="modal">&times;</button>
-    </div>
-    <div class="modal-body">
+      </div>
+      <div class="modal-body">
       <form id="editBalanceForm">
         <input type="hidden" id="edit-balance-user-id">
         <div class="form-group">
@@ -599,8 +599,8 @@
           <input type="number" id="edit-credit-new" class="form-control" step="0.01" min="0" required>
         </div>
       </form>
-    </div>
-    <div class="modal-footer">
+      </div>
+      <div class="modal-footer">
       <button class="btn btn-secondary" data-dismiss="modal">取消</button>
       <button class="btn btn-primary" id="saveCreditBtn">保存</button>
     </div>
@@ -644,7 +644,7 @@
   async function loadUsers() {
     try {
       console.log("开始加载用户数据...");
-      const tbody = document.getElementById('users-table-body');
+    const tbody = document.getElementById('users-table-body');
       if (!tbody) {
         console.error("找不到users-table-body元素");
         return;
@@ -662,14 +662,14 @@
       const users = await resp.json();
       console.log("成功获取用户数据:", users);
       
-      tbody.innerHTML = '';
+    tbody.innerHTML = '';
       
       if (users.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" class="loading">暂无用户数据</td></tr>';
         return;
       }
       
-      users.forEach(user => {
+    users.forEach(user => {
         const tr = document.createElement('tr');
         
         // 格式化日期
@@ -743,47 +743,47 @@
       
       tbody.innerHTML = '<tr><td colspan="8" class="loading">加载中...</td></tr>';
       
-      const response = await fetch('/admin/api/orders');
+    const response = await fetch('/admin/api/orders');
       if (!response.ok) {
         console.error("加载订单数据失败:", response.status, response.statusText);
         tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
         return;
       }
       
-      const orders = await response.json();
+    const orders = await response.json();
       console.log("成功获取订单数据:", orders);
       
-      tbody.innerHTML = '';
+    tbody.innerHTML = '';
       
       if (orders.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" class="loading">暂无订单数据</td></tr>';
         return;
       }
       
-      const statusBadges = {
-        'submitted': 'badge-info',
-        'accepted': 'badge-warning',
-        'completed': 'badge-success',
-        'failed': 'badge-danger',
-        'cancelled': 'badge-secondary'
-      };
+    const statusBadges = {
+      'submitted': 'badge-info',
+      'accepted': 'badge-warning',
+      'completed': 'badge-success',
+      'failed': 'badge-danger',
+      'cancelled': 'badge-secondary'
+    };
       
-      orders.forEach(order => {
-        const statusClass = statusBadges[order.status] || 'badge-secondary';
-        const row = `
-          <tr>
-            <td>${order.id}</td>
-            <td>${escapeHtml(order.account)}</td>
-            <td>${order.package}个月</td>
-            <td><span class="badge ${statusClass}">${escapeHtml(order.status_text)}</span></td>
-            <td>${escapeHtml(order.creator || 'N/A')}</td>
-            <td>${escapeHtml(order.accepted_by || 'N/A')}</td>
-            <td>${order.created_at}</td>
-            <td><button class="btn btn-primary btn-sm" onclick="editOrder(${order.id})">编辑</button></td>
-          </tr>
-        `;
-        tbody.innerHTML += row;
-      });
+    orders.forEach(order => {
+      const statusClass = statusBadges[order.status] || 'badge-secondary';
+      const row = `
+        <tr>
+          <td>${order.id}</td>
+          <td>${escapeHtml(order.account)}</td>
+          <td>${order.package}个月</td>
+          <td><span class="badge ${statusClass}">${escapeHtml(order.status_text)}</span></td>
+          <td>${escapeHtml(order.creator || 'N/A')}</td>
+          <td>${escapeHtml(order.accepted_by || 'N/A')}</td>
+          <td>${order.created_at}</td>
+          <td><button class="btn btn-primary btn-sm" onclick="editOrder(${order.id})">编辑</button></td>
+        </tr>
+      `;
+      tbody.innerHTML += row;
+    });
       
       console.log("订单数据加载完成");
     } catch (e) {
@@ -791,7 +791,7 @@
       const tbody = document.getElementById('orders-table-body');
       if (tbody) {
         tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
-      }
+    }
     }
   }
 
@@ -831,46 +831,46 @@
       
       tbody.innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
       
-      const response = await fetch('/admin/api/sellers');
+    const response = await fetch('/admin/api/sellers');
       if (!response.ok) {
         console.error("加载卖家数据失败:", response.status, response.statusText);
         tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
         return;
       }
       
-      const sellers = await response.json();
+    const sellers = await response.json();
       console.log("成功获取卖家数据:", sellers);
       
-      tbody.innerHTML = '';
+    tbody.innerHTML = '';
       
-      if (sellers.length === 0) {
+    if (sellers.length === 0) {
         const colCount = tbody.parentElement.querySelector('thead tr').childElementCount || 7;
-        tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding: 40px;">暂无卖家</td></tr>`;
-        return;
-      }
+      tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding: 40px;">暂无卖家</td></tr>`;
+      return;
+    }
       
-      sellers.forEach(seller => {
-        const statusBadge = seller.is_active 
-          ? '<span class="badge badge-success">活跃</span>' 
-          : '<span class="badge badge-secondary">停用</span>';
-        const toggleButtonText = seller.is_active ? '停用' : '启用';
-        const toggleButtonClass = seller.is_active ? 'btn-warning' : 'btn-success';
-        const row = `
-          <tr>
-            <td>${seller.telegram_id}</td>
-            <td>${escapeHtml(seller.username || '')}</td>
-            <td>${escapeHtml(seller.first_name || '')}</td>
-            <td>${statusBadge}</td>
-            <td>${seller.added_at}</td>
-            <td>${escapeHtml(seller.added_by || '')}</td>
-            <td class="actions">
-              <button class="btn ${toggleButtonClass} btn-sm" onclick="toggleSeller(${seller.telegram_id})">${toggleButtonText}</button>
-              <button class="btn btn-danger btn-sm" onclick="removeSeller(${seller.telegram_id})">删除</button>
-            </td>
-          </tr>
-        `;
-        tbody.innerHTML += row;
-      });
+    sellers.forEach(seller => {
+      const statusBadge = seller.is_active 
+        ? '<span class="badge badge-success">活跃</span>' 
+        : '<span class="badge badge-secondary">停用</span>';
+      const toggleButtonText = seller.is_active ? '停用' : '启用';
+      const toggleButtonClass = seller.is_active ? 'btn-warning' : 'btn-success';
+      const row = `
+        <tr>
+          <td>${seller.telegram_id}</td>
+          <td>${escapeHtml(seller.username || '')}</td>
+          <td>${escapeHtml(seller.first_name || '')}</td>
+          <td>${statusBadge}</td>
+          <td>${seller.added_at}</td>
+          <td>${escapeHtml(seller.added_by || '')}</td>
+          <td class="actions">
+            <button class="btn ${toggleButtonClass} btn-sm" onclick="toggleSeller(${seller.telegram_id})">${toggleButtonText}</button>
+            <button class="btn btn-danger btn-sm" onclick="removeSeller(${seller.telegram_id})">删除</button>
+          </td>
+        </tr>
+      `;
+      tbody.innerHTML += row;
+    });
       
       console.log("卖家数据加载完成");
     } catch (e) {
@@ -1151,28 +1151,28 @@
     console.log("saveBalanceBtn:", document.getElementById('saveBalanceBtn'));
     
     try {
-      showTab('users');
+    showTab('users');
       console.log("显示用户标签页成功");
     } catch (e) {
       console.error("显示用户标签页失败:", e);
     }
     
     try {
-      loadUsers();
+    loadUsers();
       console.log("加载用户数据成功");
     } catch (e) {
       console.error("加载用户数据失败:", e);
     }
     
     try {
-      loadOrders();
+    loadOrders();
       console.log("加载订单数据成功");
     } catch (e) {
       console.error("加载订单数据失败:", e);
     }
     
     try {
-      loadSellers();
+    loadSellers();
       console.log("加载卖家数据成功");
     } catch (e) {
       console.error("加载卖家数据失败:", e);

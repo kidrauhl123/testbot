@@ -638,6 +638,96 @@
       color: #666;
       font-weight: 600;
     }
+
+    /* 视图切换按钮样式 */
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    
+    .view-toggle {
+      display: flex;
+      background: rgba(0,0,0,0.05);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    
+    .view-btn {
+      border: none;
+      background: transparent;
+      padding: 6px 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .view-btn.active {
+      background: rgba(102,126,234,0.8);
+      color: white;
+    }
+    
+    /* 表格视图样式 */
+    .orders-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    
+    .orders-table th {
+      background: rgba(102,126,234,0.1);
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #555;
+      border-bottom: 2px solid rgba(102,126,234,0.2);
+    }
+    
+    .orders-table td {
+      padding: 12px;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+      vertical-align: middle;
+    }
+    
+    .orders-table tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .orders-table tr:hover {
+      background: rgba(102,126,234,0.05);
+    }
+    
+    .detail-btn {
+      background: rgba(102,126,234,0.1);
+      color: #667eea;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: 5px;
+    }
+    
+    .detail-btn:hover {
+      background: rgba(102,126,234,0.2);
+    }
+    
+    .cancel-btn {
+      background: rgba(231,76,60,0.1);
+      color: #e74c3c;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    
+    .cancel-btn:hover {
+      background: rgba(231,76,60,0.2);
+    }
   </style>
 </head>
 <body>
@@ -708,7 +798,13 @@
             <div class="card">
                 <div class="card-header">
                   <h2>{% if session.is_admin %}系统最新订单{% else %}我的订单{% endif %}</h2>
-                  <div id="today-total" class="today-total"></div>
+                  <div class="header-actions">
+                    <div class="view-toggle">
+                      <button id="gridViewBtn" class="view-btn active" title="网格视图"><i class="fas fa-th"></i></button>
+                      <button id="tableViewBtn" class="view-btn" title="表格视图"><i class="fas fa-list"></i></button>
+                    </div>
+                    <div id="today-total" class="today-total"></div>
+                  </div>
                 </div>
                 <div id="orders-container">加载中...</div>
                 <div id="load-more-container" style="text-align:center; margin-top: 20px; display:none;">
@@ -719,42 +815,16 @@
     </div>
 </div>
 
-<div class="card" id="balanceInfoCard">
-  <div class="card-header">
-    <h2>账户余额</h2>
-    {% if balance is defined %}
-    <div class="balance-info">
-      当前余额: <span class="highlight">{{ balance }}</span> 元
-      {% if credit_limit is defined and credit_limit > 0 %}
-      | 透支额度: <span class="highlight-credit">{{ credit_limit }}</span> 元
-      {% endif %}
-    </div>
-    {% endif %}
-  </div>
-  <div class="balance-content">
-    <div class="balance-display">
-      <div class="balance-amount">{{ balance if balance is defined else 0 }}</div>
-      <div class="balance-label">当前余额 (元)</div>
-      {% if credit_limit is defined and credit_limit > 0 %}
-      <div class="credit-amount">{{ credit_limit }}</div>
-      <div class="credit-label">透支额度 (元)</div>
-      {% endif %}
-    </div>
-    <div class="balance-actions">
-      <a href="/dashboard" class="btn btn-primary">前往个人中心</a>
-    </div>
-  </div>
-</div>
-
 <script>
   // 全局变量
-  let displayedOrders = 12; // 初始显示12个订单
+  let displayedOrders = 5; // 初始显示5个订单
   let allOrders = []; // 存储所有订单
   let searchKeyword = ''; // 搜索关键词
   let autoRefreshInterval = null;
   let userId = '{{ session.user_id }}'; // 当前用户ID
   let isAdmin = {{ 'true' if session.is_admin else 'false' }}; // 是否是管理员
   let lastOrdersHash = ''; // 用于检测订单变化的哈希
+  let viewMode = 'grid'; // 默认视图模式：grid 或 table
   const WEB_PRICES = {
     '1': 12,
     '2': 18,
@@ -892,7 +962,7 @@
       if (result.success) {
         // 重置表单和状态
         e.target.reset();
-        displayedOrders = 12;
+        displayedOrders = 5;
         searchKeyword = '';
         
         // 更新余额显示
@@ -962,28 +1032,6 @@
         dropdownBalance.classList.remove('text-danger');
         dropdownBalance.classList.add('text-success');
       }
-    }
-    
-    // 更新账户余额卡片
-    const balanceAmount = document.querySelector('.balance-amount');
-    if (balanceAmount) {
-      balanceAmount.textContent = balance;
-    }
-    
-    const creditAmount = document.querySelector('.credit-amount');
-    if (creditAmount && creditLimit !== undefined) {
-      creditAmount.textContent = creditLimit;
-    }
-    
-    // 更新余额信息文本
-    const balanceHighlight = document.querySelector('.balance-info .highlight');
-    if (balanceHighlight) {
-      balanceHighlight.textContent = balance;
-    }
-    
-    const creditHighlight = document.querySelector('.balance-info .highlight-credit');
-    if (creditHighlight && creditLimit !== undefined) {
-      creditHighlight.textContent = creditLimit;
     }
   }
 
@@ -1066,19 +1114,38 @@
       return;
     }
     
-    // 确保 displayedOrders 至少为 12
-    if (displayedOrders < 12) {
-      displayedOrders = Math.min(12, orders.length);
+    // 确保 displayedOrders 至少为 5
+    if (displayedOrders < 5) {
+      displayedOrders = Math.min(5, orders.length);
     }
     
     // 只显示指定数量的订单
     const ordersToShow = orders.slice(0, displayedOrders);
     
+    // 根据视图模式渲染
+    if (viewMode === 'grid') {
+      renderGridView(container, ordersToShow);
+    } else {
+      renderTableView(container, ordersToShow);
+    }
+    
+    // 显示或隐藏"加载更多"按钮
+    if (orders.length > displayedOrders) {
+      loadMoreBtn.style.display = 'block';
+      loadMoreBtn.querySelector('button').textContent = 
+        `显示更多订单 (${ordersToShow.length}/${orders.length})`;
+    } else {
+      loadMoreBtn.style.display = 'none';
+    }
+  }
+  
+  // 渲染网格视图
+  function renderGridView(container, orders) {
     // 创建网格容器
     container.innerHTML = '<div class="order-list-container"></div>';
     const gridContainer = container.querySelector('.order-list-container');
     
-    ordersToShow.forEach(o => {
+    orders.forEach(o => {
       const cls = 'status-' + o.status.replace('已','').toLowerCase();
       
       const html = `
@@ -1087,6 +1154,7 @@
           ${isAdmin && o.creator ? `<p class="creator">创建者：${escapeHtml(o.creator)}</p>` : ''}
           ${isAdmin && o.accepted_by ? `<p class="creator">接单者：${escapeHtml(o.accepted_by)}</p>` : ''}
           <p class="account"><strong>账号：</strong>${escapeHtml(o.account)}</p>
+          <p class="password"><strong>密码：</strong>${escapeHtml(o.password || '')}</p>
           <p class="package"><strong>套餐：</strong>${escapeHtml(o.package)}个月</p>
           <p class="price"><strong>价格：</strong>¥${WEB_PRICES[o.package] || 'N/A'}</p>
           ${o.status === 'failed' ? 
@@ -1100,20 +1168,56 @@
         </div>`;
       gridContainer.insertAdjacentHTML('beforeend', html);
     });
+  }
+  
+  // 渲染表格视图
+  function renderTableView(container, orders) {
+    let html = `
+      <table class="orders-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>账号</th>
+            <th>密码</th>
+            <th>套餐</th>
+            <th>状态</th>
+            <th>提交时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
     
-    // 显示或隐藏"加载更多"按钮
-    if (orders.length > displayedOrders) {
-      loadMoreBtn.style.display = 'block';
-      loadMoreBtn.querySelector('button').textContent = 
-        `显示更多订单 (${ordersToShow.length}/${orders.length})`;
-    } else {
-      loadMoreBtn.style.display = 'none';
-    }
+    orders.forEach(o => {
+      const cls = 'status-' + o.status.replace('已','').toLowerCase();
+      
+      html += `
+        <tr data-order-id="${o.id}">
+          <td>${o.id}</td>
+          <td>${escapeHtml(o.account)}</td>
+          <td>${escapeHtml(o.password || '')}</td>
+          <td>${escapeHtml(o.package)}个月</td>
+          <td><span class="status-badge ${cls}">${o.status_text}</span></td>
+          <td>${o.created_at}</td>
+          <td>
+            ${o.can_cancel ? `<button class="cancel-btn" onclick="cancelOrder(${o.id}, this)">撤销</button>` : ''}
+            <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
+          </td>
+        </tr>
+      `;
+    });
+    
+    html += `
+        </tbody>
+      </table>
+    `;
+    
+    container.innerHTML = html;
   }
 
   // 加载更多订单
   function loadMoreOrders() {
-    displayedOrders += 15; // 每次多显示15个
+    displayedOrders += 10; // 每次多显示10个
     const filteredOrders = searchKeyword ? 
       allOrders.filter(order => 
         order.id.toString().includes(searchKeyword) || 
@@ -1125,22 +1229,29 @@
   // 搜索订单
   function searchOrders() {
     searchKeyword = '';
-    displayedOrders = 12; // 重置显示数量
+    displayedOrders = 5; // 重置显示数量
     renderOrders(allOrders);
   }
 
   // 清除搜索
   function clearSearch() {
     searchKeyword = '';
-    displayedOrders = 12;
+    displayedOrders = 5;
     renderOrders(allOrders);
   }
 
-  // 监听回车键搜索
-  // 移除了对不存在的searchInput元素的引用
+  // 显示订单详情
+  function showOrderDetail(orderId) {
+    const order = allOrders.find(o => o.id === orderId);
+    if (!order) return;
+    
+    // 这里可以实现显示订单详情的逻辑
+    alert(`订单 #${orderId} 详情\n账号: ${order.account}\n套餐: ${order.package}个月\n状态: ${order.status_text}\n提交时间: ${order.created_at}`);
+  }
 
   // HTML转义函数
   function escapeHtml(unsafe) {
+    if (!unsafe) return '';
     return unsafe
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
@@ -1202,6 +1313,18 @@
     }
   });
 
+  // 切换视图模式
+  function toggleViewMode(mode) {
+    viewMode = mode;
+    
+    // 更新按钮状态
+    document.getElementById('gridViewBtn').classList.toggle('active', mode === 'grid');
+    document.getElementById('tableViewBtn').classList.toggle('active', mode === 'table');
+    
+    // 重新渲染订单
+    renderOrders(allOrders);
+  }
+
   // 页面加载完成后的初始化
   document.addEventListener('DOMContentLoaded', function() {
     // 加载订单
@@ -1221,6 +1344,10 @@
         card.style.transform = 'translateY(0)';
       }, 100 * index);
     });
+    
+    // 绑定视图切换按钮事件
+    document.getElementById('gridViewBtn').addEventListener('click', () => toggleViewMode('grid'));
+    document.getElementById('tableViewBtn').addEventListener('click', () => toggleViewMode('table'));
     
     // 给订单添加类名，用于添加图标
     setTimeout(() => {
