@@ -992,9 +992,6 @@ async def bot_main(notification_queue):
         # 添加文本消息处理程序
         bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
         
-        # 添加一个通用回调处理程序，捕获所有其他回调
-        bot_application.add_handler(CallbackQueryHandler(debug_callback_handler))
-        
         logger.info("已添加所有处理程序")
         print("DEBUG: 已添加所有处理程序")
         
@@ -1113,32 +1110,6 @@ def restricted(func):
     return wrapped 
 
 # 添加一个调试回调处理程序，捕获所有未被其他处理程序捕获的回调
-async def debug_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理所有其他回调，用于调试"""
-    query = update.callback_query
-    user_id = query.from_user.id
-    data = query.data
-    
-    logger.info(f"收到未处理的回调: 用户ID={user_id}, 回调数据={data}, 消息ID={query.message.message_id}")
-    print(f"DEBUG: 收到未处理的回调: 用户ID={user_id}, 回调数据={data}")
-    
-    # 确认回调以避免Telegram显示等待状态
-    await query.answer("Received but not handled specifically.")
-    
-    # 如果是接单回调但没被正确处理
-    if data.startswith('accept_'):
-        logger.warning(f"接单回调未被专门的处理程序捕获: {data}")
-        print(f"WARNING: 接单回调未被专门的处理程序捕获: {data}")
-        try:
-            oid = int(data.split('_')[1])
-            await query.answer(f"Trying to accept order #{oid}...", show_alert=True)
-            # 尝试手动调用接单处理函数
-            await on_accept(update, context)
-        except Exception as e:
-            logger.error(f"尝试手动处理接单回调时出错: {str(e)}", exc_info=True)
-            print(f"ERROR: 尝试手动处理接单回调时出错: {str(e)}")
-            await query.answer("Error processing your request.", show_alert=True)
-
 async def on_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """测试命令处理函数，用于验证机器人是否正常工作"""
     user_id = update.effective_user.id
