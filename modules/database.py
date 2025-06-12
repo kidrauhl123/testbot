@@ -457,7 +457,10 @@ def get_all_sellers():
 
 def get_active_seller_ids():
     """获取所有活跃的卖家Telegram ID"""
-    sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = 1", fetch=True)
+    if DATABASE_URL.startswith('postgres'):
+        sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = TRUE", fetch=True)
+    else:
+        sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = 1", fetch=True)
     return [seller[0] for seller in sellers]
 
 def add_seller(telegram_id, username, first_name, added_by):
