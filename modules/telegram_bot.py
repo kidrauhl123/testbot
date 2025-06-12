@@ -57,7 +57,7 @@ def get_db_connection():
         return None
 
 # 错误处理装饰器
-def error_handler(func):
+def callback_error_handler(func):
     """装饰器：捕获并处理回调函数中的异常"""
     @functools.wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -280,7 +280,7 @@ async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
 
 # ===== TG 回调处理 =====
-@error_handler
+@callback_error_handler
 async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理接单回调"""
     query = update.callback_query
@@ -1197,7 +1197,7 @@ async def on_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"已发送测试回复给用户 {user_id}")
     print(f"DEBUG: 已发送测试回复给用户 {user_id}")
 
-@error_handler
+@callback_error_handler
 async def on_test_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理测试按钮回调"""
     try:
