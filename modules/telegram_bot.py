@@ -427,8 +427,14 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             # 更新UI - 确保显示完整的按钮文本
             try:
                 # 使用单行按钮以确保完整显示
-                await query.edit_message_reply_markup(
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(button_text, callback_data="noop")]])
+                await query.edit_message_text(
+                    text=f"🎉 Order #{oid} - You've accepted this order\n\n"
+                         f"👤 Account: `{query.message.text.split('Account:')[1].split('\n')[0].strip()}`\n"
+                         f"🔑 Password: `{query.message.text.split('Password:')[1].split('\n')[0].strip()}`\n"
+                         f"📦 Package: {query.message.text.split('Package:')[1].split('\n')[0].strip()}\n"
+                         f"💰 Payment: ${query.message.text.split('Payment:')[1].strip() if 'Payment:' in query.message.text else ''}",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(button_text, callback_data="noop")]]),
+                    parse_mode='Markdown'
                 )
                 
                 # 如果是"其他原因"，请求详细反馈
@@ -444,7 +450,7 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 
                 logger.info(f"已更新订单 #{oid} 的消息显示为失败状态，原因: {reason_text}")
             except Exception as markup_error:
-                logger.error(f"更新失败标记时出错: {str(markup_error)}")
+                logger.error(f"更新失败标记时出错: {str(markup_error)}", exc_info=True)
                 # 尝试通知用户出错了
                 await query.answer("Error updating UI. The order status has been updated.", show_alert=True)
     except ValueError as ve:
