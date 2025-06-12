@@ -334,7 +334,7 @@ def register_routes(app):
             'status': 'ok',
             'message': '服务器正常运行',
             'time': time.strftime("%Y-%m-%d %H:%M:%S"),
-            'admin_ids': constants.ADMIN_CHAT_IDS
+            'seller_ids': constants.SELLER_CHAT_IDS
         })
 
     # 添加一个路由用于手动触发订单检查
@@ -366,4 +366,56 @@ def register_routes(app):
             return jsonify({
                 'status': 'error',
                 'message': f'触发失败: {str(e)}'
-            }) 
+            })
+
+    # ==================================
+    #        后台管理 (Admin)
+    # ==================================
+    def admin_required(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'user_id' not in session or not session.get('is_admin'):
+                return redirect(url_for('login'))
+            return f(*args, **kwargs)
+        return decorated_function
+
+    @app.route('/admin')
+    @login_required
+    @admin_required
+    def admin_dashboard():
+        return render_template('admin.html')
+
+    @app.route('/admin/api/users')
+    @login_required
+    @admin_required
+    def admin_api_users():
+        users = execute_query("SELECT id, username, is_admin, created_at, last_login FROM users ORDER BY id DESC", fetch=True)
+        return jsonify([{
+            "id": u[0], "username": u[1], "is_admin": u[2], 
+            "created_at": u[3], "last_login": u[4]
+        } for u in users])
+
+    @app.route('/admin/api/orders')
+    @login_required
+    @admin_required
+    def admin_api_orders():
+        orders = execute_query("""
+            SELECT o.id, o.account, o.package, o.status, u.username, o.accepted_by_first_name, o.created_at
+            FROM orders o
+            LEFT JOIN users u ON o.user_id = u.id
+            ORDER BY o.id DESC
+        """, fetch=True)
+
+        formatted_orders = []
+        for row in orders:
+            formatted_orders.append({
+                "id": row[0],
+                "account": row[1],
+                "package": row[2],
+                "status": row[3],
+                "status_text": STATUS_TEXT_ZH.get(row[3], row[3]),
+                "creator": row[4],
+                "accepted_by": row[5],
+                "created_at": row[6]
+            })
+        return jsonify(formatted_orders) 

@@ -4,6 +4,8 @@ import logging
 from datetime import datetime, timedelta
 from collections import defaultdict
 import time
+import os
+from functools import wraps
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -16,7 +18,7 @@ from telegram.ext import (
 )
 
 from modules.constants import (
-    BOT_TOKEN, ADMIN_CHAT_IDS, STATUS, PLAN_LABELS_EN, 
+    BOT_TOKEN, SELLER_CHAT_IDS, STATUS, PLAN_LABELS_EN, 
     TG_PRICES, DATABASE_URL, user_info_cache, user_languages,
     feedback_waiting, notified_orders
 )
@@ -31,9 +33,9 @@ logger = logging.getLogger(__name__)
 bot_application = None
 
 # ===== TG 辅助函数 =====
-def is_telegram_admin(chat_id):
-    """检查是否为管理员"""
-    return chat_id in ADMIN_CHAT_IDS
+def is_seller(chat_id):
+    """检查用户是否为已授权的卖家"""
+    return chat_id in SELLER_CHAT_IDS
 
 async def get_user_info(user_id):
     """获取Telegram用户信息并缓存"""
@@ -90,7 +92,7 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """开始命令处理"""
     user_id = update.effective_user.id
     
-    if is_telegram_admin(user_id):
+    if is_seller(user_id):
         await update.message.reply_text(
             "Welcome back, Seller! Use the following commands:\n"
             "/seller - Show seller specific commands\n"
@@ -105,7 +107,7 @@ async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理卖家命令"""
     user_id = update.effective_user.id
     
-    if not is_telegram_admin(user_id):
+    if not is_seller(user_id):
         await update.message.reply_text("You are not a seller and cannot use this command.")
         return
     
@@ -191,7 +193,7 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 清理超时的处理中请求
     await cleanup_processing_accepts()
     
-    if not is_telegram_admin(user_id):
+    if not is_seller(user_id):
         logger.warning(f"非卖家 {user_id} 尝试接单")
         await query.answer("You are not a seller and cannot accept orders")
         return
@@ -309,7 +311,7 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     logger.info(f"收到反馈按钮回调: 用户={user_id}, 数据={data}")
     
-    if not is_telegram_admin(user_id):
+    if not is_seller(user_id):
         logger.warning(f"非管理员 {user_id} 尝试提交反馈")
         await query.answer("You are not an admin")
         return
@@ -384,7 +386,7 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理统计命令"""
     user_id = update.effective_user.id
     
-    if not is_telegram_admin(user_id):
+    if not is_seller(user_id):
         await update.message.reply_text("You are not a seller and cannot use this command.")
         return
     
@@ -401,7 +403,7 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     
     # 如果是总管理员，添加查看所有人统计的选项
-    if user_id in ADMIN_CHAT_IDS and ADMIN_CHAT_IDS.index(user_id) == 0:
+    if user_id in SELLER_CHAT_IDS and SELLER_CHAT_IDS.index(user_id) == 0:
         keyboard.append([
             InlineKeyboardButton("👥 All Sellers Today", callback_data="stats_today_all"),
             InlineKeyboardButton("👥 All Sellers This Month", callback_data="stats_month_all")
@@ -416,7 +418,7 @@ async def on_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     data = query.data
     
-    if not is_telegram_admin(user_id):
+    if not is_seller(user_id):
         await query.answer("You are not an admin")
         return
     
@@ -702,7 +704,7 @@ async def check_and_push_orders():
                 oid = order[0]
                 
                 # 尝试为所有管理员更新消息
-                for admin_id in ADMIN_CHAT_IDS:
+                for admin_id in SELLER_CHAT_IDS:
                     try:
                         # 查找包含该订单ID的消息
                         # 注意：这里无法直接找到特定消息，只能通过轮询最近消息来处理
@@ -730,7 +732,7 @@ async def check_and_push_orders():
             logger.info(f"发现 {len(new_orders)} 个新订单，准备推送...")
             
             # 获取所有管理员
-            for admin_id in ADMIN_CHAT_IDS:
+            for admin_id in SELLER_CHAT_IDS:
                 try:
                     logger.info(f"向卖家 {admin_id} 推送新订单通知")
                     for order in new_orders:
@@ -770,7 +772,7 @@ async def run_bot():
     """运行Telegram机器人"""
     global bot_application
     
-    logger.info(f"正在启动Telegram机器人，管理员ID: {ADMIN_CHAT_IDS}")
+    logger.info(f"正在启动Telegram机器人，卖家ID: {SELLER_CHAT_IDS}")
     
     # 主循环，确保即使出错也会尝试重启
     restart_count = 0
@@ -902,7 +904,7 @@ async def run_bot():
     return
 
 def run_bot_in_thread():
-    """在线程中运行机器人"""
+    """在单独的线程中运行机器人"""
     try:
         logger.info("在单独的线程中启动Telegram机器人")
         asyncio.run(run_bot())

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>系统管理后台 - 破天充值系统</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+  <style>
+    * { box-sizing: border-box; }
+    body { 
+      font-family: 'Microsoft YaHei', Arial, sans-serif; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      margin: 0; padding: 0; min-height: 100vh;
+      color: #333;
+    }
+    
+    .navbar {
+      background: rgba(255,255,255,0.95);
+      padding: 15px 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .navbar-brand {
+      font-size: 24px;
+      font-weight: bold;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .navbar-user {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .admin-badge {
+      background: #ffc107;
+      color: #333;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .btn {
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+    .btn-primary { background: #667eea; color: white; }
+    .btn-danger { background: #dc3545; color: white; }
+    
+    .main-container {
+      max-width: 1400px;
+      margin: 20px auto;
+      padding: 20px;
+    }
+    
+    .admin-container {
+      display: flex;
+      gap: 20px;
+    }
+    
+    .sidebar {
+      width: 240px;
+      flex-shrink: 0;
+      background: rgba(255,255,255,0.95);
+      border-radius: 15px;
+      padding: 20px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      backdrop-filter: blur(10px);
+      align-self: flex-start;
+    }
+    
+    .sidebar-menu {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    .sidebar-menu a {
+      display: flex;
+      align-items: center;
+      padding: 12px 15px;
+      color: #333;
+      text-decoration: none;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+      font-weight: 500;
+    }
+    
+    .sidebar-menu a:hover, .sidebar-menu a.active {
+      background: #667eea;
+      color: white;
+    }
+    
+    .sidebar-menu i {
+      margin-right: 12px;
+      width: 20px;
+      text-align: center;
+    }
+    
+    .content {
+      flex: 1;
+      background: rgba(255,255,255,0.95);
+      border-radius: 15px;
+      padding: 30px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      backdrop-filter: blur(10px);
+    }
+    
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    
+    .content-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .content-header h2 {
+      margin: 0;
+      font-weight: 400;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .data-table th, .data-table td {
+      padding: 12px 15px;
+      text-align: left;
+      border-bottom: 1px solid #e9ecef;
+      vertical-align: middle;
+    }
+    .data-table th {
+      background: #f8f9fa;
+      font-weight: 600;
+    }
+    .data-table tr:hover {
+      background: #f8f9fa;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge-success { background: #28a745; color: white; }
+    .badge-warning { background: #ffc107; color: #333; }
+    .badge-danger { background: #dc3545; color: white; }
+    .badge-info { background: #17a2b8; color: white; }
+    .badge-secondary { background: #6c757d; color: white; }
+
+    .loading {
+      text-align: center;
+      padding: 50px;
+      color: #667eea;
+    }
+  </style>
+</head>
+<body>
+<div class="navbar">
+  <div class="navbar-brand">破天充值系统 - 管理后台</div>
+  <div class="navbar-user">
+    <a href="/" class="btn btn-primary">返回主页</a>
+    <span>欢迎, <span class="username">{{ session.username }}</span></span>
+    <span class="admin-badge">超级管理员</span>
+    <a href="/logout" class="btn btn-danger">退出登录</a>
+  </div>
+</div>
+
+<div class="main-container">
+  <div class="admin-container">
+    <div class="sidebar">
+      <ul class="sidebar-menu">
+        <li><a href="#users" class="active" onclick="showTab('users')"><i class="fas fa-users"></i> 用户管理</a></li>
+        <li><a href="#orders" onclick="showTab('orders')"><i class="fas fa-file-invoice-dollar"></i> 订单管理</a></li>
+        <li><a href="#sellers" onclick="showTab('sellers')"><i class="fas fa-user-tie"></i> 卖家管理</a></li>
+      </ul>
+    </div>
+    
+    <div class="content">
+      <!-- 用户管理 -->
+      <div id="users" class="tab-content active">
+        <div class="content-header">
+          <h2><i class="fas fa-users"></i> 用户管理</h2>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>用户名</th>
+              <th>角色</th>
+              <th>创建时间</th>
+              <th>最后登录</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="users-table-body">
+            <!-- Data will be populated by JS -->
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- 订单管理 -->
+      <div id="orders" class="tab-content">
+        <div class="content-header">
+          <h2><i class="fas fa-file-invoice-dollar"></i> 订单管理</h2>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>账号</th>
+              <th>套餐</th>
+              <th>状态</th>
+              <th>创建者</th>
+              <th>接单者</th>
+              <th>创建时间</th>
+            </tr>
+          </thead>
+          <tbody id="orders-table-body">
+            <!-- Data will be populated by JS -->
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- 卖家管理 -->
+      <div id="sellers" class="tab-content">
+        <div class="content-header">
+          <h2><i class="fas fa-user-tie"></i> 卖家管理</h2>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>TG ID</th>
+              <th>用户名</th>
+              <th>昵称</th>
+              <th>添加时间</th>
+              <th>添加者</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="sellers-table-body">
+            <!-- Data will be populated by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function showTab(tabName) {
+    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+    document.getElementById(tabName).classList.add('active');
+    
+    document.querySelectorAll('.sidebar-menu a').forEach(link => link.classList.remove('active'));
+    document.querySelector(`.sidebar-menu a[href="#${tabName}"]`).classList.add('active');
+  }
+
+  function renderLoading(tbodyId) {
+    const tbody = document.getElementById(tbodyId);
+    const colCount = tbody.parentElement.querySelector('thead tr').childElementCount;
+    tbody.innerHTML = `<tr><td colspan="${colCount}" class="loading">加载中...</td></tr>`;
+  }
+
+  function escapeHtml(unsafe) {
+    return unsafe
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  async function loadUsers() {
+    renderLoading('users-table-body');
+    const response = await fetch('/admin/api/users');
+    const users = await response.json();
+    const tbody = document.getElementById('users-table-body');
+    tbody.innerHTML = '';
+    users.forEach(user => {
+      const row = `
+        <tr>
+          <td>${user.id}</td>
+          <td>${escapeHtml(user.username)}</td>
+          <td>${user.is_admin ? '<span class="badge badge-warning">管理员</span>' : '<span class="badge badge-secondary">用户</span>'}</td>
+          <td>${user.created_at || ''}</td>
+          <td>${user.last_login || '从未'}</td>
+          <td><button class="btn btn-danger btn-sm">删除</button></td>
+        </tr>
+      `;
+      tbody.innerHTML += row;
+    });
+  }
+
+  async function loadOrders() {
+    renderLoading('orders-table-body');
+    const response = await fetch('/admin/api/orders');
+    const orders = await response.json();
+    const tbody = document.getElementById('orders-table-body');
+    tbody.innerHTML = '';
+    const statusBadges = {
+      'submitted': 'badge-info',
+      'accepted': 'badge-warning',
+      'completed': 'badge-success',
+      'failed': 'badge-danger',
+      'cancelled': 'badge-secondary'
+    };
+    orders.forEach(order => {
+      const statusClass = statusBadges[order.status] || 'badge-secondary';
+      const row = `
+        <tr>
+          <td>${order.id}</td>
+          <td>${escapeHtml(order.account)}</td>
+          <td>${order.package}个月</td>
+          <td><span class="badge ${statusClass}">${escapeHtml(order.status_text)}</span></td>
+          <td>${escapeHtml(order.creator || 'N/A')}</td>
+          <td>${escapeHtml(order.accepted_by || 'N/A')}</td>
+          <td>${order.created_at}</td>
+        </tr>
+      `;
+      tbody.innerHTML += row;
+    });
+  }
+
+  async function loadSellers() {
+    renderLoading('sellers-table-body');
+    // NOTE: This endpoint needs to be created.
+    // const response = await fetch('/admin/api/sellers');
+    // const sellers = await response.json();
+    const tbody = document.getElementById('sellers-table-body');
+    tbody.innerHTML = '<tr><td colspan="6" class="loading">功能开发中...</td></tr>';
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    showTab('users');
+    loadUsers();
+    loadOrders();
+    loadSellers();
+
+    document.querySelector('.sidebar-menu a[href="#users"]').addEventListener('click', loadUsers);
+    document.querySelector('.sidebar-menu a[href="#orders"]').addEventListener('click', loadOrders);
+    document.querySelector('.sidebar-menu a[href="#sellers"]').addEventListener('click', loadSellers);
+  });
+</script>
+</body>
+</html> 

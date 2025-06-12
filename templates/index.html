@@ -360,6 +360,7 @@
     <span>欢迎，<span class="username">{{ session.username }}</span></span>
     {% if session.is_admin %}
     <span class="admin-badge">超级管理员</span>
+    <a href="/admin" style="font-size: 14px; color: #667eea; text-decoration: none;">管理后台</a>
     {% endif %}
     <button class="logout-btn" onclick="window.location.href='/logout'">退出登录</button>
   </div>
