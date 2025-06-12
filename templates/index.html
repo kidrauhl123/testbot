@@ -1281,8 +1281,31 @@
     const order = allOrders.find(o => o.id === orderId);
     if (!order) return;
     
-    // 这里可以实现显示订单详情的逻辑
-    alert(`订单 #${orderId} 详情\n账号: ${order.account}\n套餐: ${order.package}个月\n状态: ${order.status_text}\n提交时间: ${order.created_at}`);
+    // 构建详细信息
+    let detailMessage = `订单 #${orderId} 详情\n\n`;
+    detailMessage += `账号: ${order.account}\n`;
+    detailMessage += `密码: ${order.password || '未提供'}\n`;
+    detailMessage += `套餐: ${order.package}个月\n`;
+    detailMessage += `状态: ${order.status_text}\n`;
+    detailMessage += `提交时间: ${order.created_at}\n`;
+    
+    if (order.accepted_at) {
+      detailMessage += `接单时间: ${order.accepted_at}\n`;
+    }
+    
+    if (order.completed_at) {
+      detailMessage += `完成时间: ${order.completed_at}\n`;
+    }
+    
+    if (order.remark) {
+      detailMessage += `备注: ${order.remark}\n`;
+    }
+    
+    if (order.accepted_by) {
+      detailMessage += `接单人: ${order.accepted_by}\n`;
+    }
+    
+    alert(detailMessage);
   }
 
   // HTML转义函数
