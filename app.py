@@ -3,6 +3,8 @@ import threading
 import logging
 import time
 import queue
+import sys
+import atexit
 from flask import Flask
 
 # 根据环境变量确定是否为生产环境
@@ -38,6 +40,17 @@ register_routes(app, notification_queue)
 
 # ===== 主程序 =====
 if __name__ == "__main__":
+    # 使用锁目录确保只有一个实例运行
+    lock_dir = 'bot.lock'
+    try:
+        os.mkdir(lock_dir)
+        logger.info("成功获取锁，启动主程序。")
+        # 注册一个清理函数，在程序正常退出时删除锁目录
+        atexit.register(lambda: os.rmdir(lock_dir))
+    except FileExistsError:
+        logger.error("锁目录已存在，另一个实例可能正在运行。程序退出。")
+        sys.exit(1)
+
     # 初始化数据库
     logger.info("正在初始化数据库...")
     init_db()

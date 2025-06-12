@@ -959,11 +959,11 @@ async def periodic_order_check():
 
 async def process_notification_queue(queue):
     """处理来自Flask的通知队列"""
+    loop = asyncio.get_running_loop()
     while True:
         try:
-            # 使用 get_nowait 立即获取或在队列为空时引发异常
-            # 这使得我们可以使用 asyncio.sleep 来避免阻塞整个循环
-            data = queue.get_nowait()
+            # 在执行器中运行阻塞的 queue.get()，这样不会阻塞事件循环
+            data = await loop.run_in_executor(None, queue.get)
             logger.info(f"从队列中获取到通知任务: {data.get('type')}")
             await send_notification_from_queue(data)
             queue.task_done()
@@ -971,10 +971,10 @@ async def process_notification_queue(queue):
             logger.info("通知队列处理器被取消。")
             break
         except Exception as e:
-            # 如果队列为空，则等待一小段时间
-            if "Empty" not in str(e):
-                 logger.error(f"处理通知队列时出错: {e}")
-            await asyncio.sleep(1) # 队列为空时等待1秒
+            # 捕获并记录所有其他异常
+            logger.error(f"处理通知队列任务时发生未知错误: {repr(e)}", exc_info=True)
+            # 等待一会避免在持续出错时刷屏
+            await asyncio.sleep(5)
     
 def run_bot_in_thread():
     """在单独的线程中运行机器人"""
