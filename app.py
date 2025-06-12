@@ -5,6 +5,7 @@ import time
 import queue
 import sys
 import atexit
+import signal
 from flask import Flask
 
 # 根据环境变量确定是否为生产环境
@@ -29,6 +30,28 @@ from modules.constants import sync_env_sellers_to_db
 # 创建一个线程安全的队列用于在Flask和Telegram机器人之间通信
 notification_queue = queue.Queue()
 
+# 锁目录路径
+lock_dir = 'bot.lock'
+
+# 清理锁目录的函数
+def cleanup_lock():
+    try:
+        if os.path.exists(lock_dir):
+            os.rmdir(lock_dir)
+            logger.info("已清理锁目录")
+    except Exception as e:
+        logger.error(f"清理锁目录失败: {str(e)}")
+
+# 信号处理函数
+def signal_handler(sig, frame):
+    logger.info(f"接收到信号 {sig}，正在清理并退出...")
+    cleanup_lock()
+    sys.exit(0)
+
+# 注册信号处理器
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
 # ===== Flask 应用 =====
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET', 'secret_' + str(time.time()))
@@ -40,13 +63,22 @@ register_routes(app, notification_queue)
 
 # ===== 主程序 =====
 if __name__ == "__main__":
+    # 在启动前先尝试清理可能存在的锁目录
+    if os.path.exists(lock_dir):
+        logger.warning("检测到锁目录已存在，可能是上次异常退出导致。尝试清理...")
+        try:
+            os.rmdir(lock_dir)
+            logger.info("成功清理旧的锁目录")
+        except Exception as e:
+            logger.error(f"清理锁目录失败: {str(e)}")
+            sys.exit(1)
+            
     # 使用锁目录确保只有一个实例运行
-    lock_dir = 'bot.lock'
     try:
         os.mkdir(lock_dir)
         logger.info("成功获取锁，启动主程序。")
         # 注册一个清理函数，在程序正常退出时删除锁目录
-        atexit.register(lambda: os.rmdir(lock_dir))
+        atexit.register(cleanup_lock)
     except FileExistsError:
         logger.error("锁目录已存在，另一个实例可能正在运行。程序退出。")
         sys.exit(1)
