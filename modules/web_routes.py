@@ -281,6 +281,11 @@ def register_routes(app):
             # 优先使用昵称，其次是用户名，最后是ID
             seller_display = accepted_by_first_name or accepted_by_username or accepted_by
             
+            # 如果是失败状态，翻译失败原因
+            translated_remark = remark
+            if status == STATUS['FAILED'] and remark:
+                translated_remark = REASON_TEXT_ZH.get(remark, remark)
+            
             order_data = {
                 "id": oid,
                 "account": account,
@@ -290,7 +295,7 @@ def register_routes(app):
                 "created_at": created_at,
                 "accepted_at": accepted_at or "",
                 "completed_at": completed_at or "",
-                "remark": remark or "",
+                "remark": translated_remark or "",
                 "creator": web_user_id,
                 "accepted_by": seller_display or "",
                 "can_cancel": status == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == user_id)
