@@ -609,7 +609,8 @@
     firstnameInput.value = '';
     errorDiv.style.display = 'none';
     
-    openModal('add-seller-modal');
+    // 这里直接添加卖家，不使用模态框
+    // openModal('add-seller-modal');
   }
 
   async function loadSellers() {
@@ -782,6 +783,7 @@
     const modal = document.getElementById(modalId);
     if (!modal) {
       console.error("找不到模态框元素:", modalId);
+      alert(`找不到ID为${modalId}的模态框元素，请检查HTML`);
       return;
     }
     modal.classList.add('show');
@@ -804,6 +806,9 @@
       const modal = this.closest('.modal-backdrop');
       if (modal) {
         modal.classList.remove('show');
+        console.log("已关闭模态框:", modal.id);
+      } else {
+        console.error("未找到父级模态框元素");
       }
     });
   });
@@ -838,6 +843,11 @@
   });
 
   document.addEventListener('DOMContentLoaded', () => {
+    // 检查页面上的所有模态框元素
+    console.log("检查模态框元素:");
+    console.log("editBalanceModal:", document.getElementById('editBalanceModal'));
+    console.log("edit-order-modal:", document.getElementById('edit-order-modal'));
+    
     showTab('users');
     loadUsers();
     loadOrders();
