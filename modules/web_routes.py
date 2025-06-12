@@ -199,12 +199,28 @@ def register_routes(app):
             orders = execute_query("SELECT id, account, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             logger.info(f"查询到的最新订单: {orders}")
             
+            # 计算是否使用了透支额度
+            used_credit = 0
+            if balance < price:
+                # 如果原始余额小于价格，说明使用了透支额度
+                if balance >= 0:
+                    # 余额为正数，使用的透支额度 = 价格 - 余额
+                    used_credit = price - balance
+                else:
+                    # 余额为负数，使用的透支额度 = 价格
+                    used_credit = price
+            
+            success_message = '订单已提交成功！'
+            if used_credit > 0:
+                success_message = f'订单已提交成功！已使用透支额度 {used_credit} 元'
+            
             return jsonify({
                 "success": True,
-                "message": '订单已提交成功！',
+                "message": success_message,
                 "balance": new_balance,
                 "credit_limit": credit_limit,
-                "orders": orders
+                "orders": orders,
+                "used_credit": used_credit
             })
         except Exception as e:
             logger.error(f"创建订单失败: {str(e)}", exc_info=True)
