@@ -41,7 +41,7 @@ lock_dir = 'bot.lock'
 def cleanup_resources():
     """清理应用锁目录和数据库 journal 文件。"""
     # 清理应用锁目录
-        if os.path.exists(lock_dir):
+    if os.path.exists(lock_dir):
         try:
             if os.path.isdir(lock_dir):
                 os.rmdir(lock_dir)
