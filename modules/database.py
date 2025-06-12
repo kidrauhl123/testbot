@@ -259,15 +259,15 @@ def init_postgres_db():
     conn.close()
 
 # 数据库执行函数
-def execute_query(query, params=(), fetch=False):
+def execute_query(query, params=(), fetch=False, return_cursor=False):
     """执行数据库查询并返回结果"""
     logger.debug(f"执行查询: {query[:50]}... 参数: {params}")
     if DATABASE_URL.startswith('postgres'):
-        return execute_postgres_query(query, params, fetch)
+        return execute_postgres_query(query, params, fetch, return_cursor)
     else:
-        return execute_sqlite_query(query, params, fetch)
+        return execute_sqlite_query(query, params, fetch, return_cursor)
 
-def execute_sqlite_query(query, params=(), fetch=False):
+def execute_sqlite_query(query, params=(), fetch=False, return_cursor=False):
     """执行SQLite查询并返回结果"""
     try:
         conn = sqlite3.connect("orders.db")
@@ -293,6 +293,10 @@ def execute_sqlite_query(query, params=(), fetch=False):
         
         cursor.execute(query, params)
         
+        if return_cursor:
+            conn.commit()
+            return cursor
+
         result = None
         if fetch:
             result = cursor.fetchall()
@@ -307,7 +311,7 @@ def execute_sqlite_query(query, params=(), fetch=False):
         logger.error(f"SQLite查询执行失败: {str(e)}", exc_info=True)
         raise
 
-def execute_postgres_query(query, params=(), fetch=False):
+def execute_postgres_query(query, params=(), fetch=False, return_cursor=False):
     """执行PostgreSQL查询并返回结果"""
     url = urlparse(DATABASE_URL)
     dbname = url.path[1:]
@@ -329,6 +333,10 @@ def execute_postgres_query(query, params=(), fetch=False):
     query = query.replace('?', '%s')
     cursor.execute(query, params)
     
+    if return_cursor:
+        conn.commit()
+        return cursor
+
     result = None
     if fetch:
         result = cursor.fetchall()
