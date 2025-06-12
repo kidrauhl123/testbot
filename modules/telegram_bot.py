@@ -259,12 +259,6 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             processing_accepts.add(accept_key)
             processing_accepts_time[accept_key] = time.time()  # 记录开始时间
             
-            # 先确认回调，避免超时
-            try:
-                await query.answer("Processing your request...")
-            except Exception as e:
-                logger.error(f"确认回调时出错: {str(e)}")
-            
             logger.info(f"卖家 {user_id} 尝试接单 #{oid}")
             
             # 尝试接单
@@ -280,6 +274,9 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         logger.error(f"找不到订单 #{oid} 的详情")
                         await query.edit_message_text(f"Error: Order #{oid} details not found")
                         return
+                        
+                    # 接单成功时发送一个简单的确认提示
+                    await query.answer("Order accepted!")
                         
                     order = order[0]
                     account, password, package = order[1], order[2], order[3]

@@ -989,7 +989,7 @@
       const resp = await fetch('/', { method: 'POST', body: data });
       const result = await resp.json();
       
-      if (result.success) {
+      if (resp.ok && result.success) {
         // 重置表单和状态
         e.target.reset();
         displayedOrders = 5;
@@ -1009,15 +1009,13 @@
           await loadOrders();
         }
         
-        // 显示成功消息，如果使用了透支额度，使用更醒目的样式
-        if (result.used_credit && result.used_credit > 0) {
-          showCustomAlert(result.message || `订单提交成功！已使用透支额度 ${result.used_credit} 元`, 'warning');
-        } else {
-          alert(result.message || '订单提交成功！');
-        }
+        // 根据是否使用透支额度显示不同类型的成功消息
+        const messageType = result.used_credit > 0 ? 'warning' : 'success';
+        showCustomAlert(result.message || '订单提交成功！', messageType);
+
       } else {
         // 处理错误情况
-        alert(result.error || '提交失败，请重试');
+        showCustomAlert(result.error || '提交失败，请重试', 'error');
         
         // 更新余额显示（如果返回了）
         if (result.balance !== undefined) {
@@ -1025,7 +1023,7 @@
         }
       }
     } catch (error) {
-      alert('提交失败，请重试');
+      showCustomAlert('网络错误或服务器无响应，请重试', 'error');
       console.error('订单提交错误:', error);
     } finally {
       btn.textContent = orig;
