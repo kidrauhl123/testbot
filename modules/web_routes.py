@@ -478,4 +478,84 @@ def register_routes(app):
     @admin_required
     def admin_api_toggle_seller(telegram_id):
         toggle_seller_status(telegram_id)
-        return jsonify({"success": True}) 
+        return jsonify({"success": True})
+
+    # 获取单个订单详情的API
+    @app.route('/admin/api/orders/<int:order_id>')
+    @login_required
+    @admin_required
+    def admin_api_order_detail(order_id):
+        """获取单个订单的详细信息"""
+        order = execute_query("""
+            SELECT id, account, password, package, status, remark, created_at, 
+                   accepted_by, web_user_id, user_id, accepted_at, completed_at
+            FROM orders 
+            WHERE id = ?
+        """, (order_id,), fetch=True)
+        
+        if not order:
+            return jsonify({"error": "订单不存在"}), 404
+            
+        o = order[0]
+        return jsonify({
+            "id": o[0],
+            "account": o[1],
+            "password": o[2],
+            "package": o[3],
+            "status": o[4],
+            "remark": o[5],
+            "created_at": o[6],
+            "accepted_by": o[7],
+            "web_user_id": o[8],
+            "user_id": o[9],
+            "accepted_at": o[10],
+            "completed_at": o[11]
+        })
+    
+    # 编辑订单的API
+    @app.route('/admin/api/orders/<int:order_id>', methods=['PUT'])
+    @login_required
+    @admin_required
+    def admin_api_edit_order(order_id):
+        """编辑订单信息（仅限超级管理员）"""
+        try:
+            data = request.json
+            
+            # 验证必填字段
+            if not data.get('account') or not data.get('password'):
+                return jsonify({"error": "账号和密码不能为空"}), 400
+                
+            # 查询原订单，确保存在
+            existing_order = execute_query("SELECT id FROM orders WHERE id = ?", (order_id,), fetch=True)
+            if not existing_order:
+                return jsonify({"error": "订单不存在"}), 404
+                
+            # 更新订单信息
+            execute_query("""
+                UPDATE orders SET 
+                account = ?, 
+                password = ?, 
+                package = ?, 
+                status = ?, 
+                remark = ?
+                WHERE id = ?
+            """, (
+                data.get('account'),
+                data.get('password'),
+                data.get('package'),
+                data.get('status'),
+                data.get('remark', ''),
+                order_id
+            ))
+            
+            # 如果状态变更为已完成或失败，添加完成时间
+            if data.get('status') in [STATUS['COMPLETED'], STATUS['FAILED'], STATUS['CANCELLED']]:
+                timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                execute_query("UPDATE orders SET completed_at = ? WHERE id = ? AND completed_at IS NULL", 
+                             (timestamp, order_id))
+            
+            return jsonify({"success": True, "message": "订单更新成功"})
+            
+        except Exception as e:
+            logger.error(f"编辑订单失败: {str(e)}", exc_info=True)
+            return jsonify({"error": f"编辑订单失败: {str(e)}"}), 500 

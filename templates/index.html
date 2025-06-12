@@ -454,25 +454,58 @@
     let totalAmount = 0;
     let totalCount = 0;
     
+    // 为管理员统计每个用户的金额
+    const userAmounts = {};
+    
     todayOrders.forEach(order => {
       totalCount++;
       // 只计算已完成订单的金额
       if (order.status === 'completed') {
         const price = WEB_PRICES[order.package] || 0;
         totalAmount += price;
+        
+        // 如果是管理员，记录每个用户的金额
+        if (isAdmin && order.creator) {
+          if (!userAmounts[order.creator]) {
+            userAmounts[order.creator] = {
+              username: order.creator,
+              amount: 0
+            };
+          }
+          userAmounts[order.creator].amount += price;
+        }
       }
     });
     
-    return { totalAmount, totalCount };
+    return { totalAmount, totalCount, userAmounts };
   }
   
   // 显示今日总金额
   function updateTodayTotal(orders) {
-    const { totalAmount, totalCount } = calculateTodayTotal(orders);
+    const { totalAmount, totalCount, userAmounts } = calculateTodayTotal(orders);
     const todayTotalElement = document.getElementById('today-total');
     
     if (todayTotalElement) {
-      todayTotalElement.innerHTML = `今日: ${totalCount}单 / ¥${totalAmount.toFixed(2)}`;
+      if (isAdmin) {
+        // 转换为数组并按金额排序
+        const userList = Object.values(userAmounts).sort((a, b) => b.amount - a.amount);
+        // 只取前三名
+        const topUsers = userList.slice(0, 3);
+        
+        if (topUsers.length > 0) {
+          let html = '今日排行: ';
+          topUsers.forEach((user, index) => {
+            html += `${index + 1}. ${user.username}: ¥${user.amount.toFixed(2)}`;
+            if (index < topUsers.length - 1) html += ' | ';
+          });
+          todayTotalElement.innerHTML = html;
+        } else {
+          todayTotalElement.innerHTML = '今日总额: ¥0.00';
+        }
+      } else {
+        // 普通用户只显示总金额
+        todayTotalElement.innerHTML = `今日总额: ¥${totalAmount.toFixed(2)}`;
+      }
     }
   }
     
@@ -529,10 +562,16 @@
       lastOrdersHash = newHash;
       allOrders = newOrders;
       
+      // 仅显示今日订单
+      const today = new Date().toISOString().split('T')[0]; // 获取今天的日期 YYYY-MM-DD
+      const todayOrders = allOrders.filter(order => {
+        return order.created_at && order.created_at.startsWith(today);
+      });
+      
       // 应用搜索过滤
-      let filteredOrders = allOrders;
+      let filteredOrders = todayOrders;
       if (searchKeyword) {
-        filteredOrders = allOrders.filter(order => 
+        filteredOrders = todayOrders.filter(order => 
           order.id.toString().includes(searchKeyword) || 
           order.account.toLowerCase().includes(searchKeyword.toLowerCase())
         );

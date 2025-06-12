@@ -323,6 +323,7 @@
               <th>创建者</th>
               <th>接单者</th>
               <th>创建时间</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody id="orders-table-body">
@@ -374,6 +375,58 @@
             <!-- Data will be populated by JS -->
           </tbody>
         </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div>
+  <!-- 编辑订单模态框 -->
+  <div id="edit-order-modal" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>编辑订单</h3>
+        <button class="modal-close" onclick="hideModal('edit-order-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="edit-order-error" class="error-message" style="display:none;"></div>
+        <input type="hidden" id="edit-order-id">
+        <div class="form-group">
+          <label for="edit-order-account">账号</label>
+          <input type="text" id="edit-order-account" class="form-control">
+        </div>
+        <div class="form-group">
+          <label for="edit-order-password">密码</label>
+          <input type="text" id="edit-order-password" class="form-control">
+        </div>
+        <div class="form-group">
+          <label for="edit-order-package">套餐</label>
+          <select id="edit-order-package" class="form-control">
+            <option value="1">1个月</option>
+            <option value="2">2个月</option>
+            <option value="3">3个月</option>
+            <option value="6">6个月</option>
+            <option value="12">12个月</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="edit-order-status">状态</label>
+          <select id="edit-order-status" class="form-control">
+            <option value="submitted">已提交</option>
+            <option value="accepted">已接单</option>
+            <option value="completed">充值成功</option>
+            <option value="failed">充值失败</option>
+            <option value="cancelled">已撤销</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="edit-order-remark">备注/失败原因</label>
+          <input type="text" id="edit-order-remark" class="form-control">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="hideModal('edit-order-modal')">取消</button>
+        <button class="btn btn-primary" onclick="saveOrderEdit()">保存</button>
       </div>
     </div>
   </div>
@@ -448,6 +501,7 @@
           <td>${escapeHtml(order.creator || 'N/A')}</td>
           <td>${escapeHtml(order.accepted_by || 'N/A')}</td>
           <td>${order.created_at}</td>
+          <td><button class="btn btn-primary btn-sm" onclick="editOrder(${order.id})">编辑</button></td>
         </tr>
       `;
       tbody.innerHTML += row;
@@ -588,6 +642,77 @@
   async function toggleSeller(telegramId) {
     await fetch(`/admin/api/sellers/${telegramId}/toggle`, { method: 'POST' });
     loadSellers();
+  }
+
+  // 编辑订单
+  async function editOrder(orderId) {
+    try {
+      // 加载订单详情
+      const response = await fetch(`/admin/api/orders/${orderId}`);
+      
+      if (!response.ok) {
+        alert('加载订单详情失败');
+        return;
+      }
+      
+      const order = await response.json();
+      
+      // 填充表单
+      document.getElementById('edit-order-id').value = order.id;
+      document.getElementById('edit-order-account').value = order.account;
+      document.getElementById('edit-order-password').value = order.password;
+      document.getElementById('edit-order-package').value = order.package;
+      document.getElementById('edit-order-status').value = order.status;
+      document.getElementById('edit-order-remark').value = order.remark || '';
+      
+      // 显示模态框
+      showModal('edit-order-modal');
+    } catch (error) {
+      console.error('获取订单详情失败:', error);
+      alert('获取订单详情失败');
+    }
+  }
+  
+  // 保存订单编辑
+  async function saveOrderEdit() {
+    const orderId = document.getElementById('edit-order-id').value;
+    const errorDiv = document.getElementById('edit-order-error');
+    
+    try {
+      const data = {
+        account: document.getElementById('edit-order-account').value,
+        password: document.getElementById('edit-order-password').value,
+        package: document.getElementById('edit-order-package').value,
+        status: document.getElementById('edit-order-status').value,
+        remark: document.getElementById('edit-order-remark').value
+      };
+      
+      if (!data.account || !data.password) {
+        errorDiv.textContent = '账号和密码不能为空';
+        errorDiv.style.display = 'block';
+        return;
+      }
+      
+      const response = await fetch(`/admin/api/orders/${orderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      
+      if (response.ok) {
+        hideModal('edit-order-modal');
+        loadOrders(); // 重新加载订单列表
+        alert('订单更新成功');
+      } else {
+        const result = await response.json();
+        errorDiv.textContent = result.error || '更新失败，请重试';
+        errorDiv.style.display = 'block';
+      }
+    } catch (error) {
+      console.error('保存订单编辑失败:', error);
+      errorDiv.textContent = '网络错误，请重试';
+      errorDiv.style.display = 'block';
+    }
   }
 
   document.addEventListener('DOMContentLoaded', () => {
