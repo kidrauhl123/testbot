@@ -1285,6 +1285,31 @@
     if (userSearchInput) {
       // ... existing code ...
     }
+
+    // --- 初始化 ---
+    // 页面加载时默认显示第一个标签页
+    document.addEventListener('DOMContentLoaded', () => {
+      // 从URL hash加载或者默认加载第一个
+      const hash = window.location.hash.substring(1);
+      if (hash) {
+        showTab(hash);
+      } else {
+        showTab('dashboard');
+      }
+      
+      // 为侧边栏链接添加点击事件
+      document.querySelectorAll('.sidebar-menu a').forEach(link => {
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          const tabName = new URL(link.href).hash.substring(1);
+          showTab(tabName);
+          // 更新URL hash
+          history.pushState(null, null, `#${tabName}`);
+        });
+      });
+
+      console.log("页面初始化完成。");
+    });
   });
 </script>
 </body>
