@@ -366,40 +366,85 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         elif data.startswith('fail_'):
             oid = int(data.split('_')[1])
-            logger.info(f"管理员 {user_id} 标记订单 #{oid} 为失败")
+            logger.info(f"管理员 {user_id} 点击了失败按钮 #{oid}")
             
+            # 显示失败原因选项
+            keyboard = [
+                [InlineKeyboardButton("Wrong Password", callback_data=f"reason_wrong_password_{oid}")],
+                [InlineKeyboardButton("Membership Not Expired", callback_data=f"reason_not_expired_{oid}")],
+                [InlineKeyboardButton("Other Reason", callback_data=f"reason_other_{oid}")],
+                [InlineKeyboardButton("Cancel (Clicked by Mistake)", callback_data=f"reason_cancel_{oid}")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            try:
+                await query.edit_message_reply_markup(reply_markup=reply_markup)
+                logger.info(f"已为订单 #{oid} 显示失败原因选项")
+            except Exception as markup_error:
+                logger.error(f"显示失败原因选项时出错: {str(markup_error)}")
+                await query.answer("Error updating options. Please try again.", show_alert=True)
+        
+        # 处理失败原因选项
+        elif data.startswith('reason_'):
+            parts = data.split('_')
+            reason_type = parts[1]
+            oid = int(parts[-1])  # 订单ID在最后一部分
+            
+            logger.info(f"管理员 {user_id} 为订单 #{oid} 选择了失败原因: {reason_type}")
+            
+            # 如果是取消，恢复原始按钮
+            if reason_type == "cancel":
+                keyboard = [
+                    [InlineKeyboardButton("✅ Complete", callback_data=f"done_{oid}"),
+                     InlineKeyboardButton("❌ Failed", callback_data=f"fail_{oid}")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                try:
+                    await query.edit_message_reply_markup(reply_markup=reply_markup)
+                    await query.answer("Operation cancelled.")
+                    logger.info(f"已取消订单 #{oid} 的失败操作")
+                except Exception as cancel_error:
+                    logger.error(f"取消失败操作时出错: {str(cancel_error)}")
+                return
+            
+            # 处理其他原因类型
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            execute_query("UPDATE orders SET status=?, completed_at=? WHERE id=? AND accepted_by=?",
-                        (STATUS['FAILED'], timestamp, oid, str(user_id)))
             
-            # 先更新UI，确保按钮状态改变
+            # 设置失败状态和原因
+            reason_text = ""
+            if reason_type == "wrong_password":
+                reason_text = "Wrong password"
+            elif reason_type == "not_expired":
+                reason_text = "Membership not expired"
+            elif reason_type == "other":
+                reason_text = "Other reason (details pending)"
+                # 标记需要额外反馈
+                feedback_waiting[user_id] = oid
+            
+            # 更新数据库
+            execute_query("UPDATE orders SET status=?, completed_at=?, remark=? WHERE id=? AND accepted_by=?",
+                        (STATUS['FAILED'], timestamp, reason_text, oid, str(user_id)))
+            
+            # 更新UI
             try:
                 await query.edit_message_reply_markup(
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Failed", callback_data="noop")]])
                 )
-                logger.info(f"已更新订单 #{oid} 的消息显示为失败状态")
+                
+                # 如果是"其他原因"，请求详细反馈
+                if reason_type == "other":
+                    await query.message.reply_text(
+                        "Please provide more details about the failure reason. Your next message will be recorded as feedback."
+                    )
+                else:
+                    await query.message.reply_text(
+                        f"Order #{oid} marked as failed. Reason: {reason_text}"
+                    )
+                
+                logger.info(f"已更新订单 #{oid} 的消息显示为失败状态，原因: {reason_text}")
             except Exception as markup_error:
                 logger.error(f"更新失败标记时出错: {str(markup_error)}")
-            
-            # 获取原始订单信息并请求反馈
-            order = get_order_details(oid)
-            if order:
-                feedback_waiting[user_id] = oid
-                try:
-                    await query.message.reply_text(
-                        "Please provide a reason for the failure. Your next message will be recorded as feedback."
-                    )
-                    logger.info(f"已请求管理员 {user_id} 为失败订单 #{oid} 提供反馈")
-                except Exception as reply_error:
-                    logger.error(f"请求反馈时出错: {str(reply_error)}")
-            else:
-                logger.error(f"找不到订单 #{oid} 的详情，无法请求反馈")
-                try:
-                    await query.message.reply_text(
-                        "Order marked as failed. Could not retrieve order details for feedback."
-                    )
-                except Exception as reply_error:
-                    logger.error(f"发送失败信息时出错: {str(reply_error)}")
     except ValueError as ve:
         logger.error(f"解析订单ID出错: {str(ve)}")
     except Exception as e:
@@ -769,7 +814,7 @@ async def run_bot():
     bot_application.add_handler(CommandHandler("seller", on_admin_command))
     bot_application.add_handler(CommandHandler("stats", on_stats))
     bot_application.add_handler(CallbackQueryHandler(on_accept, pattern="^accept_"))
-    bot_application.add_handler(CallbackQueryHandler(on_feedback_button, pattern="^(done|fail)_"))
+    bot_application.add_handler(CallbackQueryHandler(on_feedback_button, pattern="^(done|fail|reason)_"))
     bot_application.add_handler(CallbackQueryHandler(on_stats_callback, pattern="^stats_"))
     bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     
