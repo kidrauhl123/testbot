@@ -372,15 +372,20 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             execute_query("UPDATE orders SET status=?, completed_at=? WHERE id=? AND accepted_by=?",
                         (STATUS['FAILED'], timestamp, oid, str(user_id)))
             
+            # 先更新UI，确保按钮状态改变
+            try:
+                await query.edit_message_reply_markup(
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Failed", callback_data="noop")]])
+                )
+                logger.info(f"已更新订单 #{oid} 的消息显示为失败状态")
+            except Exception as markup_error:
+                logger.error(f"更新失败标记时出错: {str(markup_error)}")
+            
             # 获取原始订单信息并请求反馈
             order = get_order_details(oid)
             if order:
                 feedback_waiting[user_id] = oid
-                
                 try:
-                    await query.edit_message_reply_markup(
-                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Failed", callback_data="noop")]])
-                    )
                     await query.message.reply_text(
                         "Please provide a reason for the failure. Your next message will be recorded as feedback."
                     )
@@ -389,6 +394,12 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     logger.error(f"请求反馈时出错: {str(reply_error)}")
             else:
                 logger.error(f"找不到订单 #{oid} 的详情，无法请求反馈")
+                try:
+                    await query.message.reply_text(
+                        "Order marked as failed. Could not retrieve order details for feedback."
+                    )
+                except Exception as reply_error:
+                    logger.error(f"发送失败信息时出错: {str(reply_error)}")
     except ValueError as ve:
         logger.error(f"解析订单ID出错: {str(ve)}")
     except Exception as e:
