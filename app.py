@@ -106,28 +106,6 @@ def telegram_webhook():
         traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
 
-@app.route('/')
-def index():
-    """首页"""
-    try:
-        return render_template('index.html')
-    except Exception as e:
-        logger.error(f"渲染首页时出错: {str(e)}", exc_info=True)
-        print(f"ERROR: 渲染首页时出错: {str(e)}")
-        traceback.print_exc()
-        return "服务器错误，请查看日志", 500
-
-@app.route('/admin')
-def admin():
-    """管理员页面"""
-    try:
-        return render_template('admin.html')
-    except Exception as e:
-        logger.error(f"渲染管理员页面时出错: {str(e)}", exc_info=True)
-        print(f"ERROR: 渲染管理员页面时出错: {str(e)}")
-        traceback.print_exc()
-        return "服务器错误，请查看日志", 500
-
 @app.errorhandler(Exception)
 def handle_exception(e):
     """处理所有未捕获的异常"""
