@@ -687,7 +687,8 @@ def register_routes(app):
         """获取单个订单的详细信息"""
         order = execute_query("""
             SELECT id, account, password, package, status, remark, created_at, 
-                   accepted_by, web_user_id, user_id, accepted_at, completed_at
+                   accepted_at, completed_at, accepted_by, web_user_id, user_id,
+                   accepted_by_username, accepted_by_first_name
             FROM orders 
             WHERE id = ?
         """, (order_id,), fetch=True)
