@@ -17,6 +17,66 @@
       overflow-y: auto;
     }
     
+    /* 自定义提示框样式 */
+    .custom-alert {
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 15px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 9999;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      min-width: 300px;
+      max-width: 80%;
+      animation: slideDown 0.3s ease-out;
+    }
+    
+    .custom-alert.success {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
+    }
+    
+    .custom-alert.warning {
+      background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%);
+      color: #333;
+    }
+    
+    .custom-alert.error {
+      background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+      color: white;
+    }
+    
+    .custom-alert-icon {
+      margin-right: 10px;
+      font-size: 18px;
+    }
+    
+    .custom-alert-close {
+      margin-left: auto;
+      cursor: pointer;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+    }
+    
+    .custom-alert-close:hover {
+      opacity: 1;
+    }
+    
+    @keyframes slideDown {
+      0% {
+        transform: translate(-50%, -20px);
+        opacity: 0;
+      }
+      100% {
+        transform: translate(-50%, 0);
+        opacity: 1;
+      }
+    }
+    
     .navbar {
       background: rgba(255,255,255,0.95);
       padding: 10px 15px;
@@ -702,6 +762,45 @@
     '6': 50,
     '12': 84
   };
+  
+  // 显示自定义提示框
+  function showCustomAlert(message, type = 'success') {
+    // 移除任何已经存在的提示框
+    const existingAlerts = document.querySelectorAll('.custom-alert');
+    existingAlerts.forEach(alert => alert.remove());
+    
+    // 创建新的提示框
+    const alert = document.createElement('div');
+    alert.className = `custom-alert ${type}`;
+    
+    // 根据类型设置图标
+    let icon = 'check-circle';
+    if (type === 'warning') icon = 'exclamation-triangle';
+    if (type === 'error') icon = 'times-circle';
+    
+    alert.innerHTML = `
+      <div class="custom-alert-icon"><i class="fas fa-${icon}"></i></div>
+      <div class="custom-alert-message">${message}</div>
+      <div class="custom-alert-close"><i class="fas fa-times"></i></div>
+    `;
+    
+    // 添加到文档
+    document.body.appendChild(alert);
+    
+    // 添加关闭按钮事件
+    alert.querySelector('.custom-alert-close').addEventListener('click', () => {
+      alert.remove();
+    });
+    
+    // 5秒后自动关闭
+    setTimeout(() => {
+      if (alert.parentNode) {
+        alert.style.opacity = '0';
+        alert.style.transform = 'translate(-50%, -20px)';
+        setTimeout(() => alert.remove(), 300);
+      }
+    }, 5000);
+  }
   
   // 生成订单数据的简单哈希
   function generateOrdersHash(orders) {
