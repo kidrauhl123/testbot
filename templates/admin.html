@@ -136,6 +136,11 @@
       font-weight: 400;
     }
 
+    .header-actions {
+      display: flex;
+      gap: 10px;
+    }
+
     .data-table {
       width: 100%;
       border-collapse: collapse;
@@ -477,24 +482,13 @@
       <div id="orders" class="tab-content">
         <div class="content-header">
           <h2><i class="fas fa-file-invoice-dollar"></i> 订单管理</h2>
+          <div class="header-actions">
+            <input type="text" id="order-search" class="form-control" placeholder="搜索订单ID、账号、创建者..." style="width: 250px;">
+            <button id="batch-delete-btn" class="btn btn-danger">批量删除</button>
+          </div>
         </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>账号</th>
-              <th>套餐</th>
-              <th>状态</th>
-              <th>创建者</th>
-              <th>接单者</th>
-              <th>创建时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="orders-table-body">
-            <!-- Data will be populated by JS -->
-          </tbody>
-        </table>
+        <div id="orders-table-container"></div>
+        <div class="pagination"></div>
       </div>
       
       <!-- 卖家管理 -->
@@ -1229,6 +1223,68 @@
     };
     
     console.log("页面初始化完成，绑定了测试函数 testEditBalance()、testEditOrder()、testOpenModal() 和 testCloseModal()");
+
+    // --- 订单管理 ---
+    const selectAllCheckbox = document.getElementById('select-all-orders');
+    const batchDeleteBtn = document.getElementById('batch-delete-btn');
+    const ordersTableContainer = document.getElementById('orders-table-container');
+
+    if (selectAllCheckbox) {
+      selectAllCheckbox.addEventListener('change', (e) => {
+        const checkboxes = document.querySelectorAll('.order-checkbox');
+        checkboxes.forEach(checkbox => {
+          checkbox.checked = e.target.checked;
+        });
+      });
+    }
+
+    if (batchDeleteBtn) {
+      batchDeleteBtn.addEventListener('click', async () => {
+        const selectedCheckboxes = document.querySelectorAll('.order-checkbox:checked');
+        const orderIds = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+        if (orderIds.length === 0) {
+          alert('请至少选择一个订单');
+          return;
+        }
+
+        if (confirm(`确定要永久删除这 ${orderIds.length} 个订单吗？此操作不可撤销！`)) {
+          try {
+            const resp = await fetch('/admin/api/orders/batch-delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ order_ids: orderIds })
+            });
+            const result = await resp.json();
+            if (resp.ok && result.success) {
+              alert(`成功删除了 ${result.deleted_count} 个订单`);
+              loadOrders(); // 重新加载订单
+            } else {
+              alert(result.error || '删除失败');
+            }
+          } catch (e) {
+            alert('请求失败，请检查网络');
+            console.error(e);
+          }
+        }
+      });
+    }
+
+    if (ordersTableContainer) {
+      ordersTableContainer.addEventListener('change', (e) => {
+        if (e.target.classList.contains('order-checkbox')) {
+          const allCheckboxes = document.querySelectorAll('.order-checkbox');
+          const allChecked = Array.from(allCheckboxes).every(cb => cb.checked);
+          selectAllCheckbox.checked = allChecked;
+        }
+      });
+    }
+
+    // --- 用户管理 ---
+    const userSearchInput = document.getElementById('user-search');
+    if (userSearchInput) {
+      // ... existing code ...
+    }
   });
 </script>
 </body>

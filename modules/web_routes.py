@@ -887,4 +887,43 @@ def register_routes(app, notification_queue):
             # 订单状态改为已取消或失败，且未退款，执行退款
             refund_order(order_id)
         
-        return jsonify({"success": True}) 
+        return jsonify({"success": True})
+
+    @app.route('/admin/api/orders/batch-delete', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_api_batch_delete_orders():
+        """管理员批量删除订单"""
+        data = request.json
+        order_ids = data.get('order_ids')
+
+        if not order_ids or not isinstance(order_ids, list):
+            return jsonify({"success": False, "error": "无效的订单ID列表"}), 400
+
+        try:
+            # 将ID转换为整数，防止SQL注入
+            order_ids_int = [int(oid) for oid in order_ids]
+            
+            # 创建占位符字符串
+            placeholders = ','.join(['?'] * len(order_ids_int))
+            
+            # 执行删除
+            # 注意：execute_query 需要返回受影响的行数，如果它不返回，则此代码需要调整
+            # 假设 execute_query 可以返回 cursor 来获取 rowcount
+            result = execute_query(
+                f"DELETE FROM orders WHERE id IN ({placeholders})",
+                order_ids_int,
+                fetch=False, # 假设 fetch=False 用于执行非查询语句
+                return_cursor=True # 需要一个方法来获取rowCount
+            )
+            
+            deleted_count = result.rowcount if result else 0
+
+            logger.info(f"管理员 {session.get('username')} 删除了 {deleted_count} 个订单: {order_ids}")
+            
+            return jsonify({"success": True, "deleted_count": deleted_count})
+        except (ValueError, TypeError):
+            return jsonify({"success": False, "error": "订单ID必须是有效的数字"}), 400
+        except Exception as e:
+            logger.error(f"批量删除订单时出错: {e}", exc_info=True)
+            return jsonify({"success": False, "error": "服务器内部错误"}), 500 
