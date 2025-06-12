@@ -24,16 +24,6 @@ if os.environ.get('SELLER_CHAT_IDS'):
     except Exception as e:
         logger.error(f"解析SELLER_CHAT_IDS环境变量出错: {e}")
 
-# 向后兼容ADMIN_CHAT_IDS环境变量
-if os.environ.get('ADMIN_CHAT_IDS') and not os.environ.get('SELLER_CHAT_IDS'):
-    try:
-        # 格式: "123456789,987654321"
-        admin_ids_str = os.environ.get('ADMIN_CHAT_IDS', '')
-        SELLER_CHAT_IDS = [int(x.strip()) for x in admin_ids_str.split(',') if x.strip()]
-        logger.info(f"从ADMIN_CHAT_IDS环境变量加载卖家ID: {SELLER_CHAT_IDS}")
-    except Exception as e:
-        logger.error(f"解析ADMIN_CHAT_IDS环境变量出错: {e}")
-
 # 将环境变量中的卖家ID同步到数据库
 def sync_env_sellers_to_db():
     """将环境变量中的卖家ID同步到数据库"""
