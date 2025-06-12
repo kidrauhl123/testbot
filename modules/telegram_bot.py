@@ -8,6 +8,7 @@ import os
 from functools import wraps
 import pytz
 import sys
+import functools
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -1197,6 +1198,7 @@ async def on_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"已发送测试回复给用户 {user_id}")
     print(f"DEBUG: 已发送测试回复给用户 {user_id}")
 
+@error_handler
 async def on_test_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理测试按钮回调"""
     try:
@@ -1306,4 +1308,37 @@ def process_telegram_update(update_data, notification_queue):
             print("DEBUG: 处理更新完成，事件循环已正确关闭")
     except Exception as e:
         logger.error(f"在线程中处理Telegram更新时出错: {str(e)}", exc_info=True)
-        print(f"ERROR: 在线程中处理Telegram更新时出错: {str(e)}") 
+        print(f"ERROR: 在线程中处理Telegram更新时出错: {str(e)}")
+
+def error_handler(func):
+    """装饰器：捕获并处理回调函数中的异常"""
+    @functools.wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            return await func(update, context)
+        except Exception as e:
+            user_id = None
+            try:
+                if update.effective_user:
+                    user_id = update.effective_user.id
+            except:
+                pass
+            
+            error_msg = f"回调处理错误 [{func.__name__}] "
+            if user_id:
+                error_msg += f"用户ID: {user_id} "
+            error_msg += f"错误: {str(e)}"
+            
+            logger.error(error_msg, exc_info=True)
+            print(f"ERROR: {error_msg}")
+            
+            # 尝试通知用户
+            try:
+                if update.callback_query:
+                    await update.callback_query.answer("操作失败，请稍后重试", show_alert=True)
+            except Exception as notify_err:
+                logger.error(f"无法通知用户错误: {str(notify_err)}")
+                print(f"ERROR: 无法通知用户错误: {str(notify_err)}")
+            
+            return None
+    return wrapper 

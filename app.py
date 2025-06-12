@@ -65,24 +65,22 @@ register_routes(app, notification_queue)
 # 添加Telegram webhook路由
 @app.route('/telegram-webhook', methods=['POST'])
 def telegram_webhook():
+    """处理来自Telegram的webhook请求"""
     try:
         # 获取更新数据
-        update_data = request.json
+        update_data = request.get_json()
         logger.info(f"收到Telegram webhook更新: {update_data}")
         print(f"DEBUG: 收到Telegram webhook更新: {update_data}")
         
-        # 处理更新
-        if update_data:
-            threading.Thread(
-                target=process_telegram_update,
-                args=(update_data, notification_queue),
-                daemon=True
-            ).start()
-            return jsonify({"status": "success"}), 200
-        else:
-            logger.warning("收到空的Telegram webhook更新")
-            print("WARNING: 收到空的Telegram webhook更新")
-            return jsonify({"status": "error", "message": "Empty update"}), 400
+        # 在单独的线程中处理更新，避免阻塞Flask响应
+        threading.Thread(
+            target=bot.process_telegram_update,
+            args=(update_data, notification_queue),
+            daemon=True
+        ).start()
+        
+        # 立即返回响应，避免Telegram超时
+        return jsonify({"status": "success"}), 200
     except Exception as e:
         logger.error(f"处理Telegram webhook时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 处理Telegram webhook时出错: {str(e)}")
