@@ -1,7 +1,12 @@
-flask
-gunicorn
-python-telegram-bot>=20.0
+flask==2.0.1
+python-telegram-bot==20.0
+psycopg2-binary==2.9.3
+gunicorn==20.1.0
+python-dotenv==0.19.1
+werkzeug==2.0.1
+itsdangerous==2.0.1
+jinja2==3.0.1
+pytz==2023.3
 requests
 schedule
 aiohttp
-psycopg2-binary

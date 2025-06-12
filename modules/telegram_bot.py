@@ -6,6 +6,7 @@ from collections import defaultdict
 import time
 import os
 from functools import wraps
+import pytz
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -29,6 +30,16 @@ from modules.database import (
 # 设置日志
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+# 中国时区
+CN_TIMEZONE = pytz.timezone('Asia/Shanghai')
+
+# 获取中国时间的函数
+def get_china_time():
+    """获取当前中国时间（UTC+8）"""
+    utc_now = datetime.now(pytz.utc)
+    china_now = utc_now.astimezone(CN_TIMEZONE)
+    return china_now.strftime("%Y-%m-%d %H:%M:%S")
 
 # ===== 全局 Bot 实例 =====
 bot_application = None
@@ -351,7 +362,7 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             oid = int(data.split('_')[1])
             logger.info(f"管理员 {user_id} 标记订单 #{oid} 为已完成")
             
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = get_china_time()
             execute_query("UPDATE orders SET status=?, completed_at=? WHERE id=? AND accepted_by=?",
                         (STATUS['COMPLETED'], timestamp, oid, str(user_id)))
                         
@@ -415,7 +426,7 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 return
             
             # 处理其他原因类型
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = get_china_time()
             
             # 设置失败状态和原因（添加emoji）
             reason_text = ""
