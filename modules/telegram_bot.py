@@ -97,8 +97,9 @@ def get_china_time():
     china_now = utc_now.astimezone(CN_TIMEZONE)
     return china_now.strftime("%Y-%m-%d %H:%M:%S")
 
-# ===== 全局 Bot 实例 =====
+# ===== 全局变量 =====
 bot_application = None
+BOT_LOOP = None
 
 # 跟踪等待额外反馈的订单
 feedback_waiting = {}
@@ -932,8 +933,10 @@ async def send_notification_from_queue(data):
 # ===== 主函数 =====
 def run_bot(notification_queue):
     """在一个新事件循环中运行Telegram机器人"""
+    global BOT_LOOP
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+    BOT_LOOP = loop  # 保存主事件循环
     loop.run_until_complete(bot_main(notification_queue))
 
 
@@ -1205,58 +1208,25 @@ async def on_test_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"处理测试按钮回调时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 处理测试按钮回调时出错: {str(e)}")
 
-# 同步版本的处理函数，用于在线程中调用
 def process_telegram_update(update_data, notification_queue):
-    """同步版本的处理函数，用于在线程中调用"""
+    """将更新任务安全地提交到主事件循环中"""
+    if BOT_LOOP and BOT_LOOP.is_running():
+        logger.info(f"将更新任务提交到主事件循环: {update_data.get('update_id')}")
+        asyncio.run_coroutine_threadsafe(
+            process_telegram_update_async(update_data, notification_queue),
+            BOT_LOOP
+        )
+    else:
+        logger.error("机器人事件循环未运行或已关闭，无法处理更新！")
+
+async def process_telegram_update_async(update_data, notification_queue):
+    """在主事件循环中实际处理更新"""
     try:
-        # 记录处理开始
-        logger.info(f"开始处理Telegram更新: {update_data}")
-        print(f"DEBUG: 开始处理Telegram更新: {update_data}")
-        
-        # 创建新的事件循环
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        try:
-            # 运行异步处理函数
-            loop.run_until_complete(process_telegram_update_async(update_data, notification_queue))
-        except Exception as inner_e:
-            logger.error(f"在异步处理Telegram更新时出错: {str(inner_e)}", exc_info=True)
-            print(f"ERROR: 在异步处理Telegram更新时出错: {str(inner_e)}")
-            traceback.print_exc()
-        finally:
-            # 确保在完成后正确关闭事件循环
-            # 首先关闭所有挂起的任务
-            pending = asyncio.all_tasks(loop)
-            if pending:
-                # 取消所有挂起的任务
-                for task in pending:
-                    task.cancel()
-                # 等待它们完成
-                try:
-                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-                except asyncio.CancelledError:
-                    pass
-            
-            # 停止事件循环
-            try:
-                loop.run_until_complete(loop.shutdown_asyncgens())
-                loop.run_until_complete(loop.shutdown_default_executor())
-            except Exception as shutdown_e:
-                logger.error(f"关闭事件循环时出错: {str(shutdown_e)}", exc_info=True)
-                print(f"ERROR: 关闭事件循环时出错: {str(shutdown_e)}")
-            
-            loop.close()
-            
-            # 重置事件循环
-            asyncio.set_event_loop(None)
-            
-            logger.info("处理更新完成，事件循环已正确关闭")
-            print("DEBUG: 处理更新完成，事件循环已正确关闭")
+        logger.info("开始异步处理Telegram更新")
+        update = Update.de_json(update_data, bot_application.bot)
+        await bot_application.process_update(update)
     except Exception as e:
-        logger.error(f"在线程中处理Telegram更新时出错: {str(e)}", exc_info=True)
-        print(f"ERROR: 在线程中处理Telegram更新时出错: {str(e)}")
-        traceback.print_exc()
+        logger.error(f"异步处理Telegram更新时出错: {e}", exc_info=True)
 
 def get_order_by_id(order_id):
     """根据ID获取订单信息"""
@@ -1306,14 +1276,3 @@ def update_order_status(order_id, status, handler_id=None):
         logger.error(f"更新订单 {order_id} 状态时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 更新订单 {order_id} 状态时出错: {str(e)}")
         return False 
-
-async def process_telegram_update_async(update_data, notification_queue):
-    """异步处理Telegram更新"""
-    try:
-        logger.info("开始异步处理Telegram更新")
-        update = Update.de_json(update_data, bot_application.bot)
-        await bot_application.process_update(update)
-    except Exception as e:
-        logger.error(f"异步处理Telegram更新时出错: {e}", exc_info=True)
-    finally:
-        logger.info("处理更新完成，事件循环已正确关闭") 
