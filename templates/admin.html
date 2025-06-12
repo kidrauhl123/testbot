@@ -487,7 +487,28 @@
             <button id="batch-delete-btn" class="btn btn-danger">批量删除</button>
           </div>
         </div>
-        <div id="orders-table-container"></div>
+        <div id="orders-table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="select-all-orders"></th>
+                <th>ID</th>
+                <th>账号</th>
+                <th>套餐</th>
+                <th>状态</th>
+                <th>创建者</th>
+                <th>接单人</th>
+                <th>创建时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="orders-table-body">
+              <tr>
+                <td colspan="9" class="loading">加载中...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <div class="pagination"></div>
       </div>
       
@@ -597,6 +618,58 @@
       <div class="modal-footer">
       <button class="btn btn-secondary" data-dismiss="modal">取消</button>
       <button class="btn btn-primary" id="saveCreditBtn">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 订单编辑模态框 -->
+<div class="modal-backdrop" id="edit-order-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>编辑订单</h3>
+      <button class="modal-close" data-dismiss="modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="edit-order-error" class="error-message" style="display:none;"></div>
+      <form id="edit-order-form">
+        <input type="hidden" id="edit-order-id">
+        <div class="form-group">
+          <label for="edit-order-account">账号</label>
+          <input type="text" id="edit-order-account" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label for="edit-order-password">密码</label>
+          <input type="text" id="edit-order-password" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label for="edit-order-package">套餐</label>
+          <select id="edit-order-package" class="form-control">
+            <option value="1">1个月</option>
+            <option value="3">3个月</option>
+            <option value="6">6个月</option>
+            <option value="12">12个月</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="edit-order-status">状态</label>
+          <select id="edit-order-status" class="form-control">
+            <option value="submitted">待处理</option>
+            <option value="accepted">已接单</option>
+            <option value="completed">已完成</option>
+            <option value="failed">充值失败</option>
+            <option value="cancelled">已取消</option>
+            <option value="disputing">正在质疑</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="edit-order-remark">备注</label>
+          <textarea id="edit-order-remark" class="form-control" rows="3"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
+      <button class="btn btn-primary" onclick="saveOrderEdit()">保存</button>
     </div>
   </div>
 </div>
@@ -729,63 +802,66 @@
   async function loadOrders() {
     try {
       console.log("开始加载订单数据...");
+      const container = document.getElementById('orders-table-container');
       const tbody = document.getElementById('orders-table-body');
       if (!tbody) {
         console.error("找不到orders-table-body元素");
         return;
       }
       
-      tbody.innerHTML = '<tr><td colspan="8" class="loading">加载中...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="loading">加载中...</td></tr>';
       
-    const response = await fetch('/admin/api/orders');
+      const response = await fetch('/admin/api/orders');
       if (!response.ok) {
         console.error("加载订单数据失败:", response.status, response.statusText);
-        tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="loading">加载失败，请刷新重试</td></tr>';
         return;
       }
       
-    const orders = await response.json();
+      const data = await response.json();
+      const orders = data.orders || [];
       console.log("成功获取订单数据:", orders);
       
-    tbody.innerHTML = '';
+      tbody.innerHTML = '';
       
       if (orders.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="loading">暂无订单数据</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="loading">暂无订单数据</td></tr>';
         return;
       }
       
-    const statusBadges = {
-      'submitted': 'badge-info',
-      'accepted': 'badge-warning',
-      'completed': 'badge-success',
-      'failed': 'badge-danger',
-      'cancelled': 'badge-secondary'
-    };
+      const statusBadges = {
+        'submitted': 'badge-info',
+        'accepted': 'badge-warning',
+        'completed': 'badge-success',
+        'failed': 'badge-danger',
+        'cancelled': 'badge-secondary',
+        'disputing': 'badge-danger'
+      };
       
-    orders.forEach(order => {
-      const statusClass = statusBadges[order.status] || 'badge-secondary';
-      const row = `
-        <tr>
+      orders.forEach(order => {
+        const statusClass = statusBadges[order.status] || 'badge-secondary';
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td><input type="checkbox" class="order-checkbox" value="${order.id}"></td>
           <td>${order.id}</td>
           <td>${escapeHtml(order.account)}</td>
           <td>${order.package}个月</td>
           <td><span class="badge ${statusClass}">${escapeHtml(order.status_text)}</span></td>
           <td>${escapeHtml(order.creator || 'N/A')}</td>
-          <td>${escapeHtml(order.accepted_by || 'N/A')}</td>
+          <td>${order.seller ? escapeHtml(order.seller.name || order.seller.username || order.seller.telegram_id || 'N/A') : 'N/A'}</td>
           <td>${order.created_at}</td>
           <td><button class="btn btn-primary btn-sm" onclick="editOrder(${order.id})">编辑</button></td>
-        </tr>
-      `;
-      tbody.innerHTML += row;
-    });
+        `;
+        tbody.appendChild(row);
+      });
       
       console.log("订单数据加载完成");
     } catch (e) {
       console.error('加载订单失败', e);
       const tbody = document.getElementById('orders-table-body');
       if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
-    }
+        tbody.innerHTML = '<tr><td colspan="9" class="loading">加载失败，请刷新重试</td></tr>';
+      }
     }
   }
 
@@ -1285,31 +1361,6 @@
     if (userSearchInput) {
       // ... existing code ...
     }
-
-    // --- 初始化 ---
-    // 页面加载时默认显示第一个标签页
-    document.addEventListener('DOMContentLoaded', () => {
-      // 从URL hash加载或者默认加载第一个
-      const hash = window.location.hash.substring(1);
-      if (hash) {
-        showTab(hash);
-      } else {
-        showTab('dashboard');
-      }
-      
-      // 为侧边栏链接添加点击事件
-      document.querySelectorAll('.sidebar-menu a').forEach(link => {
-        link.addEventListener('click', (e) => {
-          e.preventDefault();
-          const tabName = new URL(link.href).hash.substring(1);
-          showTab(tabName);
-          // 更新URL hash
-          history.pushState(null, null, `#${tabName}`);
-        });
-      });
-
-      console.log("页面初始化完成。");
-    });
   });
 </script>
 </body>
