@@ -287,59 +287,72 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
     
-    logger.info(f"收到接单回调: 用户ID={user_id}")
-    print(f"DEBUG: 收到接单回调: 用户ID={user_id}")
+    logger.info(f"收到接单回调: 用户ID={user_id}, data={repr(query.data)}")
+    print(f"DEBUG: 收到接单回调: 用户ID={user_id}, data={repr(query.data)}")
     
-    # 解析回调数据
-    data = query.data.split("_")
-    if len(data) >= 3:
-        order_id = data[2]
-        logger.info(f"接单回调解析: 订单ID={order_id}")
-        print(f"DEBUG: 接单回调解析: 订单ID={order_id}")
+    # 防止重复点击
+    if (user_id, query.data) in processing_accepts:
+        await query.answer("正在处理中，请勿重复点击")
+        return
         
-        # 检查订单状态
-        order = get_order_by_id(order_id)
-        if not order:
-            await query.answer("订单不存在或已被删除", show_alert=True)
-            logger.warning(f"接单失败: 订单 {order_id} 不存在")
-            print(f"WARNING: 接单失败: 订单 {order_id} 不存在")
-            return
+    try:
+        parts = query.data.split('_')
+        logger.info(f"分割后的数据: {parts}")
+        print(f"DEBUG: 分割后的数据: {parts}")
         
-        if order['status'] != 'pending':
-            await query.answer("此订单已被接受或已完成", show_alert=True)
-            logger.warning(f"接单失败: 订单 {order_id} 状态为 {order['status']}")
-            print(f"WARNING: 接单失败: 订单 {order_id} 状态为 {order['status']}")
-            return
-        
-        # 更新订单状态
-        update_order_status(order_id, 'accepted', user_id)
-        
-        # 确认回调
-        await query.answer("您已成功接单！", show_alert=True)
-        
-        # 更新消息
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ 已被接单", callback_data=f"order_accepted_{order_id}")]
-        ])
-        
-        await query.edit_message_text(
-            f"📦 *订单 #{order_id}*\n\n"
-            f"• 商品: {order['product']}\n"
-            f"• 数量: {order['quantity']}\n"
-            f"• 地址: {order['address']}\n"
-            f"• 联系方式: {order['contact']}\n\n"
-            f"*✅ 此订单已被接受*\n"
-            f"接单人ID: `{user_id}`",
-            reply_markup=keyboard,
-            parse_mode='Markdown'
-        )
-        
-        logger.info(f"订单 {order_id} 已被用户 {user_id} 接受")
-        print(f"INFO: 订单 {order_id} 已被用户 {user_id} 接受")
-    else:
-        await query.answer("无效的订单数据", show_alert=True)
-        logger.error(f"接单回调数据无效: {query.data}")
+        oid_str = parts[1]
+        oid = int(oid_str)
+    except (IndexError, ValueError) as e:
+        logger.error(f"接单回调数据无效: {query.data}", exc_info=True)
         print(f"ERROR: 接单回调数据无效: {query.data}")
+        await query.answer("无效的订单数据", show_alert=True)
+        return
+
+    # 添加到处理集合
+    processing_accepts.add((user_id, query.data))
+
+    logger.info(f"接单回调解析: 订单ID={oid}")
+    print(f"DEBUG: 接单回调解析: 订单ID={oid}")
+    
+    # 检查订单状态
+    order = get_order_by_id(oid)
+    if not order:
+        await query.answer("订单不存在或已被删除", show_alert=True)
+        logger.warning(f"接单失败: 订单 {oid} 不存在")
+        print(f"WARNING: 接单失败: 订单 {oid} 不存在")
+        return
+    
+    if order['status'] != 'pending':
+        await query.answer("此订单已被接受或已完成", show_alert=True)
+        logger.warning(f"接单失败: 订单 {oid} 状态为 {order['status']}")
+        print(f"WARNING: 接单失败: 订单 {oid} 状态为 {order['status']}")
+        return
+    
+    # 更新订单状态
+    update_order_status(oid, 'accepted', user_id)
+    
+    # 确认回调
+    await query.answer("您已成功接单！", show_alert=True)
+    
+    # 更新消息
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ 已被接单", callback_data=f"order_accepted_{oid}")]
+    ])
+    
+    await query.edit_message_text(
+        f"📦 *订单 #{oid}*\n\n"
+        f"• 商品: {order['product']}\n"
+        f"• 数量: {order['quantity']}\n"
+        f"• 地址: {order['address']}\n"
+        f"• 联系方式: {order['contact']}\n\n"
+        f"*✅ 此订单已被接受*\n"
+        f"接单人ID: `{user_id}`",
+        reply_markup=keyboard,
+        parse_mode='Markdown'
+    )
+    
+    logger.info(f"订单 {oid} 已被用户 {user_id} 接受")
+    print(f"INFO: 订单 {oid} 已被用户 {user_id} 接受")
 
 async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理反馈按钮回调"""
@@ -984,11 +997,6 @@ async def bot_main(notification_queue):
         stats_handler = CallbackQueryHandler(on_stats_callback, pattern="^stats_")
         bot_application.add_handler(stats_handler)
         
-        # 添加测试回调处理程序
-        test_callback_handler = CallbackQueryHandler(on_test_callback, pattern="^test_")
-        bot_application.add_handler(test_callback_handler)
-        print("DEBUG: 已添加测试回调处理程序")
-        
         # 添加文本消息处理程序
         bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
         
@@ -1108,96 +1116,6 @@ def restricted(func):
             logger.warning(f"未经授权的访问: {user_id}")
             await update.message.reply_text("Sorry, you are not authorized to use this bot.")
     return wrapped 
-
-# 添加一个调试回调处理程序，捕获所有未被其他处理程序捕获的回调
-async def on_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """测试命令处理函数，用于验证机器人是否正常工作"""
-    user_id = update.effective_user.id
-    username = update.effective_user.username
-    first_name = update.effective_user.first_name
-    
-    logger.info(f"收到测试命令: 用户ID={user_id}, 用户名={username}, 昵称={first_name}")
-    print(f"DEBUG: 收到测试命令: 用户ID={user_id}, 用户名={username}, 昵称={first_name}")
-    
-    # 创建一个测试按钮
-    keyboard = [
-        [InlineKeyboardButton("Test Button", callback_data="test_button")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.message.reply_text(
-        f"🔄 *Bot Test Response*\n\n"
-        f"• User ID: `{user_id}`\n"
-        f"• Username: @{username or 'None'}\n"
-        f"• Name: {first_name or 'Unknown'}\n"
-        f"• Time: {get_china_time()}\n\n"
-        f"Bot is working correctly. Click the button below to test callback handling.",
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
-    )
-    
-    logger.info(f"已发送测试回复给用户 {user_id}")
-    print(f"DEBUG: 已发送测试回复给用户 {user_id}")
-
-@callback_error_handler
-async def on_test_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理测试按钮回调"""
-    try:
-        query = update.callback_query
-        user_id = query.from_user.id
-        
-        logger.info(f"收到测试按钮回调: 用户ID={user_id}")
-        print(f"DEBUG: 收到测试按钮回调: 用户ID={user_id}")
-        
-        # 首先确认回调，避免Telegram显示等待状态
-        try:
-            await query.answer("Test callback received successfully!", show_alert=True)
-            logger.info("已确认测试按钮回调")
-            print("DEBUG: 已确认测试按钮回调")
-        except Exception as e:
-            logger.error(f"确认测试按钮回调时出错: {str(e)}", exc_info=True)
-            print(f"ERROR: 确认测试按钮回调时出错: {str(e)}")
-        
-        # 然后尝试编辑消息
-        try:
-            await query.edit_message_text(
-                f"✅ *Callback Test Successful*\n\n"
-                f"• User ID: `{user_id}`\n"
-                f"• Time: {get_china_time()}\n\n"
-                f"The bot is correctly handling callback queries.",
-                parse_mode='Markdown'
-            )
-            logger.info("已更新测试按钮消息")
-            print("DEBUG: 已更新测试按钮消息")
-        except Exception as e:
-            logger.error(f"更新测试按钮消息时出错: {str(e)}", exc_info=True)
-            print(f"ERROR: 更新测试按钮消息时出错: {str(e)}")
-        
-        logger.info(f"已处理测试按钮回调，用户 {user_id}")
-        print(f"DEBUG: 已处理测试按钮回调，用户 {user_id}")
-    except Exception as e:
-        logger.error(f"处理测试按钮回调时出错: {str(e)}", exc_info=True)
-        print(f"ERROR: 处理测试按钮回调时出错: {str(e)}")
-
-def process_telegram_update(update_data, notification_queue):
-    """将更新任务安全地提交到主事件循环中"""
-    if BOT_LOOP and BOT_LOOP.is_running():
-        logger.info(f"将更新任务提交到主事件循环: {update_data.get('update_id')}")
-        asyncio.run_coroutine_threadsafe(
-            process_telegram_update_async(update_data, notification_queue),
-            BOT_LOOP
-        )
-    else:
-        logger.error("机器人事件循环未运行或已关闭，无法处理更新！")
-
-async def process_telegram_update_async(update_data, notification_queue):
-    """在主事件循环中实际处理更新"""
-    try:
-        logger.info("开始异步处理Telegram更新")
-        update = Update.de_json(update_data, bot_application.bot)
-        await bot_application.process_update(update)
-    except Exception as e:
-        logger.error(f"异步处理Telegram更新时出错: {e}", exc_info=True)
 
 def get_order_by_id(order_id):
     """根据ID获取订单信息"""
