@@ -291,21 +291,26 @@
         <div class="content-header">
           <h2><i class="fas fa-users"></i> 用户管理</h2>
         </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>用户名</th>
-              <th>角色</th>
-              <th>创建时间</th>
-              <th>最后登录</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="users-table-body">
-            <!-- Data will be populated by JS -->
-          </tbody>
-        </table>
+        <div class="users-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>用户名</th>
+                <th>注册时间</th>
+                <th>最后登录</th>
+                <th>余额</th>
+                <th>角色</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="users-table-body">
+              <tr>
+                <td colspan="7" class="loading">加载中...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
       
       <!-- 订单管理 -->
@@ -432,6 +437,37 @@
   </div>
 </div>
 
+<!-- 修改余额模态框 -->
+<div class="modal-backdrop" id="editBalanceModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>修改用户余额</h3>
+      <button class="modal-close" data-dismiss="modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="editBalanceForm">
+        <input type="hidden" id="edit-balance-user-id">
+        <div class="form-group">
+          <label for="edit-balance-username">用户名</label>
+          <input type="text" id="edit-balance-username" class="form-control" disabled>
+        </div>
+        <div class="form-group">
+          <label for="edit-balance-current">当前余额</label>
+          <input type="text" id="edit-balance-current" class="form-control" disabled>
+        </div>
+        <div class="form-group">
+          <label for="edit-balance-new">新余额</label>
+          <input type="number" id="edit-balance-new" class="form-control" step="0.01" min="0" required>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
+      <button class="btn btn-primary" id="saveBalanceBtn">保存</button>
+    </div>
+  </div>
+</div>
+
 <script>
   function showTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
@@ -457,24 +493,58 @@
   }
 
   async function loadUsers() {
-    renderLoading('users-table-body');
-    const response = await fetch('/admin/api/users');
-    const users = await response.json();
-    const tbody = document.getElementById('users-table-body');
-    tbody.innerHTML = '';
-    users.forEach(user => {
-      const row = `
-        <tr>
+    try {
+      const resp = await fetch('/admin/api/users');
+      const users = await resp.json();
+      
+      const tbody = document.getElementById('users-table-body');
+      tbody.innerHTML = '';
+      
+      users.forEach(user => {
+        const tr = document.createElement('tr');
+        
+        // 格式化日期
+        const createdAt = user.created_at ? new Date(user.created_at).toLocaleString() : '未知';
+        const lastLogin = user.last_login ? new Date(user.last_login).toLocaleString() : '未登录';
+        
+        tr.innerHTML = `
           <td>${user.id}</td>
-          <td>${escapeHtml(user.username)}</td>
-          <td>${user.is_admin ? '<span class="badge badge-warning">管理员</span>' : '<span class="badge badge-secondary">用户</span>'}</td>
-          <td>${user.created_at || ''}</td>
-          <td>${user.last_login || '从未'}</td>
-          <td><button class="btn btn-danger btn-sm">删除</button></td>
-        </tr>
-      `;
-      tbody.innerHTML += row;
-    });
+          <td>${user.username}</td>
+          <td>${createdAt}</td>
+          <td>${lastLogin}</td>
+          <td class="user-balance">${user.balance ? user.balance.toFixed(2) : '0.00'} 元</td>
+          <td>${user.is_admin ? '<span class="badge badge-warning">管理员</span>' : '<span class="badge badge-secondary">普通用户</span>'}</td>
+          <td>
+            <button class="btn btn-sm btn-primary edit-balance-btn" data-id="${user.id}" 
+                    data-username="${user.username}" data-balance="${user.balance || 0}">
+              修改余额
+            </button>
+          </td>
+        `;
+        
+        tbody.appendChild(tr);
+      });
+      
+      // 绑定修改余额按钮事件
+      document.querySelectorAll('.edit-balance-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const userId = this.getAttribute('data-id');
+          const username = this.getAttribute('data-username');
+          const balance = this.getAttribute('data-balance');
+          
+          document.getElementById('edit-balance-user-id').value = userId;
+          document.getElementById('edit-balance-username').value = username;
+          document.getElementById('edit-balance-current').value = balance;
+          document.getElementById('edit-balance-new').value = balance;
+          
+          openModal('editBalanceModal');
+        });
+      });
+    } catch (e) {
+      console.error('加载用户失败', e);
+      document.getElementById('users-table-body').innerHTML = 
+        '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
+    }
   }
 
   async function loadOrders() {
@@ -714,6 +784,35 @@
       errorDiv.style.display = 'block';
     }
   }
+
+  // 保存余额修改
+  document.getElementById('saveBalanceBtn').addEventListener('click', async function() {
+    const userId = document.getElementById('edit-balance-user-id').value;
+    const newBalance = document.getElementById('edit-balance-new').value;
+    
+    try {
+      const resp = await fetch(`/admin/api/users/${userId}/balance`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ balance: newBalance })
+      });
+      
+      const result = await resp.json();
+      
+      if (result.success) {
+        alert('余额修改成功');
+        closeModal('editBalanceModal');
+        loadUsers(); // 重新加载用户列表
+      } else {
+        alert(result.error || '修改失败');
+      }
+    } catch (e) {
+      console.error('修改余额失败', e);
+      alert('修改余额失败，请重试');
+    }
+  });
 
   document.addEventListener('DOMContentLoaded', () => {
     showTab('users');

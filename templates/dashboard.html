@@ -234,13 +234,47 @@
         grid-template-columns: 1fr;
       }
     }
+    
+    .balance-badge {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 2px 5px rgba(56,239,125,0.3);
+      display: flex;
+      align-items: center;
+    }
+    .balance-badge::before {
+      content: '💰';
+      margin-right: 5px;
+    }
+    
+    .admin-badge {
+      background: linear-gradient(135deg, #ffb347 0%, #ffcc33 100%);
+      color: #333;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 2px 5px rgba(255,195,51,0.3);
+    }
   </style>
 </head>
 <body>
 <div class="navbar">
-  <div class="navbar-brand">破天充值系统</div>
+  <div class="navbar-brand">
+    Spotify充值系统
+  </div>
   <div class="navbar-user">
-    <span>欢迎, {{ session.username }}</span>
+    {% if is_admin %}
+    <span class="admin-badge">管理员</span>
+    <a href="/admin" class="btn btn-primary">管理后台</a>
+    {% endif %}
+    {% if balance is defined %}
+    <span class="balance-badge">余额: {{ balance }} 元</span>
+    {% endif %}
     <a href="/" class="btn btn-primary">返回首页</a>
     <a href="/logout" class="btn btn-danger">退出登录</a>
   </div>
@@ -254,8 +288,13 @@
       </div>
       <div class="stats-container" id="stats-container">
         <div class="stat-card">
-          <div class="stat-icon"><i class="fas fa-clipboard-list"></i></div>
-          <div class="stat-value" id="total-orders">--</div>
+          <div class="stat-icon"><i class="fas fa-wallet"></i></div>
+          <div class="stat-value">{{ balance|default(0.00, true) }}</div>
+          <div class="stat-label">当前余额 (元)</div>
+        </div>
+        <div class="stat-card" id="total-orders">
+          <div class="stat-icon"><i class="fas fa-shopping-cart"></i></div>
+          <div class="stat-value">0</div>
           <div class="stat-label">总订单数</div>
         </div>
         <div class="stat-card">

@@ -58,7 +58,8 @@ def init_sqlite_db():
             password_hash TEXT NOT NULL,
             is_admin INTEGER DEFAULT 0,
             created_at TEXT NOT NULL,
-            last_login TEXT
+            last_login TEXT,
+            balance REAL DEFAULT 0
         )
     """)
     
@@ -80,6 +81,11 @@ def init_sqlite_db():
     if 'user_id' not in columns:
         logger.info("为orders表添加user_id列")
         c.execute("ALTER TABLE orders ADD COLUMN user_id INTEGER")
+    
+    # 检查是否需要添加balance列（用户余额）
+    if 'balance' not in columns:
+        logger.info("为users表添加balance列")
+        c.execute("ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0")
     
     # 检查是否需要添加accepted_by_username列（Telegram用户名）
     if 'accepted_by_username' not in columns:
@@ -153,7 +159,8 @@ def init_postgres_db():
             password_hash TEXT NOT NULL,
             is_admin INTEGER DEFAULT 0,
             created_at TEXT NOT NULL,
-            last_login TEXT
+            last_login TEXT,
+            balance REAL DEFAULT 0
         )
     """)
     
@@ -174,6 +181,13 @@ def init_postgres_db():
         c.execute("SELECT user_id FROM orders LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
         c.execute("ALTER TABLE orders ADD COLUMN user_id INTEGER")
+    
+    # 检查是否需要添加balance列（用户余额）
+    try:
+        c.execute("SELECT balance FROM users LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为users表添加balance列")
+        c.execute("ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0")
     
     # 检查是否需要添加accepted_by_username列（Telegram用户名）
     try:
@@ -488,4 +502,51 @@ def toggle_seller_status(telegram_id):
 
 def remove_seller(telegram_id):
     """移除卖家"""
-    execute_query("DELETE FROM sellers WHERE telegram_id = ?", (telegram_id,)) 
+    return execute_query("DELETE FROM sellers WHERE telegram_id=?", (telegram_id,))
+
+# ===== 余额系统相关函数 =====
+def get_user_balance(user_id):
+    """获取用户余额"""
+    result = execute_query("SELECT balance FROM users WHERE id=?", (user_id,), fetch=True)
+    if result:
+        return result[0][0]
+    return 0
+
+def update_user_balance(user_id, amount):
+    """更新用户余额（增加或减少）"""
+    # 获取当前余额
+    current_balance = get_user_balance(user_id)
+    new_balance = current_balance + amount
+    
+    # 确保余额不会变成负数
+    if new_balance < 0:
+        return False, "余额不足"
+    
+    # 更新余额
+    execute_query("UPDATE users SET balance=? WHERE id=?", (new_balance, user_id))
+    return True, new_balance
+
+def set_user_balance(user_id, balance):
+    """设置用户余额（仅限管理员使用）"""
+    # 确保余额不为负
+    if balance < 0:
+        balance = 0
+    
+    execute_query("UPDATE users SET balance=? WHERE id=?", (balance, user_id))
+    return True, balance
+
+def check_balance_for_package(user_id, package):
+    """检查用户余额是否足够购买指定套餐"""
+    from modules.constants import WEB_PRICES
+    
+    # 获取套餐价格
+    price = WEB_PRICES.get(package, 0)
+    
+    # 获取用户余额
+    balance = get_user_balance(user_id)
+    
+    # 判断余额是否足够
+    if balance >= price:
+        return True, balance, price
+    else:
+        return False, balance, price 

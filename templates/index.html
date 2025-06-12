@@ -56,6 +56,21 @@
       font-weight: 600;
       box-shadow: 0 2px 5px rgba(255,195,51,0.3);
     }
+    .balance-badge {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 2px 5px rgba(56,239,125,0.3);
+      display: flex;
+      align-items: center;
+    }
+    .balance-badge::before {
+      content: '💰';
+      margin-right: 5px;
+    }
     .btn {
       border: none;
       padding: 10px 18px;
@@ -368,6 +383,50 @@
       margin-right: 5px;
       font-size: 14px;
     }
+
+    .balance-info {
+      display: flex;
+      align-items: center;
+      color: #667eea;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    .balance-info .highlight {
+      color: #11998e;
+      margin: 0 4px;
+    }
+    
+    .balance-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .balance-display {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    .balance-amount {
+      font-size: 32px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 5px;
+    }
+    
+    .balance-label {
+      font-size: 14px;
+      color: #666;
+    }
+    
+    .balance-actions {
+      display: flex;
+      gap: 10px;
+    }
   </style>
 </head>
 <body>
@@ -380,6 +439,9 @@
       <a href="/admin" class="btn btn-primary">管理后台</a>
     {% else %}
       <a href="/dashboard" class="btn btn-primary">我的后台</a>
+    {% endif %}
+    {% if balance is defined %}
+    <span class="balance-badge">余额: {{ balance }} 元</span>
     {% endif %}
     <a href="/logout" class="btn btn-danger">退出登录</a>
   </div>
@@ -416,6 +478,21 @@
             </div>
         </div>
     </div>
+</div>
+
+<div class="card" id="balanceInfoCard">
+  <div class="card-header">
+    <h2>账户余额</h2>
+  </div>
+  <div class="balance-content">
+    <div class="balance-display">
+      <div class="balance-amount">{{ balance if balance is defined else 0 }}</div>
+      <div class="balance-label">当前余额 (元)</div>
+    </div>
+    <div class="balance-actions">
+      <a href="/dashboard" class="btn btn-primary">前往个人中心</a>
+    </div>
+  </div>
 </div>
 
 <script>

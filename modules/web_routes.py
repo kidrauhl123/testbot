@@ -9,6 +9,7 @@ from flask import Flask, request, render_template, jsonify, session, redirect, u
 
 from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH
 from modules.database import execute_query, hash_password, get_all_sellers, add_seller, remove_seller, toggle_seller_status
+from modules.database import check_balance_for_package, update_user_balance, get_user_balance, set_user_balance
 from modules.telegram_bot import bot_application, check_and_push_orders
 import modules.constants as constants
 
@@ -103,12 +104,18 @@ def register_routes(app):
         try:
             orders = execute_query("SELECT id, account, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             logger.info(f"获取到最近订单: {orders}")
+            
+            # 获取用户余额
+            user_id = session.get('user_id')
+            balance = get_user_balance(user_id)
+            
             return render_template('index.html', 
                                    orders=orders, 
                                    prices=WEB_PRICES, 
                                    plan_options=PLAN_OPTIONS,
                                    username=session.get('username'),
-                                   is_admin=session.get('is_admin'))
+                                   is_admin=session.get('is_admin'),
+                                   balance=balance)
         except Exception as e:
             logger.error(f"获取订单失败: {str(e)}", exc_info=True)
             return render_template('index.html', 
@@ -144,6 +151,17 @@ def register_routes(app):
             
             logger.info(f"当前会话信息: user_id={user_id}, username={username}")
             
+            # 检查用户余额是否足够
+            sufficient, balance, price = check_balance_for_package(user_id, package)
+            
+            if not sufficient:
+                logger.warning(f"订单提交失败: 用户余额不足 (用户={username}, 余额={balance}, 价格={price})")
+                return render_template('index.html', 
+                                       error=f'余额不足，当前余额: {balance}，套餐价格: {price}', 
+                                       prices=WEB_PRICES, 
+                                       plan_options=PLAN_OPTIONS,
+                                       balance=balance)
+            
             # 记录当前时间
             timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
             
@@ -155,13 +173,25 @@ def register_routes(app):
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (account, password, package, remark, STATUS['SUBMITTED'], timestamp, username, user_id, 0))
             
+            # 扣除用户余额
+            success, new_balance = update_user_balance(user_id, -price)
+            if not success:
+                logger.error(f"余额扣除失败: 用户={username}, 金额={price}")
+            else:
+                logger.info(f"余额扣除成功: 用户={username}, 金额={price}, 新余额={new_balance}")
+            
             logger.info(f"订单提交成功: 用户={username}, 套餐={package}")
             
             # 获取最新订单列表
             orders = execute_query("SELECT id, account, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             logger.info(f"查询到的最新订单: {orders}")
             
-            return render_template('index.html', orders=orders, success='订单已提交成功！', prices=WEB_PRICES, plan_options=PLAN_OPTIONS)
+            return render_template('index.html', 
+                                   orders=orders, 
+                                   success='订单已提交成功！', 
+                                   prices=WEB_PRICES, 
+                                   plan_options=PLAN_OPTIONS,
+                                   balance=new_balance)
         except Exception as e:
             logger.error(f"创建订单失败: {str(e)}", exc_info=True)
             return render_template('index.html', error=f'订单提交失败: {str(e)}', prices=WEB_PRICES, plan_options=PLAN_OPTIONS)
@@ -393,18 +423,64 @@ def register_routes(app):
     @app.route('/dashboard')
     @login_required
     def user_dashboard():
-        """普通用户的仪表盘页面"""
-        return render_template('dashboard.html')
+        """用户仪表盘"""
+        user_id = session.get('user_id')
+        username = session.get('username')
+        is_admin = session.get('is_admin', 0)
+        
+        # 获取用户余额
+        balance = get_user_balance(user_id)
+        
+        return render_template('dashboard.html', 
+                              username=username, 
+                              is_admin=is_admin,
+                              balance=balance)
 
     @app.route('/admin/api/users')
     @login_required
     @admin_required
     def admin_api_users():
-        users = execute_query("SELECT id, username, is_admin, created_at, last_login FROM users ORDER BY id DESC", fetch=True)
+        """获取所有用户列表（仅限管理员）"""
+        users = execute_query("""
+            SELECT id, username, is_admin, created_at, last_login, balance 
+            FROM users ORDER BY created_at DESC
+        """, fetch=True)
+        
         return jsonify([{
-            "id": u[0], "username": u[1], "is_admin": u[2], 
-            "created_at": u[3], "last_login": u[4]
-        } for u in users])
+            "id": user[0],
+            "username": user[1],
+            "is_admin": bool(user[2]),
+            "created_at": user[3],
+            "last_login": user[4],
+            "balance": user[5] if len(user) > 5 else 0
+        } for user in users])
+    
+    @app.route('/admin/api/users/<int:user_id>/balance', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_update_user_balance(user_id):
+        """更新用户余额（仅限管理员）"""
+        data = request.json
+        
+        if not data or 'balance' not in data:
+            return jsonify({"error": "缺少余额参数"}), 400
+        
+        try:
+            balance = float(data['balance'])
+        except (ValueError, TypeError):
+            return jsonify({"error": "余额必须是数字"}), 400
+        
+        # 不允许设置负余额
+        if balance < 0:
+            balance = 0
+        
+        success, new_balance = set_user_balance(user_id, balance)
+        
+        if success:
+            logger.info(f"管理员设置用户ID={user_id}的余额为{new_balance}")
+            return jsonify({"success": True, "balance": new_balance})
+        else:
+            return jsonify({"error": "更新余额失败"}), 500
 
     @app.route('/admin/api/orders')
     @login_required
