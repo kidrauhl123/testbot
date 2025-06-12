@@ -405,7 +405,7 @@ def register_routes(app):
     @admin_required
     def admin_api_orders():
         orders = execute_query("""
-            SELECT o.id, o.account, o.package, o.status, u.username, o.accepted_by_first_name, o.created_at
+            SELECT o.id, o.account, o.package, o.status, u.username, o.accepted_by_first_name, o.created_at, o.remark
             FROM orders o
             LEFT JOIN users u ON o.user_id = u.id
             ORDER BY o.id DESC
@@ -413,6 +413,13 @@ def register_routes(app):
 
         formatted_orders = []
         for row in orders:
+            # 如果是失败状态，翻译失败原因
+            remark = row[7] or ""
+            if row[3] == STATUS['FAILED'] and remark:
+                translated_remark = REASON_TEXT_ZH.get(remark, remark)
+            else:
+                translated_remark = remark
+                
             formatted_orders.append({
                 "id": row[0],
                 "account": row[1],
@@ -421,7 +428,8 @@ def register_routes(app):
                 "status_text": STATUS_TEXT_ZH.get(row[3], row[3]),
                 "creator": row[4],
                 "accepted_by": row[5],
-                "created_at": row[6]
+                "created_at": row[6],
+                "remark": translated_remark
             })
         return jsonify(formatted_orders)
         
