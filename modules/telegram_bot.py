@@ -33,6 +33,12 @@ logger = logging.getLogger(__name__)
 # ===== 全局 Bot 实例 =====
 bot_application = None
 
+# 跟踪等待额外反馈的订单
+feedback_waiting = {}
+
+# 用户信息缓存
+user_info_cache = {}
+
 # ===== TG 辅助函数 =====
 def is_seller(chat_id):
     """检查用户是否为已授权的卖家"""
