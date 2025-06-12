@@ -9,6 +9,7 @@ from functools import wraps
 import pytz
 import sys
 import functools
+import sqlite3
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -26,7 +27,7 @@ from modules.constants import (
 )
 from modules.database import (
     get_order_details, accept_order_atomic, execute_query, 
-    get_unnotified_orders, get_active_seller_ids, get_db_connection
+    get_unnotified_orders, get_active_seller_ids
 )
 
 # 设置日志
@@ -41,6 +42,18 @@ logger = logging.getLogger(__name__)
 
 # 中国时区
 CN_TIMEZONE = pytz.timezone('Asia/Shanghai')
+
+# 获取数据库连接
+def get_db_connection():
+    """获取SQLite数据库连接"""
+    try:
+        conn = sqlite3.connect("orders.db")
+        conn.row_factory = sqlite3.Row  # 使查询结果可以通过列名访问
+        return conn
+    except Exception as e:
+        logger.error(f"获取数据库连接时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 获取数据库连接时出错: {str(e)}")
+        return None
 
 # 获取中国时间的函数
 def get_china_time():
