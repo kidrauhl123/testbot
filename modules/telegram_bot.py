@@ -7,6 +7,7 @@ import time
 import os
 from functools import wraps
 import pytz
+import sys
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -28,7 +29,13 @@ from modules.database import (
 )
 
 # 设置日志
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 logger = logging.getLogger(__name__)
 
 # 中国时区
@@ -233,17 +240,22 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = query.from_user.id
         data = query.data
         
-        logger.info(f"收到接单回调: 用户={user_id}, 数据={data}")
+        # 添加更详细的日志
+        logger.info(f"收到接单回调: 用户ID={user_id}, 回调数据={data}, 消息ID={query.message.message_id}")
+        print(f"DEBUG: 收到接单回调: 用户ID={user_id}, 回调数据={data}")
         
-        # 先确认回调，避免Telegram显示等待状态
+        # 立即确认回调，避免Telegram显示等待状态
         try:
             await query.answer("Processing your request...")
+            logger.info("已确认回调请求")
         except Exception as e:
-            logger.error(f"确认回调时出错: {str(e)}")
+            logger.error(f"确认回调时出错: {str(e)}", exc_info=True)
+            print(f"ERROR: 确认回调时出错: {str(e)}")
         
         # 清理超时的处理中请求
         await cleanup_processing_accepts()
         
+        # 检查用户是否为卖家
         if not is_seller(user_id):
             logger.warning(f"非卖家 {user_id} 尝试接单")
             try:
@@ -256,130 +268,77 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not data.startswith('accept_'):
             logger.warning(f"无效的接单回调数据: {data}")
             return
-            
+        
+        # 简化流程，使用更直接的方式处理接单
         try:
+            # 解析订单ID
             oid = int(data.split('_')[1])
             logger.info(f"解析订单ID: {oid}")
-            
-            # 创建唯一的接单标识符
-            accept_key = f"{user_id}_{oid}"
-            
-            # 检查是否正在处理这个接单请求
-            if accept_key in processing_accepts:
-                logger.warning(f"重复的接单请求: 用户={user_id}, 订单={oid}")
-                try:
-                    await query.answer("Your request is still processing, please wait", show_alert=True)
-                except Exception as e:
-                    logger.error(f"回复重复请求时出错: {str(e)}")
-                return
-            
-            # 标记为正在处理
-            processing_accepts.add(accept_key)
-            processing_accepts_time[accept_key] = time.time()  # 记录开始时间
-            
-            logger.info(f"卖家 {user_id} 尝试接单 #{oid}")
+            print(f"DEBUG: 解析订单ID: {oid}")
             
             # 尝试接单
-            try:
-                success, message = accept_order_atomic(oid, user_id)
-                logger.info(f"接单结果: 成功={success}, 消息={message}")
-            except Exception as db_error:
-                logger.error(f"数据库接单操作失败: {str(db_error)}", exc_info=True)
-                success = False
-                message = "Database error occurred"
+            logger.info(f"卖家 {user_id} 尝试接单 #{oid}")
+            print(f"DEBUG: 卖家 {user_id} 尝试接单 #{oid}")
+            success, message = accept_order_atomic(oid, user_id)
+            logger.info(f"接单结果: 成功={success}, 消息={message}")
+            print(f"DEBUG: 接单结果: 成功={success}, 消息={message}")
             
             if success:
+                # 接单成功
                 logger.info(f"卖家 {user_id} 成功接单 #{oid}")
+                print(f"DEBUG: 卖家 {user_id} 成功接单 #{oid}")
                 
-                # 更新消息展示
-                try:
-                    order = get_order_details(oid)
-                    if not order or len(order) == 0:
-                        logger.error(f"找不到订单 #{oid} 的详情")
-                        try:
-                            await query.edit_message_text(f"Error: Order #{oid} details not found")
-                        except Exception as e:
-                            logger.error(f"更新订单消息失败: {str(e)}")
-                        
-                        # 清理处理状态
-                        if accept_key in processing_accepts:
-                            processing_accepts.remove(accept_key)
-                        if accept_key in processing_accepts_time:
-                            del processing_accepts_time[accept_key]
-                        return
-                        
-                    # 接单成功时发送一个简单的确认提示
-                    try:
-                        await query.answer("Order accepted successfully!", show_alert=True)
-                    except Exception as e:
-                        logger.error(f"发送成功提示时出错: {str(e)}")
-                        
-                    order = order[0]
-                    account, password, package = order[1], order[2], order[3]
-                    
-                    keyboard = [
-                        [InlineKeyboardButton("✅ Complete", callback_data=f"done_{oid}"),
-                         InlineKeyboardButton("❌ Failed", callback_data=f"fail_{oid}")]
-                    ]
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-                    
-                    try:
-                        await query.edit_message_text(
-                            f"🎉 Order #{oid} - You've accepted this order\n\n"
-                            f"👤 Account: `{account}`\n"
-                            f"🔑 Password: `{password}`\n"
-                            f"📦 Package: {package} month(s)\n"
-                            f"💰 Payment: ${TG_PRICES[package]}",
-                            reply_markup=reply_markup,
-                            parse_mode='Markdown'
-                        )
-                        logger.info(f"已更新订单 #{oid} 的消息显示为已接单状态")
-                    except Exception as update_error:
-                        logger.error(f"更新接单消息时出错: {str(update_error)}", exc_info=True)
-                        try:
-                            await query.edit_message_text(
-                                f"Order #{oid} accepted, but there was an error updating the message. The order is still assigned to you."
-                            )
-                        except Exception as e:
-                            logger.error(f"尝试发送备用消息时出错: {str(e)}")
-                except Exception as order_error:
-                    logger.error(f"处理订单详情时出错: {str(order_error)}", exc_info=True)
-                    try:
-                        await query.edit_message_text(
-                            f"Order #{oid} accepted, but there was an error retrieving order details. The order is still assigned to you."
-                        )
-                    except Exception as e:
-                        logger.error(f"发送错误消息时出错: {str(e)}")
+                # 获取订单详情
+                order = get_order_details(oid)
+                if not order or len(order) == 0:
+                    logger.error(f"找不到订单 #{oid} 的详情")
+                    print(f"ERROR: 找不到订单 #{oid} 的详情")
+                    await query.edit_message_text(f"Error: Order #{oid} details not found")
+                    return
+                
+                # 发送成功提示
+                await query.answer("Order accepted successfully!", show_alert=True)
+                
+                # 更新消息
+                order = order[0]
+                account, password, package = order[1], order[2], order[3]
+                
+                keyboard = [
+                    [InlineKeyboardButton("✅ Complete", callback_data=f"done_{oid}"),
+                     InlineKeyboardButton("❌ Failed", callback_data=f"fail_{oid}")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await query.edit_message_text(
+                    f"🎉 Order #{oid} - You've accepted this order\n\n"
+                    f"👤 Account: `{account}`\n"
+                    f"🔑 Password: `{password}`\n"
+                    f"📦 Package: {package} month(s)\n"
+                    f"💰 Payment: ${TG_PRICES[package]}",
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+                logger.info(f"已更新订单 #{oid} 的消息显示为已接单状态")
+                print(f"DEBUG: 已更新订单 #{oid} 的消息显示为已接单状态")
             else:
+                # 接单失败
                 logger.warning(f"订单 #{oid} 接单失败: {message}")
-                try:
-                    await query.answer(message, show_alert=True)
-                    if "already taken" in message or "not found" in message:
-                        await query.edit_message_text(f"⚠️ Order #{oid} has already been taken by someone else or does not exist.")
-                except Exception as e:
-                    logger.error(f"编辑接单失败消息时出错: {str(e)}")
-            
+                print(f"DEBUG: 订单 #{oid} 接单失败: {message}")
+                await query.answer(message, show_alert=True)
+                
+                if "already taken" in message or "not found" in message:
+                    await query.edit_message_text(f"⚠️ Order #{oid} has already been taken by someone else or does not exist.")
         except ValueError as ve:
-            logger.error(f"解析订单ID出错: {str(ve)}")
-            try:
-                await query.answer("Invalid order ID", show_alert=True)
-            except Exception as e:
-                logger.error(f"回复无效ID时出错: {str(e)}")
+            logger.error(f"解析订单ID出错: {str(ve)}", exc_info=True)
+            print(f"ERROR: 解析订单ID出错: {str(ve)}")
+            await query.answer("Invalid order ID", show_alert=True)
         except Exception as e:
             logger.error(f"处理接单时发生未知错误: {str(e)}", exc_info=True)
-            try:
-                await query.answer("An error occurred. Please try again.", show_alert=True)
-            except Exception as answer_error:
-                logger.error(f"发送错误回复时出错: {str(answer_error)}")
-        finally:
-            # 无论成功或失败，最后都从集合中移除
-            if 'accept_key' in locals():
-                if accept_key in processing_accepts:
-                    processing_accepts.remove(accept_key)
-                if accept_key in processing_accepts_time:
-                    del processing_accepts_time[accept_key]
+            print(f"ERROR: 处理接单时发生未知错误: {str(e)}")
+            await query.answer("An error occurred. Please try again.", show_alert=True)
     except Exception as outer_error:
         logger.critical(f"接单回调函数外层出错: {str(outer_error)}", exc_info=True)
+        print(f"CRITICAL: 接单回调函数外层出错: {str(outer_error)}")
 
 async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理反馈按钮回调"""
@@ -830,56 +789,82 @@ async def show_all_stats(query, date_str, period_text):
 
 # ===== 推送通知 =====
 async def check_and_push_orders():
-    """检查数据库中是否有新订单并推送给所有卖家"""
-    unnotified_orders = get_unnotified_orders()
+    """检查并推送新订单"""
+    global bot_application
     
-    if not unnotified_orders:
-        return
-    
-    logger.info(f"发现 {len(unnotified_orders)} 个未通知订单，准备推送")
-    
-    seller_ids = get_active_seller_ids()
-    if not seller_ids:
-        logger.warning("没有活跃的卖家，无法推送新订单。")
-        return
-    
-    logger.info(f"找到 {len(seller_ids)} 个活跃卖家")
-    
-    for order in unnotified_orders:
-        try:
-            oid, account, password, package, created_at, web_user_id = order
-            
-            user_info = f" from web user: {web_user_id}" if web_user_id else ""
-            
-            message = (
-                f"📢 New Order #{oid}{user_info}\n"
-                f"Account: `{account}`\n"
-                f"Password: `********` (hidden until accepted)\n"
-                f"Package: {package} month(s)"
-            )
-            
-            # 创建接单按钮
-            keyboard = [[InlineKeyboardButton("Accept", callback_data=f'accept_{oid}')]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            # 向所有卖家发送通知
-            success_count = 0
-            for seller_id in seller_ids:
-                try:
-                    await bot_application.bot.send_message(chat_id=seller_id, text=message, reply_markup=reply_markup)
-                    success_count += 1
-                    logger.debug(f"成功向卖家 {seller_id} 推送订单 #{oid}")
-                except Exception as e:
-                    logger.error(f"向卖家 {seller_id} 发送订单 #{oid} 通知失败: {str(e)}")
-            
-            if success_count > 0:
-                # 只有成功推送给至少一个卖家时才标记为已通知
-                execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
-                logger.info(f"订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家")
-            else:
-                logger.error(f"订单 #{oid} 未能成功推送给任何卖家")
-        except Exception as e:
-            logger.error(f"处理订单通知时出错: {str(e)}", exc_info=True)
+    try:
+        if not bot_application:
+            logger.error("机器人未初始化，无法推送订单")
+            print("ERROR: 机器人未初始化，无法推送订单")
+            return
+        
+        # 获取未通知的订单
+        unnotified_orders = get_unnotified_orders()
+        if not unnotified_orders:
+            # 没有未通知的订单，直接返回
+            return
+        
+        # 获取活跃卖家
+        seller_ids = get_active_seller_ids()
+        if not seller_ids:
+            logger.warning("没有活跃的卖家，无法推送订单")
+            print("WARNING: 没有活跃的卖家，无法推送订单")
+            return
+        
+        logger.info(f"找到 {len(seller_ids)} 个活跃卖家")
+        print(f"DEBUG: 找到 {len(seller_ids)} 个活跃卖家: {seller_ids}")
+        
+        for order in unnotified_orders:
+            try:
+                oid, account, password, package, created_at, web_user_id = order
+                
+                logger.info(f"准备推送订单 #{oid} 给卖家")
+                print(f"DEBUG: 准备推送订单 #{oid} 给卖家")
+                
+                user_info = f" from web user: {web_user_id}" if web_user_id else ""
+                
+                message = (
+                    f"📢 New Order #{oid}{user_info}\n"
+                    f"Account: `{account}`\n"
+                    f"Password: `********` (hidden until accepted)\n"
+                    f"Package: {package} month(s)"
+                )
+                
+                # 创建接单按钮
+                keyboard = [[InlineKeyboardButton("Accept", callback_data=f'accept_{oid}')]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                # 向所有卖家发送通知
+                success_count = 0
+                for seller_id in seller_ids:
+                    try:
+                        sent_message = await bot_application.bot.send_message(
+                            chat_id=seller_id, 
+                            text=message, 
+                            reply_markup=reply_markup,
+                            parse_mode='Markdown'
+                        )
+                        success_count += 1
+                        logger.info(f"成功向卖家 {seller_id} 推送订单 #{oid}, 消息ID: {sent_message.message_id}")
+                        print(f"DEBUG: 成功向卖家 {seller_id} 推送订单 #{oid}, 消息ID: {sent_message.message_id}")
+                    except Exception as e:
+                        logger.error(f"向卖家 {seller_id} 发送订单 #{oid} 通知失败: {str(e)}", exc_info=True)
+                        print(f"ERROR: 向卖家 {seller_id} 发送订单 #{oid} 通知失败: {str(e)}")
+                
+                if success_count > 0:
+                    # 只有成功推送给至少一个卖家时才标记为已通知
+                    execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
+                    logger.info(f"订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家")
+                    print(f"DEBUG: 订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家")
+                else:
+                    logger.error(f"订单 #{oid} 未能成功推送给任何卖家")
+                    print(f"ERROR: 订单 #{oid} 未能成功推送给任何卖家")
+            except Exception as e:
+                logger.error(f"处理订单通知时出错: {str(e)}", exc_info=True)
+                print(f"ERROR: 处理订单通知时出错: {str(e)}")
+    except Exception as e:
+        logger.error(f"检查并推送订单时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 检查并推送订单时出错: {str(e)}")
 
 # ===== 通知发送函数 =====
 async def send_notification_from_queue(data):
@@ -953,45 +938,90 @@ async def bot_main(notification_queue):
     global bot_application
     
     logger.info("正在启动Telegram机器人...")
+    print("DEBUG: 正在启动Telegram机器人...")
     
-    # 初始化，增加连接池大小和超时设置
-    bot_application = (
-        ApplicationBuilder()
-        .token(BOT_TOKEN)
-        .connection_pool_size(16)
-        .connect_timeout(30.0)
-        .read_timeout(30.0)
-        .write_timeout(30.0)
-        .pool_timeout(30.0)
-        .build()
-    )
-    
-    # 添加处理程序
-    bot_application.add_handler(CommandHandler("start", on_start))
-    bot_application.add_handler(CommandHandler("seller", on_admin_command))
-    bot_application.add_handler(CommandHandler("stats", on_stats))
-    bot_application.add_handler(CallbackQueryHandler(on_accept, pattern="^accept_"))
-    bot_application.add_handler(CallbackQueryHandler(on_feedback_button, pattern="^(done|fail|reason)_"))
-    bot_application.add_handler(CallbackQueryHandler(on_stats_callback, pattern="^stats_"))
-    bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
-    
-    # 启动机器人
-    logger.info("初始化机器人...")
-    await bot_application.initialize()
-    logger.info("启动机器人...")
-    await bot_application.updater.start_polling()
-    
-    logger.info("Telegram机器人启动成功")
-    
-    # 启动后台任务
-    order_check_task = asyncio.create_task(periodic_order_check())
-    notification_task = asyncio.create_task(process_notification_queue(notification_queue))
-    
-    logger.info("进入主循环保持运行")
-    
-    # 等待任务完成
-    await asyncio.gather(order_check_task, notification_task)
+    try:
+        # 初始化，增加连接池大小和超时设置
+        bot_application = (
+            ApplicationBuilder()
+            .token(BOT_TOKEN)
+            .connection_pool_size(16)
+            .connect_timeout(30.0)
+            .read_timeout(30.0)
+            .write_timeout(30.0)
+            .pool_timeout(30.0)
+            .build()
+        )
+        
+        logger.info("Telegram机器人应用已构建")
+        print("DEBUG: Telegram机器人应用已构建")
+        
+        # 添加处理程序
+        bot_application.add_handler(CommandHandler("start", on_start))
+        bot_application.add_handler(CommandHandler("seller", on_admin_command))
+        bot_application.add_handler(CommandHandler("stats", on_stats))
+        
+        # 添加回调处理程序，确保正确处理各种回调
+        bot_application.add_handler(CallbackQueryHandler(on_accept, pattern="^accept_"))
+        bot_application.add_handler(CallbackQueryHandler(on_feedback_button, pattern="^(done|fail|reason)_"))
+        bot_application.add_handler(CallbackQueryHandler(on_stats_callback, pattern="^stats_"))
+        
+        # 添加文本消息处理程序
+        bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+        
+        logger.info("已添加所有处理程序")
+        print("DEBUG: 已添加所有处理程序")
+        
+        # 添加错误处理程序
+        bot_application.add_error_handler(error_handler)
+        
+        # 启动机器人
+        logger.info("初始化机器人...")
+        print("DEBUG: 初始化机器人...")
+        await bot_application.initialize()
+        
+        logger.info("启动机器人轮询...")
+        print("DEBUG: 启动机器人轮询...")
+        await bot_application.updater.start_polling(allowed_updates=["message", "callback_query"])
+        
+        logger.info("Telegram机器人启动成功")
+        print("DEBUG: Telegram机器人启动成功")
+        
+        # 启动后台任务
+        order_check_task = asyncio.create_task(periodic_order_check())
+        notification_task = asyncio.create_task(process_notification_queue(notification_queue))
+        
+        logger.info("进入主循环保持运行")
+        print("DEBUG: 进入主循环保持运行")
+        
+        # 等待任务完成
+        await asyncio.gather(order_check_task, notification_task)
+    except Exception as e:
+        logger.critical(f"Telegram机器人启动失败: {str(e)}", exc_info=True)
+        print(f"CRITICAL: Telegram机器人启动失败: {str(e)}")
 
+# 添加错误处理函数
+async def error_handler(update, context):
+    """处理Telegram机器人的错误"""
+    logger.error(f"Telegram机器人发生错误: {context.error}", exc_info=context.error)
+    print(f"ERROR: Telegram机器人发生错误: {context.error}")
+    
+    # 尝试获取错误来源
+    if update:
+        if update.effective_message:
+            logger.error(f"错误发生在消息: {update.effective_message.text}")
+            print(f"ERROR: 错误发生在消息: {update.effective_message.text}")
+        elif update.callback_query:
+            logger.error(f"错误发生在回调查询: {update.callback_query.data}")
+            print(f"ERROR: 错误发生在回调查询: {update.callback_query.data}")
+    
+    # 如果是回调查询错误，尝试回复用户
+    try:
+        if update and update.callback_query:
+            await update.callback_query.answer("An error occurred. Please try again later.", show_alert=True)
+    except Exception as e:
+        logger.error(f"尝试回复错误通知失败: {str(e)}")
+        print(f"ERROR: 尝试回复错误通知失败: {str(e)}")
 
 async def periodic_order_check():
     """定期检查新订单的任务"""
