@@ -368,17 +368,19 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             oid = int(data.split('_')[1])
             logger.info(f"管理员 {user_id} 点击了失败按钮 #{oid}")
             
-            # 显示失败原因选项
+            # 显示失败原因选项（添加emoji）
             keyboard = [
-                [InlineKeyboardButton("Wrong Password", callback_data=f"reason_wrong_password_{oid}")],
-                [InlineKeyboardButton("Membership Not Expired", callback_data=f"reason_not_expired_{oid}")],
-                [InlineKeyboardButton("Other Reason", callback_data=f"reason_other_{oid}")],
-                [InlineKeyboardButton("Cancel (Clicked by Mistake)", callback_data=f"reason_cancel_{oid}")]
+                [InlineKeyboardButton("🔑 Wrong Password", callback_data=f"reason_wrong_password_{oid}")],
+                [InlineKeyboardButton("⏱️ Membership Not Expired", callback_data=f"reason_not_expired_{oid}")],
+                [InlineKeyboardButton("❓ Other Reason", callback_data=f"reason_other_{oid}")],
+                [InlineKeyboardButton("↩️ Cancel (Clicked by Mistake)", callback_data=f"reason_cancel_{oid}")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             try:
                 await query.edit_message_reply_markup(reply_markup=reply_markup)
+                # 确保回调被确认
+                await query.answer("Please select a reason")
                 logger.info(f"已为订单 #{oid} 显示失败原因选项")
             except Exception as markup_error:
                 logger.error(f"显示失败原因选项时出错: {str(markup_error)}")
@@ -411,18 +413,18 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             # 处理其他原因类型
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-            # 设置失败状态和原因
+            # 设置失败状态和原因（添加emoji）
             reason_text = ""
             button_text = ""
             if reason_type == "wrong_password":
                 reason_text = "Wrong password"
-                button_text = "Wrong Password"
+                button_text = "🔑 Wrong Password"
             elif reason_type == "not_expired":
                 reason_text = "Membership not expired"
-                button_text = "Membership Not Expired"
+                button_text = "⏱️ Membership Not Expired"
             elif reason_type == "other":
                 reason_text = "Other reason (details pending)"
-                button_text = "Other Reason"
+                button_text = "❓ Other Reason"
                 # 标记需要额外反馈
                 feedback_waiting[user_id] = oid
             
@@ -430,10 +432,11 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             execute_query("UPDATE orders SET status=?, completed_at=?, remark=? WHERE id=? AND accepted_by=?",
                         (STATUS['FAILED'], timestamp, reason_text, oid, str(user_id)))
             
-            # 更新UI
+            # 更新UI - 确保显示完整的按钮文本
             try:
+                # 使用单行按钮以确保完整显示
                 await query.edit_message_reply_markup(
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"❌ {button_text}", callback_data="noop")]])
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(button_text, callback_data="noop")]])
                 )
                 
                 # 如果是"其他原因"，请求详细反馈
@@ -441,12 +444,12 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     # 先确认回调，避免"等待中"状态
                     await query.answer("Please provide more details")
                     await query.message.reply_text(
-                        "Please provide more details about the failure reason. Your next message will be recorded as feedback."
+                        "📝 Please provide more details about the failure reason. Your next message will be recorded as feedback."
                     )
                 else:
                     await query.answer(f"Order marked as failed: {reason_text}")
                     await query.message.reply_text(
-                        f"Order #{oid} marked as failed. Reason: {reason_text}"
+                        f"❌ Order #{oid} marked as failed.\nReason: {button_text}"
                     )
                 
                 logger.info(f"已更新订单 #{oid} 的消息显示为失败状态，原因: {reason_text}")
