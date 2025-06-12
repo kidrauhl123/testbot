@@ -244,6 +244,9 @@
       <div id="sellers" class="tab-content">
         <div class="content-header">
           <h2><i class="fas fa-user-tie"></i> 卖家管理</h2>
+          <button class="btn btn-primary" onclick="showAddSellerModal()">
+            <i class="fas fa-plus"></i> 添加卖家
+          </button>
         </div>
         <table class="data-table">
           <thead>
@@ -251,6 +254,7 @@
               <th>TG ID</th>
               <th>用户名</th>
               <th>昵称</th>
+              <th>状态</th>
               <th>添加时间</th>
               <th>添加者</th>
               <th>操作</th>
@@ -261,6 +265,35 @@
           </tbody>
         </table>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 添加卖家弹窗 -->
+<div class="modal-backdrop" id="add-seller-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>添加新卖家</h3>
+      <button class="modal-close" onclick="hideModal('add-seller-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="add-seller-error" class="error-message" style="display:none;"></div>
+      <div class="form-group">
+        <label>Telegram 用户ID *</label>
+        <input type="number" class="form-control" id="new-seller-id" placeholder="用户的数字ID">
+      </div>
+      <div class="form-group">
+        <label>用户名 (可选)</label>
+        <input type="text" class="form-control" id="new-seller-username" placeholder="@username">
+      </div>
+      <div class="form-group">
+        <label>昵称 (可选)</label>
+        <input type="text" class="form-control" id="new-seller-firstname" placeholder="用户的名字">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="hideModal('add-seller-modal')">取消</button>
+      <button class="btn btn-primary" onclick="addSeller()">确认添加</button>
     </div>
   </div>
 </div>
@@ -340,13 +373,99 @@
     });
   }
 
+  function showModal(modalId) {
+    document.getElementById(modalId).classList.add('show');
+  }
+
+  function hideModal(modalId) {
+    document.getElementById(modalId).classList.remove('show');
+  }
+
+  function showAddSellerModal() {
+    // Clear previous input
+    document.getElementById('new-seller-id').value = '';
+    document.getElementById('new-seller-username').value = '';
+    document.getElementById('new-seller-firstname').value = '';
+    document.getElementById('add-seller-error').style.display = 'none';
+    showModal('add-seller-modal');
+  }
+
   async function loadSellers() {
     renderLoading('sellers-table-body');
-    // NOTE: This endpoint needs to be created.
-    // const response = await fetch('/admin/api/sellers');
-    // const sellers = await response.json();
+    const response = await fetch('/admin/api/sellers');
+    const sellers = await response.json();
     const tbody = document.getElementById('sellers-table-body');
-    tbody.innerHTML = '<tr><td colspan="6" class="loading">功能开发中...</td></tr>';
+    tbody.innerHTML = '';
+    if (sellers.length === 0) {
+      const colCount = tbody.parentElement.querySelector('thead tr').childElementCount;
+      tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding: 40px;">暂无卖家</td></tr>`;
+      return;
+    }
+    sellers.forEach(seller => {
+      const statusBadge = seller.is_active 
+        ? '<span class="badge badge-success">活跃</span>' 
+        : '<span class="badge badge-secondary">停用</span>';
+      const toggleButtonText = seller.is_active ? '停用' : '启用';
+      const toggleButtonClass = seller.is_active ? 'btn-warning' : 'btn-success';
+      const row = `
+        <tr>
+          <td>${seller.telegram_id}</td>
+          <td>${escapeHtml(seller.username || '')}</td>
+          <td>${escapeHtml(seller.first_name || '')}</td>
+          <td>${statusBadge}</td>
+          <td>${seller.added_at}</td>
+          <td>${escapeHtml(seller.added_by || '')}</td>
+          <td class="actions">
+            <button class="btn ${toggleButtonClass} btn-sm" onclick="toggleSeller(${seller.telegram_id})">${toggleButtonText}</button>
+            <button class="btn btn-danger btn-sm" onclick="removeSeller(${seller.telegram_id})">删除</button>
+          </td>
+        </tr>
+      `;
+      tbody.innerHTML += row;
+    });
+  }
+
+  async function addSeller() {
+    const errorDiv = document.getElementById('add-seller-error');
+    const telegramId = document.getElementById('new-seller-id').value;
+    if (!telegramId) {
+      errorDiv.textContent = 'Telegram ID 不能为空。';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    const data = {
+      telegram_id: parseInt(telegramId),
+      username: document.getElementById('new-seller-username').value,
+      first_name: document.getElementById('new-seller-firstname').value,
+    };
+
+    const response = await fetch('/admin/api/sellers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (response.ok) {
+      hideModal('add-seller-modal');
+      loadSellers();
+    } else {
+      const result = await response.json();
+      errorDiv.textContent = result.error || '添加失败，请重试。';
+      errorDiv.style.display = 'block';
+    }
+  }
+
+  async function removeSeller(telegramId) {
+    if (!confirm(`确认要删除卖家 ${telegramId} 吗？此操作不可逆。`)) return;
+
+    await fetch(`/admin/api/sellers/${telegramId}`, { method: 'DELETE' });
+    loadSellers();
+  }
+
+  async function toggleSeller(telegramId) {
+    await fetch(`/admin/api/sellers/${telegramId}/toggle`, { method: 'POST' });
+    loadSellers();
   }
 
   document.addEventListener('DOMContentLoaded', () => {

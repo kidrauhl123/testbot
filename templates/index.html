@@ -10,9 +10,9 @@
       font-family: 'Microsoft YaHei', Arial, sans-serif; 
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       margin: 0; padding: 0; min-height: 100vh;
+      color: #333;
     }
     
-    /* 顶部导航栏 */
     .navbar {
       background: rgba(255,255,255,0.95);
       padding: 15px 20px;
@@ -31,405 +31,185 @@
     .navbar-user {
       display: flex;
       align-items: center;
-      gap: 20px;
+      gap: 15px;
     }
-    .navbar-user span {
-      color: #666;
-      font-size: 14px;
-    }
-    .navbar-user .username {
-      color: #333;
-      font-weight: 600;
-    }
-    .navbar-user .admin-badge {
+    .admin-badge {
       background: #ffc107;
       color: #333;
-      padding: 2px 8px;
+      padding: 4px 10px;
       border-radius: 12px;
       font-size: 12px;
       font-weight: 600;
     }
-    .logout-btn {
-      background: #dc3545;
-      color: white;
+    .btn {
       border: none;
       padding: 8px 16px;
       border-radius: 6px;
       cursor: pointer;
       font-size: 14px;
       transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
     }
-    .logout-btn:hover {
-      background: #c82333;
+    .btn:hover {
       transform: translateY(-1px);
     }
+    .btn-primary { background: #667eea; color: white; }
+    .btn-danger { background: #dc3545; color: white; }
     
     .main-container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 10px 20px;
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 20px;
     }
-    .container { 
-      display: flex; 
-      background: rgba(255,255,255,0.1);
-      backdrop-filter: blur(10px);
+    
+    .card {
+      background: rgba(255,255,255,0.95);
       border-radius: 15px;
-      overflow: hidden;
-      margin: 20px 0;
-    }
-    .left, .right { padding: 20px; }
-    .left { 
-      width: 40%; 
-      display: flex; 
-      justify-content: center; 
-      align-items: flex-start; 
-    }
-    .form-box { 
-      background: rgba(255,255,255,0.95); 
-      padding: 30px; 
-      border-radius: 15px; 
-      box-shadow: 0 8px 32px rgba(0,0,0,0.1); 
-      width: 100%; 
-      max-width: 420px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
       backdrop-filter: blur(10px);
     }
-    .form-box h2 { 
-      text-align: center; 
-      font-size: 28px; 
-      margin-bottom: 30px; 
-      color: #333;
-      font-weight: 300;
+    
+    .card-header {
+      margin: -30px -30px 20px -30px;
+      padding: 20px 30px;
+      background: rgba(0,0,0,0.02);
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+      border-radius: 15px 15px 0 0;
     }
-    .form-box label { 
-      font-weight: 600; 
-      margin-top: 20px; 
-      display: block; 
+    
+    .card-header h2 {
+      margin: 0;
+      font-weight: 400;
+      font-size: 24px;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
       color: #555;
-      font-size: 14px;
     }
-    .form-box input, .form-box select, .form-box button {
-      width: 100%; 
-      padding: 12px 15px; 
-      margin-top: 8px; 
-      border-radius: 8px; 
-      border: 2px solid #e1e5e9; 
+    
+    .form-control {
+      width: 100%;
+      padding: 12px 15px;
+      border-radius: 8px;
+      border: 2px solid #e1e5e9;
       font-size: 14px;
       transition: all 0.3s ease;
     }
-    .form-box input:focus, .form-box select:focus {
+    
+    .form-control:focus {
       outline: none;
       border-color: #667eea;
       box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
     }
-    .form-box button { 
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white; 
-      border: none; 
-      cursor: pointer; 
-      font-weight: 600;
-      margin-top: 25px;
+    
+    .submit-btn {
+      width: 100%;
       padding: 15px;
       font-size: 16px;
-    }
-    .form-box button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(102,126,234,0.4);
-    }
-    .right { 
-      width: 60%; 
-      background: rgba(255,255,255,0.95); 
-      border-radius: 15px;
-      margin: 20px 0;
-      backdrop-filter: blur(10px);
-    }
-    .right h3 {
-      color: #333;
-      font-weight: 300;
-      text-align: center;
-      padding: 20px 0 10px;
-      margin: 0;
-      border-bottom: 2px solid #f0f0f0;
-    }
-    
-    /* 搜索栏样式 */
-    .search-container {
-      padding: 20px;
-      background: #f8f9fa;
-      border-bottom: 1px solid #e9ecef;
-    }
-    .search-box {
-      display: flex;
-      gap: 10px;
-    }
-    .search-box input {
-      flex: 1;
-      padding: 10px 15px;
-      border: 2px solid #e1e5e9;
-      border-radius: 8px;
-      font-size: 14px;
-      transition: all 0.3s ease;
-    }
-    .search-box input:focus {
-      outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
-    }
-    .search-box button {
-      padding: 10px 20px;
-      background: #667eea;
+      font-weight: 600;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
       border: none;
       border-radius: 8px;
       cursor: pointer;
-      font-size: 14px;
-      font-weight: 600;
       transition: all 0.3s ease;
-    }
-    .search-box button:hover {
-      background: #5a67d8;
-      transform: translateY(-1px);
     }
     
-    .order { 
-      background: #f8f9fa; 
-      padding: 15px; 
-      margin: 10px 15px; 
-      border-radius: 10px; 
-      border-left: 4px solid #667eea;
-      transition: all 0.3s ease;
-      opacity: 1;
-    }
-    .order:hover {
-      transform: translateX(5px);
-      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    }
-    .order h4 { 
-      margin: 0 0 8px; 
-      color: #333;
-      font-size: 16px;
-      font-weight: 600;
-    }
-    .order p { 
-      margin: 6px 0; 
-      font-size: 13px; 
-      color: #666;
-    }
-    .order .time { 
-      color: #999; 
-      font-size: 12px; 
-    }
-    .order .creator {
-      color: #667eea;
-      font-weight: 600;
-    }
-    .cancel-btn { 
-      display: inline-block; 
-      margin-top: 12px; 
-      padding: 6px 12px; 
-      font-size: 12px; 
-      color: #fff; 
-      background: #dc3545;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer; 
-      transition: all 0.3s ease;
-    }
-    .cancel-btn:hover {
-      background: #c82333;
-      transform: translateY(-1px);
-    }
-    .cancel-btn:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-      transform: none;
-    }
-    .status-badge {
-      display: inline-block;
-      padding: 4px 12px;
-      border-radius: 15px;
-      font-size: 12px;
-      font-weight: 600;
-      color: white;
-    }
-    .status-submitted { background: #17a2b8; }
-    .status-accepted { background: #ffc107; color: #333; }
-    .status-completed { background: #28a745; }
-    .status-failed { background: #dc3545; }
-    .status-cancelled { background: #6c757d; }
-    
-    /* 加载更多按钮 */
-    .load-more-container {
-      text-align: center;
-      padding: 20px;
-    }
-    .load-more-btn {
-      padding: 12px 30px;
-      background: #667eea;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 600;
-      transition: all 0.3s ease;
-    }
-    .load-more-btn:hover {
-      background: #5a67d8;
+    .submit-btn:hover {
       transform: translateY(-2px);
       box-shadow: 0 5px 15px rgba(102,126,234,0.4);
     }
-    .load-more-btn:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-      transform: none;
-    }
-    
-    /* 无结果提示 */
-    .no-results {
-      text-align: center;
-      color: #999;
-      padding: 40px;
-      font-size: 14px;
-    }
-    
-    /* 加载动画 */
-    .loading {
-      text-align: center;
-      padding: 20px;
-      color: #667eea;
-    }
-    .loading::after {
-      content: '...';
-      animation: dots 1.5s steps(4, end) infinite;
-    }
-    @keyframes dots {
-      0%, 20% { content: ''; }
-      40% { content: '.'; }
-      60% { content: '..'; }
-      80%, 100% { content: '...'; }
-    }
 
-    /* 平滑更新动画 */
-    .order-updating {
-      opacity: 0.7;
-      transition: opacity 0.3s ease;
-    }
-
-    /* 自动刷新状态指示器 */
-    .refresh-indicator {
-      position: fixed;
-      top: 80px;
-      right: 20px;
-      background: rgba(102, 126, 234, 0.9);
-      color: white;
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-size: 12px;
-      z-index: 1000;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-    }
-    .refresh-indicator.show {
-      opacity: 1;
-    }
-
-    @media (max-width: 768px) {
-      .navbar {
-        flex-direction: column;
-        gap: 10px;
-      }
-      .container { flex-direction: column; }
-      .left, .right { width: 100%; }
-      .form-box { margin: 20px 0; }
-      .search-box { flex-direction: column; }
-      .search-box button { width: 100%; }
-      .refresh-indicator {
-        top: 100px;
-        right: 10px;
-        font-size: 11px;
-        padding: 6px 12px;
-      }
+    .order-list-item {
+        background: #fff;
+        padding: 20px;
+        margin-bottom: 15px;
+        border-radius: 10px;
+        border-left: 5px solid #667eea;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
     }
   </style>
 </head>
 <body>
-<!-- 顶部导航栏 -->
 <div class="navbar">
   <div class="navbar-brand">破天充值系统</div>
   <div class="navbar-user">
-    <span>欢迎，<span class="username">{{ session.username }}</span></span>
+    <span>欢迎, <span class="username">{{ session.username }}</span></span>
     {% if session.is_admin %}
-    <span class="admin-badge">超级管理员</span>
-    <a href="/admin" style="font-size: 14px; color: #667eea; text-decoration: none;">管理后台</a>
+      <span class="admin-badge">超级管理员</span>
+      <a href="/admin" class="btn btn-primary">管理后台</a>
     {% endif %}
-    <button class="logout-btn" onclick="window.location.href='/logout'">退出登录</button>
+    <a href="/logout" class="btn btn-danger">退出登录</a>
   </div>
 </div>
 
-<div class="refresh-indicator" id="refreshIndicator">更新中...</div>
-
 <div class="main-container">
-  <div class="container">
-    <div class="left">
-      <div class="form-box">
-        <h2>充值下单</h2>
-        <form id="orderForm" autocomplete="off">
-          <label>破天账号：</label>
-          <input name="account" required autocomplete="off" placeholder="请输入您的破天账号">
-
-          <label>密码：</label>
-          <input name="password" required type="text" autocomplete="off" placeholder="请输入密码">
-
-
-          <label>套餐类型：</label>
-          <select name="package" required>
-            <option value="1">1个月</option>
-            <option value="2">2个月</option>
-            <option value="3">3个月</option>
-            <option value="6">6个月</option>
-            <option value="12">12个月</option>
-          </select>
-
-          <label>备注（可选）：</label>
-          <input name="remark" autocomplete="off" placeholder="如有特殊要求请备注">
-
-          <button type="submit">提交订单</button>
-        </form>
-        
-        <!-- 用户统计区域 -->
-        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e1e5e9;">
-
-          <h4 style="font-size: 16px; color: #666; margin-bottom: 10px;">今日统计</h4>
-          <div id="userStats" style="font-size: 14px; color: #999;">
-            <div class="loading">加载中</div>
-          </div>
-        </div>
-      </div>
+  <!-- 订单提交表单 -->
+  <div class="card">
+    <div class="card-header">
+      <h2>充值下单</h2>
     </div>
-    <div class="right">
-      <h3>
+    <form id="orderForm" autocomplete="off">
+      <div class="form-group">
+        <label>破天账号</label>
+        <input name="account" class="form-control" required placeholder="请输入您的破天账号">
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input name="password" type="text" class="form-control" required placeholder="请输入密码">
+      </div>
+      <div class="form-group">
+        <label>套餐类型</label>
+        <select name="package" class="form-control" required>
+          <option value="1">1个月</option>
+          <option value="2">2个月</option>
+          <option value="3">3个月</option>
+          <option value="6">6个月</option>
+          <option value="12">12个月</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>备注 (可选)</label>
+        <input name="remark" class="form-control" placeholder="如有特殊要求请备注">
+      </div>
+      <button type="submit" class="submit-btn">提交订单</button>
+    </form>
+  </div>
+  
+  <!-- 今日统计 (仅管理员可见) -->
+  {% if session.is_admin %}
+  <div class="card">
+    <div class="card-header">
+      <h2>今日统计</h2>
+    </div>
+    <div id="admin-stats-container">加载中...</div>
+  </div>
+  {% endif %}
+
+  <!-- 订单列表 -->
+  <div class="card">
+    <div class="card-header">
+      <h2>
         {% if session.is_admin %}
-        系统订单状态<br><small style="font-weight:normal;color:#666;">（显示全部最新订单，每5秒自动更新）</small>
+          系统最新订单
         {% else %}
-        我的订单<br><small style="font-weight:normal;color:#666;">（显示您提交的订单，每5秒自动更新）</small>
+          我的订单
         {% endif %}
-      </h3>
-      
-      <!-- 搜索栏 -->
-      <div class="search-container">
-        <div class="search-box">
-          <input type="text" id="searchInput" placeholder="搜索订单号或账号..." autocomplete="off">
-          <button onclick="searchOrders()">搜索</button>
-          <button onclick="clearSearch()">清除</button>
-        </div>
-      </div>
-      
-      <div id="ordersContainer"></div>
-      
-      <!-- 加载更多按钮 -->
-      <div class="load-more-container" id="loadMoreContainer" style="display:none;">
-        <button class="load-more-btn" onclick="loadMoreOrders()">显示更多订单</button>
-      </div>
+      </h2>
+    </div>
+    <div id="orders-container">加载中...</div>
+    <div id="load-more-container" style="text-align:center; margin-top: 20px; display:none;">
+      <button onclick="loadMoreOrders()" class="btn btn-primary">显示更多</button>
     </div>
   </div>
 </div>
@@ -475,7 +255,7 @@
       const resp = await fetch(`/orders/stats/web/${targetId}`);
       const stats = await resp.json();
       
-      const statsDiv = document.getElementById('userStats');
+      const statsDiv = document.getElementById('admin-stats-container');
       const total = stats.total || {};
       const totalOrders = (total.submitted || 0) + (total.completed || 0) + (total.failed || 0) + (total.cancelled || 0);
       
@@ -557,7 +337,7 @@
   }
 
   function renderAdminStatsList() {
-    const statsDiv = document.getElementById('userStats');
+    const statsDiv = document.getElementById('admin-stats-container');
     
     // 如果没有统计数据
     if (!userStatResults || userStatResults.length === 0) {
@@ -669,7 +449,7 @@
       }
     } catch (e) {
       console.error('加载订单失败', e);
-      document.getElementById('ordersContainer').innerHTML = 
+      document.getElementById('orders-container').innerHTML = 
         '<div class="no-results">加载失败，请刷新重试</div>';
       if (showIndicator) {
         hideRefreshIndicator();
@@ -691,8 +471,8 @@
 
   // 渲染订单
   function renderOrders(orders) {
-    const container = document.getElementById('ordersContainer');
-    const loadMoreBtn = document.getElementById('loadMoreContainer');
+    const container = document.getElementById('orders-container');
+    const loadMoreBtn = document.getElementById('load-more-container');
     
     if (!orders.length) {
       container.innerHTML = '<div class="no-results">暂无订单</div>';
@@ -713,7 +493,7 @@
       const cls = 'status-' + o.status.replace('已','').toLowerCase();
       
       const html = `
-        <div class="order" data-order-id="${o.id}">
+        <div class="order-list-item" data-order-id="${o.id}">
           <h4>订单 #${o.id} <span class="status-badge ${cls}">${o.status_text}</span></h4>
           ${isAdmin && o.creator ? `<p class="creator">创建者：${escapeHtml(o.creator)}</p>` : ''}
           ${isAdmin && o.accepted_by ? `<p class="creator">接单者：${escapeHtml(o.accepted_by)}</p>` : ''}

@@ -8,27 +8,6 @@ if not os.environ.get('BOT_TOKEN'):
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 
-# 确保管理员ID列表中始终包含1878943383
-default_admin = 1878943383
-SELLER_CHAT_IDS_ENV = os.environ.get("SELLER_CHAT_IDS", str(default_admin))
-
-SELLER_CHAT_IDS = []
-if SELLER_CHAT_IDS_ENV.strip():
-    # 解析环境变量中的卖家ID
-    for x in SELLER_CHAT_IDS_ENV.split(","):
-        if x.strip():
-            try:
-                SELLER_CHAT_IDS.append(int(x.strip()))
-            except ValueError:
-                pass
-
-# 如果默认管理员不在列表中，则添加
-if default_admin not in SELLER_CHAT_IDS:
-    SELLER_CHAT_IDS.append(default_admin)
-
-# 同步回环境变量，以确保一致性
-os.environ['SELLER_CHAT_IDS'] = ",".join(map(str, SELLER_CHAT_IDS))
-
 # ===== 价格系统 =====
 # 网页端价格（人民币）
 WEB_PRICES = {'1': 12, '2': 18, '3': 30, '6': 50, '12': 84}

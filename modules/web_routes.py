@@ -8,7 +8,7 @@ import asyncio
 from flask import Flask, request, render_template, jsonify, session, redirect, url_for
 
 from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS
-from modules.database import execute_query, hash_password
+from modules.database import execute_query, hash_password, get_all_sellers, add_seller, remove_seller, toggle_seller_status
 from modules.telegram_bot import bot_application, check_and_push_orders
 import modules.constants as constants
 
@@ -334,7 +334,6 @@ def register_routes(app):
             'status': 'ok',
             'message': '服务器正常运行',
             'time': time.strftime("%Y-%m-%d %H:%M:%S"),
-            'seller_ids': constants.SELLER_CHAT_IDS
         })
 
     # 添加一个路由用于手动触发订单检查
@@ -374,15 +373,16 @@ def register_routes(app):
     def admin_required(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            if 'user_id' not in session or not session.get('is_admin'):
-                return redirect(url_for('login'))
+            if not session.get('is_admin'):
+                return jsonify({"error": "管理员权限不足"}), 403
             return f(*args, **kwargs)
         return decorated_function
 
     @app.route('/admin')
     @login_required
-    @admin_required
     def admin_dashboard():
+        if not session.get('is_admin'):
+            return redirect(url_for('index'))
         return render_template('admin.html')
 
     @app.route('/admin/api/users')
@@ -418,4 +418,45 @@ def register_routes(app):
                 "accepted_by": row[5],
                 "created_at": row[6]
             })
-        return jsonify(formatted_orders) 
+        return jsonify(formatted_orders)
+        
+    @app.route('/admin/api/sellers', methods=['GET'])
+    @login_required
+    @admin_required
+    def admin_api_get_sellers():
+        sellers = get_all_sellers()
+        return jsonify([{
+            "telegram_id": s[0], "username": s[1], "first_name": s[2],
+            "is_active": s[3], "added_at": s[4], "added_by": s[5]
+        } for s in sellers])
+
+    @app.route('/admin/api/sellers', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_api_add_seller():
+        data = request.json
+        telegram_id = data.get('telegram_id')
+        if not telegram_id:
+            return jsonify({"error": "Telegram ID 不能为空"}), 400
+        
+        add_seller(
+            telegram_id, 
+            data.get('username'), 
+            data.get('first_name'), 
+            session['username']
+        )
+        return jsonify({"success": True})
+
+    @app.route('/admin/api/sellers/<int:telegram_id>', methods=['DELETE'])
+    @login_required
+    @admin_required
+    def admin_api_remove_seller(telegram_id):
+        remove_seller(telegram_id)
+        return jsonify({"success": True})
+
+    @app.route('/admin/api/sellers/<int:telegram_id>/toggle', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_api_toggle_seller(telegram_id):
+        toggle_seller_status(telegram_id)
+        return jsonify({"success": True}) 

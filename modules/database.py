@@ -62,6 +62,18 @@ def init_sqlite_db():
         )
     """)
     
+    # 卖家表
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS sellers (
+            telegram_id INTEGER PRIMARY KEY,
+            username TEXT,
+            first_name TEXT,
+            is_active INTEGER DEFAULT 1,
+            added_at TEXT NOT NULL,
+            added_by TEXT
+        )
+    """)
+    
     # 检查是否需要添加新列
     c.execute("PRAGMA table_info(orders)")
     columns = [column[1] for column in c.fetchall()]
@@ -142,6 +154,18 @@ def init_postgres_db():
             is_admin INTEGER DEFAULT 0,
             created_at TEXT NOT NULL,
             last_login TEXT
+        )
+    """)
+    
+    # 卖家表
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS sellers (
+            telegram_id BIGINT PRIMARY KEY,
+            username TEXT,
+            first_name TEXT,
+            is_active BOOLEAN DEFAULT TRUE,
+            added_at TEXT NOT NULL,
+            added_by TEXT
         )
     """)
     
@@ -424,4 +448,30 @@ def accept_order_atomic(oid, user_id):
 
 # 获取订单详情
 def get_order_details(oid):
-    return execute_query("SELECT id, account, password, package, status, remark FROM orders WHERE id = ?", (oid,), fetch=True) 
+    return execute_query("SELECT id, account, password, package, status, remark FROM orders WHERE id = ?", (oid,), fetch=True)
+
+# ===== 卖家管理 =====
+def get_all_sellers():
+    """获取所有卖家信息"""
+    return execute_query("SELECT telegram_id, username, first_name, is_active, added_at, added_by FROM sellers ORDER BY added_at DESC", fetch=True)
+
+def get_active_seller_ids():
+    """获取所有活跃的卖家Telegram ID"""
+    sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = 1", fetch=True)
+    return [seller[0] for seller in sellers]
+
+def add_seller(telegram_id, username, first_name, added_by):
+    """添加新卖家"""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    execute_query(
+        "INSERT INTO sellers (telegram_id, username, first_name, added_at, added_by) VALUES (?, ?, ?, ?, ?)",
+        (telegram_id, username, first_name, timestamp, added_by)
+    )
+
+def toggle_seller_status(telegram_id):
+    """切换卖家活跃状态"""
+    execute_query("UPDATE sellers SET is_active = NOT is_active WHERE telegram_id = ?", (telegram_id,))
+
+def remove_seller(telegram_id):
+    """移除卖家"""
+    execute_query("DELETE FROM sellers WHERE telegram_id = ?", (telegram_id,)) 
