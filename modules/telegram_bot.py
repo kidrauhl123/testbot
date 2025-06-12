@@ -413,12 +413,16 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             
             # 设置失败状态和原因
             reason_text = ""
+            button_text = ""
             if reason_type == "wrong_password":
                 reason_text = "Wrong password"
+                button_text = "Wrong Password"
             elif reason_type == "not_expired":
                 reason_text = "Membership not expired"
+                button_text = "Membership Not Expired"
             elif reason_type == "other":
                 reason_text = "Other reason (details pending)"
+                button_text = "Other Reason"
                 # 标记需要额外反馈
                 feedback_waiting[user_id] = oid
             
@@ -429,15 +433,18 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             # 更新UI
             try:
                 await query.edit_message_reply_markup(
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Failed", callback_data="noop")]])
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"❌ {button_text}", callback_data="noop")]])
                 )
                 
                 # 如果是"其他原因"，请求详细反馈
                 if reason_type == "other":
+                    # 先确认回调，避免"等待中"状态
+                    await query.answer("Please provide more details")
                     await query.message.reply_text(
                         "Please provide more details about the failure reason. Your next message will be recorded as feedback."
                     )
                 else:
+                    await query.answer(f"Order marked as failed: {reason_text}")
                     await query.message.reply_text(
                         f"Order #{oid} marked as failed. Reason: {reason_text}"
                     )
@@ -445,6 +452,8 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 logger.info(f"已更新订单 #{oid} 的消息显示为失败状态，原因: {reason_text}")
             except Exception as markup_error:
                 logger.error(f"更新失败标记时出错: {str(markup_error)}")
+                # 尝试通知用户出错了
+                await query.answer("Error updating UI. The order status has been updated.", show_alert=True)
     except ValueError as ve:
         logger.error(f"解析订单ID出错: {str(ve)}")
     except Exception as e:
