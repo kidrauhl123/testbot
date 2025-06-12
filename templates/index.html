@@ -397,6 +397,11 @@
       margin: 0 4px;
     }
     
+    .balance-info .highlight-credit {
+      color: #f39c12;
+      margin: 0 4px;
+    }
+    
     .balance-content {
       display: flex;
       justify-content: space-between;
@@ -423,6 +428,38 @@
       color: #666;
     }
     
+    .credit-amount {
+      font-size: 24px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-top: 10px;
+      margin-bottom: 5px;
+    }
+    
+    .credit-label {
+      font-size: 14px;
+      color: #666;
+    }
+    
+    .credit-badge {
+      background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 2px 5px rgba(243,156,18,0.3);
+      display: flex;
+      align-items: center;
+    }
+    
+    .credit-badge::before {
+      content: '💳';
+      margin-right: 5px;
+    }
+    
     .balance-actions {
       display: flex;
       gap: 10px;
@@ -442,6 +479,9 @@
     {% endif %}
     {% if balance is defined %}
     <span class="balance-badge">余额: {{ balance }} 元</span>
+    {% endif %}
+    {% if credit_limit is defined and credit_limit > 0 %}
+    <span class="credit-badge">透支额度: {{ credit_limit }} 元</span>
     {% endif %}
     <a href="/logout" class="btn btn-danger">退出登录</a>
   </div>
@@ -483,11 +523,23 @@
 <div class="card" id="balanceInfoCard">
   <div class="card-header">
     <h2>账户余额</h2>
+    {% if balance is defined %}
+    <div class="balance-info">
+      当前余额: <span class="highlight">{{ balance }}</span> 元
+      {% if credit_limit is defined and credit_limit > 0 %}
+      | 透支额度: <span class="highlight-credit">{{ credit_limit }}</span> 元
+      {% endif %}
+    </div>
+    {% endif %}
   </div>
   <div class="balance-content">
     <div class="balance-display">
       <div class="balance-amount">{{ balance if balance is defined else 0 }}</div>
       <div class="balance-label">当前余额 (元)</div>
+      {% if credit_limit is defined and credit_limit > 0 %}
+      <div class="credit-amount">{{ credit_limit }}</div>
+      <div class="credit-label">透支额度 (元)</div>
+      {% endif %}
     </div>
     <div class="balance-actions">
       <a href="/dashboard" class="btn btn-primary">前往个人中心</a>

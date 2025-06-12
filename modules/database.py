@@ -46,6 +46,7 @@ def init_sqlite_db():
             notified INTEGER DEFAULT 0,
             web_user_id TEXT,
             user_id INTEGER,
+            refunded INTEGER DEFAULT 0,
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     """)
@@ -59,7 +60,8 @@ def init_sqlite_db():
             is_admin INTEGER DEFAULT 0,
             created_at TEXT NOT NULL,
             last_login TEXT,
-            balance REAL DEFAULT 0
+            balance REAL DEFAULT 0,
+            credit_limit REAL DEFAULT 0
         )
     """)
     
@@ -82,10 +84,20 @@ def init_sqlite_db():
         logger.info("为orders表添加user_id列")
         c.execute("ALTER TABLE orders ADD COLUMN user_id INTEGER")
     
+    # 检查是否需要添加refunded列（是否已退款）
+    if 'refunded' not in columns:
+        logger.info("为orders表添加refunded列")
+        c.execute("ALTER TABLE orders ADD COLUMN refunded INTEGER DEFAULT 0")
+    
     # 检查是否需要添加balance列（用户余额）
     if 'balance' not in columns:
         logger.info("为users表添加balance列")
         c.execute("ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0")
+    
+    # 检查是否需要添加credit_limit列（透支额度）
+    if 'credit_limit' not in columns:
+        logger.info("为users表添加credit_limit列")
+        c.execute("ALTER TABLE users ADD COLUMN credit_limit REAL DEFAULT 0")
     
     # 检查是否需要添加accepted_by_username列（Telegram用户名）
     if 'accepted_by_username' not in columns:
@@ -147,7 +159,8 @@ def init_postgres_db():
             accepted_by_first_name TEXT,
             notified INTEGER DEFAULT 0,
             web_user_id TEXT,
-            user_id INTEGER
+            user_id INTEGER,
+            refunded INTEGER DEFAULT 0
         )
     """)
     
@@ -160,7 +173,8 @@ def init_postgres_db():
             is_admin INTEGER DEFAULT 0,
             created_at TEXT NOT NULL,
             last_login TEXT,
-            balance REAL DEFAULT 0
+            balance REAL DEFAULT 0,
+            credit_limit REAL DEFAULT 0
         )
     """)
     
@@ -182,12 +196,26 @@ def init_postgres_db():
     except psycopg2.errors.UndefinedColumn:
         c.execute("ALTER TABLE orders ADD COLUMN user_id INTEGER")
     
+    # 检查是否需要添加refunded列（是否已退款）
+    try:
+        c.execute("SELECT refunded FROM orders LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为orders表添加refunded列")
+        c.execute("ALTER TABLE orders ADD COLUMN refunded INTEGER DEFAULT 0")
+    
     # 检查是否需要添加balance列（用户余额）
     try:
         c.execute("SELECT balance FROM users LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
         logger.info("为users表添加balance列")
         c.execute("ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0")
+    
+    # 检查是否需要添加credit_limit列（透支额度）
+    try:
+        c.execute("SELECT credit_limit FROM users LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为users表添加credit_limit列")
+        c.execute("ALTER TABLE users ADD COLUMN credit_limit REAL DEFAULT 0")
     
     # 检查是否需要添加accepted_by_username列（Telegram用户名）
     try:
@@ -512,15 +540,34 @@ def get_user_balance(user_id):
         return result[0][0]
     return 0
 
+def get_user_credit_limit(user_id):
+    """获取用户透支额度"""
+    result = execute_query("SELECT credit_limit FROM users WHERE id=?", (user_id,), fetch=True)
+    if result:
+        return result[0][0]
+    return 0
+
+def set_user_credit_limit(user_id, credit_limit):
+    """设置用户透支额度（仅限管理员使用）"""
+    # 确保透支额度不为负
+    if credit_limit < 0:
+        credit_limit = 0
+    
+    execute_query("UPDATE users SET credit_limit=? WHERE id=?", (credit_limit, user_id))
+    return True, credit_limit
+
 def update_user_balance(user_id, amount):
     """更新用户余额（增加或减少）"""
     # 获取当前余额
     current_balance = get_user_balance(user_id)
     new_balance = current_balance + amount
     
-    # 确保余额不会变成负数
-    if new_balance < 0:
-        return False, "余额不足"
+    # 获取透支额度
+    credit_limit = get_user_credit_limit(user_id)
+    
+    # 确保余额+透支额度不会变成负数
+    if new_balance < -credit_limit:
+        return False, "余额和透支额度不足"
     
     # 更新余额
     execute_query("UPDATE users SET balance=? WHERE id=?", (new_balance, user_id))
@@ -545,8 +592,57 @@ def check_balance_for_package(user_id, package):
     # 获取用户余额
     balance = get_user_balance(user_id)
     
-    # 判断余额是否足够
-    if balance >= price:
-        return True, balance, price
+    # 获取用户透支额度
+    credit_limit = get_user_credit_limit(user_id)
+    
+    # 判断余额+透支额度是否足够
+    if balance + credit_limit >= price:
+        return True, balance, price, credit_limit
     else:
-        return False, balance, price 
+        return False, balance, price, credit_limit
+
+def refund_order(order_id):
+    """退款订单金额到用户余额"""
+    # 获取订单信息
+    order = execute_query("""
+        SELECT id, user_id, package, status 
+        FROM orders 
+        WHERE id=?
+    """, (order_id,), fetch=True)
+    
+    if not order or not order[0]:
+        logger.warning(f"退款失败: 找不到订单ID={order_id}")
+        return False, "找不到订单"
+    
+    order_id, user_id, package, status = order[0]
+    
+    # 只有已撤销或充值失败的订单才能退款
+    if status not in ['cancelled', 'failed']:
+        logger.warning(f"退款失败: 订单状态不是已撤销或充值失败 (ID={order_id}, 状态={status})")
+        return False, f"订单状态不允许退款: {status}"
+    
+    # 检查订单是否已退款
+    refunded = execute_query("SELECT refunded FROM orders WHERE id=?", (order_id,), fetch=True)
+    if refunded and refunded[0][0]:
+        logger.warning(f"退款失败: 订单已退款 (ID={order_id})")
+        return False, "订单已退款"
+    
+    # 获取套餐价格
+    from modules.constants import WEB_PRICES
+    price = WEB_PRICES.get(package, 0)
+    
+    if price <= 0:
+        logger.warning(f"退款失败: 套餐价格无效 (ID={order_id}, 套餐={package}, 价格={price})")
+        return False, "套餐价格无效"
+    
+    # 退款到用户余额
+    success, new_balance = update_user_balance(user_id, price)
+    if not success:
+        logger.error(f"退款到用户余额失败: 订单ID={order_id}, 用户ID={user_id}, 金额={price}")
+        return False, "退款到用户余额失败"
+    
+    # 标记订单为已退款
+    execute_query("UPDATE orders SET refunded=1 WHERE id=?", (order_id,))
+    
+    logger.info(f"订单退款成功: ID={order_id}, 用户ID={user_id}, 金额={price}, 新余额={new_balance}")
+    return True, new_balance 

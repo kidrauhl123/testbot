@@ -301,6 +301,7 @@
                 <th>注册时间</th>
                 <th>最后登录</th>
                 <th>余额</th>
+                <th>透支额度</th>
                 <th>角色</th>
                 <th>操作</th>
               </tr>
@@ -417,6 +418,37 @@
   </div>
 </div>
 
+<!-- 修改透支额度模态框 -->
+<div class="modal-backdrop" id="editCreditModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>修改用户透支额度</h3>
+      <button class="modal-close" data-dismiss="modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="editCreditForm">
+        <input type="hidden" id="edit-credit-user-id">
+        <div class="form-group">
+          <label for="edit-credit-username">用户名</label>
+          <input type="text" id="edit-credit-username" class="form-control" disabled>
+        </div>
+        <div class="form-group">
+          <label for="edit-credit-current">当前透支额度</label>
+          <input type="text" id="edit-credit-current" class="form-control" disabled>
+        </div>
+        <div class="form-group">
+          <label for="edit-credit-new">新透支额度</label>
+          <input type="number" id="edit-credit-new" class="form-control" step="0.01" min="0" required>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
+      <button class="btn btn-primary" id="saveCreditBtn">保存</button>
+    </div>
+  </div>
+</div>
+
 <script>
   function showTab(tabId) {
     // 隐藏所有标签内容
@@ -492,10 +524,14 @@
           <td>${createdAt}</td>
           <td>${lastLogin}</td>
           <td class="user-balance">${user.balance ? user.balance.toFixed(2) : '0.00'} 元</td>
+          <td class="user-credit">${user.credit_limit ? user.credit_limit.toFixed(2) : '0.00'} 元</td>
           <td>${user.is_admin ? '<span class="badge badge-warning">管理员</span>' : '<span class="badge badge-secondary">普通用户</span>'}</td>
           <td>
             <button class="btn btn-sm btn-primary" onclick="editUserBalance(${user.id}, '${user.username}', ${user.balance || 0})">
               修改余额
+            </button>
+            <button class="btn btn-sm btn-warning" onclick="editUserCredit(${user.id}, '${user.username}', ${user.credit_limit || 0})">
+              修改额度
             </button>
           </td>
         `;
@@ -524,6 +560,18 @@
     document.getElementById('edit-balance-new').value = balance;
     
     openModal('editBalanceModal');
+  }
+
+  // 修改用户透支额度函数
+  function editUserCredit(userId, username, credit) {
+    console.log("修改用户透支额度:", userId, username, credit);
+    
+    document.getElementById('edit-credit-user-id').value = userId;
+    document.getElementById('edit-credit-username').value = username;
+    document.getElementById('edit-credit-current').value = credit;
+    document.getElementById('edit-credit-new').value = credit;
+    
+    openModal('editCreditModal');
   }
 
   async function loadOrders() {
@@ -885,10 +933,40 @@
     }
   });
 
+  // 保存透支额度修改
+  document.getElementById('saveCreditBtn').addEventListener('click', async function() {
+    const userId = document.getElementById('edit-credit-user-id').value;
+    const newCredit = document.getElementById('edit-credit-new').value;
+    
+    try {
+      const resp = await fetch(`/admin/api/users/${userId}/credit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ credit_limit: newCredit })
+      });
+      
+      const result = await resp.json();
+      
+      if (result.success) {
+        alert('透支额度修改成功');
+        closeModal('editCreditModal');
+        loadUsers(); // 重新加载用户列表
+      } else {
+        alert(result.error || '修改失败');
+      }
+    } catch (e) {
+      console.error('修改透支额度失败', e);
+      alert('修改透支额度失败，请重试');
+    }
+  });
+
   document.addEventListener('DOMContentLoaded', () => {
     // 检查页面上的所有模态框元素
     console.log("检查模态框元素:");
     console.log("editBalanceModal:", document.getElementById('editBalanceModal'));
+    console.log("editCreditModal:", document.getElementById('editCreditModal'));
     console.log("edit-order-modal:", document.getElementById('edit-order-modal'));
     
     // 检查标签页元素

@@ -251,6 +251,23 @@
       margin-right: 5px;
     }
     
+    .credit-badge {
+      background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 2px 5px rgba(243,156,18,0.3);
+      display: flex;
+      align-items: center;
+    }
+    
+    .credit-badge::before {
+      content: '💳';
+      margin-right: 5px;
+    }
+    
     .admin-badge {
       background: linear-gradient(135deg, #ffb347 0%, #ffcc33 100%);
       color: #333;
@@ -275,6 +292,9 @@
     {% if balance is defined %}
     <span class="balance-badge">余额: {{ balance }} 元</span>
     {% endif %}
+    {% if credit_limit is defined and credit_limit > 0 %}
+    <span class="credit-badge">透支额度: {{ credit_limit }} 元</span>
+    {% endif %}
     <a href="/" class="btn btn-primary">返回首页</a>
     <a href="/logout" class="btn btn-danger">退出登录</a>
   </div>
@@ -292,6 +312,15 @@
           <div class="stat-value">{{ balance|default(0.00, true) }}</div>
           <div class="stat-label">当前余额 (元)</div>
         </div>
+        {% if credit_limit is defined and credit_limit > 0 %}
+        <div class="stat-card">
+          <div class="stat-icon">
+            <i class="fas fa-credit-card"></i>
+          </div>
+          <div class="stat-value">{{ credit_limit }}</div>
+          <div class="stat-label">透支额度 (元)</div>
+        </div>
+        {% endif %}
         <div class="stat-card" id="total-orders">
           <div class="stat-icon"><i class="fas fa-shopping-cart"></i></div>
           <div class="stat-value">0</div>

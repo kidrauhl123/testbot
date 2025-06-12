@@ -10,6 +10,7 @@ from flask import Flask, request, render_template, jsonify, session, redirect, u
 from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH
 from modules.database import execute_query, hash_password, get_all_sellers, add_seller, remove_seller, toggle_seller_status
 from modules.database import check_balance_for_package, update_user_balance, get_user_balance, set_user_balance
+from modules.database import get_user_credit_limit, set_user_credit_limit, refund_order
 from modules.telegram_bot import bot_application, check_and_push_orders
 import modules.constants as constants
 
@@ -105,9 +106,10 @@ def register_routes(app):
             orders = execute_query("SELECT id, account, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             logger.info(f"获取到最近订单: {orders}")
             
-            # 获取用户余额
+            # 获取用户余额和透支额度
             user_id = session.get('user_id')
             balance = get_user_balance(user_id)
+            credit_limit = get_user_credit_limit(user_id)
             
             return render_template('index.html', 
                                    orders=orders, 
@@ -115,7 +117,8 @@ def register_routes(app):
                                    plan_options=PLAN_OPTIONS,
                                    username=session.get('username'),
                                    is_admin=session.get('is_admin'),
-                                   balance=balance)
+                                   balance=balance,
+                                   credit_limit=credit_limit)
         except Exception as e:
             logger.error(f"获取订单失败: {str(e)}", exc_info=True)
             return render_template('index.html', 
@@ -152,15 +155,16 @@ def register_routes(app):
             logger.info(f"当前会话信息: user_id={user_id}, username={username}")
             
             # 检查用户余额是否足够
-            sufficient, balance, price = check_balance_for_package(user_id, package)
+            sufficient, balance, price, credit_limit = check_balance_for_package(user_id, package)
             
             if not sufficient:
-                logger.warning(f"订单提交失败: 用户余额不足 (用户={username}, 余额={balance}, 价格={price})")
+                logger.warning(f"订单提交失败: 用户余额不足 (用户={username}, 余额={balance}, 透支额度={credit_limit}, 价格={price})")
                 return render_template('index.html', 
-                                       error=f'余额不足，当前余额: {balance}，套餐价格: {price}', 
+                                       error=f'余额和透支额度不足，当前余额: {balance}，透支额度: {credit_limit}，套餐价格: {price}', 
                                        prices=WEB_PRICES, 
                                        plan_options=PLAN_OPTIONS,
-                                       balance=balance)
+                                       balance=balance,
+                                       credit_limit=credit_limit)
             
             # 记录当前时间
             timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -169,14 +173,20 @@ def register_routes(app):
             
             # 插入订单
             execute_query("""
-                INSERT INTO orders (account, password, package, remark, status, created_at, web_user_id, user_id, notified) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (account, password, package, remark, STATUS['SUBMITTED'], timestamp, username, user_id, 0))
+                INSERT INTO orders (account, password, package, remark, status, created_at, web_user_id, user_id, notified, refunded) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (account, password, package, remark, STATUS['SUBMITTED'], timestamp, username, user_id, 0, 0))
             
             # 扣除用户余额
             success, new_balance = update_user_balance(user_id, -price)
             if not success:
                 logger.error(f"余额扣除失败: 用户={username}, 金额={price}")
+                return render_template('index.html', 
+                                      error=f'扣款失败，订单未提交，请联系管理员', 
+                                      prices=WEB_PRICES, 
+                                      plan_options=PLAN_OPTIONS,
+                                      balance=balance,
+                                      credit_limit=credit_limit)
             else:
                 logger.info(f"余额扣除成功: 用户={username}, 金额={price}, 新余额={new_balance}")
             
@@ -191,10 +201,14 @@ def register_routes(app):
                                    success='订单已提交成功！', 
                                    prices=WEB_PRICES, 
                                    plan_options=PLAN_OPTIONS,
-                                   balance=new_balance)
+                                   balance=new_balance,
+                                   credit_limit=credit_limit)
         except Exception as e:
             logger.error(f"创建订单失败: {str(e)}", exc_info=True)
-            return render_template('index.html', error=f'订单提交失败: {str(e)}', prices=WEB_PRICES, plan_options=PLAN_OPTIONS)
+            return render_template('index.html', 
+                                  error=f'订单提交失败: {str(e)}', 
+                                  prices=WEB_PRICES, 
+                                  plan_options=PLAN_OPTIONS)
 
     @app.route('/orders/stats/web/<user_id>')
     @login_required
@@ -339,27 +353,44 @@ def register_routes(app):
     @login_required
     def cancel_order(oid):
         """取消订单"""
-        # 查找订单
-        order = execute_query("SELECT status, user_id FROM orders WHERE id = ?", (oid,), fetch=True)
+        user_id = session.get('user_id')
+        is_admin = session.get('is_admin', 0)
+        
+        # 获取订单信息
+        order = execute_query("""
+            SELECT id, user_id, status, package, refunded 
+            FROM orders 
+            WHERE id=?
+        """, (oid,), fetch=True)
+        
         if not order:
             return jsonify({"error": "订单不存在"}), 404
+            
+        order_id, order_user_id, status, package, refunded = order[0]
         
-        status, order_user_id = order[0]
-        
-        # 检查是否可以取消（只有submitted状态的订单可以取消）
+        # 验证权限：只能取消自己的订单，或者管理员可以取消任何人的订单
+        if user_id != order_user_id and not is_admin:
+            return jsonify({"error": "权限不足"}), 403
+            
+        # 只能取消"已提交"状态的订单
         if status != STATUS['SUBMITTED']:
-            return jsonify({"error": "只有等待处理的订单可以取消"}), 400
+            return jsonify({"error": "只能取消待处理的订单"}), 400
+            
+        # 更新订单状态为已取消
+        execute_query("UPDATE orders SET status=? WHERE id=?", 
+                      (STATUS['CANCELLED'], oid))
         
-        # 检查权限（管理员或订单所有者）
-        if not session.get('is_admin') and session.get('user_id') != order_user_id:
-            return jsonify({"error": "没有权限取消此订单"}), 403
+        logger.info(f"订单已取消: ID={oid}")
         
-        # 执行取消
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        execute_query("UPDATE orders SET status=?, completed_at=? WHERE id=?",
-                     (STATUS['CANCELLED'], timestamp, oid))
+        # 如果订单未退款，执行退款操作
+        if not refunded:
+            success, result = refund_order(oid)
+            if success:
+                logger.info(f"订单退款成功: ID={oid}, 新余额={result}")
+            else:
+                logger.warning(f"订单退款失败: ID={oid}, 原因={result}")
         
-        return jsonify({"success": True, "message": "订单已取消"})
+        return jsonify({"success": True})
 
     # 添加一个测试路由
     @app.route('/test')
@@ -428,13 +459,15 @@ def register_routes(app):
         username = session.get('username')
         is_admin = session.get('is_admin', 0)
         
-        # 获取用户余额
+        # 获取用户余额和透支额度
         balance = get_user_balance(user_id)
+        credit_limit = get_user_credit_limit(user_id)
         
         return render_template('dashboard.html', 
                               username=username, 
                               is_admin=is_admin,
-                              balance=balance)
+                              balance=balance,
+                              credit_limit=credit_limit)
 
     @app.route('/admin/api/users')
     @login_required
@@ -442,7 +475,7 @@ def register_routes(app):
     def admin_api_users():
         """获取所有用户列表（仅限管理员）"""
         users = execute_query("""
-            SELECT id, username, is_admin, created_at, last_login, balance 
+            SELECT id, username, is_admin, created_at, last_login, balance, credit_limit 
             FROM users ORDER BY created_at DESC
         """, fetch=True)
         
@@ -452,7 +485,8 @@ def register_routes(app):
             "is_admin": bool(user[2]),
             "created_at": user[3],
             "last_login": user[4],
-            "balance": user[5] if len(user) > 5 else 0
+            "balance": user[5] if len(user) > 5 else 0,
+            "credit_limit": user[6] if len(user) > 6 else 0
         } for user in users])
     
     @app.route('/admin/api/users/<int:user_id>/balance', methods=['POST'])
@@ -481,6 +515,33 @@ def register_routes(app):
             return jsonify({"success": True, "balance": new_balance})
         else:
             return jsonify({"error": "更新余额失败"}), 500
+
+    @app.route('/admin/api/users/<int:user_id>/credit', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_update_user_credit(user_id):
+        """更新用户透支额度（仅限管理员）"""
+        data = request.json
+        
+        if not data or 'credit_limit' not in data:
+            return jsonify({"error": "缺少透支额度参数"}), 400
+        
+        try:
+            credit_limit = float(data['credit_limit'])
+        except (ValueError, TypeError):
+            return jsonify({"error": "透支额度必须是数字"}), 400
+        
+        # 不允许设置负透支额度
+        if credit_limit < 0:
+            credit_limit = 0
+        
+        success, new_credit_limit = set_user_credit_limit(user_id, credit_limit)
+        
+        if success:
+            logger.info(f"管理员设置用户ID={user_id}的透支额度为{new_credit_limit}")
+            return jsonify({"success": True, "credit_limit": new_credit_limit})
+        else:
+            return jsonify({"error": "更新透支额度失败"}), 500
 
     @app.route('/admin/api/orders')
     @login_required
@@ -593,45 +654,36 @@ def register_routes(app):
     @login_required
     @admin_required
     def admin_api_edit_order(order_id):
-        """编辑订单信息（仅限超级管理员）"""
-        try:
-            data = request.json
-            
-            # 验证必填字段
-            if not data.get('account') or not data.get('password'):
-                return jsonify({"error": "账号和密码不能为空"}), 400
-                
-            # 查询原订单，确保存在
-            existing_order = execute_query("SELECT id FROM orders WHERE id = ?", (order_id,), fetch=True)
-            if not existing_order:
-                return jsonify({"error": "订单不存在"}), 404
-                
-            # 更新订单信息
-            execute_query("""
-                UPDATE orders SET 
-                account = ?, 
-                password = ?, 
-                package = ?, 
-                status = ?, 
-                remark = ?
-                WHERE id = ?
-            """, (
-                data.get('account'),
-                data.get('password'),
-                data.get('package'),
-                data.get('status'),
-                data.get('remark', ''),
-                order_id
-            ))
-            
-            # 如果状态变更为已完成或失败，添加完成时间
-            if data.get('status') in [STATUS['COMPLETED'], STATUS['FAILED'], STATUS['CANCELLED']]:
-                timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-                execute_query("UPDATE orders SET completed_at = ? WHERE id = ? AND completed_at IS NULL", 
-                             (timestamp, order_id))
-            
-            return jsonify({"success": True, "message": "订单更新成功"})
-            
-        except Exception as e:
-            logger.error(f"编辑订单失败: {str(e)}", exc_info=True)
-            return jsonify({"error": f"编辑订单失败: {str(e)}"}), 500 
+        """管理员编辑订单"""
+        data = request.json
+        
+        # 获取当前订单信息
+        order = execute_query("SELECT status, user_id, package, refunded FROM orders WHERE id=?", (order_id,), fetch=True)
+        if not order:
+            return jsonify({"error": "订单不存在"}), 404
+        
+        current_status, user_id, current_package, refunded = order[0]
+        
+        # 获取新状态
+        new_status = data.get('status')
+        
+        # 更新订单信息
+        execute_query("""
+            UPDATE orders 
+            SET account=?, password=?, package=?, status=?, remark=? 
+            WHERE id=?
+        """, (
+            data.get('account'), 
+            data.get('password'), 
+            data.get('package'), 
+            new_status, 
+            data.get('remark', ''),
+            order_id
+        ))
+        
+        # 处理状态变更的退款逻辑
+        if current_status != new_status and new_status in [STATUS['CANCELLED'], STATUS['FAILED']] and not refunded:
+            # 订单状态改为已取消或失败，且未退款，执行退款
+            refund_order(order_id)
+        
+        return jsonify({"success": True}) 
