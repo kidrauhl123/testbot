@@ -228,23 +228,38 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理接单回调"""
     global processing_accepts, processing_accepts_time
     
-    query = update.callback_query
-    user_id = query.from_user.id
-    
-    logger.info(f"收到接单回调: 用户={user_id}, 数据={query.data}")
-    
-    # 清理超时的处理中请求
-    await cleanup_processing_accepts()
-    
-    if not is_seller(user_id):
-        logger.warning(f"非卖家 {user_id} 尝试接单")
-        await query.answer("You are not a seller and cannot accept orders")
-        return
-    
-    data = query.data
-    if data.startswith('accept_'):
+    try:
+        query = update.callback_query
+        user_id = query.from_user.id
+        data = query.data
+        
+        logger.info(f"收到接单回调: 用户={user_id}, 数据={data}")
+        
+        # 先确认回调，避免Telegram显示等待状态
+        try:
+            await query.answer("Processing your request...")
+        except Exception as e:
+            logger.error(f"确认回调时出错: {str(e)}")
+        
+        # 清理超时的处理中请求
+        await cleanup_processing_accepts()
+        
+        if not is_seller(user_id):
+            logger.warning(f"非卖家 {user_id} 尝试接单")
+            try:
+                await query.answer("You are not a seller and cannot accept orders", show_alert=True)
+            except Exception as e:
+                logger.error(f"回复非卖家时出错: {str(e)}")
+            return
+        
+        # 检查是否是接单回调
+        if not data.startswith('accept_'):
+            logger.warning(f"无效的接单回调数据: {data}")
+            return
+            
         try:
             oid = int(data.split('_')[1])
+            logger.info(f"解析订单ID: {oid}")
             
             # 创建唯一的接单标识符
             accept_key = f"{user_id}_{oid}"
@@ -252,7 +267,10 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 检查是否正在处理这个接单请求
             if accept_key in processing_accepts:
                 logger.warning(f"重复的接单请求: 用户={user_id}, 订单={oid}")
-                await query.answer("Processing... Please wait")
+                try:
+                    await query.answer("Your request is still processing, please wait", show_alert=True)
+                except Exception as e:
+                    logger.error(f"回复重复请求时出错: {str(e)}")
                 return
             
             # 标记为正在处理
@@ -262,7 +280,13 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"卖家 {user_id} 尝试接单 #{oid}")
             
             # 尝试接单
-            success, message = accept_order_atomic(oid, user_id)
+            try:
+                success, message = accept_order_atomic(oid, user_id)
+                logger.info(f"接单结果: 成功={success}, 消息={message}")
+            except Exception as db_error:
+                logger.error(f"数据库接单操作失败: {str(db_error)}", exc_info=True)
+                success = False
+                message = "Database error occurred"
             
             if success:
                 logger.info(f"卖家 {user_id} 成功接单 #{oid}")
@@ -270,13 +294,25 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # 更新消息展示
                 try:
                     order = get_order_details(oid)
-                    if not order:
+                    if not order or len(order) == 0:
                         logger.error(f"找不到订单 #{oid} 的详情")
-                        await query.edit_message_text(f"Error: Order #{oid} details not found")
+                        try:
+                            await query.edit_message_text(f"Error: Order #{oid} details not found")
+                        except Exception as e:
+                            logger.error(f"更新订单消息失败: {str(e)}")
+                        
+                        # 清理处理状态
+                        if accept_key in processing_accepts:
+                            processing_accepts.remove(accept_key)
+                        if accept_key in processing_accepts_time:
+                            del processing_accepts_time[accept_key]
                         return
                         
                     # 接单成功时发送一个简单的确认提示
-                    await query.answer("Order accepted!")
+                    try:
+                        await query.answer("Order accepted successfully!", show_alert=True)
+                    except Exception as e:
+                        logger.error(f"发送成功提示时出错: {str(e)}")
                         
                     order = order[0]
                     account, password, package = order[1], order[2], order[3]
@@ -287,48 +323,63 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ]
                     reply_markup = InlineKeyboardMarkup(keyboard)
                     
-                    await query.edit_message_text(
-                        f"🎉 Order #{oid} - You've accepted this order\n\n"
-                        f"👤 Account: `{account}`\n"
-                        f"🔑 Password: `{password}`\n"
-                        f"📦 Package: {package} month(s)\n"
-                        f"💰 Payment: ${TG_PRICES[package]}",
-                        reply_markup=reply_markup,
-                        parse_mode='Markdown'
-                    )
-                    logger.info(f"已更新订单 #{oid} 的消息显示为已接单状态")
-                except Exception as update_error:
-                    logger.error(f"更新接单消息时出错: {str(update_error)}", exc_info=True)
                     try:
                         await query.edit_message_text(
-                            f"Order #{oid} accepted, but there was an error updating the message. The order is still assigned to you."
+                            f"🎉 Order #{oid} - You've accepted this order\n\n"
+                            f"👤 Account: `{account}`\n"
+                            f"🔑 Password: `{password}`\n"
+                            f"📦 Package: {package} month(s)\n"
+                            f"💰 Payment: ${TG_PRICES[package]}",
+                            reply_markup=reply_markup,
+                            parse_mode='Markdown'
                         )
-                    except:
-                        pass
+                        logger.info(f"已更新订单 #{oid} 的消息显示为已接单状态")
+                    except Exception as update_error:
+                        logger.error(f"更新接单消息时出错: {str(update_error)}", exc_info=True)
+                        try:
+                            await query.edit_message_text(
+                                f"Order #{oid} accepted, but there was an error updating the message. The order is still assigned to you."
+                            )
+                        except Exception as e:
+                            logger.error(f"尝试发送备用消息时出错: {str(e)}")
+                except Exception as order_error:
+                    logger.error(f"处理订单详情时出错: {str(order_error)}", exc_info=True)
+                    try:
+                        await query.edit_message_text(
+                            f"Order #{oid} accepted, but there was an error retrieving order details. The order is still assigned to you."
+                        )
+                    except Exception as e:
+                        logger.error(f"发送错误消息时出错: {str(e)}")
             else:
                 logger.warning(f"订单 #{oid} 接单失败: {message}")
                 try:
                     await query.answer(message, show_alert=True)
-                    if "already been taken" in message:
-                        await query.edit_message_text(f"⚠️ Order #{oid} has already been taken by someone else.")
+                    if "already taken" in message or "not found" in message:
+                        await query.edit_message_text(f"⚠️ Order #{oid} has already been taken by someone else or does not exist.")
                 except Exception as e:
                     logger.error(f"编辑接单失败消息时出错: {str(e)}")
             
-            # 无论成功或失败，最后都从集合中移除
-            processing_accepts.remove(accept_key)
-            if accept_key in processing_accepts_time:
-                del processing_accepts_time[accept_key]
-
-        except ValueError:
-            logger.error("无效的回调数据")
+        except ValueError as ve:
+            logger.error(f"解析订单ID出错: {str(ve)}")
+            try:
+                await query.answer("Invalid order ID", show_alert=True)
+            except Exception as e:
+                logger.error(f"回复无效ID时出错: {str(e)}")
         except Exception as e:
             logger.error(f"处理接单时发生未知错误: {str(e)}", exc_info=True)
-            # 如果 accept_key 已定义，则从集合中移除
+            try:
+                await query.answer("An error occurred. Please try again.", show_alert=True)
+            except Exception as answer_error:
+                logger.error(f"发送错误回复时出错: {str(answer_error)}")
+        finally:
+            # 无论成功或失败，最后都从集合中移除
             if 'accept_key' in locals():
                 if accept_key in processing_accepts:
                     processing_accepts.remove(accept_key)
                 if accept_key in processing_accepts_time:
                     del processing_accepts_time[accept_key]
+    except Exception as outer_error:
+        logger.critical(f"接单回调函数外层出错: {str(outer_error)}", exc_info=True)
 
 async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理反馈按钮回调"""
