@@ -77,37 +77,42 @@ def init_sqlite_db():
         )
     """)
     
-    # 检查是否需要添加新列
+    # 检查orders表中是否需要添加新列
     c.execute("PRAGMA table_info(orders)")
-    columns = [column[1] for column in c.fetchall()]
-    if 'user_id' not in columns:
+    orders_columns = [column[1] for column in c.fetchall()]
+    
+    if 'user_id' not in orders_columns:
         logger.info("为orders表添加user_id列")
         c.execute("ALTER TABLE orders ADD COLUMN user_id INTEGER")
     
     # 检查是否需要添加refunded列（是否已退款）
-    if 'refunded' not in columns:
+    if 'refunded' not in orders_columns:
         logger.info("为orders表添加refunded列")
         c.execute("ALTER TABLE orders ADD COLUMN refunded INTEGER DEFAULT 0")
     
-    # 检查是否需要添加balance列（用户余额）
-    if 'balance' not in columns:
-        logger.info("为users表添加balance列")
-        c.execute("ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0")
-    
-    # 检查是否需要添加credit_limit列（透支额度）
-    if 'credit_limit' not in columns:
-        logger.info("为users表添加credit_limit列")
-        c.execute("ALTER TABLE users ADD COLUMN credit_limit REAL DEFAULT 0")
-    
     # 检查是否需要添加accepted_by_username列（Telegram用户名）
-    if 'accepted_by_username' not in columns:
+    if 'accepted_by_username' not in orders_columns:
         logger.info("为orders表添加accepted_by_username列")
         c.execute("ALTER TABLE orders ADD COLUMN accepted_by_username TEXT")
     
     # 检查是否需要添加accepted_by_first_name列（Telegram昵称）
-    if 'accepted_by_first_name' not in columns:
+    if 'accepted_by_first_name' not in orders_columns:
         logger.info("为orders表添加accepted_by_first_name列")
         c.execute("ALTER TABLE orders ADD COLUMN accepted_by_first_name TEXT")
+    
+    # 检查users表中是否需要添加新列
+    c.execute("PRAGMA table_info(users)")
+    users_columns = [column[1] for column in c.fetchall()]
+    
+    # 检查是否需要添加balance列（用户余额）
+    if 'balance' not in users_columns:
+        logger.info("为users表添加balance列")
+        c.execute("ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0")
+    
+    # 检查是否需要添加credit_limit列（透支额度）
+    if 'credit_limit' not in users_columns:
+        logger.info("为users表添加credit_limit列")
+        c.execute("ALTER TABLE users ADD COLUMN credit_limit REAL DEFAULT 0")
     
     # 创建超级管理员账号（如果不存在）
     admin_hash = hashlib.sha256("755439".encode()).hexdigest()

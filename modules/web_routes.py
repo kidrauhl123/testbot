@@ -145,7 +145,10 @@ def register_routes(app):
         
         if not account or not password:
             logger.warning("订单提交失败: 账号或密码为空")
-            return render_template('index.html', error='账号和密码不能为空', prices=WEB_PRICES, plan_options=PLAN_OPTIONS)
+            return jsonify({
+                "success": False,
+                "error": "账号和密码不能为空"
+            }), 400
         
         try:
             # 获取当前用户信息
@@ -159,12 +162,12 @@ def register_routes(app):
             
             if not sufficient:
                 logger.warning(f"订单提交失败: 用户余额不足 (用户={username}, 余额={balance}, 透支额度={credit_limit}, 价格={price})")
-                return render_template('index.html', 
-                                       error=f'余额和透支额度不足，当前余额: {balance}，透支额度: {credit_limit}，套餐价格: {price}', 
-                                       prices=WEB_PRICES, 
-                                       plan_options=PLAN_OPTIONS,
-                                       balance=balance,
-                                       credit_limit=credit_limit)
+                return jsonify({
+                    "success": False,
+                    "error": f'余额和透支额度不足，当前余额: {balance}，透支额度: {credit_limit}，套餐价格: {price}',
+                    "balance": balance,
+                    "credit_limit": credit_limit
+                }), 400
             
             # 记录当前时间
             timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -181,12 +184,12 @@ def register_routes(app):
             success, new_balance = update_user_balance(user_id, -price)
             if not success:
                 logger.error(f"余额扣除失败: 用户={username}, 金额={price}")
-                return render_template('index.html', 
-                                      error=f'扣款失败，订单未提交，请联系管理员', 
-                                      prices=WEB_PRICES, 
-                                      plan_options=PLAN_OPTIONS,
-                                      balance=balance,
-                                      credit_limit=credit_limit)
+                return jsonify({
+                    "success": False,
+                    "error": f'扣款失败，订单未提交，请联系管理员',
+                    "balance": balance,
+                    "credit_limit": credit_limit
+                }), 400
             else:
                 logger.info(f"余额扣除成功: 用户={username}, 金额={price}, 新余额={new_balance}")
             
@@ -196,19 +199,19 @@ def register_routes(app):
             orders = execute_query("SELECT id, account, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             logger.info(f"查询到的最新订单: {orders}")
             
-            return render_template('index.html', 
-                                   orders=orders, 
-                                   success='订单已提交成功！', 
-                                   prices=WEB_PRICES, 
-                                   plan_options=PLAN_OPTIONS,
-                                   balance=new_balance,
-                                   credit_limit=credit_limit)
+            return jsonify({
+                "success": True,
+                "message": '订单已提交成功！',
+                "balance": new_balance,
+                "credit_limit": credit_limit,
+                "orders": orders
+            })
         except Exception as e:
             logger.error(f"创建订单失败: {str(e)}", exc_info=True)
-            return render_template('index.html', 
-                                  error=f'订单提交失败: {str(e)}', 
-                                  prices=WEB_PRICES, 
-                                  plan_options=PLAN_OPTIONS)
+            return jsonify({
+                "success": False,
+                "error": f'订单提交失败: {str(e)}'
+            }), 500
 
     @app.route('/orders/stats/web/<user_id>')
     @login_required

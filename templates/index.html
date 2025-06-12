@@ -649,24 +649,83 @@
       const data = new FormData(e.target);
       
       const resp = await fetch('/', { method: 'POST', body: data });
-      if (!resp.ok) throw new Error('提交失败');
+      const result = await resp.json();
       
-      // 重置表单和状态
-      e.target.reset();
-      displayedOrders = 12;
-      searchKeyword = '';
-      
-      // 立即刷新订单和统计
-      await loadOrders();
-      
-      alert('订单提交成功！');
+      if (result.success) {
+        // 重置表单和状态
+        e.target.reset();
+        displayedOrders = 12;
+        searchKeyword = '';
+        
+        // 更新余额显示
+        if (result.balance !== undefined) {
+          updateBalanceDisplay(result.balance, result.credit_limit);
+        }
+        
+        // 更新订单列表
+        if (result.orders) {
+          allOrders = result.orders;
+          renderOrders(result.orders);
+        } else {
+          // 立即刷新订单和统计
+          await loadOrders();
+        }
+        
+        alert(result.message || '订单提交成功！');
+      } else {
+        // 处理错误情况
+        alert(result.error || '提交失败，请重试');
+        
+        // 更新余额显示（如果返回了）
+        if (result.balance !== undefined) {
+          updateBalanceDisplay(result.balance, result.credit_limit);
+        }
+      }
     } catch (error) {
-      alert(error.message || '提交失败，请重试');
+      alert('提交失败，请重试');
+      console.error('订单提交错误:', error);
     } finally {
       btn.textContent = orig;
       btn.disabled = false;
     }
   });
+  
+  // 更新余额显示的函数
+  function updateBalanceDisplay(balance, creditLimit) {
+    // 更新导航栏的余额显示
+    const balanceBadge = document.querySelector('.balance-badge');
+    if (balanceBadge) {
+      balanceBadge.textContent = `余额: ${balance} 元`;
+    }
+    
+    // 更新透支额度显示
+    const creditBadge = document.querySelector('.credit-badge');
+    if (creditBadge && creditLimit !== undefined) {
+      creditBadge.textContent = `透支额度: ${creditLimit} 元`;
+    }
+    
+    // 更新账户余额卡片
+    const balanceAmount = document.querySelector('.balance-amount');
+    if (balanceAmount) {
+      balanceAmount.textContent = balance;
+    }
+    
+    const creditAmount = document.querySelector('.credit-amount');
+    if (creditAmount && creditLimit !== undefined) {
+      creditAmount.textContent = creditLimit;
+    }
+    
+    // 更新余额信息文本
+    const balanceHighlight = document.querySelector('.balance-info .highlight');
+    if (balanceHighlight) {
+      balanceHighlight.textContent = balance;
+    }
+    
+    const creditHighlight = document.querySelector('.balance-info .highlight-credit');
+    if (creditHighlight && creditLimit !== undefined) {
+      creditHighlight.textContent = creditLimit;
+    }
+  }
 
   // 加载订单
   async function loadOrders(showIndicator = true) {
