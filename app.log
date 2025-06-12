@@ -21461,3 +21461,26 @@ telegram.error.Conflict: Conflict: terminated by other getUpdates request; make 
 2025-06-12 12:13:11,469 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
 2025-06-12 12:13:11,470 - httpcore.http11 - DEBUG - send_request_body.complete
 2025-06-12 12:13:11,470 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-12 12:13:15,464 - modules.telegram_bot - DEBUG - 执行第 22 次订单检查
+2025-06-12 12:13:15,464 - modules.database - DEBUG - 执行查询: SELECT id, account, password, package FROM orders ... 参数: ()
+2025-06-12 12:13:15,465 - modules.database - DEBUG - 查询返回 0 条结果
+2025-06-12 12:13:20,469 - modules.telegram_bot - DEBUG - 执行第 23 次订单检查
+2025-06-12 12:13:20,469 - modules.database - DEBUG - 执行查询: SELECT id, account, password, package FROM orders ... 参数: ()
+2025-06-12 12:13:20,470 - modules.database - DEBUG - 查询返回 0 条结果
+2025-06-12 12:13:21,752 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Thu, 12 Jun 2025 04:13:22 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-06-12 12:13:21,752 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk/getUpdates "HTTP/1.1 200 OK"
+2025-06-12 12:13:21,752 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-06-12 12:13:21,753 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-06-12 12:13:21,753 - httpcore.http11 - DEBUG - response_closed.started
+2025-06-12 12:13:21,753 - httpcore.http11 - DEBUG - response_closed.complete
+2025-06-12 12:13:21,753 - telegram.ext.ExtBot - DEBUG - Call to Bot API endpoint `getUpdates` finished with return value `[]`
+2025-06-12 12:13:21,754 - telegram.ext.ExtBot - DEBUG - No new updates found.
+2025-06-12 12:13:21,754 - telegram.ext.ExtBot - DEBUG - Calling Bot API endpoint `getUpdates` with parameters `{'timeout': 10, 'offset': 0}`
+2025-06-12 12:13:21,754 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-06-12 12:13:21,755 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-06-12 12:13:21,755 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-06-12 12:13:21,756 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-06-12 12:13:21,756 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-06-12 12:13:25,482 - modules.telegram_bot - DEBUG - 执行第 24 次订单检查
+2025-06-12 12:13:25,482 - modules.database - DEBUG - 执行查询: SELECT id, account, password, package FROM orders ... 参数: ()
+2025-06-12 12:13:25,483 - modules.database - DEBUG - 查询返回 0 条结果

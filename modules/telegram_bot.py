@@ -19,7 +19,7 @@ from telegram.ext import (
 
 from modules.constants import (
     BOT_TOKEN, STATUS, PLAN_LABELS_EN,
-    STATUS_TEXT_ZH, TG_PRICES, WEB_PRICES
+    STATUS_TEXT_ZH, TG_PRICES, WEB_PRICES, SELLER_CHAT_IDS
 )
 from modules.database import (
     get_order_details, accept_order_atomic, execute_query, 
@@ -36,6 +36,10 @@ bot_application = None
 # ===== TG 辅助函数 =====
 def is_seller(chat_id):
     """检查用户是否为已授权的卖家"""
+    # 首先检查环境变量中的卖家ID
+    if chat_id in SELLER_CHAT_IDS:
+        return True
+    # 然后检查数据库中的卖家ID
     return chat_id in get_active_seller_ids()
 
 async def get_user_info(user_id):
