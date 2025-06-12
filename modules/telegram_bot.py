@@ -997,76 +997,45 @@ async def bot_main(notification_queue):
         
         # 添加错误处理程序
         bot_application.add_error_handler(error_handler)
-        
-        # 启动机器人
-        logger.info("初始化机器人...")
-        print("DEBUG: 初始化机器人...")
+
+        # 初始化应用
+        logger.info("初始化Telegram应用...")
         await bot_application.initialize()
         
         # 获取Railway应用URL
-        import os
         railway_url = os.environ.get('RAILWAY_STATIC_URL')
         if not railway_url:
             railway_url = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
             if railway_url:
                 railway_url = f"https://{railway_url}"
         
-        # 如果在Railway环境中，使用webhook
+        # 总是尝试设置 Webhook，因为我们是在 Web 应用中运行
         if railway_url:
             webhook_url = f"{railway_url}/telegram-webhook"
-            logger.info(f"在Railway环境中，使用webhook: {webhook_url}")
-            print(f"DEBUG: 在Railway环境中，使用webhook: {webhook_url}")
-            
-            # 设置webhook
+            logger.info(f"设置 Telegram webhook: {webhook_url}")
+            print(f"DEBUG: 设置 Telegram webhook: {webhook_url}")
             await bot_application.bot.set_webhook(
                 url=webhook_url,
-                allowed_updates=["message", "callback_query", "chat_member", "edited_message"]
+                allowed_updates=Update.ALL_TYPES
             )
-            logger.info("Webhook已设置")
-            print("DEBUG: Webhook已设置")
-            
-            # 启动webhook服务器
-            await bot_application.start_webhook(
-                listen="0.0.0.0",
-                port=int(os.environ.get("PORT", 8080)),
-                url_path="telegram-webhook",
-                webhook_url=webhook_url
-            )
-            logger.info("Webhook服务器已启动")
-            print("DEBUG: Webhook服务器已启动")
         else:
-            # 在本地环境中，使用轮询
-            logger.info("在本地环境中，使用轮询")
-            print("DEBUG: 在本地环境中，使用轮询")
-            
-            # 使用更明确的配置启动轮询
-            await bot_application.start_polling(
-                allowed_updates=["message", "callback_query", "chat_member", "edited_message"],
-                drop_pending_updates=False,
-                timeout=30,
-                read_timeout=30,
-                write_timeout=30,
-                connect_timeout=30,
-                pool_timeout=30
-            )
-            logger.info("轮询已启动")
-            print("DEBUG: 轮询已启动")
-        
-        logger.info("Telegram机器人启动成功")
-        print("DEBUG: Telegram机器人启动成功")
-        
+            logger.warning("无法获取公开URL，未设置webhook。机器人可能无法接收更新。")
+
         # 启动后台任务
-        order_check_task = asyncio.create_task(periodic_order_check())
-        notification_task = asyncio.create_task(process_notification_queue(notification_queue))
+        logger.info("启动后台任务...")
+        asyncio.create_task(periodic_order_check())
+        asyncio.create_task(process_notification_queue(notification_queue))
         
-        logger.info("进入主循环保持运行")
-        print("DEBUG: 进入主循环保持运行")
+        logger.info("Telegram机器人主循环已启动，等待更新...")
+        print("DEBUG: Telegram机器人主循环已启动，等待更新...")
         
-        # 等待任务完成
-        await asyncio.gather(order_check_task, notification_task)
+        # 保持此协程运行以使后台任务可以执行
+        while True:
+            await asyncio.sleep(3600) # 每小时唤醒一次，但主要目的是保持运行
+
     except Exception as e:
-        logger.critical(f"Telegram机器人启动失败: {str(e)}", exc_info=True)
-        print(f"CRITICAL: Telegram机器人启动失败: {str(e)}")
+        logger.critical(f"Telegram机器人主函数 `bot_main` 发生严重错误: {str(e)}", exc_info=True)
+        print(f"CRITICAL: Telegram机器人主函数 `bot_main` 发生严重错误: {str(e)}")
 
 # 添加错误处理函数
 async def error_handler(update, context):
