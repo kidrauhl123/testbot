@@ -55,6 +55,40 @@ def get_db_connection():
         print(f"ERROR: 获取数据库连接时出错: {str(e)}")
         return None
 
+# 错误处理装饰器
+def error_handler(func):
+    """装饰器：捕获并处理回调函数中的异常"""
+    @functools.wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            return await func(update, context)
+        except Exception as e:
+            user_id = None
+            try:
+                if update.effective_user:
+                    user_id = update.effective_user.id
+            except:
+                pass
+            
+            error_msg = f"回调处理错误 [{func.__name__}] "
+            if user_id:
+                error_msg += f"用户ID: {user_id} "
+            error_msg += f"错误: {str(e)}"
+            
+            logger.error(error_msg, exc_info=True)
+            print(f"ERROR: {error_msg}")
+            
+            # 尝试通知用户
+            try:
+                if update.callback_query:
+                    await update.callback_query.answer("操作失败，请稍后重试", show_alert=True)
+            except Exception as notify_err:
+                logger.error(f"无法通知用户错误: {str(notify_err)}")
+                print(f"ERROR: 无法通知用户错误: {str(notify_err)}")
+            
+            return None
+    return wrapper
+
 # 获取中国时间的函数
 def get_china_time():
     """获取当前中国时间（UTC+8）"""
@@ -1321,37 +1355,4 @@ def update_order_status(order_id, status, handler_id=None):
     except Exception as e:
         logger.error(f"更新订单 {order_id} 状态时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 更新订单 {order_id} 状态时出错: {str(e)}")
-        return False
-
-def error_handler(func):
-    """装饰器：捕获并处理回调函数中的异常"""
-    @functools.wraps(func)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        try:
-            return await func(update, context)
-        except Exception as e:
-            user_id = None
-            try:
-                if update.effective_user:
-                    user_id = update.effective_user.id
-            except:
-                pass
-            
-            error_msg = f"回调处理错误 [{func.__name__}] "
-            if user_id:
-                error_msg += f"用户ID: {user_id} "
-            error_msg += f"错误: {str(e)}"
-            
-            logger.error(error_msg, exc_info=True)
-            print(f"ERROR: {error_msg}")
-            
-            # 尝试通知用户
-            try:
-                if update.callback_query:
-                    await update.callback_query.answer("操作失败，请稍后重试", show_alert=True)
-            except Exception as notify_err:
-                logger.error(f"无法通知用户错误: {str(notify_err)}")
-                print(f"ERROR: 无法通知用户错误: {str(notify_err)}")
-            
-            return None
-    return wrapper 
+        return False 
