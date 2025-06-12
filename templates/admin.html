@@ -187,7 +187,7 @@
     }
     
     .modal-backdrop.show {
-      display: flex;
+      display: flex !important;
     }
     
     .modal {
@@ -197,6 +197,7 @@
       max-width: 500px;
       box-shadow: 0 5px 20px rgba(0,0,0,0.2);
       overflow: hidden;
+      z-index: 1001;
     }
     
     .modal-header {
@@ -545,8 +546,7 @@
           <td class="user-balance">${user.balance ? user.balance.toFixed(2) : '0.00'} 元</td>
           <td>${user.is_admin ? '<span class="badge badge-warning">管理员</span>' : '<span class="badge badge-secondary">普通用户</span>'}</td>
           <td>
-            <button class="btn btn-sm btn-primary edit-balance-btn" data-id="${user.id}" 
-                    data-username="${user.username}" data-balance="${user.balance || 0}">
+            <button class="btn btn-sm btn-primary" onclick="editUserBalance(${user.id}, '${user.username}', ${user.balance || 0})">
               修改余额
             </button>
           </td>
@@ -555,26 +555,7 @@
         tbody.appendChild(tr);
       });
       
-      console.log("用户数据渲染完成，开始绑定按钮事件");
-      
-      // 绑定修改余额按钮事件
-      document.querySelectorAll('.edit-balance-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-          const userId = this.getAttribute('data-id');
-          const username = this.getAttribute('data-username');
-          const balance = this.getAttribute('data-balance');
-          
-          console.log("点击修改余额按钮:", userId, username, balance);
-          
-          document.getElementById('edit-balance-user-id').value = userId;
-          document.getElementById('edit-balance-username').value = username;
-          document.getElementById('edit-balance-current').value = balance;
-          document.getElementById('edit-balance-new').value = balance;
-          
-          openModal('editBalanceModal');
-        });
-      });
-      
+      console.log("用户数据渲染完成");
       console.log("用户管理加载完成");
     } catch (e) {
       console.error('加载用户失败', e);
@@ -583,6 +564,18 @@
         tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
       }
     }
+  }
+
+  // 修改用户余额函数
+  function editUserBalance(userId, username, balance) {
+    console.log("修改用户余额:", userId, username, balance);
+    
+    document.getElementById('edit-balance-user-id').value = userId;
+    document.getElementById('edit-balance-username').value = username;
+    document.getElementById('edit-balance-current').value = balance;
+    document.getElementById('edit-balance-new').value = balance;
+    
+    openModal('editBalanceModal');
   }
 
   async function loadOrders() {
@@ -873,8 +866,13 @@
       alert(`找不到ID为${modalId}的模态框元素，请检查HTML`);
       return;
     }
-    modal.classList.add('show');
-    console.log("模态框已添加show类:", modal);
+    
+    // 强制显示模态框
+    modal.style.display = 'flex';
+    setTimeout(() => {
+      modal.classList.add('show');
+      console.log("模态框已添加show类，当前样式:", modal.style.display, modal.className);
+    }, 10);
   }
   
   function closeModal(modalId) {
@@ -885,6 +883,11 @@
       return;
     }
     modal.classList.remove('show');
+    
+    // 延迟隐藏，以便动画效果
+    setTimeout(() => {
+      modal.style.display = 'none';
+    }, 300);
   }
   
   // 为所有关闭按钮添加事件
@@ -892,8 +895,13 @@
     button.addEventListener('click', function() {
       const modal = this.closest('.modal-backdrop');
       if (modal) {
+        console.log("关闭模态框:", modal.id);
         modal.classList.remove('show');
-        console.log("已关闭模态框:", modal.id);
+        
+        // 延迟隐藏，以便动画效果
+        setTimeout(() => {
+          modal.style.display = 'none';
+        }, 300);
       } else {
         console.error("未找到父级模态框元素");
       }
@@ -941,6 +949,23 @@
     console.log("orders标签页:", document.getElementById('orders'));
     console.log("sellers标签页:", document.getElementById('sellers'));
     
+    // 检查订单编辑表单元素
+    console.log("检查订单编辑表单元素:");
+    console.log("edit-order-id:", document.getElementById('edit-order-id'));
+    console.log("edit-order-account:", document.getElementById('edit-order-account'));
+    console.log("edit-order-password:", document.getElementById('edit-order-password'));
+    console.log("edit-order-package:", document.getElementById('edit-order-package'));
+    console.log("edit-order-status:", document.getElementById('edit-order-status'));
+    console.log("edit-order-remark:", document.getElementById('edit-order-remark'));
+    
+    // 检查余额编辑表单元素
+    console.log("检查余额编辑表单元素:");
+    console.log("edit-balance-user-id:", document.getElementById('edit-balance-user-id'));
+    console.log("edit-balance-username:", document.getElementById('edit-balance-username'));
+    console.log("edit-balance-current:", document.getElementById('edit-balance-current'));
+    console.log("edit-balance-new:", document.getElementById('edit-balance-new'));
+    console.log("saveBalanceBtn:", document.getElementById('saveBalanceBtn'));
+    
     try {
       showTab('users');
       console.log("显示用户标签页成功");
@@ -969,9 +994,57 @@
       console.error("加载卖家数据失败:", e);
     }
 
-    document.querySelector('.sidebar-menu a[href="#users"]').addEventListener('click', loadUsers);
-    document.querySelector('.sidebar-menu a[href="#orders"]').addEventListener('click', loadOrders);
-    document.querySelector('.sidebar-menu a[href="#sellers"]').addEventListener('click', loadSellers);
+    document.querySelector('.sidebar-menu a[href="#users"]').addEventListener('click', function() {
+      loadUsers();
+      showTab('users');
+    });
+    document.querySelector('.sidebar-menu a[href="#orders"]').addEventListener('click', function() {
+      loadOrders();
+      showTab('orders');
+    });
+    document.querySelector('.sidebar-menu a[href="#sellers"]').addEventListener('click', function() {
+      loadSellers();
+      showTab('sellers');
+    });
+    
+    // 手动测试绑定事件是否有效
+    window.testEditBalance = function() {
+      console.log("测试修改余额");
+      editUserBalance(1, 'test', 100);
+    };
+    
+    window.testEditOrder = function() {
+      console.log("测试编辑订单");
+      editOrder(1);
+    };
+    
+    // 添加手动打开模态框的函数
+    window.testOpenModal = function(modalId) {
+      console.log("手动打开模态框:", modalId);
+      const modal = document.getElementById(modalId);
+      if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.add('show');
+        console.log("模态框已打开");
+      } else {
+        console.error("找不到模态框:", modalId);
+      }
+    };
+    
+    // 添加手动关闭模态框的函数
+    window.testCloseModal = function(modalId) {
+      console.log("手动关闭模态框:", modalId);
+      const modal = document.getElementById(modalId);
+      if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+        console.log("模态框已关闭");
+      } else {
+        console.error("找不到模态框:", modalId);
+      }
+    };
+    
+    console.log("页面初始化完成，绑定了测试函数 testEditBalance()、testEditOrder()、testOpenModal() 和 testCloseModal()");
   });
 </script>
 </body>
