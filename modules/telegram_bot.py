@@ -721,7 +721,7 @@ async def check_and_push_orders():
             )
             
             # 创建接单按钮
-            keyboard = [[InlineKeyboardButton("接单", callback_data=f'accept_order_{oid}')]]
+            keyboard = [[InlineKeyboardButton("Accept", callback_data=f'accept_{oid}')]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             # 向所有卖家发送通知
@@ -856,5 +856,5 @@ def restricted(func):
         user_id = update.effective_user.id
         if not is_seller(user_id):
             logger.warning(f"未经授权的访问: {user_id}")
-            await update.message.reply_text("抱歉，您无权使用此机器人。")
+            await update.message.reply_text("Sorry, you are not authorized to use this bot.")
     return wrapped 
