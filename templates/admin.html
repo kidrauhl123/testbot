@@ -335,10 +335,29 @@
       <div id="sellers" class="tab-content">
         <div class="content-header">
           <h2><i class="fas fa-user-tie"></i> 卖家管理</h2>
-          <button class="btn btn-primary" onclick="showAddSellerModal()">
-            <i class="fas fa-plus"></i> 添加卖家
-          </button>
         </div>
+        
+        <!-- 直接添加卖家表单 -->
+        <div class="card" style="margin-bottom: 20px; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+          <h3 style="margin-top: 0;">添加新卖家</h3>
+          <div id="add-seller-error" class="error-message" style="display:none; color: #dc3545; margin-bottom: 15px; padding: 8px; background: #f8d7da; border-radius: 5px;"></div>
+          <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <div style="flex: 1;">
+              <label style="display: block; margin-bottom: 5px;">Telegram 用户ID *</label>
+              <input type="number" id="new-seller-id" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;" placeholder="用户的数字ID">
+            </div>
+            <div style="flex: 1;">
+              <label style="display: block; margin-bottom: 5px;">用户名 (可选)</label>
+              <input type="text" id="new-seller-username" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;" placeholder="@username">
+            </div>
+            <div style="flex: 1;">
+              <label style="display: block; margin-bottom: 5px;">昵称 (可选)</label>
+              <input type="text" id="new-seller-firstname" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;" placeholder="用户的名字">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="addSeller()">添加卖家</button>
+        </div>
+        
         <table class="data-table">
           <thead>
             <tr>
@@ -356,35 +375,6 @@
           </tbody>
         </table>
       </div>
-    </div>
-  </div>
-</div>
-
-<!-- 添加卖家弹窗 -->
-<div class="modal-backdrop" id="add-seller-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <h3>添加新卖家</h3>
-      <button class="modal-close" onclick="hideModal('add-seller-modal')">&times;</button>
-    </div>
-    <div class="modal-body">
-      <div id="add-seller-error" class="error-message" style="display:none;"></div>
-      <div class="form-group">
-        <label>Telegram 用户ID *</label>
-        <input type="number" class="form-control" id="new-seller-id" placeholder="用户的数字ID">
-      </div>
-      <div class="form-group">
-        <label>用户名 (可选)</label>
-        <input type="text" class="form-control" id="new-seller-username" placeholder="@username">
-      </div>
-      <div class="form-group">
-        <label>昵称 (可选)</label>
-        <input type="text" class="form-control" id="new-seller-firstname" placeholder="用户的名字">
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="hideModal('add-seller-modal')">取消</button>
-      <button class="btn btn-primary" onclick="addSeller()">确认添加</button>
     </div>
   </div>
 </div>
@@ -557,18 +547,33 @@
       first_name: document.getElementById('new-seller-firstname').value,
     };
 
-    const response = await fetch('/admin/api/sellers', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
+    try {
+      const response = await fetch('/admin/api/sellers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
 
-    if (response.ok) {
-      hideModal('add-seller-modal');
-      loadSellers();
-    } else {
-      const result = await response.json();
-      errorDiv.textContent = result.error || '添加失败，请重试。';
+      if (response.ok) {
+        // 清空输入框
+        document.getElementById('new-seller-id').value = '';
+        document.getElementById('new-seller-username').value = '';
+        document.getElementById('new-seller-firstname').value = '';
+        errorDiv.style.display = 'none';
+        
+        // 显示成功消息
+        alert('卖家添加成功！');
+        
+        // 重新加载卖家列表
+        loadSellers();
+      } else {
+        const result = await response.json();
+        errorDiv.textContent = result.error || '添加失败，请重试。';
+        errorDiv.style.display = 'block';
+      }
+    } catch (error) {
+      console.error('添加卖家出错:', error);
+      errorDiv.textContent = '网络错误，请重试。';
       errorDiv.style.display = 'block';
     }
   }
