@@ -390,6 +390,12 @@ def register_routes(app):
             return redirect(url_for('index'))
         return render_template('admin.html')
 
+    @app.route('/dashboard')
+    @login_required
+    def user_dashboard():
+        """普通用户的仪表盘页面"""
+        return render_template('dashboard.html')
+
     @app.route('/admin/api/users')
     @login_required
     @admin_required

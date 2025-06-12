@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>用户后台 - 破天充值系统</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+  <style>
+    * { box-sizing: border-box; }
+    body { 
+      font-family: 'Microsoft YaHei', Arial, sans-serif; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      margin: 0; padding: 0; min-height: 100vh;
+      color: #333;
+    }
+    
+    .navbar {
+      background: rgba(255,255,255,0.95);
+      padding: 15px 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .navbar-brand {
+      font-size: 24px;
+      font-weight: bold;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .navbar-user {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .btn {
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+    .btn-primary { background: #667eea; color: white; }
+    .btn-danger { background: #dc3545; color: white; }
+    
+    .main-container {
+      max-width: 1400px;
+      margin: 20px auto;
+      padding: 20px;
+    }
+    
+    .dashboard-container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    .card {
+      background: rgba(255,255,255,0.95);
+      border-radius: 15px;
+      padding: 20px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      backdrop-filter: blur(10px);
+    }
+    
+    .card-header {
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .card-header h2 {
+      margin: 0;
+      font-weight: 600;
+      font-size: 18px;
+      color: #333;
+    }
+
+    .stats-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    
+    .stat-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+      padding: 20px;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+    
+    .stat-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+    }
+    
+    .stat-icon {
+      font-size: 28px;
+      margin-bottom: 10px;
+      color: #667eea;
+    }
+    
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 5px;
+    }
+    
+    .stat-label {
+      font-size: 14px;
+      color: #666;
+    }
+    
+    .order-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 15px;
+    }
+    
+    .order-item {
+      background: #fff;
+      border-radius: 10px;
+      padding: 15px;
+      transition: all 0.3s ease;
+      border-left: 4px solid #667eea;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+    }
+    
+    .order-item:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    
+    .order-id {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+    
+    .order-status {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .status-submitted { background: #e9f5fe; color: #3498db; }
+    .status-accepted { background: #fef2e5; color: #f39c12; }
+    .status-completed { background: #e6f8f1; color: #2ecc71; }
+    .status-failed { background: #feeaea; color: #e74c3c; }
+    
+    .order-info {
+      margin-bottom: 15px;
+    }
+    
+    .info-row {
+      display: flex;
+      margin-bottom: 5px;
+    }
+    
+    .info-label {
+      width: 70px;
+      color: #666;
+      font-size: 13px;
+    }
+    
+    .info-value {
+      flex: 1;
+      font-weight: 500;
+    }
+    
+    .no-orders {
+      text-align: center;
+      padding: 30px;
+      color: #999;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 50px;
+      color: #667eea;
+    }
+    
+    .package-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    
+    .package-stat {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 10px 15px;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    .package-stat-value {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 5px;
+    }
+    
+    .package-stat-label {
+      color: #666;
+    }
+    
+    @media (max-width: 768px) {
+      .stats-container {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .order-list {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="navbar">
+  <div class="navbar-brand">破天充值系统</div>
+  <div class="navbar-user">
+    <span>欢迎, {{ session.username }}</span>
+    <a href="/" class="btn btn-primary">返回首页</a>
+    <a href="/logout" class="btn btn-danger">退出登录</a>
+  </div>
+</div>
+
+<div class="main-container">
+  <div class="dashboard-container">
+    <div class="card">
+      <div class="card-header">
+        <h2>我的统计数据</h2>
+      </div>
+      <div class="stats-container" id="stats-container">
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fas fa-clipboard-list"></i></div>
+          <div class="stat-value" id="total-orders">--</div>
+          <div class="stat-label">总订单数</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+          <div class="stat-value" id="completed-orders">--</div>
+          <div class="stat-label">成功订单</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fas fa-times-circle"></i></div>
+          <div class="stat-value" id="failed-orders">--</div>
+          <div class="stat-label">失败订单</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fas fa-dollar-sign"></i></div>
+          <div class="stat-value" id="total-amount">--</div>
+          <div class="stat-label">总金额</div>
+        </div>
+      </div>
+      <div id="package-stats" class="package-stats"></div>
+    </div>
+    
+    <div class="card">
+      <div class="card-header">
+        <h2>我的所有订单</h2>
+      </div>
+      <div id="orders-container" class="order-list">
+        <div class="loading">加载中...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 全局变量
+  const WEB_PRICES = {
+    '1': 12,
+    '2': 18,
+    '3': 30,
+    '6': 50,
+    '12': 84
+  };
+  
+  // 加载订单并计算统计数据
+  async function loadOrdersAndStats() {
+    try {
+      const resp = await fetch('/orders/recent?limit=100');
+      const orders = await resp.json();
+      
+      if (!orders || orders.length === 0) {
+        document.getElementById('orders-container').innerHTML = '<div class="no-orders">暂无订单记录</div>';
+        return;
+      }
+      
+      // 计算统计数据
+      const stats = calculateStats(orders);
+      updateStatsDisplay(stats);
+      
+      // 渲染订单列表
+      renderOrders(orders);
+    } catch (e) {
+      console.error('加载数据失败', e);
+      document.getElementById('orders-container').innerHTML = '<div class="no-orders">加载失败，请刷新重试</div>';
+    }
+  }
+  
+  // 计算统计数据
+  function calculateStats(orders) {
+    const stats = {
+      total: 0,
+      completed: 0,
+      failed: 0,
+      totalAmount: 0,
+      packages: {}
+    };
+    
+    for (const order of orders) {
+      stats.total++;
+      
+      // 按套餐统计
+      const pkg = order.package;
+      if (!stats.packages[pkg]) {
+        stats.packages[pkg] = {
+          total: 0,
+          completed: 0,
+          failed: 0,
+          amount: 0
+        };
+      }
+      
+      stats.packages[pkg].total++;
+      
+      // 根据状态统计
+      if (order.status === 'completed') {
+        stats.completed++;
+        stats.packages[pkg].completed++;
+        
+        const price = WEB_PRICES[pkg] || 0;
+        stats.totalAmount += price;
+        stats.packages[pkg].amount += price;
+      } else if (order.status === 'failed') {
+        stats.failed++;
+        stats.packages[pkg].failed++;
+      }
+    }
+    
+    return stats;
+  }
+  
+  // 更新统计显示
+  function updateStatsDisplay(stats) {
+    document.getElementById('total-orders').textContent = stats.total;
+    document.getElementById('completed-orders').textContent = stats.completed;
+    document.getElementById('failed-orders').textContent = stats.failed;
+    document.getElementById('total-amount').textContent = '¥' + stats.totalAmount.toFixed(2);
+    
+    // 显示套餐统计
+    const packageStatsContainer = document.getElementById('package-stats');
+    let packageStatsHtml = '';
+    
+    // 按照套餐类型排序
+    const sortedPackages = Object.keys(stats.packages).sort((a, b) => Number(a) - Number(b));
+    
+    for (const pkg of sortedPackages) {
+      const pkgStats = stats.packages[pkg];
+      packageStatsHtml += `
+        <div class="package-stat">
+          <div class="package-stat-value">${pkg}个月</div>
+          <div class="package-stat-label">总订单: ${pkgStats.total}</div>
+          <div class="package-stat-label">成功: ${pkgStats.completed}</div>
+          <div class="package-stat-label">失败: ${pkgStats.failed}</div>
+          <div class="package-stat-label">金额: ¥${pkgStats.amount.toFixed(2)}</div>
+        </div>
+      `;
+    }
+    
+    packageStatsContainer.innerHTML = packageStatsHtml;
+  }
+  
+  // 渲染订单列表
+  function renderOrders(orders) {
+    const container = document.getElementById('orders-container');
+    container.innerHTML = '';
+    
+    for (const order of orders) {
+      const statusClass = 'status-' + order.status;
+      
+      const orderHtml = `
+        <div class="order-item">
+          <div class="order-id">
+            订单 #${order.id}
+            <span class="order-status ${statusClass}">${order.status_text}</span>
+          </div>
+          <div class="order-info">
+            <div class="info-row">
+              <div class="info-label">账号:</div>
+              <div class="info-value">${escapeHtml(order.account)}</div>
+            </div>
+            <div class="info-row">
+              <div class="info-label">套餐:</div>
+              <div class="info-value">${order.package}个月</div>
+            </div>
+            <div class="info-row">
+              <div class="info-label">价格:</div>
+              <div class="info-value">¥${WEB_PRICES[order.package] || 'N/A'}</div>
+            </div>
+            ${order.status === 'failed' ? 
+              `<div class="info-row" style="color: #e74c3c;">
+                <div class="info-label">失败原因:</div>
+                <div class="info-value">${escapeHtml(order.remark || '未提供')}</div>
+              </div>` : 
+              (order.remark ? `<div class="info-row">
+                <div class="info-label">备注:</div>
+                <div class="info-value">${escapeHtml(order.remark)}</div>
+              </div>` : '')
+            }
+            <div class="info-row">
+              <div class="info-label">提交时间:</div>
+              <div class="info-value">${order.created_at}</div>
+            </div>
+            ${order.accepted_at ? `
+              <div class="info-row">
+                <div class="info-label">接单时间:</div>
+                <div class="info-value">${order.accepted_at}</div>
+              </div>` : ''
+            }
+            ${order.completed_at ? `
+              <div class="info-row">
+                <div class="info-label">完成时间:</div>
+                <div class="info-value">${order.completed_at}</div>
+              </div>` : ''
+            }
+          </div>
+        </div>
+      `;
+      
+      container.insertAdjacentHTML('beforeend', orderHtml);
+    }
+  }
+  
+  // HTML转义函数
+  function escapeHtml(unsafe) {
+    return unsafe
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+  
+  // 页面加载完成后执行
+  document.addEventListener('DOMContentLoaded', function() {
+    loadOrdersAndStats();
+  });
+</script>
+</body>
+</html> 

@@ -89,19 +89,17 @@
     
     .container {
       display: flex;
-      gap: 15px;
+      gap: 30px;
       align-items: flex-start;
     }
 
     .left {
-      width: 30%;
+      width: 40%;
       flex-shrink: 0;
-      position: relative;
     }
 
     .right {
-      width: 70%;
-      min-height: auto;
+      width: 60%;
     }
     
     .card {
@@ -121,12 +119,8 @@
     }
     
     .card-header {
-      margin: -20px -20px 15px -20px;
-      padding: 15px 20px;
-      background: rgba(0,0,0,0.02);
-      border-bottom: 1px solid rgba(0,0,0,0.05);
-      border-radius: 12px 12px 0 0;
       display: flex;
+      justify-content: space-between;
       align-items: center;
     }
     
@@ -143,6 +137,12 @@
       content: '📝';
       margin-right: 8px;
       font-size: 18px;
+    }
+
+    .today-total {
+      font-size: 14px;
+      color: #667eea;
+      font-weight: 600;
     }
 
     .form-group {
@@ -378,6 +378,8 @@
     {% if session.is_admin %}
       <span class="admin-badge">超级管理员</span>
       <a href="/admin" class="btn btn-primary">管理后台</a>
+    {% else %}
+      <a href="/dashboard" class="btn btn-primary">我的后台</a>
     {% endif %}
     <a href="/logout" class="btn btn-danger">退出登录</a>
   </div>
@@ -399,17 +401,14 @@
                   <button type="submit" class="submit-btn">提交订单</button>
                 </form>
             </div>
-            {% if session.is_admin %}
-            <div class="card">
-                <div class="card-header"><h2>今日统计</h2></div>
-                <div id="admin-stats-container">加载中...</div>
-            </div>
-            {% endif %}
         </div>
 
         <div class="right">
             <div class="card">
-                <div class="card-header"><h2>{% if session.is_admin %}系统最新订单{% else %}我的订单{% endif %}</h2></div>
+                <div class="card-header">
+                  <h2>{% if session.is_admin %}系统最新订单{% else %}我的订单{% endif %}</h2>
+                  <div id="today-total" class="today-total"></div>
+                </div>
                 <div id="orders-container">加载中...</div>
                 <div id="load-more-container" style="text-align:center; margin-top: 20px; display:none;">
                     <button onclick="loadMoreOrders()" class="btn btn-primary">显示更多</button>
@@ -436,151 +435,45 @@
     '12': 84
   };
   
-  let showStatLimit = 3;
-  let userStatResults = [];
-
-  
   // 生成订单数据的简单哈希
   function generateOrdersHash(orders) {
     const relevant = orders.map(o => `${o.id}-${o.status}-${o.accepted_at || ''}-${o.completed_at || ''}`).join('|');
     return btoa(relevant).substring(0, 16); // 简化的哈希
   }
 
-  // 加载用户统计
-  async function loadUserStats() {
-    try {
-      let targetId = userId;
-      if (isAdmin) {
-        const input = document.getElementById('statTargetUserId');
-        if (input && input.value.trim()) {
-          targetId = input.value.trim();
-        }
-      }
-  
-      const resp = await fetch(`/orders/stats/web/${targetId}`);
-      const stats = await resp.json();
-      
-      const statsDiv = document.getElementById('admin-stats-container');
-      const total = stats.total || {};
-      const totalOrders = (total.submitted || 0) + (total.completed || 0) + (total.failed || 0) + (total.cancelled || 0);
-      
-      if (totalOrders === 0) {
-        statsDiv.innerHTML = '<div style="color: #999;">今天还没有订单</div>';
-      } else {
-        let html = `
-          <div style="margin-bottom: 8px;">
-            <strong>订单数：</strong>${totalOrders} 单
-          </div>
-          <div style="margin-bottom: 8px;">
-            <strong>总金额：</strong>¥${total.amount ? total.amount.toFixed(2) : '0.00'}
-          </div>`;
-        
-        // 处理包月详情
-        const packages = stats.stats || {};
-        if (Object.keys(packages).length > 0) {
-          html += '<div style="margin-top: 10px; font-size: 13px;">';
-          for (const [pkg, details] of Object.entries(packages)) {
-            const count = (details.submitted || 0) + (details.completed || 0);
-            if (count > 0) {
-              const amount = (details.price || 0) * (details.completed || 0);
-              html += `<div>• ${pkg}个月：${count}单 (¥${amount.toFixed(2)})</div>`;
-            }
-          }
-          html += '</div>';
-        }
-        
-        statsDiv.innerHTML = html;
-      }
-    } catch (e) {
-      console.error('加载统计失败', e);
-    }
-  }
-  function buildUserStatsFromOrders(allOrders) {
-    const map = new Map();
-    const currentUsername = '{{ session.username }}'; // 获取当前登录用户名
-  
-    for (const order of allOrders) {
-      const username = order.creator;
-      if (!username) continue;
-      
-      // 如果不是管理员，只处理当前用户的订单
-      if (!isAdmin && username !== currentUsername) continue;
-  
-      if (!map.has(username)) {
-        map.set(username, {
-          username,
-          total_orders: 0,        // 完成的订单总数
-          total_submitted: 0,     // 提交的订单总数
-          total_amount: 0,
-          package_counts: {},     // 每个套餐的总提交数
-          completed_counts: {}    // 每个套餐的完成数
-        });
-      }
-  
-      const stats = map.get(username);
-      
-      // 计算提交订单总数
-      stats.total_submitted += 1;
-      
-      // 只统计已完成的订单
+  // 计算今日总金额
+  function calculateTodayTotal(orders) {
+    const today = new Date().toISOString().split('T')[0]; // 获取今天的日期 YYYY-MM-DD
+    
+    // 筛选今天的订单
+    const todayOrders = orders.filter(order => {
+      return order.created_at && order.created_at.startsWith(today);
+    });
+    
+    // 计算金额总和
+    let totalAmount = 0;
+    let totalCount = 0;
+    
+    todayOrders.forEach(order => {
+      totalCount++;
+      // 只计算已完成订单的金额
       if (order.status === 'completed') {
-        stats.total_orders += 1;
         const price = WEB_PRICES[order.package] || 0;
-        stats.total_amount += price;
-        
-        // 记录每个套餐的完成数
-        const pkg = order.package;
-        stats.completed_counts[pkg] = (stats.completed_counts[pkg] || 0) + 1;
+        totalAmount += price;
       }
-  
-      // 记录每个套餐的总提交数
-      const pkg = order.package;
-      stats.package_counts[pkg] = (stats.package_counts[pkg] || 0) + 1;
-    }
-  
-    return Array.from(map.values()).sort((a, b) => b.total_amount - a.total_amount);
+    });
+    
+    return { totalAmount, totalCount };
   }
-
-  function renderAdminStatsList() {
-    const statsDiv = document.getElementById('admin-stats-container');
+  
+  // 显示今日总金额
+  function updateTodayTotal(orders) {
+    const { totalAmount, totalCount } = calculateTodayTotal(orders);
+    const todayTotalElement = document.getElementById('today-total');
     
-    // 如果没有统计数据
-    if (!userStatResults || userStatResults.length === 0) {
-      statsDiv.innerHTML = '<div style="color: #999;">今天还没有订单</div>';
-      return;
+    if (todayTotalElement) {
+      todayTotalElement.innerHTML = `今日: ${totalCount}单 / ¥${totalAmount.toFixed(2)}`;
     }
-    
-    // 管理员可以查看所有用户，普通用户只看自己的
-    const toShow = isAdmin ? userStatResults.slice(0, showStatLimit) : userStatResults;
-  
-    let html = '';
-    for (const stat of toShow) {
-      // 如果是管理员，显示用户名标题
-      const userHeader = isAdmin ? `<strong>@${stat.username}</strong><br>` : '';
-      
-      html += `
-        <div style="margin-bottom:15px;">
-          ${userHeader}
-          订单数：${stat.total_orders} 单<br>
-          总金额：¥${stat.total_amount.toFixed(2)}<br>`;
-  
-      for (const [pkg, count] of Object.entries(stat.package_counts)) {
-        // 获取该套餐完成的订单数
-        const completedCount = stat.completed_counts[pkg] || 0;
-        // 金额只计算已完成的订单
-        const amount = (WEB_PRICES[pkg] || 0) * completedCount;
-        html += `<div style="font-size:13px;">• ${pkg}个月：${completedCount} 单 (¥${amount.toFixed(2)})</div>`;
-      }
-  
-      html += `</div>`;
-    }
-  
-    // 只有管理员需要"显示更多"按钮
-    if (isAdmin && userStatResults.length > showStatLimit) {
-      html += `<button onclick="showStatLimit += 3; renderAdminStatsList()" style="margin-top:10px;">显示更多</button>`;
-    }
-  
-    statsDiv.innerHTML = html;
   }
     
   // 提交订单
@@ -603,7 +496,6 @@
       
       // 立即刷新订单和统计
       await loadOrders();
-      await loadUserStats();
       
       alert('订单提交成功！');
     } catch (error) {
@@ -647,6 +539,9 @@
       }
       
       renderOrders(filteredOrders);
+      
+      // 更新今日总金额
+      updateTodayTotal(allOrders);
       
       if (showIndicator) {
         setTimeout(hideRefreshIndicator, 300);
@@ -822,9 +717,8 @@
 
   // 页面加载完成后的初始化
   document.addEventListener('DOMContentLoaded', function() {
-    // 加载订单和统计
+    // 加载订单
     loadOrders();
-    loadUserStats();
     
     // 启动自动刷新
     startAutoRefresh();
