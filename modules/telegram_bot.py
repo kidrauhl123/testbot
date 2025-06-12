@@ -381,8 +381,14 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # 处理失败原因选项
         elif data.startswith('reason_'):
             parts = data.split('_')
-            reason_type = parts[1]
-            oid = int(parts[-1])  # 订单ID在最后一部分
+            # 修复原因类型解析逻辑
+            if len(parts) >= 3:
+                # 格式为reason_wrong_password_79，需要正确提取原因部分
+                reason_type = '_'.join(parts[1:-1])  # 合并中间部分作为原因
+                oid = int(parts[-1])  # 订单ID在最后一部分
+            else:
+                reason_type = "unknown"
+                oid = int(parts[-1]) if parts[-1].isdigit() else 0
             
             logger.info(f"管理员 {user_id} 为订单 #{oid} 选择了失败原因: {reason_type}")
             
@@ -437,6 +443,8 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     keyboard = [[InlineKeyboardButton("⏱️ Failed: Membership Not Expired", callback_data="noop")]]
                 elif reason_type == "other":
                     keyboard = [[InlineKeyboardButton("❓ Failed: Other Reason", callback_data="noop")]]
+                else:
+                    keyboard = [[InlineKeyboardButton(f"❓ Failed: {reason_type}", callback_data="noop")]]
                 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
