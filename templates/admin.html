@@ -465,19 +465,45 @@
   }
 
   function showModal(modalId) {
-    document.getElementById(modalId).classList.add('show');
+    console.log("显示模态框:", modalId);
+    const modal = document.getElementById(modalId);
+    if (!modal) {
+      console.error("找不到模态框元素:", modalId);
+      return;
+    }
+    modal.classList.add('show');
+    console.log("模态框已添加show类:", modal);
   }
 
   function hideModal(modalId) {
-    document.getElementById(modalId).classList.remove('show');
+    console.log("隐藏模态框:", modalId);
+    const modal = document.getElementById(modalId);
+    if (!modal) {
+      console.error("找不到模态框元素:", modalId);
+      return;
+    }
+    modal.classList.remove('show');
   }
 
   function showAddSellerModal() {
+    console.log("点击了添加卖家按钮");
     // Clear previous input
-    document.getElementById('new-seller-id').value = '';
-    document.getElementById('new-seller-username').value = '';
-    document.getElementById('new-seller-firstname').value = '';
-    document.getElementById('add-seller-error').style.display = 'none';
+    const idInput = document.getElementById('new-seller-id');
+    const usernameInput = document.getElementById('new-seller-username');
+    const firstnameInput = document.getElementById('new-seller-firstname');
+    const errorDiv = document.getElementById('add-seller-error');
+    
+    if (!idInput || !usernameInput || !firstnameInput || !errorDiv) {
+      console.error("找不到模态框内的输入元素");
+      alert("模态框元素加载失败，请检查控制台");
+      return;
+    }
+    
+    idInput.value = '';
+    usernameInput.value = '';
+    firstnameInput.value = '';
+    errorDiv.style.display = 'none';
+    
     showModal('add-seller-modal');
   }
 

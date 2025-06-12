@@ -8,10 +8,31 @@ if not os.environ.get('BOT_TOKEN'):
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 
+# 支持通过环境变量设置卖家ID
+SELLER_CHAT_IDS = []
+if os.environ.get('SELLER_CHAT_IDS'):
+    try:
+        # 格式: "123456789,987654321"
+        seller_ids_str = os.environ.get('SELLER_CHAT_IDS', '')
+        SELLER_CHAT_IDS = [int(x.strip()) for x in seller_ids_str.split(',') if x.strip()]
+        print(f"从环境变量加载卖家ID: {SELLER_CHAT_IDS}")
+    except Exception as e:
+        print(f"解析SELLER_CHAT_IDS环境变量出错: {e}")
+
+# 向后兼容ADMIN_CHAT_IDS环境变量
+if os.environ.get('ADMIN_CHAT_IDS') and not os.environ.get('SELLER_CHAT_IDS'):
+    try:
+        # 格式: "123456789,987654321"
+        admin_ids_str = os.environ.get('ADMIN_CHAT_IDS', '')
+        SELLER_CHAT_IDS = [int(x.strip()) for x in admin_ids_str.split(',') if x.strip()]
+        print(f"从ADMIN_CHAT_IDS环境变量加载卖家ID: {SELLER_CHAT_IDS}")
+    except Exception as e:
+        print(f"解析ADMIN_CHAT_IDS环境变量出错: {e}")
+
 # ===== 价格系统 =====
 # 网页端价格（人民币）
 WEB_PRICES = {'1': 12, '2': 18, '3': 30, '6': 50, '12': 84}
-# Telegram端管理员薪资（美元）
+# Telegram端卖家薪资（美元）
 TG_PRICES = {'1': 1.35, '2': 1.3, '3': 3.2, '6': 5.7, '12': 9.2}
 
 # ===== 状态常量 =====
