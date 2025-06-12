@@ -677,54 +677,81 @@ def create_order_with_deduction_atomic(account, password, package, remark, usern
     这是保证数据一致性的关键操作。
     返回 (bool: success, str: message, float: new_balance, float: credit_limit)
     """
-    from .constants import WEB_PRICES, STATUS
+    from .constants import WEB_PRICES, STATUS, DATABASE_URL
 
     price = WEB_PRICES.get(str(package))
     if price is None:
         return False, "无效的套餐", None, None
 
-    conn = None
     if DATABASE_URL.startswith('postgres'):
-        # PostgreSQL-specific connection logic can be added here if needed
-        # For now, we focus on the SQLite implementation which is what the project uses
-        raise NotImplementedError("PostgreSQL atomic order creation not implemented")
+        # PostgreSQL 的事务逻辑
+        conn = None
+        try:
+            url = urlparse(DATABASE_URL)
+            conn = psycopg2.connect(
+                dbname=url.path[1:],
+                user=url.username,
+                password=url.password,
+                host=url.hostname,
+                port=url.port
+            )
+            with conn:
+                c = conn.cursor()
+                c.execute("SELECT balance, credit_limit FROM users WHERE id = %s FOR UPDATE", (user_id,))
+                user_data = c.fetchone()
+                if not user_data:
+                    return False, "用户不存在", None, None
+                
+                balance, credit_limit = user_data
+                if (balance + credit_limit) < price:
+                    return False, f'余额和透支额度不足，当前余额: {balance}，透支额度: {credit_limit}，套餐价格: {price}', balance, credit_limit
+
+                timestamp = datetime.now(CN_TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
+                c.execute("""
+                    INSERT INTO orders (account, password, package, remark, status, created_at, web_user_id, user_id, notified, refunded)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (account, password, package, remark, STATUS['SUBMITTED'], timestamp, username, user_id, 0, 0))
+                
+                new_balance = balance - price
+                c.execute("UPDATE users SET balance = %s WHERE id = %s", (new_balance, user_id))
+
+            return True, "订单创建成功", new_balance, credit_limit
+        except (Exception, psycopg2.Error) as e:
+            logger.error(f"创建PostgreSQL订单事务失败: {e}", exc_info=True)
+            return False, "数据库操作失败，订单未创建", None, None
+        finally:
+            if conn:
+                conn.close()
     else:
-        conn = sqlite3.connect("orders.db", timeout=10)
+        # SQLite 的事务逻辑
+        conn = None
+        try:
+            conn = sqlite3.connect("orders.db", timeout=10)
+            with conn:
+                conn.isolation_level = 'EXCLUSIVE'
+                c = conn.cursor()
+                c.execute("SELECT balance, credit_limit FROM users WHERE id = ?", (user_id,))
+                user_data = c.fetchone()
+                if not user_data:
+                    return False, "用户不存在", None, None
+                
+                balance, credit_limit = user_data
+                if (balance + credit_limit) < price:
+                    return False, f'余额和透支额度不足，当前余额: {balance}，透支额度: {credit_limit}，套餐价格: {price}', balance, credit_limit
 
-    try:
-        with conn:
-            # Set isolation_level to EXCLUSIVE for the transaction
-            conn.isolation_level = 'EXCLUSIVE'
-            c = conn.cursor()
+                timestamp = datetime.now(CN_TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
+                c.execute("""
+                    INSERT INTO orders (account, password, package, remark, status, created_at, web_user_id, user_id, notified, refunded)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (account, password, package, remark, STATUS['SUBMITTED'], timestamp, username, user_id, 0, 0))
 
-            # 1. 检查余额
-            c.execute("SELECT balance, credit_limit FROM users WHERE id = ?", (user_id,))
-            user_data = c.fetchone()
-            if not user_data:
-                return False, "用户不存在", None, None
-            
-            balance, credit_limit = user_data
-            if (balance + credit_limit) < price:
-                return False, f'余额和透支额度不足，当前余额: {balance}，透支额度: {credit_limit}，套餐价格: {price}', balance, credit_limit
+                new_balance = balance - price
+                c.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
 
-            # 2. 插入订单
-            timestamp = datetime.now(CN_TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
-            c.execute("""
-                INSERT INTO orders (account, password, package, remark, status, created_at, web_user_id, user_id, notified, refunded)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (account, password, package, remark, STATUS['SUBMITTED'], timestamp, username, user_id, 0, 0))
-            order_id = c.lastrowid
-
-            # 3. 扣除余额
-            new_balance = balance - price
-            c.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
-
-        # The 'with conn:' block handles the commit.
-        return True, "订单创建成功", new_balance, credit_limit
-
-    except sqlite3.Error as e:
-        logger.error(f"创建订单事务失败: {e}", exc_info=True)
-        return False, "数据库操作失败，订单未创建", None, None
-    finally:
-        if conn:
-            conn.close() 
+            return True, "订单创建成功", new_balance, credit_limit
+        except sqlite3.Error as e:
+            logger.error(f"创建SQLite订单事务失败: {e}", exc_info=True)
+            return False, "数据库操作失败，订单未创建", None, None
+        finally:
+            if conn:
+                conn.close() 
