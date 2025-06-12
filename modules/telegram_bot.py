@@ -830,8 +830,12 @@ async def check_and_push_orders():
                     f"Package: {package} month(s)"
                 )
                 
-                # 创建接单按钮
-                keyboard = [[InlineKeyboardButton("Accept", callback_data=f'accept_{oid}')]]
+                # 创建接单按钮 - 确保callback_data格式正确
+                callback_data = f'accept_{oid}'
+                logger.info(f"创建接单按钮，callback_data: {callback_data}")
+                print(f"DEBUG: 创建接单按钮，callback_data: {callback_data}")
+                
+                keyboard = [[InlineKeyboardButton("Accept", callback_data=callback_data)]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 # 向所有卖家发送通知
@@ -955,19 +959,38 @@ async def bot_main(notification_queue):
         
         logger.info("Telegram机器人应用已构建")
         print("DEBUG: Telegram机器人应用已构建")
+        print(f"DEBUG: 使用的BOT_TOKEN: {BOT_TOKEN[:5]}...{BOT_TOKEN[-5:]}")
         
         # 添加处理程序
         bot_application.add_handler(CommandHandler("start", on_start))
         bot_application.add_handler(CommandHandler("seller", on_admin_command))
         bot_application.add_handler(CommandHandler("stats", on_stats))
         
+        # 添加测试命令处理程序
+        bot_application.add_handler(CommandHandler("test", on_test))
+        print("DEBUG: 已添加测试命令处理程序")
+        
         # 添加回调处理程序，确保正确处理各种回调
-        bot_application.add_handler(CallbackQueryHandler(on_accept, pattern="^accept_"))
-        bot_application.add_handler(CallbackQueryHandler(on_feedback_button, pattern="^(done|fail|reason)_"))
-        bot_application.add_handler(CallbackQueryHandler(on_stats_callback, pattern="^stats_"))
+        accept_handler = CallbackQueryHandler(on_accept, pattern="^accept_")
+        bot_application.add_handler(accept_handler)
+        print(f"DEBUG: 已添加接单回调处理程序: {accept_handler}")
+        
+        feedback_handler = CallbackQueryHandler(on_feedback_button, pattern="^(done|fail|reason)_")
+        bot_application.add_handler(feedback_handler)
+        
+        stats_handler = CallbackQueryHandler(on_stats_callback, pattern="^stats_")
+        bot_application.add_handler(stats_handler)
+        
+        # 添加测试回调处理程序
+        test_callback_handler = CallbackQueryHandler(on_test_callback, pattern="^test_")
+        bot_application.add_handler(test_callback_handler)
+        print("DEBUG: 已添加测试回调处理程序")
         
         # 添加文本消息处理程序
         bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+        
+        # 添加一个通用回调处理程序，捕获所有其他回调
+        bot_application.add_handler(CallbackQueryHandler(debug_callback_handler))
         
         logger.info("已添加所有处理程序")
         print("DEBUG: 已添加所有处理程序")
@@ -982,7 +1005,17 @@ async def bot_main(notification_queue):
         
         logger.info("启动机器人轮询...")
         print("DEBUG: 启动机器人轮询...")
-        await bot_application.updater.start_polling(allowed_updates=["message", "callback_query"])
+        
+        # 使用更明确的配置启动轮询
+        await bot_application.updater.start_polling(
+            allowed_updates=["message", "callback_query", "chat_member", "edited_message"],
+            drop_pending_updates=False,
+            timeout=30,
+            read_timeout=30,
+            write_timeout=30,
+            connect_timeout=30,
+            pool_timeout=30
+        )
         
         logger.info("Telegram机器人启动成功")
         print("DEBUG: Telegram机器人启动成功")
@@ -1071,3 +1104,79 @@ def restricted(func):
             logger.warning(f"未经授权的访问: {user_id}")
             await update.message.reply_text("Sorry, you are not authorized to use this bot.")
     return wrapped 
+
+# 添加一个调试回调处理程序，捕获所有未被其他处理程序捕获的回调
+async def debug_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理所有其他回调，用于调试"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    data = query.data
+    
+    logger.info(f"收到未处理的回调: 用户ID={user_id}, 回调数据={data}, 消息ID={query.message.message_id}")
+    print(f"DEBUG: 收到未处理的回调: 用户ID={user_id}, 回调数据={data}")
+    
+    # 确认回调以避免Telegram显示等待状态
+    await query.answer("Received but not handled specifically.")
+    
+    # 如果是接单回调但没被正确处理
+    if data.startswith('accept_'):
+        logger.warning(f"接单回调未被专门的处理程序捕获: {data}")
+        print(f"WARNING: 接单回调未被专门的处理程序捕获: {data}")
+        try:
+            oid = int(data.split('_')[1])
+            await query.answer(f"Trying to accept order #{oid}...", show_alert=True)
+            # 尝试手动调用接单处理函数
+            await on_accept(update, context)
+        except Exception as e:
+            logger.error(f"尝试手动处理接单回调时出错: {str(e)}", exc_info=True)
+            print(f"ERROR: 尝试手动处理接单回调时出错: {str(e)}")
+            await query.answer("Error processing your request.", show_alert=True)
+
+async def on_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """测试命令处理函数，用于验证机器人是否正常工作"""
+    user_id = update.effective_user.id
+    username = update.effective_user.username
+    first_name = update.effective_user.first_name
+    
+    logger.info(f"收到测试命令: 用户ID={user_id}, 用户名={username}, 昵称={first_name}")
+    print(f"DEBUG: 收到测试命令: 用户ID={user_id}, 用户名={username}, 昵称={first_name}")
+    
+    # 创建一个测试按钮
+    keyboard = [
+        [InlineKeyboardButton("Test Button", callback_data="test_button")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        f"🔄 *Bot Test Response*\n\n"
+        f"• User ID: `{user_id}`\n"
+        f"• Username: @{username or 'None'}\n"
+        f"• Name: {first_name or 'Unknown'}\n"
+        f"• Time: {get_china_time()}\n\n"
+        f"Bot is working correctly. Click the button below to test callback handling.",
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+    
+    logger.info(f"已发送测试回复给用户 {user_id}")
+    print(f"DEBUG: 已发送测试回复给用户 {user_id}")
+
+async def on_test_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理测试按钮回调"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    logger.info(f"收到测试按钮回调: 用户ID={user_id}")
+    print(f"DEBUG: 收到测试按钮回调: 用户ID={user_id}")
+    
+    await query.answer("Test callback received successfully!", show_alert=True)
+    await query.edit_message_text(
+        f"✅ *Callback Test Successful*\n\n"
+        f"• User ID: `{user_id}`\n"
+        f"• Time: {get_china_time()}\n\n"
+        f"The bot is correctly handling callback queries.",
+        parse_mode='Markdown'
+    )
+    
+    logger.info(f"已处理测试按钮回调，用户 {user_id}")
+    print(f"DEBUG: 已处理测试按钮回调，用户 {user_id}") 
