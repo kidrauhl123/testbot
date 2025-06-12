@@ -168,9 +168,9 @@ async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 接单前不显示密码
             await update.message.reply_text(
                 f"🔹 *Order #{oid}* - {created_at}\n\n"
-                f"• Account: `{account}`\n"
-                f"• Package: *{PLAN_LABELS_EN[package]}*\n"
-                f"• Payment: *${TG_PRICES[package]}*",
+                f"• 👤 Account: `{account}`\n"
+                f"• 📦 Package: *{PLAN_LABELS_EN[package]}*\n"
+                f"• 💰 Payment: *${TG_PRICES[package]}*",
                 reply_markup=reply_markup,
                 parse_mode='Markdown'
             )
@@ -198,10 +198,10 @@ async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 await update.message.reply_text(
                     f"🔸 *Order #{oid}*\n\n"
-                    f"• Account: `{account}`\n"
-                    f"• Password: `{password}`\n"
-                    f"• Package: *{PLAN_LABELS_EN[package]}*\n"
-                    f"• Payment: *${TG_PRICES[package]}*",
+                    f"• 👤 Account: `{account}`\n"
+                    f"• 🔑 Password: `{password}`\n"
+                    f"• 📦 Package: *{PLAN_LABELS_EN[package]}*\n"
+                    f"• 💰 Payment: *${TG_PRICES[package]}*",
                     reply_markup=reply_markup,
                     parse_mode='Markdown'
                 )
@@ -274,10 +274,11 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup = InlineKeyboardMarkup(keyboard)
                     
                     await query.edit_message_text(
-                        f"Order #{oid} - You've accepted this order\n"
-                        f"Account: `{account}`\n"
-                        f"Password: `{password}`\n"
-                        f"Package: {package} month(s)",
+                        f"🎉 Order #{oid} - You've accepted this order\n\n"
+                        f"👤 Account: `{account}`\n"
+                        f"🔑 Password: `{password}`\n"
+                        f"📦 Package: {package} month(s)\n"
+                        f"💰 Payment: ${TG_PRICES[package]}",
                         reply_markup=reply_markup,
                         parse_mode='Markdown'
                     )

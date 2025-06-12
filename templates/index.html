@@ -23,6 +23,8 @@
       position: sticky;
       top: 0;
       z-index: 100;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
     }
     .navbar-brand {
       font-size: 24px;
@@ -30,6 +32,13 @@
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+    }
+    .navbar-brand::before {
+      content: '🎵';
+      margin-right: 8px;
+      font-size: 28px;
     }
     .navbar-user {
       display: flex;
@@ -37,26 +46,38 @@
       gap: 15px;
     }
     .admin-badge {
-      background: #ffc107;
+      background: linear-gradient(135deg, #ffb347 0%, #ffcc33 100%);
       color: #333;
       padding: 4px 10px;
       border-radius: 12px;
       font-size: 12px;
       font-weight: 600;
+      box-shadow: 0 2px 5px rgba(255,195,51,0.3);
     }
     .btn {
       border: none;
-      padding: 8px 16px;
-      border-radius: 6px;
+      padding: 10px 18px;
+      border-radius: 8px;
       cursor: pointer;
       font-size: 14px;
       transition: all 0.3s ease;
       text-decoration: none;
       display: inline-block;
+      font-weight: 600;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
-    .btn:hover { transform: translateY(-1px); }
-    .btn-primary { background: #667eea; color: white; }
-    .btn-danger { background: #dc3545; color: white; }
+    .btn:hover { 
+      transform: translateY(-3px); 
+      box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+    }
+    .btn-primary { 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+      color: white; 
+    }
+    .btn-danger { 
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5253 100%); 
+      color: white; 
+    }
     
     .main-container {
       max-width: 1200px;
@@ -87,8 +108,15 @@
       border-radius: 15px;
       padding: 30px;
       margin-bottom: 20px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
       backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 15px 40px rgba(0,0,0,0.2);
     }
     
     .card-header {
@@ -97,59 +125,190 @@
       background: rgba(0,0,0,0.02);
       border-bottom: 1px solid rgba(0,0,0,0.05);
       border-radius: 15px 15px 0 0;
+      display: flex;
+      align-items: center;
     }
     
     .card-header h2 {
       margin: 0;
-      font-weight: 400;
+      font-weight: 600;
+      font-size: 24px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    .card-header h2::before {
+      content: '📝';
+      margin-right: 10px;
       font-size: 24px;
     }
 
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
     .form-group label {
-      display: block; margin-bottom: 8px; font-weight: 600; color: #555;
+      display: block; 
+      margin-bottom: 8px; 
+      font-weight: 600; 
+      color: #555;
     }
+    
     .form-control {
-      width: 100%; padding: 12px 15px; border-radius: 8px;
-      border: 2px solid #e1e5e9; font-size: 14px; transition: all 0.3s ease;
+      width: 100%; 
+      padding: 14px 18px; 
+      border-radius: 10px;
+      border: 2px solid #e1e5e9; 
+      font-size: 15px; 
+      transition: all 0.3s ease;
+      background-color: rgba(255,255,255,0.8);
     }
+    
     .form-control:focus {
-      outline: none; border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
+      outline: none; 
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102,126,234,0.2);
+      background-color: #fff;
     }
+    
     .submit-btn {
-      width: 100%; padding: 15px; font-size: 16px; font-weight: 600;
+      width: 100%; 
+      padding: 16px; 
+      font-size: 16px; 
+      font-weight: 600;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white; border: none; border-radius: 8px; cursor: pointer;
-      transition: all 0.3s ease; margin-top: 10px;
-    }
-    .submit-btn:hover {
-      transform: translateY(-2px);
+      color: white; 
+      border: none; 
+      border-radius: 10px; 
+      cursor: pointer;
+      transition: all 0.3s ease; 
+      margin-top: 15px;
       box-shadow: 0 5px 15px rgba(102,126,234,0.4);
+    }
+    
+    .submit-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(102,126,234,0.5);
     }
 
     .order-list-item {
-      background: #fff; padding: 20px; margin-bottom: 15px;
-      border-radius: 10px; border-left: 5px solid #667eea;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      background: #fff; 
+      padding: 25px; 
+      margin-bottom: 20px;
+      border-radius: 12px; 
+      border-left: 5px solid #667eea;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+      transition: all 0.3s ease;
     }
-    .order-list-item h4 { margin: 0 0 10px; font-size: 16px; }
-    .order-list-item p { margin: 5px 0; font-size: 14px; color: #666; }
+    
+    .order-list-item:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    }
+    
+    .order-list-item h4 { 
+      margin: 0 0 15px; 
+      font-size: 18px; 
+      color: #333;
+      display: flex;
+      align-items: center;
+    }
+    
+    .order-list-item h4::before {
+      content: '🔔';
+      margin-right: 8px;
+    }
+    
+    .order-list-item p { 
+      margin: 8px 0; 
+      font-size: 15px; 
+      color: #666; 
+      display: flex;
+      align-items: center;
+    }
+    
+    .order-list-item p.account::before {
+      content: '👤';
+      margin-right: 8px;
+    }
+    
+    .order-list-item p.package::before {
+      content: '📦';
+      margin-right: 8px;
+    }
+    
+    .order-list-item p.status::before {
+      content: '🔄';
+      margin-right: 8px;
+    }
+    
+    .order-list-item p.time::before {
+      content: '⏱️';
+      margin-right: 8px;
+    }
+    
+    /* 状态标签 */
+    .status-badge {
+      display: inline-block;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+    
+    .status-submitted {
+      background-color: #e9f5fe;
+      color: #3498db;
+    }
+    
+    .status-accepted {
+      background-color: #fef2e5;
+      color: #f39c12;
+    }
+    
+    .status-completed {
+      background-color: #e6f8f1;
+      color: #2ecc71;
+    }
+    
+    .status-failed {
+      background-color: #feeaea;
+      color: #e74c3c;
+    }
     
     /* 刷新指示器样式 */
     #refreshIndicator {
       position: fixed;
       top: 20px;
       right: 20px;
-      background: rgba(102,126,234,0.9);
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
-      padding: 8px 15px;
-      border-radius: 20px;
+      padding: 10px 20px;
+      border-radius: 30px;
       font-size: 14px;
+      font-weight: 600;
       opacity: 0;
       transform: translateY(-20px);
       transition: all 0.3s ease;
       z-index: 1000;
+      box-shadow: 0 5px 15px rgba(102,126,234,0.4);
+      display: flex;
+      align-items: center;
     }
+    
+    #refreshIndicator::before {
+      content: '🔄';
+      margin-right: 8px;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
     #refreshIndicator.show {
       opacity: 1;
       transform: translateY(0);
@@ -606,18 +765,50 @@
     }
   });
 
-  // 初始化
-  window.addEventListener('load', async () => {
-    await loadOrders();
-    // 对所有用户都使用相同的统计逻辑
-    userStatResults = buildUserStatsFromOrders(allOrders);
-    renderAdminStatsList();
+  // 页面加载完成后的初始化
+  document.addEventListener('DOMContentLoaded', function() {
+    // 加载订单和统计
+    loadOrders();
+    loadUserStats();
+    
+    // 启动自动刷新
     startAutoRefresh();
+    
+    // 添加动画效果
+    const cards = document.querySelectorAll('.card');
+    cards.forEach((card, index) => {
+      card.style.opacity = '0';
+      card.style.transform = 'translateY(20px)';
+      setTimeout(() => {
+        card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+        card.style.opacity = '1';
+        card.style.transform = 'translateY(0)';
+      }, 100 * index);
+    });
+    
+    // 给订单添加类名，用于添加图标
+    setTimeout(() => {
+      const orderItems = document.querySelectorAll('.order-list-item');
+      orderItems.forEach(item => {
+        const accountElem = item.querySelector('p:nth-child(2)');
+        if (accountElem) accountElem.classList.add('account');
+        
+        const packageElem = item.querySelector('p:nth-child(3)');
+        if (packageElem) packageElem.classList.add('package');
+        
+        const statusElem = item.querySelector('p:nth-child(4)');
+        if (statusElem) statusElem.classList.add('status');
+        
+        const timeElems = item.querySelectorAll('p.time');
+        if (timeElems.length > 0) {
+          timeElems.forEach(el => el.classList.add('time'));
+        }
+      });
+    }, 1000);
   });
 
-
-  // 页面卸载时清理
-  window.addEventListener('beforeunload', () => {
+  // 当用户离开页面时停止自动刷新
+  window.addEventListener('beforeunload', function() {
     stopAutoRefresh();
   });
 </script>
