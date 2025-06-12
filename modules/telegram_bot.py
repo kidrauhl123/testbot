@@ -1199,23 +1199,42 @@ async def on_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_test_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理测试按钮回调"""
-    query = update.callback_query
-    user_id = query.from_user.id
-    
-    logger.info(f"收到测试按钮回调: 用户ID={user_id}")
-    print(f"DEBUG: 收到测试按钮回调: 用户ID={user_id}")
-    
-    await query.answer("Test callback received successfully!", show_alert=True)
-    await query.edit_message_text(
-        f"✅ *Callback Test Successful*\n\n"
-        f"• User ID: `{user_id}`\n"
-        f"• Time: {get_china_time()}\n\n"
-        f"The bot is correctly handling callback queries.",
-        parse_mode='Markdown'
-    )
-    
-    logger.info(f"已处理测试按钮回调，用户 {user_id}")
-    print(f"DEBUG: 已处理测试按钮回调，用户 {user_id}")
+    try:
+        query = update.callback_query
+        user_id = query.from_user.id
+        
+        logger.info(f"收到测试按钮回调: 用户ID={user_id}")
+        print(f"DEBUG: 收到测试按钮回调: 用户ID={user_id}")
+        
+        # 首先确认回调，避免Telegram显示等待状态
+        try:
+            await query.answer("Test callback received successfully!", show_alert=True)
+            logger.info("已确认测试按钮回调")
+            print("DEBUG: 已确认测试按钮回调")
+        except Exception as e:
+            logger.error(f"确认测试按钮回调时出错: {str(e)}", exc_info=True)
+            print(f"ERROR: 确认测试按钮回调时出错: {str(e)}")
+        
+        # 然后尝试编辑消息
+        try:
+            await query.edit_message_text(
+                f"✅ *Callback Test Successful*\n\n"
+                f"• User ID: `{user_id}`\n"
+                f"• Time: {get_china_time()}\n\n"
+                f"The bot is correctly handling callback queries.",
+                parse_mode='Markdown'
+            )
+            logger.info("已更新测试按钮消息")
+            print("DEBUG: 已更新测试按钮消息")
+        except Exception as e:
+            logger.error(f"更新测试按钮消息时出错: {str(e)}", exc_info=True)
+            print(f"ERROR: 更新测试按钮消息时出错: {str(e)}")
+        
+        logger.info(f"已处理测试按钮回调，用户 {user_id}")
+        print(f"DEBUG: 已处理测试按钮回调，用户 {user_id}")
+    except Exception as e:
+        logger.error(f"处理测试按钮回调时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 处理测试按钮回调时出错: {str(e)}")
 
 async def process_telegram_update_async(update_data, notification_queue):
     """处理从webhook接收的Telegram更新"""
@@ -1258,11 +1277,33 @@ def process_telegram_update(update_data, notification_queue):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
-        # 运行异步处理函数
-        loop.run_until_complete(process_telegram_update_async(update_data, notification_queue))
-        
-        # 清理
-        loop.close()
+        try:
+            # 运行异步处理函数
+            loop.run_until_complete(process_telegram_update_async(update_data, notification_queue))
+        finally:
+            # 确保在完成后正确关闭事件循环
+            # 首先关闭所有挂起的任务
+            pending = asyncio.all_tasks(loop)
+            if pending:
+                # 取消所有挂起的任务
+                for task in pending:
+                    task.cancel()
+                # 等待它们完成
+                try:
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                except asyncio.CancelledError:
+                    pass
+            
+            # 停止事件循环
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.run_until_complete(loop.shutdown_default_executor())
+            loop.close()
+            
+            # 重置事件循环
+            asyncio.set_event_loop(None)
+            
+            logger.info("处理更新完成，事件循环已正确关闭")
+            print("DEBUG: 处理更新完成，事件循环已正确关闭")
     except Exception as e:
         logger.error(f"在线程中处理Telegram更新时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 在线程中处理Telegram更新时出错: {str(e)}") 
