@@ -7,7 +7,7 @@ import asyncio
 
 from flask import Flask, request, render_template, jsonify, session, redirect, url_for
 
-from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS
+from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH
 from modules.database import execute_query, hash_password, get_all_sellers, add_seller, remove_seller, toggle_seller_status
 from modules.telegram_bot import bot_application, check_and_push_orders
 import modules.constants as constants

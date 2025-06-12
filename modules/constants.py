@@ -72,6 +72,15 @@ PLAN_OPTIONS = [('1', '1个月'), ('2', '2个月'), ('3', '3个月'), ('6', '6�
 PLAN_LABELS_ZH = {v: l for v, l in PLAN_OPTIONS}
 PLAN_LABELS_EN = {'1': '1 Month', '2': '2 Months', '3': '3 Months', '6': '6 Months', '12': '12 Months'}
 
+# 失败原因的中英文映射
+REASON_TEXT_ZH = {
+    'Wrong password': '密码错误',
+    'Membership not expired': '会员未到期',
+    'Other reason': '其他原因',
+    'Other reason (details pending)': '其他原因',
+    'Unknown reason': '未知原因'
+}
+
 # ===== 全局变量 =====
 user_languages = defaultdict(lambda: 'en')
 feedback_waiting = {}
