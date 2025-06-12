@@ -10,6 +10,7 @@ import pytz
 import sys
 import functools
 import sqlite3
+import traceback
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -1236,43 +1237,14 @@ async def on_test_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"处理测试按钮回调时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 处理测试按钮回调时出错: {str(e)}")
 
-async def process_telegram_update_async(update_data, notification_queue):
-    """处理从webhook接收的Telegram更新"""
-    global bot_application
-    
-    try:
-        logger.info(f"处理webhook更新: {update_data}")
-        print(f"DEBUG: 处理webhook更新: {update_data}")
-        
-        if not bot_application:
-            logger.error("机器人应用未初始化，无法处理更新")
-            print("ERROR: 机器人应用未初始化，无法处理更新")
-            return
-        
-        # 从更新数据创建Update对象
-        from telegram import Update
-        update = Update.de_json(update_data, bot_application.bot)
-        
-        # 记录更新类型
-        if update.callback_query:
-            logger.info(f"收到回调查询: 用户ID={update.callback_query.from_user.id}, 数据={update.callback_query.data}")
-            print(f"DEBUG: 收到回调查询: 用户ID={update.callback_query.from_user.id}, 数据={update.callback_query.data}")
-        elif update.message:
-            logger.info(f"收到消息: 用户ID={update.message.from_user.id}, 文本={update.message.text}")
-            print(f"DEBUG: 收到消息: 用户ID={update.message.from_user.id}, 文本={update.message.text}")
-        
-        # 处理更新
-        await bot_application.process_update(update)
-        logger.info("更新处理完成")
-        print("DEBUG: 更新处理完成")
-    except Exception as e:
-        logger.error(f"处理Telegram更新时出错: {str(e)}", exc_info=True)
-        print(f"ERROR: 处理Telegram更新时出错: {str(e)}")
-
 # 同步版本的处理函数，用于在线程中调用
 def process_telegram_update(update_data, notification_queue):
     """同步版本的处理函数，用于在线程中调用"""
     try:
+        # 记录处理开始
+        logger.info(f"开始处理Telegram更新: {update_data}")
+        print(f"DEBUG: 开始处理Telegram更新: {update_data}")
+        
         # 创建新的事件循环
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -1280,6 +1252,10 @@ def process_telegram_update(update_data, notification_queue):
         try:
             # 运行异步处理函数
             loop.run_until_complete(process_telegram_update_async(update_data, notification_queue))
+        except Exception as inner_e:
+            logger.error(f"在异步处理Telegram更新时出错: {str(inner_e)}", exc_info=True)
+            print(f"ERROR: 在异步处理Telegram更新时出错: {str(inner_e)}")
+            traceback.print_exc()
         finally:
             # 确保在完成后正确关闭事件循环
             # 首先关闭所有挂起的任务
@@ -1295,8 +1271,13 @@ def process_telegram_update(update_data, notification_queue):
                     pass
             
             # 停止事件循环
-            loop.run_until_complete(loop.shutdown_asyncgens())
-            loop.run_until_complete(loop.shutdown_default_executor())
+            try:
+                loop.run_until_complete(loop.shutdown_asyncgens())
+                loop.run_until_complete(loop.shutdown_default_executor())
+            except Exception as shutdown_e:
+                logger.error(f"关闭事件循环时出错: {str(shutdown_e)}", exc_info=True)
+                print(f"ERROR: 关闭事件循环时出错: {str(shutdown_e)}")
+            
             loop.close()
             
             # 重置事件循环
@@ -1307,6 +1288,7 @@ def process_telegram_update(update_data, notification_queue):
     except Exception as e:
         logger.error(f"在线程中处理Telegram更新时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 在线程中处理Telegram更新时出错: {str(e)}")
+        traceback.print_exc()
 
 def get_order_by_id(order_id):
     """根据ID获取订单信息"""
@@ -1356,3 +1338,108 @@ def update_order_status(order_id, status, handler_id=None):
         logger.error(f"更新订单 {order_id} 状态时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 更新订单 {order_id} 状态时出错: {str(e)}")
         return False 
+
+async def process_telegram_update_async(update_data, notification_queue):
+    """异步处理Telegram更新"""
+    try:
+        logger.info("开始异步处理Telegram更新")
+        print("DEBUG: 开始异步处理Telegram更新")
+        
+        if not update_data:
+            logger.warning("收到空的更新数据")
+            print("WARNING: 收到空的更新数据")
+            return
+        
+        # 创建Update对象
+        update = Update.de_json(update_data, bot_application.bot)
+        if not update:
+            logger.warning("无法解析更新数据")
+            print("WARNING: 无法解析更新数据")
+            return
+        
+        # 创建上下文对象
+        context = ContextTypes.DEFAULT_TYPE.context_types.context.copy()
+        context.bot = bot_application.bot
+        context.update_queue = bot_application.update_queue
+        context.job_queue = bot_application.job_queue
+        context.chat_data = {}
+        context.user_data = {}
+        context.bot_data = {}
+        
+        # 处理更新
+        logger.info(f"处理更新类型: {update}")
+        print(f"DEBUG: 处理更新类型: {update}")
+        
+        # 处理回调查询
+        if update.callback_query:
+            logger.info(f"处理回调查询: {update.callback_query.data}")
+            print(f"DEBUG: 处理回调查询: {update.callback_query.data}")
+            
+            # 根据回调数据分发到不同的处理函数
+            callback_data = update.callback_query.data
+            
+            try:
+                if callback_data.startswith("accept_"):
+                    await on_accept(update, context)
+                elif callback_data.startswith("done_"):
+                    await on_feedback_button(update, context)
+                elif callback_data.startswith("fail_"):
+                    await on_feedback_button(update, context)
+                elif callback_data.startswith("reason_"):
+                    await on_feedback_button(update, context)
+                elif callback_data.startswith("stats_"):
+                    await on_stats_callback(update, context)
+                elif callback_data.startswith("test_"):
+                    await on_test_callback(update, context)
+                else:
+                    # 未知回调，使用调试处理器
+                    logger.warning(f"未知回调数据: {callback_data}")
+                    print(f"WARNING: 未知回调数据: {callback_data}")
+                    await debug_callback_handler(update, context)
+            except Exception as callback_e:
+                logger.error(f"处理回调时出错: {str(callback_e)}", exc_info=True)
+                print(f"ERROR: 处理回调时出错: {str(callback_e)}")
+                traceback.print_exc()
+                
+                # 尝试通知用户
+                try:
+                    await update.callback_query.answer("处理请求时出错，请稍后重试", show_alert=True)
+                except Exception as notify_e:
+                    logger.error(f"通知用户出错: {str(notify_e)}")
+                    print(f"ERROR: 通知用户出错: {str(notify_e)}")
+        
+        # 处理命令
+        elif update.message and update.message.text:
+            logger.info(f"处理消息: {update.message.text}")
+            print(f"DEBUG: 处理消息: {update.message.text}")
+            
+            try:
+                text = update.message.text
+                if text.startswith("/start"):
+                    await on_start(update, context)
+                elif text.startswith("/seller"):
+                    await on_admin_command(update, context)
+                elif text.startswith("/stats"):
+                    await on_stats(update, context)
+                elif text.startswith("/test"):
+                    await on_test(update, context)
+                else:
+                    await on_text(update, context)
+            except Exception as message_e:
+                logger.error(f"处理消息时出错: {str(message_e)}", exc_info=True)
+                print(f"ERROR: 处理消息时出错: {str(message_e)}")
+                traceback.print_exc()
+                
+                # 尝试通知用户
+                try:
+                    await update.message.reply_text("处理命令时出错，请稍后重试")
+                except Exception as notify_e:
+                    logger.error(f"通知用户出错: {str(notify_e)}")
+                    print(f"ERROR: 通知用户出错: {str(notify_e)}")
+        
+        logger.info("异步处理Telegram更新完成")
+        print("DEBUG: 异步处理Telegram更新完成")
+    except Exception as e:
+        logger.error(f"异步处理Telegram更新时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 异步处理Telegram更新时出错: {str(e)}")
+        traceback.print_exc() 
