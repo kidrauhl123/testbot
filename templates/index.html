@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Spotify充值系统</title>
+  <title>破天充值系统</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- 添加Font Awesome图标库 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -10,7 +10,7 @@
     * { box-sizing: border-box; }
     body { 
       font-family: 'Microsoft YaHei', Arial, sans-serif; 
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
       margin: 0; padding: 0; min-height: 100vh;
       color: #333;
       font-size: 14px;
@@ -78,9 +78,9 @@
     }
     
     .navbar {
-      background: rgba(255,255,255,0.95);
-      padding: 10px 15px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      background: rgba(255,255,255,0.9);
+      padding: 12px 20px;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.08);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -89,20 +89,19 @@
       z-index: 100;
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(255,255,255,0.2);
     }
     .navbar-brand {
-      font-size: 20px;
+      font-size: 18px;
       font-weight: bold;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      color: #667eea;
       display: flex;
       align-items: center;
     }
     .navbar-brand::before {
       content: '🎵';
       margin-right: 6px;
-      font-size: 22px;
+      font-size: 20px;
     }
     .navbar-user {
       display: flex;
@@ -186,35 +185,36 @@
     }
     
     .main-container {
-      max-width: 1400px;
-      margin: 15px auto;
-      padding: 0 15px;
+      max-width: 1200px;
+      margin: 30px auto;
+      padding: 0 20px;
     }
     
     .container {
       display: flex;
-      gap: 30px;
+      gap: 40px;
       align-items: flex-start;
     }
 
     .left {
-      width: 40%;
+      width: 35%;
       flex-shrink: 0;
     }
 
     .right {
-      width: 60%;
+      width: 65%;
     }
     
     .card {
-      background: rgba(255,255,255,0.95);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 15px;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+      background: rgba(255,255,255,0.97);
+      border-radius: 15px;
+      padding: 25px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       transition: transform 0.3s ease, box-shadow 0.3s ease;
+      border: 1px solid rgba(255,255,255,0.5);
     }
     
     .card:hover {
@@ -300,24 +300,36 @@
 
     .order-list-container {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(1, 1fr);
       gap: 15px;
     }
 
     .order-list-item {
       background: #fff; 
-      padding: 15px; 
+      padding: 16px; 
       margin-bottom: 0;
       border-radius: 10px; 
       border-left: 4px solid #667eea;
-      box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
       transition: all 0.3s ease;
       font-size: 13px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .order-list-item::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+      width: 5px;
+      background: linear-gradient(to bottom, transparent, rgba(102,126,234,0.1), transparent);
     }
     
     .order-list-item:hover {
       transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     }
     
     .order-list-item h4 { 
@@ -370,9 +382,16 @@
     }
     
     /* 时间样式 */
+    .time-info {
+      background: rgba(242, 242, 247, 0.5);
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin: 10px 0;
+    }
+    
     .order-list-item p.time {
-      margin: 8px 0;
-      font-size: 14px;
+      margin: 5px 0;
+      font-size: 13px;
       color: #666;
     }
     
@@ -822,6 +841,67 @@
       font-weight: 600;
       color: #e74c3c;
     }
+    
+    /* 搜索框样式 */
+    .search-container {
+      margin: 15px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .search-box {
+      display: flex;
+      position: relative;
+      width: 100%;
+    }
+    
+    .search-input {
+      flex: 1;
+      padding: 10px 15px;
+      padding-right: 80px;
+      border: 1px solid #e1e5e9;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: all 0.3s;
+      background-color: rgba(255,255,255,0.9);
+    }
+    
+    .search-input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102,126,234,0.2);
+    }
+    
+    .search-btn, .clear-search-btn {
+      position: absolute;
+      right: 0;
+      top: 0;
+      height: 100%;
+      border: none;
+      background: transparent;
+      padding: 0 12px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #667eea;
+      transition: all 0.2s;
+    }
+    
+    .clear-search-btn {
+      right: 36px;
+      color: #aaa;
+    }
+    
+    .search-btn:hover, .clear-search-btn:hover {
+      color: #764ba2;
+    }
+    
+    .refresh-hint {
+      font-size: 12px;
+      color: #888;
+      text-align: right;
+      font-style: italic;
+    }
   </style>
 </head>
 <body>
@@ -878,24 +958,36 @@
     <div class="container">
         <div class="left">
             <div class="card">
-                <div class="card-header"><h2>充值下单</h2></div>
+                <div class="card-header">
+                  <h2>充值下单</h2>
+                </div>
                 <form id="orderForm" autocomplete="off">
-                  <div class="form-group"><label>破天账号</label><input name="account" class="form-control" required placeholder="请输入您的破天账号"></div>
-                  <div class="form-group"><label>密码</label><input name="password" type="text" class="form-control" required placeholder="请输入密码"></div>
-                  <div class="form-group"><label>套餐类型</label>
+                  <div class="form-group">
+                    <label>破天账号</label>
+                    <input name="account" class="form-control" required placeholder="请输入您的破天账号">
+                  </div>
+                  <div class="form-group">
+                    <label>密码</label>
+                    <input name="password" type="text" class="form-control" required placeholder="请输入密码">
+                  </div>
+                  <div class="form-group">
+                    <label>套餐类型</label>
                     <select name="package" class="form-control" id="packageSelect" required>
-                      <option value="1">1个月 </option>
-                      <option value="2">2个月 </option>
-                      <option value="3">3个月 </option>
-                      <option value="6">6个月 </option>
-                      <option value="12">12个月 </option>
+                      <option value="1">1个月</option>
+                      <option value="2">2个月</option>
+                      <option value="3">3个月</option>
+                      <option value="6">6个月</option>
+                      <option value="12">12个月</option>
                     </select>
                   </div>
                   <div class="form-group">
                     <label>价格</label>
                     <div class="price-display">¥<span id="selectedPrice">12</span><small style="margin-left:2px;font-size:12px;font-weight:normal;opacity:0.8;">元</small></div>
                   </div>
-                  <div class="form-group"><label>备注 (可选)</label><input name="remark" class="form-control" placeholder="如有特殊要求请备注"></div>
+                  <div class="form-group">
+                    <label>备注 (可选)</label>
+                    <input name="remark" class="form-control" placeholder="如有特殊要求请备注">
+                  </div>
                   <button type="submit" class="submit-btn">提交订单</button>
                 </form>
             </div>
@@ -904,7 +996,7 @@
         <div class="right">
             <div class="card">
                 <div class="card-header">
-                  <h2>{% if session.is_admin %}系统最新订单{% else %}我的订单{% endif %}</h2>
+                  <h2>{% if session.is_admin %}系统订单状态{% else %}我的订单{% endif %}</h2>
                   <div class="header-actions">
                     <div class="view-toggle">
                       <button id="gridViewBtn" class="view-btn" title="网格视图"><i class="fas fa-th"></i></button>
@@ -912,6 +1004,14 @@
                     </div>
                     <div id="today-total" class="today-total"></div>
                   </div>
+                </div>
+                <div class="search-container">
+                  <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="搜索订单号或账号..." class="search-input">
+                    <button id="searchBtn" class="search-btn"><i class="fas fa-search"></i></button>
+                    <button id="clearSearchBtn" class="clear-search-btn"><i class="fas fa-times"></i></button>
+                  </div>
+                  <div class="refresh-hint">(显示全部最新订单，每5秒自动更新)</div>
                 </div>
                 <div id="orders-container">加载中...</div>
                 <div id="load-more-container" style="text-align:center; margin-top: 20px; display:none;">
@@ -943,6 +1043,44 @@
     '6': 50,
     '12': 84
   };
+  
+  // 搜索处理
+  document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    
+    // 搜索按钮点击事件
+    searchBtn.addEventListener('click', function() {
+      searchKeyword = searchInput.value.trim();
+      displayedOrders = 5; // 重置显示数量
+      
+      if (searchKeyword) {
+        const filteredOrders = allOrders.filter(order => 
+          order.id.toString().includes(searchKeyword) || 
+          order.account.toLowerCase().includes(searchKeyword.toLowerCase())
+        );
+        renderOrders(filteredOrders);
+      } else {
+        renderOrders(allOrders);
+      }
+    });
+    
+    // 回车键搜索
+    searchInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        searchBtn.click();
+      }
+    });
+    
+    // 清除搜索
+    clearSearchBtn.addEventListener('click', function() {
+      searchInput.value = '';
+      searchKeyword = '';
+      displayedOrders = 5;
+      renderOrders(allOrders);
+    });
+  });
   
   // 套餐选择处理
   document.addEventListener('DOMContentLoaded', function() {
@@ -1282,9 +1420,11 @@
             `<p class="failed-reason"><span class="failed-icon">❌</span> <strong>失败原因：</strong>${escapeHtml(o.remark || '未提供')}</p>` : 
             (o.remark ? `<p class="remark"><strong>备注：</strong>${escapeHtml(o.remark)}</p>` : '')
           }
-          <p class="time">提交时间：${o.created_at}</p>
-          ${o.accepted_at ? `<p class="time">接单时间：${o.accepted_at}</p>` : ''}
-          ${o.completed_at ? `<p class="time">完成时间：${o.completed_at}</p>` : ''}
+          <div class="time-info">
+            <p class="time">提交时间：${o.created_at}</p>
+            ${o.accepted_at ? `<p class="time">接单时间：${o.accepted_at}</p>` : ''}
+            ${o.completed_at ? `<p class="time">完成时间：${o.completed_at}</p>` : ''}
+          </div>
           ${o.can_cancel ? `<button class="cancel-btn" onclick="cancelOrder(${o.id}, this)">撤销订单</button>` : ''}
         </div>`;
       gridContainer.insertAdjacentHTML('beforeend', html);
@@ -1351,20 +1491,6 @@
         order.account.toLowerCase().includes(searchKeyword.toLowerCase())
       ) : allOrders;
     renderOrders(filteredOrders);
-  }
-
-  // 搜索订单
-  function searchOrders() {
-    searchKeyword = '';
-    displayedOrders = 5; // 重置显示数量
-    renderOrders(allOrders);
-  }
-
-  // 清除搜索
-  function clearSearch() {
-    searchKeyword = '';
-    displayedOrders = 5;
-    renderOrders(allOrders);
   }
 
   // 显示订单详情
