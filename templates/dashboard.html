@@ -796,6 +796,11 @@
         e.preventDefault();
         const tabId = this.getAttribute('href').substring(1);
         showTab(tabId);
+        
+        // 当切换到余额明细标签页时加载数据
+        if (tabId === 'balance') {
+          loadBalanceDetails();
+        }
       });
     });
     
@@ -805,6 +810,42 @@
     // 加载订单数据
     loadOrdersAndStats();
   });
+  
+  // 加载余额明细数据
+  async function loadBalanceDetails() {
+    const transactionTbody = document.getElementById('transaction-tbody');
+    
+    try {
+      // 目前显示一些模拟数据
+      // 实际项目中应该从API获取真实数据
+      const mockTransactions = [
+        { id: 1001, type: '充值', amount: '+100.00', balance: '100.00', time: '2023-06-01 13:22:45', description: '用户充值' },
+        { id: 1002, type: '消费', amount: '-12.00', balance: '88.00', time: '2023-06-02 09:15:30', description: '订单 #12345' },
+        { id: 1003, type: '消费', amount: '-18.00', balance: '70.00', time: '2023-06-05 14:33:21', description: '订单 #12346' },
+        { id: 1004, type: '退款', amount: '+12.00', balance: '82.00', time: '2023-06-07 11:05:18', description: '订单 #12345 退款' }
+      ];
+      
+      let html = '';
+      mockTransactions.forEach(tx => {
+        const isPositive = tx.amount.startsWith('+');
+        html += `
+          <tr>
+            <td>${tx.id}</td>
+            <td>${tx.type}</td>
+            <td class="${isPositive ? 'text-success' : 'text-danger'}">${tx.amount}</td>
+            <td>${tx.balance}</td>
+            <td>${tx.time}</td>
+            <td>${tx.description}</td>
+          </tr>
+        `;
+      });
+      
+      transactionTbody.innerHTML = html;
+    } catch (error) {
+      console.error('加载余额明细失败:', error);
+      transactionTbody.innerHTML = '<tr><td colspan="6" class="error">加载失败，请刷新重试</td></tr>';
+    }
+  }
 </script>
 </body>
 </html> 
