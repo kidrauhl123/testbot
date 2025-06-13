@@ -1038,9 +1038,8 @@ async def check_and_push_orders():
                 user_info = f" from web user: {web_user_id}" if web_user_id else ""
                 
                 message = (
-                    f"📢 New Order #{oid}{user_info}\n"
+                    f"📦 New Order #{oid}{user_info}\n"
                     f"Account: `{account}`\n"
-                    f"Password: `********` (hidden until accepted)\n"
                     f"Package: {package} month(s)"
                 )
                 
