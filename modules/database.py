@@ -777,36 +777,66 @@ def create_order_with_deduction_atomic(account, password, package, remark, usern
 # ===== 充值相关函数 =====
 def create_recharge_tables():
     """创建充值记录表"""
-    if DATABASE_URL.startswith('postgres'):
-        execute_query("""
-            CREATE TABLE IF NOT EXISTS recharge_requests (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                amount REAL NOT NULL,
-                status TEXT NOT NULL,
-                payment_method TEXT NOT NULL,
-                proof_image TEXT,
-                created_at TEXT NOT NULL,
-                processed_at TEXT,
-                processed_by TEXT,
-                FOREIGN KEY (user_id) REFERENCES users (id)
-            )
-        """)
-    else:
-        execute_query("""
-            CREATE TABLE IF NOT EXISTS recharge_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                amount REAL NOT NULL,
-                status TEXT NOT NULL,
-                payment_method TEXT NOT NULL,
-                proof_image TEXT,
-                created_at TEXT NOT NULL,
-                processed_at TEXT,
-                processed_by TEXT,
-                FOREIGN KEY (user_id) REFERENCES users (id)
-            )
-        """)
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            # 检查表是否存在
+            table_exists = execute_query("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'recharge_requests'
+                )
+            """, fetch=True)
+            
+            if not table_exists or not table_exists[0][0]:
+                execute_query("""
+                    CREATE TABLE recharge_requests (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL,
+                        amount REAL NOT NULL,
+                        status TEXT NOT NULL,
+                        payment_method TEXT NOT NULL,
+                        proof_image TEXT,
+                        created_at TEXT NOT NULL,
+                        processed_at TEXT,
+                        processed_by TEXT,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )
+                """)
+                logger.info("已创建充值记录表(PostgreSQL)")
+        else:
+            # SQLite连接
+            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(current_dir, "orders.db")
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # 检查表是否存在
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='recharge_requests'")
+            if not cursor.fetchone():
+                cursor.execute("""
+                    CREATE TABLE recharge_requests (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        amount REAL NOT NULL,
+                        status TEXT NOT NULL,
+                        payment_method TEXT NOT NULL,
+                        proof_image TEXT,
+                        created_at TEXT NOT NULL,
+                        processed_at TEXT,
+                        processed_by TEXT,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )
+                """)
+                conn.commit()
+                logger.info("已创建充值记录表(SQLite)")
+            
+            conn.close()
+        
+        return True
+    except Exception as e:
+        logger.error(f"创建充值记录表失败: {str(e)}", exc_info=True)
+        return False
 
 def create_recharge_request(user_id, amount, payment_method, proof_image):
     """创建充值请求"""
@@ -843,12 +873,20 @@ def create_recharge_request(user_id, amount, payment_method, proof_image):
 def get_user_recharge_requests(user_id):
     """获取用户的充值请求记录"""
     try:
-        requests = execute_query("""
-            SELECT id, amount, status, payment_method, proof_image, created_at, processed_at
-            FROM recharge_requests
-            WHERE user_id = ?
-            ORDER BY created_at DESC
-        """, (user_id,), fetch=True)
+        if DATABASE_URL.startswith('postgres'):
+            requests = execute_query("""
+                SELECT id, amount, status, payment_method, proof_image, created_at, processed_at
+                FROM recharge_requests
+                WHERE user_id = %s
+                ORDER BY created_at DESC
+            """, (user_id,), fetch=True)
+        else:
+            requests = execute_query("""
+                SELECT id, amount, status, payment_method, proof_image, created_at, processed_at
+                FROM recharge_requests
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+            """, (user_id,), fetch=True)
         
         return requests
     except Exception as e:
