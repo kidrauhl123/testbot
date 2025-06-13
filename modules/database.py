@@ -858,13 +858,22 @@ def get_user_recharge_requests(user_id):
 def get_pending_recharge_requests():
     """获取所有待处理的充值请求"""
     try:
-        requests = execute_query("""
-            SELECT r.id, r.user_id, r.amount, r.payment_method, r.proof_image, r.created_at, u.username
-            FROM recharge_requests r
-            JOIN users u ON r.user_id = u.id
-            WHERE r.status = 'pending'
-            ORDER BY r.created_at ASC
-        """, fetch=True)
+        if DATABASE_URL.startswith('postgres'):
+            requests = execute_query("""
+                SELECT r.id, r.user_id, r.amount, r.payment_method, r.proof_image, r.created_at, u.username
+                FROM recharge_requests r
+                JOIN users u ON r.user_id = u.id
+                WHERE r.status = %s
+                ORDER BY r.created_at ASC
+            """, ('pending',), fetch=True)
+        else:
+            requests = execute_query("""
+                SELECT r.id, r.user_id, r.amount, r.payment_method, r.proof_image, r.created_at, u.username
+                FROM recharge_requests r
+                JOIN users u ON r.user_id = u.id
+                WHERE r.status = ?
+                ORDER BY r.created_at ASC
+            """, ('pending',), fetch=True)
         
         return requests
     except Exception as e:
@@ -875,11 +884,18 @@ def approve_recharge_request(request_id, admin_id):
     """批准充值请求并增加用户余额"""
     try:
         # 获取充值请求详情
-        request = execute_query("""
-            SELECT user_id, amount
-            FROM recharge_requests
-            WHERE id = ? AND status = 'pending'
-        """, (request_id,), fetch=True)
+        if DATABASE_URL.startswith('postgres'):
+            request = execute_query("""
+                SELECT user_id, amount
+                FROM recharge_requests
+                WHERE id = %s AND status = %s
+            """, (request_id, 'pending'), fetch=True)
+        else:
+            request = execute_query("""
+                SELECT user_id, amount
+                FROM recharge_requests
+                WHERE id = ? AND status = ?
+            """, (request_id, 'pending'), fetch=True)
         
         if not request:
             return False, "充值请求不存在或已处理"
@@ -902,18 +918,32 @@ def approve_recharge_request(request_id, admin_id):
             now = get_china_time()
             
             # 更新充值请求状态
-            cursor.execute("""
-                UPDATE recharge_requests
-                SET status = 'approved', processed_at = ?, processed_by = ?
-                WHERE id = ?
-            """, (now, admin_id, request_id))
-            
-            # 增加用户余额
-            cursor.execute("""
-                UPDATE users
-                SET balance = balance + ?
-                WHERE id = ?
-            """, (amount, user_id))
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("""
+                    UPDATE recharge_requests
+                    SET status = %s, processed_at = %s, processed_by = %s
+                    WHERE id = %s
+                """, ('approved', now, admin_id, request_id))
+                
+                # 增加用户余额
+                cursor.execute("""
+                    UPDATE users
+                    SET balance = balance + %s
+                    WHERE id = %s
+                """, (amount, user_id))
+            else:
+                cursor.execute("""
+                    UPDATE recharge_requests
+                    SET status = ?, processed_at = ?, processed_by = ?
+                    WHERE id = ?
+                """, ('approved', now, admin_id, request_id))
+                
+                # 增加用户余额
+                cursor.execute("""
+                    UPDATE users
+                    SET balance = balance + ?
+                    WHERE id = ?
+                """, (amount, user_id))
             
             # 提交事务
             conn.commit()
@@ -939,11 +969,18 @@ def reject_recharge_request(request_id, admin_id):
         now = get_china_time()
         
         # 更新充值请求状态
-        execute_query("""
-            UPDATE recharge_requests
-            SET status = 'rejected', processed_at = ?, processed_by = ?
-            WHERE id = ? AND status = 'pending'
-        """, (now, admin_id, request_id))
+        if DATABASE_URL.startswith('postgres'):
+            execute_query("""
+                UPDATE recharge_requests
+                SET status = %s, processed_at = %s, processed_by = %s
+                WHERE id = %s AND status = %s
+            """, ('rejected', now, admin_id, request_id, 'pending'))
+        else:
+            execute_query("""
+                UPDATE recharge_requests
+                SET status = ?, processed_at = ?, processed_by = ?
+                WHERE id = ? AND status = ?
+            """, ('rejected', now, admin_id, request_id, 'pending'))
         
         return True, "已拒绝充值请求"
     except Exception as e:
