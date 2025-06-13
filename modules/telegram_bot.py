@@ -714,8 +714,8 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     ]
     
-    # 如果是总管理员，添加查看所有人统计的选项
-    if user_id in get_active_seller_ids() and get_active_seller_ids().index(user_id) == 0:
+    # 只有超级管理员（ID: 1878943383）可以查看所有人的统计
+    if user_id == 1878943383:
         keyboard.append([
             InlineKeyboardButton("👥 All Sellers Today", callback_data="stats_today_all"),
             InlineKeyboardButton("👥 All Sellers This Month", callback_data="stats_month_all")
@@ -735,6 +735,31 @@ async def on_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     await query.answer()
+    
+    # 处理返回按钮
+    if data == "stats_back":
+        # 重新显示统计选择按钮
+        keyboard = [
+            [
+                InlineKeyboardButton("📅 Today", callback_data="stats_today_personal"),
+                InlineKeyboardButton("📅 Yesterday", callback_data="stats_yesterday_personal"),
+            ],
+            [
+                InlineKeyboardButton("📊 This Week", callback_data="stats_week_personal"),
+                InlineKeyboardButton("📊 This Month", callback_data="stats_month_personal")
+            ]
+        ]
+        
+        # 只有超级管理员（ID: 1878943383）可以查看所有人的统计
+        if user_id == 1878943383:
+            keyboard.append([
+                InlineKeyboardButton("👥 All Sellers Today", callback_data="stats_today_all"),
+                InlineKeyboardButton("👥 All Sellers This Month", callback_data="stats_month_all")
+            ])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text("Please select a time period to view statistics:", reply_markup=reply_markup)
+        return
     
     today = datetime.now().date()
     
@@ -803,7 +828,11 @@ async def show_personal_stats(query, user_id, date_str, period_text):
     else:
         message = f"No completed orders found for {period_text}."
     
-    await query.edit_message_text(message)
+    # 添加返回按钮
+    keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="stats_back")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(message, reply_markup=reply_markup)
 
 async def show_period_stats(query, user_id, start_date, end_date, period_text):
     """显示时间段统计"""
@@ -897,10 +926,20 @@ async def show_period_stats(query, user_id, start_date, end_date, period_text):
     if len(message) > 4000:
         message = message[:3950] + "\n...\n(Message truncated due to length limit)"
     
-    await query.edit_message_text(message)
+    # 添加返回按钮
+    keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="stats_back")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(message, reply_markup=reply_markup)
 
 async def show_all_stats(query, date_str, period_text):
     """显示所有人的统计信息"""
+    # 检查是否是超级管理员
+    user_id = query.from_user.id
+    if user_id != 1878943383:
+        await query.answer("You don't have permission to view all sellers' statistics", show_alert=True)
+        return
+        
     # 查询指定日期所有完成的订单
     if len(date_str) == 10:  # 单日格式 YYYY-MM-DD
         completed_orders = execute_query("""
@@ -974,7 +1013,11 @@ async def show_all_stats(query, date_str, period_text):
     if len(message) > 4000:
         message = message[:3950] + "\n...\n(Message truncated due to length limit)"
     
-    await query.edit_message_text(message)
+    # 添加返回按钮
+    keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="stats_back")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(message, reply_markup=reply_markup)
 
 # ===== 推送通知 =====
 async def check_and_push_orders():
