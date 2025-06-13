@@ -428,10 +428,20 @@ def accept_order_atomic(oid, user_id):
             # 检查订单状态
             cursor.execute("SELECT status FROM orders WHERE id = %s FOR UPDATE", (oid,))
             order = cursor.fetchone()
-            if not order or order[0] != 'submitted':
+            if not order:
                 conn.rollback()
                 conn.close()
-                return False, "Order already taken or not found"
+                return False, "Order not found"
+                
+            if order[0] == 'cancelled':
+                conn.rollback()
+                conn.close()
+                return False, "Order has been cancelled"
+                
+            if order[0] != 'submitted':
+                conn.rollback()
+                conn.close()
+                return False, "Order already taken"
             
             # 检查该用户当前接单数量（状态为accepted的订单）
             cursor.execute("""
@@ -504,10 +514,20 @@ def accept_order_atomic(oid, user_id):
             # 检查订单状态
             cursor.execute("SELECT status FROM orders WHERE id = ?", (oid,))
             order = cursor.fetchone()
-            if not order or order[0] != 'submitted':
+            if not order:
                 conn.rollback()
                 conn.close()
-                return False, "Order already taken or not found"
+                return False, "Order not found"
+                
+            if order[0] == 'cancelled':
+                conn.rollback()
+                conn.close()
+                return False, "Order has been cancelled"
+                
+            if order[0] != 'submitted':
+                conn.rollback()
+                conn.close()
+                return False, "Order already taken"
             
             # 检查该用户当前接单数量（状态为accepted的订单）
             cursor.execute("""

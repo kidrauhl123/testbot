@@ -446,189 +446,75 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"接单回调解析: 订单ID={oid}")
     print(f"DEBUG: 接单回调解析: 订单ID={oid}")
     
-    # 首先检查订单是否存在，尝试直接使用SQL查询，避免中间层转换问题
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        # 使用accept_order_atomic函数处理接单
+        success, message = accept_order_atomic(oid, user_id)
         
-        # 首先尝试直接使用整数ID，根据数据库类型使用不同的占位符
-        if DATABASE_URL.startswith('postgres'):
-            cursor.execute("SELECT COUNT(*) FROM orders WHERE id = %s", (oid,))
-        else:
-            cursor.execute("SELECT COUNT(*) FROM orders WHERE id = ?", (oid,))
-            
-        count = cursor.fetchone()[0]
-        
-        # 如果直接使用整数ID失败，尝试使用字符串ID
-        if count == 0:
-            logger.warning(f"使用整数ID={oid}未找到订单，尝试字符串ID")
-            if DATABASE_URL.startswith('postgres'):
-                cursor.execute("SELECT COUNT(*) FROM orders WHERE id = %s", (str(oid),))
-            else:
-                cursor.execute("SELECT COUNT(*) FROM orders WHERE id = ?", (str(oid),))
-                
-            count = cursor.fetchone()[0]
-            
-            if count > 0:
-                logger.info(f"使用字符串ID={oid}找到订单")
-            
-        exists = count > 0
-        conn.close()
-        
-        logger.info(f"订单 {oid} 存在性检查结果: {exists}")
-        print(f"DEBUG: 订单 {oid} 存在性检查结果: {exists}")
-        
-        if not exists:
-            # 列出最近订单以进行调试
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            if DATABASE_URL.startswith('postgres'):
-                cursor.execute("SELECT id FROM orders ORDER BY id DESC LIMIT 5")
-            else:
-                cursor.execute("SELECT id FROM orders ORDER BY id DESC LIMIT 5")
-                
-            recent_orders = cursor.fetchall()
-            if recent_orders:
-                recent_ids = [str(order[0]) for order in recent_orders]
-                logger.info(f"最近的订单ID: {', '.join(recent_ids)}")
-                print(f"INFO: 最近的订单ID: {', '.join(recent_ids)}")
-            conn.close()
-            
-            # 从处理集合中移除，避免重复点击检测错误
+        if not success:
+            # 从处理集合中移除
             if (user_id, query.data) in processing_accepts:
                 processing_accepts.remove((user_id, query.data))
             if (user_id, query.data) in processing_accepts_time:
                 del processing_accepts_time[(user_id, query.data)]
             
-            await query.answer("Order doesn't exist", show_alert=True)
-            logger.warning(f"接单失败: 订单 {oid} 不存在于数据库中")
-            print(f"WARNING: 接单失败: 订单 {oid} 不存在于数据库中")
-            return
-    except Exception as e:
-        logger.error(f"检查订单 {oid} 是否存在时出错: {str(e)}", exc_info=True)
-        print(f"ERROR: 检查订单 {oid} 是否存在时出错: {str(e)}")
-        
-        # 从处理集合中移除，避免重复点击检测错误
-        if (user_id, query.data) in processing_accepts:
-            processing_accepts.remove((user_id, query.data))
-        if (user_id, query.data) in processing_accepts_time:
-            del processing_accepts_time[(user_id, query.data)]
+            # 根据不同的错误消息显示不同的按钮状态
+            if message == "Order has been cancelled":
+                keyboard = [[InlineKeyboardButton("Cancelled", callback_data="noop")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await query.edit_message_reply_markup(reply_markup=reply_markup)
+            elif message == "Order already taken":
+                keyboard = [[InlineKeyboardButton("Already taken", callback_data="noop")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await query.edit_message_reply_markup(reply_markup=reply_markup)
             
-        await query.answer("Error querying order", show_alert=True)
-        return
-    
-    # 检查订单状态
-    try:
+            await query.answer(message, show_alert=True)
+            return
+            
+        # 获取订单详情
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # 根据数据库类型使用不同的占位符
         if DATABASE_URL.startswith('postgres'):
             cursor.execute("SELECT * FROM orders WHERE id = %s", (oid,))
         else:
             cursor.execute("SELECT * FROM orders WHERE id = ?", (oid,))
             
         order_row = cursor.fetchone()
-        
-        if not order_row:
-            if (user_id, query.data) in processing_accepts:
-                processing_accepts.remove((user_id, query.data))
-            if (user_id, query.data) in processing_accepts_time:
-                del processing_accepts_time[(user_id, query.data)]
-            
-            await query.answer("Order doesn't exist or has been deleted", show_alert=True)
-            logger.warning(f"接单失败: 订单 {oid} 存在但无法获取详情")
-            print(f"WARNING: 接单失败: 订单 {oid} 存在但无法获取详情")
-            conn.close()
-            return
-        
-        # 将结果转换为字典
         columns = [column[0] for column in cursor.description]
         order = {columns[i]: order_row[i] for i in range(len(columns))}
         conn.close()
-        
-        logger.info(f"订单 {oid} 状态: {order['status']}")
-        print(f"DEBUG: 订单 {oid} 详情: {order}")
-        
-        if order['status'] != STATUS['SUBMITTED']:
-            # 从处理集合中移除，避免重复点击检测错误
-            if (user_id, query.data) in processing_accepts:
-                processing_accepts.remove((user_id, query.data))
-            if (user_id, query.data) in processing_accepts_time:
-                del processing_accepts_time[(user_id, query.data)]
-            
-            await query.answer("This order has already been accepted or completed", show_alert=True)
-            logger.warning(f"接单失败: 订单 {oid} 状态为 {order['status']}")
-            print(f"WARNING: 接单失败: 订单 {oid} 状态为 {order['status']}")
-            return
-        
-        # 更新订单状态
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        timestamp = get_china_time()
-        
-        # 根据数据库类型使用不同的语法
-        if DATABASE_URL.startswith('postgres'):
-            cursor.execute(
-                "UPDATE orders SET status = %s, accepted_at = %s, accepted_by = %s WHERE id = %s",
-                (STATUS['ACCEPTED'], timestamp, str(user_id), oid)
-            )
-        else:
-            cursor.execute(
-                "UPDATE orders SET status = ?, accepted_at = ?, accepted_by = ? WHERE id = ?",
-                (STATUS['ACCEPTED'], timestamp, str(user_id), oid)
-            )
-            
-        conn.commit()
-        conn.close()
-        success = True
-        
-        if not success:
-            # 从处理集合中移除，避免重复点击检测错误
-            if (user_id, query.data) in processing_accepts:
-                processing_accepts.remove((user_id, query.data))
-            if (user_id, query.data) in processing_accepts_time:
-                del processing_accepts_time[(user_id, query.data)]
-            
-            await query.answer("Failed to update order status, please try again later", show_alert=True)
-            logger.error(f"更新订单 {oid} 状态失败")
-            return
         
         # 确认回调
         await query.answer("You have successfully accepted the order!", show_alert=True)
         
         # 更新消息
-        try:
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("✅ Mark as Complete", callback_data=f"done_{oid}"),
-                 InlineKeyboardButton("❌ Mark as Failed", callback_data=f"fail_{oid}")]
-            ])
-            
-            # 获取订单详情以显示
-            account = order.get('account', '未知账号')
-            password = order.get('password', '未知密码')
-            package = order.get('package', '未知套餐')
-            
-            await query.edit_message_text(
-                f"📦 *Order #{oid}*\n\n"
-                f"• Account: `{account}`\n"
-                f"• Password: `{password}`\n"
-                f"• Package: *{PLAN_LABELS_EN.get(package, package)}*\n\n"
-                f"*✅ This order has been accepted*\n"
-                f"Accepted by ID: `{user_id}`",
-                reply_markup=keyboard,
-                parse_mode='Markdown'
-            )
-        except Exception as e:
-            logger.error(f"更新消息失败: {str(e)}", exc_info=True)
-            # 即使更新消息失败，订单状态已经更新，所以不需要回滚
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Mark as Complete", callback_data=f"done_{oid}"),
+             InlineKeyboardButton("❌ Mark as Failed", callback_data=f"fail_{oid}")]
+        ])
+        
+        # 获取订单详情以显示
+        account = order.get('account', '未知账号')
+        password = order.get('password', '未知密码')
+        package = order.get('package', '未知套餐')
+        
+        await query.edit_message_text(
+            f"📦 *Order #{oid}*\n\n"
+            f"• Account: `{account}`\n"
+            f"• Password: `{password}`\n"
+            f"• Package: *{PLAN_LABELS_EN.get(package, package)}*\n\n"
+            f"*✅ This order has been accepted*\n"
+            f"Accepted by ID: `{user_id}`",
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
         
         # 从处理集合中移除
         if (user_id, query.data) in processing_accepts:
             processing_accepts.remove((user_id, query.data))
         if (user_id, query.data) in processing_accepts_time:
             del processing_accepts_time[(user_id, query.data)]
-        
+            
         logger.info(f"订单 {oid} 已被用户 {user_id} 接受")
         print(f"INFO: 订单 {oid} 已被用户 {user_id} 接受")
     except Exception as e:
@@ -640,7 +526,7 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             processing_accepts.remove((user_id, query.data))
         if (user_id, query.data) in processing_accepts_time:
             del processing_accepts_time[(user_id, query.data)]
-        
+            
         await query.answer("Error processing order, please try again later", show_alert=True)
 
 async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
