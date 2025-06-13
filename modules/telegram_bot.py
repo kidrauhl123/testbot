@@ -112,7 +112,7 @@ def callback_error_handler(func):
             # 尝试通知用户
             try:
                 if update.callback_query:
-                    await update.callback_query.answer("操作失败，请稍后重试", show_alert=True)
+                    await update.callback_query.answer("Operation failed, please try again later", show_alert=True)
             except Exception as notify_err:
                 logger.error(f"无法通知用户错误: {str(notify_err)}")
                 print(f"ERROR: 无法通知用户错误: {str(notify_err)}")
@@ -499,11 +499,11 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 processing_accepts.remove((user_id, query.data))
             if (user_id, query.data) in processing_accepts_time:
                 del processing_accepts_time[(user_id, query.data)]
-                
-                            await query.answer("Order doesn't exist", show_alert=True)
-                logger.warning(f"接单失败: 订单 {oid} 不存在于数据库中")
-                print(f"WARNING: 接单失败: 订单 {oid} 不存在于数据库中")
-                return
+            
+            await query.answer("Order doesn't exist", show_alert=True)
+            logger.warning(f"接单失败: 订单 {oid} 不存在于数据库中")
+            print(f"WARNING: 接单失败: 订单 {oid} 不存在于数据库中")
+            return
     except Exception as e:
         logger.error(f"检查订单 {oid} 是否存在时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 检查订单 {oid} 是否存在时出错: {str(e)}")
@@ -514,8 +514,8 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if (user_id, query.data) in processing_accepts_time:
             del processing_accepts_time[(user_id, query.data)]
             
-                    await query.answer("Error querying order", show_alert=True)
-            return
+        await query.answer("Error querying order", show_alert=True)
+        return
     
     # 检查订单状态
     try:
@@ -535,12 +535,12 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 processing_accepts.remove((user_id, query.data))
             if (user_id, query.data) in processing_accepts_time:
                 del processing_accepts_time[(user_id, query.data)]
-                
-                            await query.answer("Order doesn't exist or has been deleted", show_alert=True)
-                logger.warning(f"接单失败: 订单 {oid} 存在但无法获取详情")
-                print(f"WARNING: 接单失败: 订单 {oid} 存在但无法获取详情")
-                conn.close()
-                return
+            
+            await query.answer("Order doesn't exist or has been deleted", show_alert=True)
+            logger.warning(f"接单失败: 订单 {oid} 存在但无法获取详情")
+            print(f"WARNING: 接单失败: 订单 {oid} 存在但无法获取详情")
+            conn.close()
+            return
         
         # 将结果转换为字典
         columns = [column[0] for column in cursor.description]
@@ -556,6 +556,7 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 processing_accepts.remove((user_id, query.data))
             if (user_id, query.data) in processing_accepts_time:
                 del processing_accepts_time[(user_id, query.data)]
+            
                 
                             await query.answer("This order has already been accepted or completed", show_alert=True)
                 logger.warning(f"接单失败: 订单 {oid} 状态为 {order['status']}")
