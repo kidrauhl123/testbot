@@ -822,8 +822,8 @@
     </div>
     
     {% if balance is defined %}
-    <div class="balance-badge {% if balance < 0 %}negative{% endif %}">
-      余额: {{ balance }}元{% if credit_limit is defined and credit_limit > 0 %} (额度: {{ credit_limit }}元){% endif %}
+    <div id="balanceBadge" class="balance-badge {% if balance < 0 %}negative{% endif %}" style="cursor:pointer;">
+      余额: {{ balance }} 元
       <a href="/recharge" class="recharge-btn">充值</a>
     </div>
     {% endif %}
@@ -869,6 +869,10 @@
     </div>
 </div>
 
+<div id="balanceInfoBar" style="display:none;padding:8px 15px;background:#fff8e1;border-bottom:1px solid #ffcc33;font-size:13px;text-align:center;">
+  当前余额：{{ balance }} 元  {% if credit_limit is defined and credit_limit > 0 %}&nbsp;&nbsp;可透支额度：{{ credit_limit }} 元{% endif %}
+</div>
+
 <script>
   // 全局变量
   let displayedOrders = 5; // 初始显示5个订单
@@ -878,7 +882,7 @@
   let userId = '{{ session.user_id }}'; // 当前用户ID
   let isAdmin = {{ 'true' if session.is_admin else 'false' }}; // 是否是管理员
   let lastOrdersHash = ''; // 用于检测订单变化的哈希
-  let viewMode = 'table'; // 默认视图模式：grid 或 table
+  let viewMode = 'grid'; // 默认视图模式：grid 或 table
   const WEB_PRICES = {
     '1': 12,
     '2': 18,
@@ -1501,6 +1505,12 @@
         }
       });
     }, 1000);
+
+    // 点击余额badge 显示/隐藏信息栏
+    document.getElementById('balanceBadge').addEventListener('click', () => {
+      const bar = document.getElementById('balanceInfoBar');
+      bar.style.display = bar.style.display === 'none' ? 'block' : 'none';
+    });
   });
 
   // 当用户离开页面时停止自动刷新

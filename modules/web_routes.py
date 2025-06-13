@@ -900,7 +900,7 @@ def register_routes(app, notification_queue):
             return jsonify({"success": False, "error": "订单ID必须是有效的数字"}), 400
         except Exception as e:
             logger.error(f"批量删除订单时出错: {e}", exc_info=True)
-            return jsonify({"success": False, "error": "服务器内部错误"}), 500
+            return jsonify({"success": False, "error": "服务器内部错误"}), 500 
 
     # ===== 充值相关路由 =====
     @app.route('/recharge', methods=['GET'])
