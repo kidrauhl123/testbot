@@ -188,10 +188,79 @@
     
     .dashboard-container {
       display: flex;
-      flex-direction: column;
       gap: 20px;
     }
     
+    .sidebar {
+      width: 240px;
+      flex-shrink: 0;
+      background: rgba(255,255,255,0.95);
+      border-radius: 15px;
+      padding: 20px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      backdrop-filter: blur(10px);
+      align-self: flex-start;
+    }
+    
+    .sidebar-menu {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    .sidebar-menu a {
+      display: flex;
+      align-items: center;
+      padding: 12px 15px;
+      color: #333;
+      text-decoration: none;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+      font-weight: 500;
+    }
+    
+    .sidebar-menu a:hover, .sidebar-menu a.active {
+      background: #667eea;
+      color: white;
+    }
+    
+    .sidebar-menu i {
+      margin-right: 12px;
+      width: 20px;
+      text-align: center;
+    }
+    
+    .content {
+      flex: 1;
+      background: rgba(255,255,255,0.95);
+      border-radius: 15px;
+      padding: 30px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      backdrop-filter: blur(10px);
+    }
+    
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    
+    .content-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .content-header h2 {
+      margin: 0;
+      font-weight: 400;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+    }
+
     .card {
       background: rgba(255,255,255,0.95);
       border-radius: 15px;
@@ -200,22 +269,6 @@
       backdrop-filter: blur(10px);
     }
     
-    .card-header {
-      margin-bottom: 20px;
-      padding-bottom: 15px;
-      border-bottom: 1px solid #f0f0f0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    
-    .card-header h2 {
-      margin: 0;
-      font-weight: 600;
-      font-size: 18px;
-      color: #333;
-    }
-
     .stats-container {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -431,55 +484,68 @@
 
 <div class="main-container">
   <div class="dashboard-container">
-    <div class="card">
-      <div class="card-header">
-        <h2>我的统计数据</h2>
-      </div>
-      <div class="stats-container" id="stats-container">
-        <div class="stat-card">
-          <div class="stat-icon"><i class="fas fa-wallet"></i></div>
-          <div class="stat-value">{{ balance|default(0.00, true) }}</div>
-          <div class="stat-label">当前余额 (元)</div>
-        </div>
-        {% if credit_limit is defined and credit_limit > 0 %}
-        <div class="stat-card">
-          <div class="stat-icon">
-            <i class="fas fa-credit-card"></i>
-          </div>
-          <div class="stat-value">{{ credit_limit }}</div>
-          <div class="stat-label">透支额度 (元)</div>
-        </div>
-        {% endif %}
-        <div class="stat-card" id="total-orders">
-          <div class="stat-icon"><i class="fas fa-shopping-cart"></i></div>
-          <div class="stat-value">0</div>
-          <div class="stat-label">总订单数</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
-          <div class="stat-value" id="completed-orders">--</div>
-          <div class="stat-label">成功订单</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon"><i class="fas fa-times-circle"></i></div>
-          <div class="stat-value" id="failed-orders">--</div>
-          <div class="stat-label">失败订单</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon"><i class="fas fa-dollar-sign"></i></div>
-          <div class="stat-value" id="total-amount">--</div>
-          <div class="stat-label">总金额</div>
-        </div>
-      </div>
-      <div id="package-stats" class="package-stats"></div>
+    <div class="sidebar">
+      <ul class="sidebar-menu">
+        <li><a href="#orders"><i class="fas fa-shopping-cart"></i>订单管理</a></li>
+        <li><a href="#balance"><i class="fas fa-dollar-sign"></i>余额明细</a></li>
+      </ul>
     </div>
-    
-    <div class="card">
-      <div class="card-header">
-        <h2>我的所有订单</h2>
+    <div class="content">
+      <div class="tab-content active" id="orders">
+        <div class="content-header">
+          <h2>我的所有订单</h2>
+          <div class="header-actions">
+            <button class="btn btn-primary">导出订单</button>
+          </div>
+        </div>
+        <div id="orders-container" class="orders-table-container">
+          <div class="loading">加载中...</div>
+        </div>
       </div>
-      <div id="orders-container" class="orders-table-container">
-        <div class="loading">加载中...</div>
+      <div class="tab-content" id="balance">
+        <div class="content-header">
+          <h2>余额明细</h2>
+          <div class="header-actions">
+            <button class="btn btn-primary">充值</button>
+          </div>
+        </div>
+        <div class="stats-container" id="stats-container">
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-wallet"></i></div>
+            <div class="stat-value">{{ balance|default(0.00, true) }}</div>
+            <div class="stat-label">当前余额 (元)</div>
+          </div>
+          {% if credit_limit is defined and credit_limit > 0 %}
+          <div class="stat-card">
+            <div class="stat-icon">
+              <i class="fas fa-credit-card"></i>
+            </div>
+            <div class="stat-value">{{ credit_limit }}</div>
+            <div class="stat-label">透支额度 (元)</div>
+          </div>
+          {% endif %}
+          <div class="stat-card" id="total-orders">
+            <div class="stat-icon"><i class="fas fa-shopping-cart"></i></div>
+            <div class="stat-value">0</div>
+            <div class="stat-label">总订单数</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+            <div class="stat-value" id="completed-orders">--</div>
+            <div class="stat-label">成功订单</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-times-circle"></i></div>
+            <div class="stat-value" id="failed-orders">--</div>
+            <div class="stat-label">失败订单</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-dollar-sign"></i></div>
+            <div class="stat-value" id="total-amount">--</div>
+            <div class="stat-label">总金额</div>
+          </div>
+        </div>
+        <div id="package-stats" class="package-stats"></div>
       </div>
     </div>
   </div>
@@ -497,6 +563,23 @@
   
   // 存储所有订单数据
   let allOrders = [];
+  
+  // 显示指定的标签页
+  function showTab(tabId) {
+    // 隐藏所有标签内容
+    document.querySelectorAll('.tab-content').forEach(tab => {
+      tab.classList.remove('active');
+    });
+    
+    // 取消所有标签按钮激活状态
+    document.querySelectorAll('.sidebar-menu a').forEach(link => {
+      link.classList.remove('active');
+    });
+    
+    // 激活选中的标签
+    document.getElementById(tabId).classList.add('active');
+    document.querySelector(`.sidebar-menu a[href="#${tabId}"]`).classList.add('active');
+  }
   
   // 加载订单并计算统计数据
   async function loadOrdersAndStats() {
@@ -693,6 +776,19 @@
   
   // 页面加载完成后执行
   document.addEventListener('DOMContentLoaded', function() {
+    // 初始化标签页
+    document.querySelectorAll('.sidebar-menu a').forEach(link => {
+      link.addEventListener('click', function(e) {
+        e.preventDefault();
+        const tabId = this.getAttribute('href').substring(1);
+        showTab(tabId);
+      });
+    });
+    
+    // 默认显示订单管理标签
+    showTab('orders');
+    
+    // 加载订单数据
     loadOrdersAndStats();
   });
 </script>
