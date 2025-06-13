@@ -379,43 +379,54 @@
         <h2>账户充值</h2>
       </div>
       
-      <div class="payment-info">
-        <h3>充值说明</h3>
-        <p>1. 请选择充值金额并选择支付方式</p>
-        <p>2. 扫描二维码或转账到以下账号进行支付</p>
-        <p>3. 上传支付凭证截图</p>
-        <p>4. 等待管理员审核（通常在24小时内完成）</p>
-        <p>5. 审核通过后，金额将自动添加到您的账户余额</p>
-      </div>
-      
-      <div class="payment-info">
-        <h3>收款信息</h3>
-        <p><strong>支付宝：</strong>13800138000</p>
-        <p><strong>微信支付：</strong>wxid_12345</p>
-        <p><strong>银行卡：</strong>6222 0000 0000 0000（中国银行）</p>
-        <div class="payment-qrcode">
-          <img src="/static/payment_qrcode.jpg" alt="支付二维码" onerror="this.src='/static/placeholder.png'">
-        </div>
-      </div>
-      
       <form id="rechargeForm" enctype="multipart/form-data">
         <div class="form-group">
           <label for="amount">充值金额（元）</label>
-          <input type="number" class="form-control" id="amount" name="amount" min="1" step="1" required>
+          <input type="number" class="form-control" id="amount" name="amount" min="1" step="0.01" required>
         </div>
         
         <div class="form-group">
           <label for="payment_method">支付方式</label>
           <select class="form-control" id="payment_method" name="payment_method" required>
-            <option value="支付宝">支付宝</option>
-            <option value="微信支付">微信支付</option>
-            <option value="银行转账">银行转账</option>
+            <option value="支付宝口令红包">支付宝口令红包 (推荐)</option>
+            <option value="支付宝收款码">支付宝收款码</option>
+            <option value="微信收款码">微信收款码</option>
           </select>
         </div>
-        
-        <div class="form-group">
-          <label for="proof_image">支付凭证截图</label>
-          <input type="file" class="form-control" id="proof_image" name="proof_image" accept="image/*" required>
+
+        <!-- 支付宝口令 -->
+        <div id="alipay_command_section" style="display: none;">
+          <div class="payment-info">
+            <h3>支付宝口令红包</h3>
+            <p>请在支付宝App生成口令红包，并将生成的口令粘贴到下方输入框中。</p>
+          </div>
+          <div class="form-group">
+            <label for="payment_command">支付宝口令</label>
+            <input type="text" class="form-control" id="payment_command" name="payment_command" placeholder="请在此处粘贴口令">
+          </div>
+        </div>
+
+        <!-- 收款码 -->
+        <div id="qr_code_section" style="display: none;">
+          <div class="payment-info">
+            <h3>收款信息</h3>
+            <div id="alipay_qr_info" style="display: none;">
+              <p><strong>支付宝账户：</strong> 13800138000</p>
+              <div class="payment-qrcode">
+                <img src="/static/alipay_qrcode.png" alt="支付宝收款码" onerror="this.style.display='none'">
+              </div>
+            </div>
+            <div id="wechat_qr_info" style="display: none;">
+              <p><strong>微信账户：</strong> wxid_12345</p>
+              <div class="payment-qrcode">
+                <img src="/static/wechat_qrcode.png" alt="微信收款码" onerror="this.style.display='none'">
+              </div>
+            </div>
+          </div>
+          <div class="form-group" id="proof_image_group">
+            <label for="proof_image">支付凭证截图 (可选)</label>
+            <input type="file" class="form-control" id="proof_image" name="proof_image" accept="image/*">
+          </div>
         </div>
         
         <button type="submit" class="btn btn-success" id="submitBtn">提交充值申请</button>
@@ -434,7 +445,7 @@
             <th>ID</th>
             <th>金额</th>
             <th>支付方式</th>
-            <th>凭证</th>
+            <th>凭证/详情</th>
             <th>申请时间</th>
             <th>处理时间</th>
             <th>状态</th>
@@ -450,6 +461,8 @@
                 <td>
                   {% if record[4] %}
                     <img src="{{ record[4] }}" class="preview-image" onclick="openModal('{{ record[4] }}')" onerror="this.src='/static/placeholder.png'">
+                  {% elif record[7] %}
+                    <span style="font-size: 12px; color: #666;">{{ record[7] }}</span>
                   {% else %}
                     无
                   {% endif %}
@@ -512,29 +525,70 @@
       alert.className = 'custom-alert';
       alert.classList.add(type);
       
-      if (type === 'success') {
-        icon.innerHTML = '✅';
-      } else if (type === 'error') {
-        icon.innerHTML = '❌';
-      } else if (type === 'warning') {
-        icon.innerHTML = '⚠️';
-      }
+      if (type === 'success') { icon.innerHTML = '✅'; } 
+      else if (type === 'error') { icon.innerHTML = '❌'; }
       
       messageEl.textContent = message;
       alert.style.display = 'flex';
       
-      // 5秒后自动隐藏
-      setTimeout(hideAlert, 5000);
+      setTimeout(() => { alert.style.display = 'none'; }, 5000);
     }
-    
+
     function hideAlert() {
       document.getElementById('customAlert').style.display = 'none';
     }
+
+    // 动态表单逻辑
+    const paymentMethodSelect = document.getElementById('payment_method');
+    const alipayCommandSection = document.getElementById('alipay_command_section');
+    const qrCodeSection = document.getElementById('qr_code_section');
+    const alipayQrInfo = document.getElementById('alipay_qr_info');
+    const wechatQrInfo = document.getElementById('wechat_qr_info');
+    const paymentCommandInput = document.getElementById('payment_command');
+    const proofImageInput = document.getElementById('proof_image');
+
+    function updatePaymentForm() {
+        const selectedMethod = paymentMethodSelect.value;
+
+        alipayCommandSection.style.display = 'none';
+        qrCodeSection.style.display = 'none';
+        alipayQrInfo.style.display = 'none';
+        wechatQrInfo.style.display = 'none';
+
+        paymentCommandInput.value = '';
+        proofImageInput.value = '';
+
+        if (selectedMethod === '支付宝口令红包') {
+            alipayCommandSection.style.display = 'block';
+        } else if (selectedMethod === '支付宝收款码') {
+            qrCodeSection.style.display = 'block';
+            alipayQrInfo.style.display = 'block';
+        } else if (selectedMethod === '微信收款码') {
+            qrCodeSection.style.display = 'block';
+            wechatQrInfo.style.display = 'block';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', updatePaymentForm);
+    paymentMethodSelect.addEventListener('change', updatePaymentForm);
     
     // 表单提交
     document.getElementById('rechargeForm').addEventListener('submit', function(e) {
       e.preventDefault();
       
+      const selectedMethod = paymentMethodSelect.value;
+      
+      if (selectedMethod === '支付宝口令红包' && !paymentCommandInput.value.trim()) {
+        showAlert('请输入支付宝口令。', 'error');
+        return;
+      }
+
+      if ((selectedMethod === '支付宝收款码' || selectedMethod === '微信收款码') && !proofImageInput.files.length) {
+        if (!confirm('您确定不上传支付凭证吗？缺少凭证可能导致充值延迟或失败。')) {
+          return;
+        }
+      }
+
       const submitBtn = document.getElementById('submitBtn');
       submitBtn.disabled = true;
       submitBtn.textContent = '提交中...';
@@ -549,18 +603,13 @@
       .then(data => {
         if (data.success) {
           showAlert(data.message, 'success');
-          // 重置表单
-          document.getElementById('rechargeForm').reset();
-          // 2秒后刷新页面以显示新的充值记录
-          setTimeout(() => {
-            location.reload();
-          }, 2000);
+          setTimeout(() => { location.reload(); }, 2000);
         } else {
           showAlert(data.error, 'error');
         }
       })
       .catch(error => {
-        showAlert('提交请求失败，请稍后再试', 'error');
+        showAlert('提交请求失败，请稍后再试。', 'error');
         console.error('Error:', error);
       })
       .finally(() => {
