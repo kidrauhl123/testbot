@@ -1075,6 +1075,61 @@ async def send_notification_from_queue(data):
 
     try:
         notification_type = data.get('type')
+        
+        if notification_type == 'new_order':
+            # 处理新订单通知
+            oid = data.get('order_id')
+            account = data.get('account')
+            password = data.get('password')
+            package = data.get('package')
+            web_user_id = data.get('web_user_id')
+            
+            user_info = f" from web user: {web_user_id}" if web_user_id else ""
+            
+            message = (
+                f"📢 New Order #{oid}{user_info}\n"
+                f"Account: `{account}`\n"
+                f"Password: `********` (hidden until accepted)\n"
+                f"Package: {package} month(s)"
+            )
+            
+            # 创建接单按钮
+            callback_data = f'accept_{oid}'
+            keyboard = [[InlineKeyboardButton("Accept", callback_data=callback_data)]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            # 向所有卖家发送通知
+            seller_ids = get_active_seller_ids()
+            if not seller_ids:
+                logger.warning("没有活跃的卖家，无法推送订单")
+                return
+                
+            success_count = 0
+            for seller_id in seller_ids:
+                try:
+                    sent_message = await bot_application.bot.send_message(
+                        chat_id=seller_id, 
+                        text=message, 
+                        reply_markup=reply_markup,
+                        parse_mode='Markdown'
+                    )
+                    success_count += 1
+                    logger.info(f"成功向卖家 {seller_id} 推送订单 #{oid}, 消息ID: {sent_message.message_id}")
+                except Exception as e:
+                    logger.error(f"向卖家 {seller_id} 发送订单 #{oid} 通知失败: {str(e)}", exc_info=True)
+            
+            if success_count > 0:
+                # 标记订单为已通知
+                try:
+                    execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
+                    logger.info(f"订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家")
+                except Exception as update_error:
+                    logger.error(f"更新订单 #{oid} 通知状态时出错: {str(update_error)}", exc_info=True)
+            else:
+                logger.error(f"订单 #{oid} 未能成功推送给任何卖家")
+            
+            return
+            
         seller_id = data.get('seller_id')
         oid = data.get('order_id')
         account = data.get('account')

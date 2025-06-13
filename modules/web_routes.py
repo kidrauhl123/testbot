@@ -194,6 +194,20 @@ def register_routes(app, notification_queue):
                     "can_cancel": o[4] == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == o[6])
                 })
             
+            # 触发立即通知卖家 - 获取新创建的订单ID并加入通知队列
+            if orders and orders[0]['id']:
+                new_order_id = orders[0]['id']
+                # 加入通知队列，通知类型为new_order
+                notification_queue.put({
+                    'type': 'new_order',
+                    'order_id': new_order_id,
+                    'account': account,
+                    'password': password,
+                    'package': package,
+                    'web_user_id': username
+                })
+                logger.info(f"已将订单 #{new_order_id} 加入通知队列")
+            
             return jsonify({
                 "success": True,
                 "message": '订单已提交成功！',
