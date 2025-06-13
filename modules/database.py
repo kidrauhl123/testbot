@@ -34,7 +34,9 @@ def init_db():
         init_sqlite_db()
     
     # 创建充值记录表
+    logger.info("正在创建充值记录表...")
     create_recharge_tables()
+    logger.info("充值记录表创建完成")
         
 def init_sqlite_db():
     """初始化SQLite数据库"""
