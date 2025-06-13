@@ -1104,6 +1104,8 @@ async def send_notification_from_queue(data):
             await send_status_change_notification(data)
         elif data['type'] == 'recharge_request':
             await send_recharge_request_notification(data)
+        elif data['type'] == 'dispute':
+            await send_dispute_notification(data)
         else:
             logger.warning(f"未知的通知类型: {data['type']}")
     except Exception as e:
@@ -1328,6 +1330,32 @@ async def send_recharge_request_notification(data):
         logger.error(f"发送充值请求通知时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 发送充值请求通知时出错: {str(e)}")
         traceback.print_exc()
+
+async def send_dispute_notification(data):
+    """发送质疑订单通知到卖家"""
+    global bot_application
+    try:
+        seller_id = data.get('seller_id')
+        oid = data.get('order_id')
+        account = data.get('account')
+        password = data.get('password')
+        package = data.get('package')
+        message_text = (
+            f"⚠️ <b>Order Dispute</b> ⚠️\n\n"
+            f"Order #{oid} has been disputed by the user.\n"
+            f"Account: <code>{account}</code>\n"
+            f"Password: <code>{password}</code>\n"
+            f"Package: {package} month(s)\n\n"
+            f"Please check and handle this order as soon as possible."
+        )
+        await bot_application.bot.send_message(
+            chat_id=seller_id,
+            text=message_text,
+            parse_mode='HTML'
+        )
+        logger.info(f"已向卖家 {seller_id} 发送订单质疑通知 #{oid}")
+    except Exception as e:
+        logger.error(f"发送订单质疑通知时出错: {str(e)}", exc_info=True)
 
 # ===== 主函数 =====
 def run_bot(notification_queue):
