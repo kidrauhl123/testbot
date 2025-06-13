@@ -923,60 +923,74 @@ def register_routes(app, notification_queue):
     @login_required
     def submit_recharge():
         """提交充值请求"""
-        user_id = session.get('user_id')
-        amount = request.form.get('amount')
-        payment_method = request.form.get('payment_method')
-        
-        # 验证输入
         try:
-            amount = float(amount)
-            if amount <= 0:
-                return jsonify({"success": False, "error": "充值金额必须大于0"}), 400
-        except ValueError:
-            return jsonify({"success": False, "error": "请输入有效的金额"}), 400
-        
-        if not payment_method:
-            payment_method = "未指定"
-        
-        # 处理上传的支付凭证
-        proof_image = None
-        if 'proof_image' in request.files:
-            file = request.files['proof_image']
-            if file and file.filename:
-                # 确保上传目录存在
-                upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'uploads')
-                if not os.path.exists(upload_dir):
-                    os.makedirs(upload_dir)
-                
-                # 生成唯一文件名
-                filename = f"{int(time.time())}_{file.filename}"
-                file_path = os.path.join(upload_dir, filename)
-                
-                # 保存文件
-                file.save(file_path)
-                proof_image = f"/static/uploads/{filename}"
-        
-        # 创建充值请求
-        request_id, success, message = create_recharge_request(user_id, amount, payment_method, proof_image)
-        
-        if success:
-            # 发送通知到TG管理员
-            username = session.get('username')
-            notification_queue.put({
-                'type': 'recharge_request',
-                'request_id': request_id,
-                'username': username,
-                'amount': amount,
-                'payment_method': payment_method,
-                'proof_image': proof_image
-            })
+            user_id = session.get('user_id')
+            amount = request.form.get('amount')
+            payment_method = request.form.get('payment_method')
             
-            return jsonify({
-                "success": True,
-                "message": "充值请求已提交，请等待管理员审核"
-            })
-        else:
-            return jsonify({"success": False, "error": message}), 500
+            logger.info(f"收到充值请求: 用户ID={user_id}, 金额={amount}, 支付方式={payment_method}")
+            
+            # 验证输入
+            try:
+                amount = float(amount)
+                if amount <= 0:
+                    return jsonify({"success": False, "error": "充值金额必须大于0"}), 400
+            except ValueError:
+                return jsonify({"success": False, "error": "请输入有效的金额"}), 400
+            
+            if not payment_method:
+                payment_method = "未指定"
+            
+            # 处理上传的支付凭证
+            proof_image = None
+            if 'proof_image' in request.files:
+                file = request.files['proof_image']
+                if file and file.filename:
+                    try:
+                        # 确保上传目录存在
+                        upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'uploads')
+                        if not os.path.exists(upload_dir):
+                            os.makedirs(upload_dir)
+                        
+                        # 生成唯一文件名
+                        filename = f"{int(time.time())}_{file.filename}"
+                        file_path = os.path.join(upload_dir, filename)
+                        
+                        # 保存文件
+                        file.save(file_path)
+                        proof_image = f"/static/uploads/{filename}"
+                        logger.info(f"已保存充值凭证: {proof_image}")
+                    except Exception as e:
+                        logger.error(f"保存充值凭证失败: {str(e)}", exc_info=True)
+                        return jsonify({"success": False, "error": f"保存充值凭证失败: {str(e)}"}), 500
+            
+            # 创建充值请求
+            logger.info(f"正在创建充值请求: 用户ID={user_id}, 金额={amount}, 支付方式={payment_method}")
+            request_id, success, message = create_recharge_request(user_id, amount, payment_method, proof_image)
+            
+            if success:
+                # 发送通知到TG管理员
+                username = session.get('username')
+                notification_queue.put({
+                    'type': 'recharge_request',
+                    'request_id': request_id,
+                    'username': username,
+                    'amount': amount,
+                    'payment_method': payment_method,
+                    'proof_image': proof_image
+                })
+                logger.info(f"充值请求 #{request_id} 已提交成功，已加入通知队列")
+                
+                return jsonify({
+                    "success": True,
+                    "message": "充值请求已提交，请等待管理员审核"
+                })
+            else:
+                logger.error(f"创建充值请求失败: {message}")
+                return jsonify({"success": False, "error": message}), 500
+        except Exception as e:
+            logger.error(f"处理充值请求时出错: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": f"处理充值请求时出错: {str(e)}"}), 500
     
     @app.route('/admin/recharge-requests', methods=['GET'])
     @login_required
