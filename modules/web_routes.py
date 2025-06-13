@@ -177,6 +177,14 @@ def register_routes(app, notification_queue):
             # 获取最新订单列表并格式化
             orders_raw = execute_query("SELECT id, account, password, package, status, created_at, user_id FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             orders = []
+            
+            # 获取新创建的订单ID
+            new_order_id = None
+            if orders_raw and len(orders_raw) > 0:
+                new_order_id = orders_raw[0][0]
+                logger.info(f"新创建的订单ID: {new_order_id}")
+                print(f"DEBUG: 新创建的订单ID: {new_order_id}")
+            
             for o in orders_raw:
                 orders.append({
                     "id": o[0],
@@ -195,8 +203,7 @@ def register_routes(app, notification_queue):
                 })
             
             # 触发立即通知卖家 - 获取新创建的订单ID并加入通知队列
-            if orders and orders[0]['id']:
-                new_order_id = orders[0]['id']
+            if new_order_id:
                 # 加入通知队列，通知类型为new_order
                 notification_queue.put({
                     'type': 'new_order',
@@ -207,6 +214,10 @@ def register_routes(app, notification_queue):
                     'web_user_id': username
                 })
                 logger.info(f"已将订单 #{new_order_id} 加入通知队列")
+                print(f"DEBUG: 已将订单 #{new_order_id} 加入通知队列")
+            else:
+                logger.warning("无法获取新创建的订单ID，无法发送通知")
+                print("WARNING: 无法获取新创建的订单ID，无法发送通知")
             
             return jsonify({
                 "success": True,

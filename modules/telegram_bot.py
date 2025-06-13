@@ -397,8 +397,10 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
         oid_str = parts[1]
         try:
             oid = int(oid_str)
+            logger.info(f"成功将订单ID转换为整数: {oid}")
+            print(f"DEBUG: 成功将订单ID转换为整数: {oid}")
         except ValueError as e:
-            logger.error(f"接单回调数据无效，无法转换为整数: {oid_str}")
+            logger.error(f"接单回调数据无效，无法转换为整数: {oid_str}, 错误: {str(e)}")
             await query.answer("无效的订单ID", show_alert=True)
             return
     except (IndexError, ValueError) as e:
@@ -414,97 +416,174 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"接单回调解析: 订单ID={oid}")
     print(f"DEBUG: 接单回调解析: 订单ID={oid}")
     
-    # 首先检查订单是否存在
-    exists = check_order_exists(oid)
-    if not exists:
+    # 首先检查订单是否存在，尝试直接使用SQL查询，避免中间层转换问题
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # 首先尝试直接使用整数ID
+        cursor.execute("SELECT COUNT(*) FROM orders WHERE id = ?", (oid,))
+        count = cursor.fetchone()[0]
+        
+        # 如果直接使用整数ID失败，尝试使用字符串ID
+        if count == 0:
+            logger.warning(f"使用整数ID={oid}未找到订单，尝试字符串ID")
+            cursor.execute("SELECT COUNT(*) FROM orders WHERE id = ?", (str(oid),))
+            count = cursor.fetchone()[0]
+            
+            if count > 0:
+                logger.info(f"使用字符串ID={oid}找到订单")
+            
+        exists = count > 0
+        conn.close()
+        
+        logger.info(f"订单 {oid} 存在性检查结果: {exists}")
+        print(f"DEBUG: 订单 {oid} 存在性检查结果: {exists}")
+        
+        if not exists:
+            # 列出最近订单以进行调试
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM orders ORDER BY id DESC LIMIT 5")
+            recent_orders = cursor.fetchall()
+            if recent_orders:
+                recent_ids = [str(order[0]) for order in recent_orders]
+                logger.info(f"最近的订单ID: {', '.join(recent_ids)}")
+                print(f"INFO: 最近的订单ID: {', '.join(recent_ids)}")
+            conn.close()
+            
+            # 从处理集合中移除，避免重复点击检测错误
+            if (user_id, query.data) in processing_accepts:
+                processing_accepts.remove((user_id, query.data))
+            if (user_id, query.data) in processing_accepts_time:
+                del processing_accepts_time[(user_id, query.data)]
+                
+            await query.answer("订单不存在", show_alert=True)
+            logger.warning(f"接单失败: 订单 {oid} 不存在于数据库中")
+            print(f"WARNING: 接单失败: 订单 {oid} 不存在于数据库中")
+            return
+    except Exception as e:
+        logger.error(f"检查订单 {oid} 是否存在时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 检查订单 {oid} 是否存在时出错: {str(e)}")
+        
         # 从处理集合中移除，避免重复点击检测错误
         if (user_id, query.data) in processing_accepts:
             processing_accepts.remove((user_id, query.data))
         if (user_id, query.data) in processing_accepts_time:
             del processing_accepts_time[(user_id, query.data)]
             
-        await query.answer("订单不存在", show_alert=True)
-        logger.warning(f"接单失败: 订单 {oid} 不存在于数据库中")
-        print(f"WARNING: 接单失败: 订单 {oid} 不存在于数据库中")
+        await query.answer("查询订单时出错", show_alert=True)
         return
     
     # 检查订单状态
-    order = get_order_by_id(oid)
-    if not order:
-        # 从处理集合中移除，避免重复点击检测错误
-        if (user_id, query.data) in processing_accepts:
-            processing_accepts.remove((user_id, query.data))
-        if (user_id, query.data) in processing_accepts_time:
-            del processing_accepts_time[(user_id, query.data)]
-            
-        await query.answer("订单不存在或已被删除", show_alert=True)
-        logger.warning(f"接单失败: 订单 {oid} 存在但无法获取详情")
-        print(f"WARNING: 接单失败: 订单 {oid} 存在但无法获取详情")
-        return
-    
-    logger.info(f"订单 {oid} 状态: {order['status']}")
-    
-    if order['status'] != STATUS['SUBMITTED']:
-        # 从处理集合中移除，避免重复点击检测错误
-        if (user_id, query.data) in processing_accepts:
-            processing_accepts.remove((user_id, query.data))
-        if (user_id, query.data) in processing_accepts_time:
-            del processing_accepts_time[(user_id, query.data)]
-            
-        await query.answer("此订单已被接受或已完成", show_alert=True)
-        logger.warning(f"接单失败: 订单 {oid} 状态为 {order['status']}")
-        print(f"WARNING: 接单失败: 订单 {oid} 状态为 {order['status']}")
-        return
-    
-    # 更新订单状态
-    success = update_order_status(oid, STATUS['ACCEPTED'], user_id)
-    if not success:
-        # 从处理集合中移除，避免重复点击检测错误
-        if (user_id, query.data) in processing_accepts:
-            processing_accepts.remove((user_id, query.data))
-        if (user_id, query.data) in processing_accepts_time:
-            del processing_accepts_time[(user_id, query.data)]
-            
-        await query.answer("更新订单状态失败，请稍后重试", show_alert=True)
-        logger.error(f"更新订单 {oid} 状态失败")
-        return
-    
-    # 确认回调
-    await query.answer("您已成功接单！", show_alert=True)
-    
-    # 更新消息
     try:
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ 已被接单", callback_data=f"order_accepted_{oid}")]
-        ])
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM orders WHERE id = ?", (oid,))
+        order_row = cursor.fetchone()
         
-        # 获取订单详情以显示
-        account = order.get('account', '未知账号')
-        password = order.get('password', '未知密码')
-        package = order.get('package', '未知套餐')
+        if not order_row:
+            if (user_id, query.data) in processing_accepts:
+                processing_accepts.remove((user_id, query.data))
+            if (user_id, query.data) in processing_accepts_time:
+                del processing_accepts_time[(user_id, query.data)]
+                
+            await query.answer("订单不存在或已被删除", show_alert=True)
+            logger.warning(f"接单失败: 订单 {oid} 存在但无法获取详情")
+            print(f"WARNING: 接单失败: 订单 {oid} 存在但无法获取详情")
+            conn.close()
+            return
         
-        await query.edit_message_text(
-            f"📦 *订单 #{oid}*\n\n"
-            f"• 账号: `{account}`\n"
-            f"• 密码: `{password}`\n"
-            f"• 套餐: *{PLAN_LABELS_EN.get(package, package)}*\n\n"
-            f"*✅ 此订单已被接受*\n"
-            f"接单人ID: `{user_id}`",
-            reply_markup=keyboard,
-            parse_mode='Markdown'
+        # 将结果转换为字典
+        columns = [column[0] for column in cursor.description]
+        order = {columns[i]: order_row[i] for i in range(len(columns))}
+        conn.close()
+        
+        logger.info(f"订单 {oid} 状态: {order['status']}")
+        print(f"DEBUG: 订单 {oid} 详情: {order}")
+        
+        if order['status'] != STATUS['SUBMITTED']:
+            # 从处理集合中移除，避免重复点击检测错误
+            if (user_id, query.data) in processing_accepts:
+                processing_accepts.remove((user_id, query.data))
+            if (user_id, query.data) in processing_accepts_time:
+                del processing_accepts_time[(user_id, query.data)]
+                
+            await query.answer("此订单已被接受或已完成", show_alert=True)
+            logger.warning(f"接单失败: 订单 {oid} 状态为 {order['status']}")
+            print(f"WARNING: 接单失败: 订单 {oid} 状态为 {order['status']}")
+            return
+        
+        # 更新订单状态
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        timestamp = get_china_time()
+        cursor.execute(
+            "UPDATE orders SET status = ?, accepted_at = ?, accepted_by = ? WHERE id = ?",
+            (STATUS['ACCEPTED'], timestamp, str(user_id), oid)
         )
+        conn.commit()
+        conn.close()
+        success = True
+        
+        if not success:
+            # 从处理集合中移除，避免重复点击检测错误
+            if (user_id, query.data) in processing_accepts:
+                processing_accepts.remove((user_id, query.data))
+            if (user_id, query.data) in processing_accepts_time:
+                del processing_accepts_time[(user_id, query.data)]
+                
+            await query.answer("更新订单状态失败，请稍后重试", show_alert=True)
+            logger.error(f"更新订单 {oid} 状态失败")
+            return
+        
+        # 确认回调
+        await query.answer("您已成功接单！", show_alert=True)
+        
+        # 更新消息
+        try:
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ 已被接单", callback_data=f"order_accepted_{oid}")]
+            ])
+            
+            # 获取订单详情以显示
+            account = order.get('account', '未知账号')
+            password = order.get('password', '未知密码')
+            package = order.get('package', '未知套餐')
+            
+            await query.edit_message_text(
+                f"📦 *订单 #{oid}*\n\n"
+                f"• 账号: `{account}`\n"
+                f"• 密码: `{password}`\n"
+                f"• 套餐: *{PLAN_LABELS_EN.get(package, package)}*\n\n"
+                f"*✅ 此订单已被接受*\n"
+                f"接单人ID: `{user_id}`",
+                reply_markup=keyboard,
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.error(f"更新消息失败: {str(e)}", exc_info=True)
+            # 即使更新消息失败，订单状态已经更新，所以不需要回滚
+        
+        # 从处理集合中移除
+        if (user_id, query.data) in processing_accepts:
+            processing_accepts.remove((user_id, query.data))
+        if (user_id, query.data) in processing_accepts_time:
+            del processing_accepts_time[(user_id, query.data)]
+        
+        logger.info(f"订单 {oid} 已被用户 {user_id} 接受")
+        print(f"INFO: 订单 {oid} 已被用户 {user_id} 接受")
     except Exception as e:
-        logger.error(f"更新消息失败: {str(e)}", exc_info=True)
-        # 即使更新消息失败，订单状态已经更新，所以不需要回滚
-    
-    # 从处理集合中移除
-    if (user_id, query.data) in processing_accepts:
-        processing_accepts.remove((user_id, query.data))
-    if (user_id, query.data) in processing_accepts_time:
-        del processing_accepts_time[(user_id, query.data)]
-    
-    logger.info(f"订单 {oid} 已被用户 {user_id} 接受")
-    print(f"INFO: 订单 {oid} 已被用户 {user_id} 接受")
+        logger.error(f"处理订单 {oid} 接单请求时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 处理订单 {oid} 接单请求时出错: {str(e)}")
+        
+        # 从处理集合中移除
+        if (user_id, query.data) in processing_accepts:
+            processing_accepts.remove((user_id, query.data))
+        if (user_id, query.data) in processing_accepts_time:
+            del processing_accepts_time[(user_id, query.data)]
+        
+        await query.answer("处理订单时出错，请稍后重试", show_alert=True)
 
 async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理反馈按钮回调"""
