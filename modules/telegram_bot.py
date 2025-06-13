@@ -463,7 +463,7 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await query.edit_message_reply_markup(reply_markup=reply_markup)
             elif message == "Order already taken":
-                keyboard = [[InlineKeyboardButton("Already taken", callback_data="noop")]]
+                keyboard = [[InlineKeyboardButton("❌Already taken", callback_data="noop")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await query.edit_message_reply_markup(reply_markup=reply_markup)
             
