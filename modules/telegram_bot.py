@@ -270,15 +270,15 @@ async def on_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
     if not is_seller(user_id):
-        await update.message.reply_text("⚠️ 您没有权限使用此命令。")
+        await update.message.reply_text("⚠️ You do not have permission to use this command.")
         return
     
     await update.message.reply_text(
-        "✅ 机器人正常运行中！\n\n"
-        f"• 当前时间: {get_china_time()}\n"
-        f"• 您的用户ID: {user_id}\n"
-        "• 机器人状态: 在线\n\n"
-        "如需帮助，请使用 /start 命令查看可用功能。"
+        "✅ Bot is running normally!\n\n"
+        f"• Current Time: {get_china_time()}\n"
+        f"• Your User ID: {user_id}\n"
+        "• Bot Status: Online\n\n"
+        "For help, use the /start command to see available functions."
     )
     logger.info(f"用户 {user_id} 执行了测试命令")
 
@@ -410,7 +410,7 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 防止重复点击
     if (user_id, query.data) in processing_accepts:
-        await query.answer("正在处理中，请勿重复点击")
+        await query.answer("Processing, please don't click repeatedly")
         logger.info(f"用户 {user_id} 重复点击了 {query.data}")
         return
         
@@ -421,7 +421,7 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if len(parts) < 2:
             logger.error(f"接单回调数据格式错误: {query.data}")
-            await query.answer("无效的订单数据格式", show_alert=True)
+            await query.answer("Invalid order data format", show_alert=True)
             return
             
         oid_str = parts[1]
@@ -431,12 +431,12 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"DEBUG: 成功将订单ID转换为整数: {oid}")
         except ValueError as e:
             logger.error(f"接单回调数据无效，无法转换为整数: {oid_str}, 错误: {str(e)}")
-            await query.answer("无效的订单ID", show_alert=True)
+            await query.answer("Invalid order ID", show_alert=True)
             return
     except (IndexError, ValueError) as e:
         logger.error(f"接单回调数据无效: {query.data}", exc_info=True)
         print(f"ERROR: 接单回调数据无效: {query.data}")
-        await query.answer("无效的订单数据", show_alert=True)
+        await query.answer("Invalid order data", show_alert=True)
         return
 
     # 添加到处理集合
@@ -500,10 +500,10 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if (user_id, query.data) in processing_accepts_time:
                 del processing_accepts_time[(user_id, query.data)]
                 
-            await query.answer("订单不存在", show_alert=True)
-            logger.warning(f"接单失败: 订单 {oid} 不存在于数据库中")
-            print(f"WARNING: 接单失败: 订单 {oid} 不存在于数据库中")
-            return
+                            await query.answer("Order doesn't exist", show_alert=True)
+                logger.warning(f"接单失败: 订单 {oid} 不存在于数据库中")
+                print(f"WARNING: 接单失败: 订单 {oid} 不存在于数据库中")
+                return
     except Exception as e:
         logger.error(f"检查订单 {oid} 是否存在时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 检查订单 {oid} 是否存在时出错: {str(e)}")
@@ -514,8 +514,8 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if (user_id, query.data) in processing_accepts_time:
             del processing_accepts_time[(user_id, query.data)]
             
-        await query.answer("查询订单时出错", show_alert=True)
-        return
+                    await query.answer("Error querying order", show_alert=True)
+            return
     
     # 检查订单状态
     try:
@@ -536,11 +536,11 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if (user_id, query.data) in processing_accepts_time:
                 del processing_accepts_time[(user_id, query.data)]
                 
-            await query.answer("订单不存在或已被删除", show_alert=True)
-            logger.warning(f"接单失败: 订单 {oid} 存在但无法获取详情")
-            print(f"WARNING: 接单失败: 订单 {oid} 存在但无法获取详情")
-            conn.close()
-            return
+                            await query.answer("Order doesn't exist or has been deleted", show_alert=True)
+                logger.warning(f"接单失败: 订单 {oid} 存在但无法获取详情")
+                print(f"WARNING: 接单失败: 订单 {oid} 存在但无法获取详情")
+                conn.close()
+                return
         
         # 将结果转换为字典
         columns = [column[0] for column in cursor.description]
@@ -557,10 +557,10 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if (user_id, query.data) in processing_accepts_time:
                 del processing_accepts_time[(user_id, query.data)]
                 
-            await query.answer("此订单已被接受或已完成", show_alert=True)
-            logger.warning(f"接单失败: 订单 {oid} 状态为 {order['status']}")
-            print(f"WARNING: 接单失败: 订单 {oid} 状态为 {order['status']}")
-            return
+                            await query.answer("This order has already been accepted or completed", show_alert=True)
+                logger.warning(f"接单失败: 订单 {oid} 状态为 {order['status']}")
+                print(f"WARNING: 接单失败: 订单 {oid} 状态为 {order['status']}")
+                return
         
         # 更新订单状态
         conn = get_db_connection()
@@ -590,12 +590,12 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if (user_id, query.data) in processing_accepts_time:
                 del processing_accepts_time[(user_id, query.data)]
                 
-            await query.answer("更新订单状态失败，请稍后重试", show_alert=True)
-            logger.error(f"更新订单 {oid} 状态失败")
-            return
+                            await query.answer("Failed to update order status, please try again later", show_alert=True)
+                logger.error(f"更新订单 {oid} 状态失败")
+                return
         
         # 确认回调
-        await query.answer("您已成功接单！", show_alert=True)
+        await query.answer("You have successfully accepted the order!", show_alert=True)
         
         # 更新消息
         try:
@@ -610,12 +610,12 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             package = order.get('package', '未知套餐')
             
             await query.edit_message_text(
-                f"📦 *订单 #{oid}*\n\n"
-                f"• 账号: `{account}`\n"
-                f"• 密码: `{password}`\n"
-                f"• 套餐: *{PLAN_LABELS_EN.get(package, package)}*\n\n"
-                f"*✅ 此订单已被接受*\n"
-                f"接单人ID: `{user_id}`",
+                f"📦 *Order #{oid}*\n\n"
+                f"• Account: `{account}`\n"
+                f"• Password: `{password}`\n"
+                f"• Package: *{PLAN_LABELS_EN.get(package, package)}*\n\n"
+                f"*✅ This order has been accepted*\n"
+                f"Accepted by ID: `{user_id}`",
                 reply_markup=keyboard,
                 parse_mode='Markdown'
             )
@@ -641,7 +641,7 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if (user_id, query.data) in processing_accepts_time:
             del processing_accepts_time[(user_id, query.data)]
         
-        await query.answer("处理订单时出错，请稍后重试", show_alert=True)
+        await query.answer("Error processing order, please try again later", show_alert=True)
 
 async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理反馈按钮回调"""
