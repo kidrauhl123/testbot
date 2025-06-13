@@ -1109,6 +1109,15 @@ async def send_notification_from_queue(data):
     except Exception as e:
         logger.error(f"发送通知时出错: {str(e)}", exc_info=True)
 
+# ===== 推送通知函数 =====
+def set_order_notified_atomic(oid):
+    """原子性地将订单notified字段设为1，只有notified=0时才更新，防止重复推送"""
+    updated = execute_query(
+        "UPDATE orders SET notified=1 WHERE id=? AND notified=0", (oid,)
+    )
+    # 如果有行被更新，说明本次可以推送，否则已被推送过
+    return updated is not None
+
 async def send_new_order_notification(data):
     """发送新订单通知到所有卖家"""
     global bot_application
@@ -1116,6 +1125,10 @@ async def send_new_order_notification(data):
     try:
         # 获取新订单详情
         oid = data.get('order_id')
+        # 推送前先原子性标记
+        if not set_order_notified_atomic(oid):
+            logger.info(f"订单 #{oid} 已经被其他进程推送过，跳过")
+            return
         account = data.get('account')
         password = data.get('password')
         package = data.get('package')
