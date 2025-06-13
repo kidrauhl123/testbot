@@ -1587,18 +1587,38 @@ def update_order_status(order_id, status, handler_id=None):
     """更新订单状态"""
     try:
         conn = get_db_connection()
+        if not conn:
+            logger.error(f"更新订单 {order_id} 状态时无法获取数据库连接")
+            print(f"ERROR: 更新订单 {order_id} 状态时无法获取数据库连接")
+            return False
+            
         cursor = conn.cursor()
         
-        if handler_id:
-            cursor.execute(
-                "UPDATE orders SET status = ?, handler_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (status, handler_id, order_id)
-            )
+        # 根据数据库类型执行不同的查询
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL使用%s作为占位符，并且时间戳函数不同
+            if handler_id:
+                cursor.execute(
+                    "UPDATE orders SET status = %s, handler_id = %s, updated_at = NOW() WHERE id = %s",
+                    (status, handler_id, order_id)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE orders SET status = %s, updated_at = NOW() WHERE id = %s",
+                    (status, order_id)
+                )
         else:
-            cursor.execute(
-                "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (status, order_id)
-            )
+            # SQLite
+            if handler_id:
+                cursor.execute(
+                    "UPDATE orders SET status = ?, handler_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (status, handler_id, order_id)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (status, order_id)
+                )
         
         conn.commit()
         conn.close()
