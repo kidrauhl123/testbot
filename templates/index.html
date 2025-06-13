@@ -356,9 +356,11 @@
       margin-right: 8px;
     }
     
-    .order-list-item p.time::before {
-      content: '⏱️';
-      margin-right: 8px;
+    /* 时间样式 */
+    .order-list-item p.time {
+      margin: 8px 0;
+      font-size: 14px;
+      color: #666;
     }
     
     /* 失败原因样式 */
@@ -1256,9 +1258,9 @@
             `<p class="failed-reason"><span class="failed-icon">❌</span> <strong>失败原因：</strong>${escapeHtml(o.remark || '未提供')}</p>` : 
             (o.remark ? `<p class="remark"><strong>备注：</strong>${escapeHtml(o.remark)}</p>` : '')
           }
-          <p class="time"><strong>提交时间：</strong>${o.created_at}</p>
-          ${o.accepted_at ? `<p class="time"><strong>接单时间：</strong>${o.accepted_at}</p>` : ''}
-          ${o.completed_at ? `<p class="time"><strong>完成时间：</strong>${o.completed_at}</p>` : ''}
+          <p class="time">提交时间：${o.created_at}</p>
+          ${o.accepted_at ? `<p class="time">接单时间：${o.accepted_at}</p>` : ''}
+          ${o.completed_at ? `<p class="time">完成时间：${o.completed_at}</p>` : ''}
           ${o.can_cancel ? `<button class="cancel-btn" onclick="cancelOrder(${o.id}, this)">撤销订单</button>` : ''}
         </div>`;
       gridContainer.insertAdjacentHTML('beforeend', html);
@@ -1274,6 +1276,7 @@
             <th>ID</th>
             <th>账号</th>
             <th>套餐</th>
+            <th>价格</th>
             <th>状态</th>
             <th>提交时间</th>
             <th>接单时间</th>
@@ -1292,6 +1295,7 @@
           <td>${o.id}</td>
           <td>${escapeHtml(o.account)}</td>
           <td>${escapeHtml(o.package)}个月</td>
+          <td>¥${WEB_PRICES[o.package] || 'N/A'}</td>
           <td><span class="status-badge ${cls}">${o.status_text}</span></td>
           <td>${o.created_at}</td>
           <td>${o.accepted_at || '-'}</td>
@@ -1348,6 +1352,7 @@
     let detailMessage = `订单 #${orderId} 详情\n\n`;
     detailMessage += `账号: ${order.account}\n`;
     detailMessage += `套餐: ${order.package}个月\n`;
+    detailMessage += `价格: ¥${WEB_PRICES[order.package] || 'N/A'}\n`;
     detailMessage += `状态: ${order.status_text}\n`;
     detailMessage += `提交时间: ${order.created_at}\n`;
     
