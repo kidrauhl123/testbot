@@ -600,7 +600,8 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 更新消息
         try:
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("✅ 已被接单", callback_data=f"order_accepted_{oid}")]
+                [InlineKeyboardButton("✅ Mark as Complete", callback_data=f"done_{oid}"),
+                 InlineKeyboardButton("❌ Mark as Failed", callback_data=f"fail_{oid}")]
             ])
             
             # 获取订单详情以显示
