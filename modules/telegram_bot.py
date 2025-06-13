@@ -204,7 +204,7 @@ async def get_user_info(user_id):
     global bot_application, user_info_cache
     
     if not bot_application:
-        return {"id": user_id, "username": "Unknown", "first_name": "Unknown", "last_name": ""}
+        return {"id": user_id, "username": str(user_id), "first_name": str(user_id), "last_name": ""}
     
     # 检查缓存
     if user_id in user_info_cache:
@@ -214,15 +214,15 @@ async def get_user_info(user_id):
         user = await bot_application.bot.get_chat(user_id)
         user_info = {
             "id": user_id,
-            "username": user.username or "No_Username",
-            "first_name": user.first_name or "Unknown",
+            "username": user.username or str(user_id),
+            "first_name": user.first_name or str(user_id),
             "last_name": user.last_name or ""
         }
         user_info_cache[user_id] = user_info
         return user_info
     except Exception as e:
         logger.error(f"Failed to get user info for {user_id}: {e}")
-        default_info = {"id": user_id, "username": "Unknown", "first_name": "Unknown", "last_name": ""}
+        default_info = {"id": user_id, "username": str(user_id), "first_name": str(user_id), "last_name": ""}
         user_info_cache[user_id] = default_info
         return default_info
 
@@ -504,7 +504,7 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"• Password: `{password}`\n"
             f"• Package: *{PLAN_LABELS_EN.get(package, package)}*\n\n"
             f"*✅ This order has been accepted*\n"
-            f"Accepted by: `{order.get('accepted_by_first_name', '')}`",
+            f"Accepted by: `{order.get('accepted_by_first_name') or order.get('accepted_by_username') or str(user_id)}`",
             reply_markup=keyboard,
             parse_mode='Markdown'
         )

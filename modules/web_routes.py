@@ -344,7 +344,9 @@ def register_routes(app, notification_queue):
             oid, account, password, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name = order
             
             # 优先使用昵称，其次是用户名，最后是ID
-            seller_display = accepted_by_first_name or accepted_by_username or ""
+            seller_display = accepted_by_first_name or accepted_by_username or accepted_by
+            if seller_display and not isinstance(seller_display, str):
+                seller_display = str(seller_display)
             
             # 如果是失败状态，翻译失败原因
             translated_remark = remark
@@ -720,8 +722,8 @@ def register_routes(app, notification_queue):
             if accepted_by:
                 seller_info = {
                     "telegram_id": accepted_by,
-                    "username": accepted_by_username,
-                    "name": accepted_by_first_name
+                    "username": accepted_by_username or str(accepted_by),
+                    "name": accepted_by_first_name or str(accepted_by)
                 }
             
             formatted_orders.append({
