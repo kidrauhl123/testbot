@@ -443,6 +443,18 @@ def accept_order_atomic(oid, user_id):
                 conn.close()
                 return False, "Order already taken"
             
+            # 检查该用户是否有正在质疑的订单
+            cursor.execute("""
+                SELECT COUNT(*) FROM orders 
+                WHERE accepted_by = %s AND status = 'disputing'
+            """, (str(user_id),))
+            disputing_count = cursor.fetchone()[0]
+            
+            if disputing_count > 0:
+                conn.rollback()
+                conn.close()
+                return False, "You have a disputed order. Please resolve it before accepting new orders."
+            
             # 检查该用户当前接单数量（状态为accepted的订单）
             cursor.execute("""
                 SELECT COUNT(*) FROM orders 
@@ -528,6 +540,18 @@ def accept_order_atomic(oid, user_id):
                 conn.rollback()
                 conn.close()
                 return False, "Order already taken"
+            
+            # 检查该用户是否有正在质疑的订单
+            cursor.execute("""
+                SELECT COUNT(*) FROM orders 
+                WHERE accepted_by = ? AND status = 'disputing'
+            """, (str(user_id),))
+            disputing_count = cursor.fetchone()[0]
+            
+            if disputing_count > 0:
+                conn.rollback()
+                conn.close()
+                return False, "You have a disputed order. Please resolve it before accepting new orders."
             
             # 检查该用户当前接单数量（状态为accepted的订单）
             cursor.execute("""
