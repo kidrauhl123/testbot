@@ -504,7 +504,7 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"• Password: `{password}`\n"
             f"• Package: *{PLAN_LABELS_EN.get(package, package)}*\n\n"
             f"*✅ This order has been accepted*\n"
-            f"Accepted by ID: `{user_id}`",
+            f"Accepted by: `{order.get('accepted_by_first_name', '')}`",
             reply_markup=keyboard,
             parse_mode='Markdown'
         )

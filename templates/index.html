@@ -1207,7 +1207,6 @@
       const html = `
         <div class="order-list-item" data-order-id="${o.id}">
           <h4>订单 #${o.id} <span class="status-badge ${cls}">${o.status_text}</span></h4>
-          ${isAdmin && o.creator ? `<p class="creator">创建者：${escapeHtml(o.creator)}</p>` : ''}
           ${isAdmin && o.accepted_by ? `<p class="creator">接单者：${escapeHtml(o.accepted_by)}</p>` : ''}
           <p class="account"><strong>账号：</strong>${escapeHtml(o.account)}</p>
           <p class="package"><strong>套餐：</strong>${escapeHtml(o.package)}个月</p>

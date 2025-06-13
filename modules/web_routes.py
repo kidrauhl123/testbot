@@ -211,8 +211,7 @@ def register_routes(app, notification_queue):
                     'order_id': new_order_id,
                     'account': account,
                     'password': password,
-                    'package': package,
-                    'web_user_id': username
+                    'package': package
                 })
                 logger.info(f"已将订单 #{new_order_id} 加入通知队列")
                 print(f"DEBUG: 已将订单 #{new_order_id} 加入通知队列")
@@ -345,7 +344,7 @@ def register_routes(app, notification_queue):
             oid, account, password, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name = order
             
             # 优先使用昵称，其次是用户名，最后是ID
-            seller_display = accepted_by_first_name or accepted_by_username or accepted_by
+            seller_display = accepted_by_first_name or accepted_by_username or ""
             
             # 如果是失败状态，翻译失败原因
             translated_remark = remark
@@ -363,7 +362,6 @@ def register_routes(app, notification_queue):
                 "accepted_at": accepted_at or "",
                 "completed_at": completed_at or "",
                 "remark": translated_remark or "",
-                "creator": web_user_id,
                 "accepted_by": seller_display or "",
                 "can_cancel": status == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == user_id)
             }
@@ -817,11 +815,8 @@ def register_routes(app, notification_queue):
             "created_at": o[6],
             "accepted_at": o[7],
             "completed_at": o[8],
-            "accepted_by": o[9],
-            "web_user_id": o[10],
-            "user_id": o[11],
-            "accepted_by_username": o[12],
-            "accepted_by_first_name": o[13]
+            "accepted_by": o[12] or o[13] or "",  # 优先使用昵称，其次是用户名
+            "user_id": o[11]
         })
     
     # 编辑订单的API
