@@ -815,16 +815,25 @@ def create_recharge_request(user_id, amount, payment_method, proof_image):
         now = get_china_time()
         
         # 插入充值请求记录
-        result = execute_query("""
-            INSERT INTO recharge_requests (user_id, amount, status, payment_method, proof_image, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (user_id, amount, 'pending', payment_method, proof_image, now), fetch=True)
-        
-        # 获取新创建的充值请求ID
         if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL需要使用RETURNING子句获取新ID
+            result = execute_query("""
+                INSERT INTO recharge_requests (user_id, amount, status, payment_method, proof_image, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (user_id, amount, 'pending', payment_method, proof_image, now), fetch=True)
             request_id = result[0][0]
         else:
-            request_id = result
+            # SQLite可以直接获取lastrowid
+            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO recharge_requests (user_id, amount, status, payment_method, proof_image, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (user_id, amount, 'pending', payment_method, proof_image, now))
+            request_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
             
         return request_id, True, "充值请求已提交"
     except Exception as e:
