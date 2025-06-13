@@ -1035,10 +1035,8 @@ async def check_and_push_orders():
                     print(f"ERROR: 订单 #{oid} 不存在于数据库中，但出现在未通知列表中")
                     continue
                 
-                user_info = f" from web user: {web_user_id}" if web_user_id else ""
-                
                 message = (
-                    f"📦 New Order #{oid}{user_info}\n"
+                    f"📦 New Order #{oid}\n"
                     f"Account: `{account}`\n"
                     f"Package: {package} month(s)"
                 )
@@ -1137,7 +1135,6 @@ async def send_new_order_notification(data):
         account = data.get('account')
         password = data.get('password')
         package = data.get('package')
-        web_user_id = data.get('web_user_id')
         
         # 构建消息文本
         message_text = (
