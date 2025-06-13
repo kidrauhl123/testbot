@@ -482,9 +482,7 @@
 </head>
 <body>
 <div class="navbar">
-  <div class="navbar-brand">
-    Spotify充值系统
-  </div>
+  <a href="/" class="navbar-brand">Spotify充值系统</a>
   <div class="navbar-user">
     <div class="user-dropdown">
       <div class="user-info">
@@ -692,32 +690,8 @@
   
   // 更新统计显示
   function updateStatsDisplay(stats) {
-    document.getElementById('total-orders').querySelector('.stat-value').textContent = stats.total;
-    document.getElementById('completed-orders').textContent = stats.completed;
-    document.getElementById('failed-orders').textContent = stats.failed;
-    document.getElementById('total-amount').textContent = '¥' + stats.totalAmount.toFixed(2);
-    
-    // 显示套餐统计
-    const packageStatsContainer = document.getElementById('package-stats');
-    let packageStatsHtml = '';
-    
-    // 按照套餐类型排序
-    const sortedPackages = Object.keys(stats.packages).sort((a, b) => Number(a) - Number(b));
-    
-    for (const pkg of sortedPackages) {
-      const pkgStats = stats.packages[pkg];
-      packageStatsHtml += `
-        <div class="package-stat">
-          <div class="package-stat-value">${pkg}个月</div>
-          <div class="package-stat-label">总订单: ${pkgStats.total}</div>
-          <div class="package-stat-label">成功: ${pkgStats.completed}</div>
-          <div class="package-stat-label">失败: ${pkgStats.failed}</div>
-          <div class="package-stat-label">金额: ¥${pkgStats.amount.toFixed(2)}</div>
-        </div>
-      `;
-    }
-    
-    packageStatsContainer.innerHTML = packageStatsHtml;
+    // 这些元素现在不存在了，所以不需要更新
+    // 如果将来需要显示这些统计数据，可以在此处添加代码
   }
   
   // 渲染订单表格
