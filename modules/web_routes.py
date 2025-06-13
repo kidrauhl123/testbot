@@ -875,26 +875,44 @@ def register_routes(app, notification_queue):
             return jsonify({"success": False, "error": "无效的订单ID列表"}), 400
 
         try:
-            # 将ID转换为整数，防止SQL注入
-            order_ids_int = [int(oid) for oid in order_ids]
-            
-            # 创建占位符字符串
-            placeholders = ','.join(['?'] * len(order_ids_int))
-            
-            # 执行删除
-            # 注意：execute_query 需要返回受影响的行数，如果它不返回，则此代码需要调整
-            # 假设 execute_query 可以返回 cursor 来获取 rowcount
-            result = execute_query(
-                f"DELETE FROM orders WHERE id IN ({placeholders})",
-                order_ids_int,
-                fetch=False, # 假设 fetch=False 用于执行非查询语句
-                return_cursor=True # 需要一个方法来获取rowCount
-            )
-            
-            deleted_count = result.rowcount if result else 0
+            # 获取订单总数
+            total_count = execute_query("SELECT COUNT(*) FROM orders", fetch=True)[0][0]
+            if len(order_ids) == total_count:
+                # 全部删除，直接truncate并重置自增ID
+                from modules.constants import DATABASE_URL
+                if DATABASE_URL.startswith('postgres'):
+                    import psycopg2
+                    from urllib.parse import urlparse
+                    url = urlparse(DATABASE_URL)
+                    conn = psycopg2.connect(
+                        dbname=url.path[1:],
+                        user=url.username,
+                        password=url.password,
+                        host=url.hostname,
+                        port=url.port
+                    )
+                    cur = conn.cursor()
+                    cur.execute("TRUNCATE TABLE orders RESTART IDENTITY;")
+                    conn.commit()
+                    cur.close()
+                    conn.close()
+                else:
+                    # SQLite等其他数据库的处理
+                    execute_query("DELETE FROM orders")
+                deleted_count = total_count
+            else:
+                # 普通批量删除
+                order_ids_int = [int(oid) for oid in order_ids]
+                placeholders = ','.join(['?'] * len(order_ids_int))
+                result = execute_query(
+                    f"DELETE FROM orders WHERE id IN ({placeholders})",
+                    order_ids_int,
+                    fetch=False,
+                    return_cursor=True
+                )
+                deleted_count = result.rowcount if result else 0
 
             logger.info(f"管理员 {session.get('username')} 删除了 {deleted_count} 个订单: {order_ids}")
-            
             return jsonify({"success": True, "deleted_count": deleted_count})
         except (ValueError, TypeError):
             return jsonify({"success": False, "error": "订单ID必须是有效的数字"}), 400
