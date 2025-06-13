@@ -13,7 +13,7 @@ from modules.database import (
     execute_query, hash_password, get_all_sellers, add_seller, remove_seller, toggle_seller_status,
     get_user_balance, get_user_credit_limit, set_user_balance, set_user_credit_limit, refund_order, 
     create_order_with_deduction_atomic, get_user_recharge_requests, create_recharge_request,
-    get_pending_recharge_requests, approve_recharge_request, reject_recharge_request
+    get_pending_recharge_requests, approve_recharge_request, reject_recharge_request, toggle_seller_admin
 )
 import modules.constants as constants
 
@@ -787,6 +787,26 @@ def register_routes(app, notification_queue):
     def admin_api_toggle_seller(telegram_id):
         toggle_seller_status(telegram_id)
         return jsonify({"success": True})
+
+    @app.route('/admin/api/sellers/toggle_admin', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_api_toggle_seller_admin():
+        """切换卖家的管理员身份"""
+        data = request.get_json()
+        telegram_id = data.get('telegram_id')
+        
+        if not telegram_id:
+            return jsonify({"error": "Missing telegram_id"}), 400
+            
+        # 不允许修改超级管理员的身份
+        if str(telegram_id) == "1878943383":
+            return jsonify({"error": "Cannot modify superadmin status"}), 403
+            
+        if toggle_seller_admin(telegram_id):
+            return jsonify({"success": True})
+        else:
+            return jsonify({"error": "Operation failed"}), 500
 
     # 获取单个订单详情的API
     @app.route('/admin/api/orders/<int:order_id>')

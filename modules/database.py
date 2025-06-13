@@ -615,7 +615,7 @@ def get_order_details(oid):
 # ===== 卖家管理 =====
 def get_all_sellers():
     """获取所有卖家信息"""
-    return execute_query("SELECT telegram_id, username, first_name, is_active, added_at, added_by FROM sellers ORDER BY added_at DESC", fetch=True)
+    return execute_query("SELECT telegram_id, username, first_name, is_active, added_at, added_by, is_admin FROM sellers ORDER BY added_at DESC", fetch=True)
 
 def get_active_seller_ids():
     """获取所有活跃的卖家Telegram ID"""
@@ -640,6 +640,33 @@ def toggle_seller_status(telegram_id):
 def remove_seller(telegram_id):
     """移除卖家"""
     return execute_query("DELETE FROM sellers WHERE telegram_id=?", (telegram_id,))
+
+def toggle_seller_admin(telegram_id):
+    """切换卖家的管理员状态"""
+    try:
+        # 先获取当前状态
+        current = execute_query("SELECT is_admin FROM sellers WHERE telegram_id = ?", (telegram_id,), fetch=True)
+        if not current:
+            return False
+            
+        new_status = not bool(current[0][0])
+        execute_query(
+            "UPDATE sellers SET is_admin = ? WHERE telegram_id = ?",
+            (new_status, telegram_id)
+        )
+        return True
+    except Exception as e:
+        logger.error(f"切换卖家管理员状态失败: {e}")
+        return False
+
+def is_admin_seller(telegram_id):
+    """检查卖家是否是管理员"""
+    result = execute_query(
+        "SELECT is_admin FROM sellers WHERE telegram_id = ? AND is_active = ?",
+        (telegram_id, True if DATABASE_URL.startswith('postgres') else 1),
+        fetch=True
+    )
+    return bool(result and result[0][0])
 
 # ===== 余额系统相关函数 =====
 def get_user_balance(user_id):

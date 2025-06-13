@@ -516,45 +516,31 @@
       <div id="sellers" class="tab-content">
         <div class="content-header">
           <h2><i class="fas fa-user-tie"></i> 卖家管理</h2>
-        </div>
-        
-        <!-- 直接添加卖家表单 -->
-        <div class="card" style="margin-bottom: 20px; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-          <h3 style="margin-top: 0;">添加新卖家</h3>
-          <div id="add-seller-error" class="error-message" style="display:none; color: #dc3545; margin-bottom: 15px; padding: 8px; background: #f8d7da; border-radius: 5px;"></div>
-          <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-            <div style="flex: 1;">
-              <label style="display: block; margin-bottom: 5px;">Telegram 用户ID *</label>
-              <input type="number" id="new-seller-id" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;" placeholder="用户的数字ID">
-            </div>
-            <div style="flex: 1;">
-              <label style="display: block; margin-bottom: 5px;">用户名 (可选)</label>
-              <input type="text" id="new-seller-username" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;" placeholder="@username">
-            </div>
-            <div style="flex: 1;">
-              <label style="display: block; margin-bottom: 5px;">昵称 (可选)</label>
-              <input type="text" id="new-seller-firstname" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;" placeholder="用户的名字">
-            </div>
+          <div class="header-actions">
+            <button class="btn btn-primary" onclick="showAddSellerModal()">添加卖家</button>
           </div>
-          <button class="btn btn-primary" onclick="addSeller()">添加卖家</button>
         </div>
-        
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>TG ID</th>
-              <th>用户名</th>
-              <th>昵称</th>
-              <th>状态</th>
-              <th>添加时间</th>
-              <th>添加者</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="sellers-table-body">
-            <!-- Data will be populated by JS -->
-          </tbody>
-        </table>
+        <div class="sellers-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Telegram ID</th>
+                <th>用户名</th>
+                <th>昵称</th>
+                <th>状态</th>
+                <th>身份</th>
+                <th>添加时间</th>
+                <th>添加人</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="sellers-table-body">
+              <tr>
+                <td colspan="8" class="loading">加载中...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -899,55 +885,64 @@
         return;
       }
       
-      tbody.innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="loading">加载中...</td></tr>';
       
-    const response = await fetch('/admin/api/sellers');
+      const response = await fetch('/admin/api/sellers');
       if (!response.ok) {
         console.error("加载卖家数据失败:", response.status, response.statusText);
-        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
         return;
       }
       
-    const sellers = await response.json();
+      const sellers = await response.json();
       console.log("成功获取卖家数据:", sellers);
       
-    tbody.innerHTML = '';
+      tbody.innerHTML = '';
       
-    if (sellers.length === 0) {
-        const colCount = tbody.parentElement.querySelector('thead tr').childElementCount || 7;
-      tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding: 40px;">暂无卖家</td></tr>`;
-      return;
-    }
+      if (sellers.length === 0) {
+        const colCount = tbody.parentElement.querySelector('thead tr').childElementCount || 8;
+        tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding: 40px;">暂无卖家</td></tr>`;
+        return;
+      }
       
-    sellers.forEach(seller => {
-      const statusBadge = seller.is_active 
-        ? '<span class="badge badge-success">活跃</span>' 
-        : '<span class="badge badge-secondary">停用</span>';
-      const toggleButtonText = seller.is_active ? '停用' : '启用';
-      const toggleButtonClass = seller.is_active ? 'btn-warning' : 'btn-success';
-      const row = `
-        <tr>
-          <td>${seller.telegram_id}</td>
-          <td>${escapeHtml(seller.username || '')}</td>
-          <td>${escapeHtml(seller.first_name || '')}</td>
-          <td>${statusBadge}</td>
-          <td>${seller.added_at}</td>
-          <td>${escapeHtml(seller.added_by || '')}</td>
-          <td class="actions">
-            <button class="btn ${toggleButtonClass} btn-sm" onclick="toggleSeller(${seller.telegram_id})">${toggleButtonText}</button>
-            <button class="btn btn-danger btn-sm" onclick="removeSeller(${seller.telegram_id})">删除</button>
-          </td>
-        </tr>
-      `;
-      tbody.innerHTML += row;
-    });
+      sellers.forEach(seller => {
+        const statusBadge = seller.is_active 
+          ? '<span class="badge badge-success">活跃</span>' 
+          : '<span class="badge badge-secondary">停用</span>';
+        const toggleButtonText = seller.is_active ? '停用' : '启用';
+        const toggleButtonClass = seller.is_active ? 'btn-warning' : 'btn-success';
+        
+        const adminBadge = seller.is_admin
+          ? '<span class="badge badge-primary">管理员</span>'
+          : '<span class="badge badge-info">普通卖家</span>';
+        const adminButtonText = seller.is_admin ? '降级为普通卖家' : '升级为管理员';
+        const adminButtonClass = seller.is_admin ? 'btn-warning' : 'btn-info';
+        
+        const row = `
+          <tr>
+            <td>${seller.telegram_id}</td>
+            <td>${escapeHtml(seller.username || '')}</td>
+            <td>${escapeHtml(seller.first_name || '')}</td>
+            <td>${statusBadge}</td>
+            <td>${adminBadge}</td>
+            <td>${seller.added_at}</td>
+            <td>${escapeHtml(seller.added_by || '')}</td>
+            <td class="actions">
+              <button class="btn ${toggleButtonClass} btn-sm" onclick="toggleSeller(${seller.telegram_id})">${toggleButtonText}</button>
+              <button class="btn ${adminButtonClass} btn-sm" onclick="toggleSellerAdmin(${seller.telegram_id})">${adminButtonText}</button>
+              <button class="btn btn-danger btn-sm" onclick="removeSeller(${seller.telegram_id})">删除</button>
+            </td>
+          </tr>
+        `;
+        tbody.innerHTML += row;
+      });
       
       console.log("卖家数据加载完成");
     } catch (e) {
       console.error('加载卖家失败', e);
       const tbody = document.getElementById('sellers-table-body');
       if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
       }
     }
   }
@@ -1008,6 +1003,32 @@
   async function toggleSeller(telegramId) {
     await fetch(`/admin/api/sellers/${telegramId}/toggle`, { method: 'POST' });
     loadSellers();
+  }
+
+  async function toggleSellerAdmin(telegramId) {
+    if (!confirm('确定要切换此卖家的管理员身份吗？')) {
+      return;
+    }
+    
+    try {
+      const response = await fetch('/admin/api/sellers/toggle_admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ telegram_id: telegramId })
+      });
+      
+      if (!response.ok) {
+        throw new Error('操作失败');
+      }
+      
+      await loadSellers();
+      showToast('操作成功', 'success');
+    } catch (e) {
+      console.error('切换卖家管理员状态失败:', e);
+      showToast('操作失败: ' + e.message, 'error');
+    }
   }
 
   // 编辑订单
