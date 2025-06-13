@@ -36,7 +36,12 @@ def init_db():
 def init_sqlite_db():
     """初始化SQLite数据库"""
     logger.info("使用SQLite数据库")
-    conn = sqlite3.connect("orders.db")
+    # 使用绝对路径访问数据库
+    current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    db_path = os.path.join(current_dir, "orders.db")
+    logger.info(f"初始化数据库: {db_path}")
+    
+    conn = sqlite3.connect(db_path)
     c = conn.cursor()
     
     # 订单表
@@ -270,7 +275,12 @@ def execute_query(query, params=(), fetch=False, return_cursor=False):
 def execute_sqlite_query(query, params=(), fetch=False, return_cursor=False):
     """执行SQLite查询并返回结果"""
     try:
-        conn = sqlite3.connect("orders.db")
+        # 使用绝对路径访问数据库
+        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        db_path = os.path.join(current_dir, "orders.db")
+        logger.debug(f"执行查询，使用数据库: {db_path}")
+        
+        conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
         # 检查是否为INSERT语句，确保notified字段被正确设置
@@ -453,7 +463,12 @@ def accept_order_atomic(oid, user_id):
             return False, "Database error"
     else:
         # SQLite版本
-        conn = sqlite3.connect("orders.db")
+        # 使用绝对路径访问数据库
+        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        db_path = os.path.join(current_dir, "orders.db")
+        logger.debug(f"接单操作，使用数据库: {db_path}")
+        
+        conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
         try:

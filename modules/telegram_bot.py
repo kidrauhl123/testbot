@@ -11,6 +11,8 @@ import sys
 import functools
 import sqlite3
 import traceback
+import psycopg2
+from urllib.parse import urlparse
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -24,7 +26,7 @@ from telegram.ext import (
 
 from modules.constants import (
     BOT_TOKEN, STATUS, PLAN_LABELS_EN,
-    STATUS_TEXT_ZH, TG_PRICES, WEB_PRICES, SELLER_CHAT_IDS
+    STATUS_TEXT_ZH, TG_PRICES, WEB_PRICES, SELLER_CHAT_IDS, DATABASE_URL
 )
 from modules.database import (
     get_order_details, accept_order_atomic, execute_query, 
@@ -46,11 +48,39 @@ CN_TIMEZONE = pytz.timezone('Asia/Shanghai')
 
 # 获取数据库连接
 def get_db_connection():
-    """获取SQLite数据库连接"""
+    """获取数据库连接，根据环境变量决定使用SQLite或PostgreSQL"""
+    
     try:
-        conn = sqlite3.connect("orders.db")
-        conn.row_factory = sqlite3.Row  # 使查询结果可以通过列名访问
-        return conn
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL连接
+            url = urlparse(DATABASE_URL)
+            dbname = url.path[1:]
+            user = url.username
+            password = url.password
+            host = url.hostname
+            port = url.port
+            
+            logger.info(f"连接PostgreSQL数据库: {host}:{port}/{dbname}")
+            
+            conn = psycopg2.connect(
+                dbname=dbname,
+                user=user,
+                password=password,
+                host=host,
+                port=port
+            )
+            return conn
+        else:
+            # SQLite连接
+            # 使用绝对路径访问数据库
+            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(current_dir, "orders.db")
+            logger.info(f"连接SQLite数据库: {db_path}")
+            print(f"DEBUG: 连接SQLite数据库: {db_path}")
+            
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row  # 使查询结果可以通过列名访问
+            return conn
     except Exception as e:
         logger.error(f"获取数据库连接时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 获取数据库连接时出错: {str(e)}")
@@ -473,8 +503,7 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             del processing_accepts_time[(user_id, query.data)]
             
         await query.answer("查询订单时出错", show_alert=True)
-        return
-    
+
     # 检查订单状态
     try:
         conn = get_db_connection()
@@ -1456,16 +1485,37 @@ def get_order_by_id(order_id):
     """根据ID获取订单信息"""
     try:
         conn = get_db_connection()
+        if not conn:
+            logger.error(f"获取订单 {order_id} 信息时无法获取数据库连接")
+            print(f"ERROR: 获取订单 {order_id} 信息时无法获取数据库连接")
+            return None
+            
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
-        order = cursor.fetchone()
         
-        if order:
-            # 将结果转换为字典
-            columns = [column[0] for column in cursor.description]
-            result = {columns[i]: order[i] for i in range(len(columns))}
-            conn.close()
-            return result
+        # 根据数据库类型执行不同的查询
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL使用%s作为占位符
+            cursor.execute("SELECT * FROM orders WHERE id = %s", (order_id,))
+            order = cursor.fetchone()
+            
+            if order:
+                # 将结果转换为字典
+                columns = [desc[0] for desc in cursor.description]
+                result = {columns[i]: order[i] for i in range(len(columns))}
+                conn.close()
+                return result
+        else:
+            # SQLite
+            cursor.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
+            order = cursor.fetchone()
+            
+            if order:
+                # 将结果转换为字典
+                columns = [column[0] for column in cursor.description]
+                result = {columns[i]: order[i] for i in range(len(columns))}
+                conn.close()
+                return result
+                
         conn.close()
         return None
     except Exception as e:
@@ -1486,7 +1536,14 @@ def check_order_exists(order_id):
         logger.info(f"正在检查订单ID={order_id}是否存在...")
         print(f"DEBUG: 正在检查订单ID={order_id}是否存在...")
         
-        cursor.execute("SELECT COUNT(*) FROM orders WHERE id = ?", (order_id,))
+        # 根据数据库类型执行不同的查询
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL使用%s作为占位符
+            cursor.execute("SELECT COUNT(*) FROM orders WHERE id = %s", (order_id,))
+        else:
+            # SQLite
+            cursor.execute("SELECT COUNT(*) FROM orders WHERE id = ?", (order_id,))
+            
         count = cursor.fetchone()[0]
         
         # 增加更多查询记录debug问题
@@ -1495,13 +1552,21 @@ def check_order_exists(order_id):
             print(f"WARNING: 订单 {order_id} 在数据库中不存在")
             
             # 检查是否有任何订单
-            cursor.execute("SELECT COUNT(*) FROM orders")
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("SELECT COUNT(*) FROM orders")
+            else:
+                cursor.execute("SELECT COUNT(*) FROM orders")
+                
             total_count = cursor.fetchone()[0]
             logger.info(f"数据库中总共有 {total_count} 个订单")
             print(f"INFO: 数据库中总共有 {total_count} 个订单")
             
             # 列出最近的几个订单ID
-            cursor.execute("SELECT id FROM orders ORDER BY id DESC LIMIT 5")
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("SELECT id FROM orders ORDER BY id DESC LIMIT 5")
+            else:
+                cursor.execute("SELECT id FROM orders ORDER BY id DESC LIMIT 5")
+                
             recent_orders = cursor.fetchall()
             if recent_orders:
                 recent_ids = [str(order[0]) for order in recent_orders]
