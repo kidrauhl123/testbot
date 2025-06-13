@@ -627,8 +627,16 @@
   // 加载订单并计算统计数据
   async function loadOrdersAndStats() {
     try {
+      console.log('开始加载订单数据');
       const resp = await fetch('/orders/recent?limit=100');
+      console.log('API响应状态:', resp.status);
+      
+      if (!resp.ok) {
+        throw new Error(`HTTP错误! 状态: ${resp.status}`);
+      }
+      
       const orders = await resp.json();
+      console.log('获取到订单数据:', orders && orders.length ? orders.length : 0, '条');
       
       if (!orders || orders.length === 0) {
         document.getElementById('orders-container').innerHTML = '<div class="no-orders">暂无订单记录</div>';
@@ -638,15 +646,15 @@
       // 存储订单数据
       allOrders = orders;
       
-      // 计算统计数据
-      const stats = calculateStats(orders);
-      updateStatsDisplay(stats);
-      
       // 渲染订单列表 - 使用表格视图
       renderOrdersTable(orders);
+      
+      // 计算统计数据 - 在渲染成功后再计算
+      const stats = calculateStats(orders);
+      updateStatsDisplay(stats);
     } catch (e) {
       console.error('加载数据失败', e);
-      document.getElementById('orders-container').innerHTML = '<div class="no-orders">加载失败，请刷新重试</div>';
+      document.getElementById('orders-container').innerHTML = '<div class="no-orders">加载失败，请刷新重试：' + e.message + '</div>';
     }
   }
   
