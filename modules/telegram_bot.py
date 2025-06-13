@@ -1079,10 +1079,23 @@ async def send_notification_from_queue(data):
         if notification_type == 'new_order':
             # 处理新订单通知
             oid = data.get('order_id')
+            try:
+                # 确保订单ID是整数
+                oid = int(oid)
+                logger.info(f"处理new_order通知，订单ID: {oid}（整数类型）")
+            except (TypeError, ValueError) as e:
+                logger.error(f"订单ID格式错误: {oid}, 错误: {str(e)}")
+                return
+                
             account = data.get('account')
             password = data.get('password')
             package = data.get('package')
             web_user_id = data.get('web_user_id')
+            
+            # 验证订单是否真实存在
+            if not check_order_exists(oid):
+                logger.error(f"无法发送通知：订单 #{oid} 不存在")
+                return
             
             user_info = f" from web user: {web_user_id}" if web_user_id else ""
             
@@ -1132,6 +1145,13 @@ async def send_notification_from_queue(data):
             
         seller_id = data.get('seller_id')
         oid = data.get('order_id')
+        try:
+            # 确保订单ID是整数
+            oid = int(oid)
+        except (TypeError, ValueError) as e:
+            logger.error(f"订单ID格式错误: {oid}, 错误: {str(e)}")
+            return
+            
         account = data.get('account')
         password = data.get('password')
         package = data.get('package')
@@ -1378,9 +1398,40 @@ def check_order_exists(order_id):
     """检查数据库中是否存在指定ID的订单"""
     try:
         conn = get_db_connection()
+        if not conn:
+            logger.error(f"检查订单 {order_id} 存在性时无法获取数据库连接")
+            print(f"ERROR: 检查订单 {order_id} 存在性时无法获取数据库连接")
+            return False
+            
         cursor = conn.cursor()
+        logger.info(f"正在检查订单ID={order_id}是否存在...")
+        print(f"DEBUG: 正在检查订单ID={order_id}是否存在...")
+        
         cursor.execute("SELECT COUNT(*) FROM orders WHERE id = ?", (order_id,))
         count = cursor.fetchone()[0]
+        
+        # 增加更多查询记录debug问题
+        if count == 0:
+            logger.warning(f"订单 {order_id} 在数据库中不存在")
+            print(f"WARNING: 订单 {order_id} 在数据库中不存在")
+            
+            # 检查是否有任何订单
+            cursor.execute("SELECT COUNT(*) FROM orders")
+            total_count = cursor.fetchone()[0]
+            logger.info(f"数据库中总共有 {total_count} 个订单")
+            print(f"INFO: 数据库中总共有 {total_count} 个订单")
+            
+            # 列出最近的几个订单ID
+            cursor.execute("SELECT id FROM orders ORDER BY id DESC LIMIT 5")
+            recent_orders = cursor.fetchall()
+            if recent_orders:
+                recent_ids = [str(order[0]) for order in recent_orders]
+                logger.info(f"最近的订单ID: {', '.join(recent_ids)}")
+                print(f"INFO: 最近的订单ID: {', '.join(recent_ids)}")
+        else:
+            logger.info(f"订单 {order_id} 存在于数据库中")
+            print(f"DEBUG: 订单 {order_id} 存在于数据库中")
+            
         conn.close()
         return count > 0
     except Exception as e:
