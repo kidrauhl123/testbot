@@ -1112,11 +1112,15 @@ async def send_notification_from_queue(data):
 # ===== 推送通知函数 =====
 def set_order_notified_atomic(oid):
     """原子性地将订单notified字段设为1，只有notified=0时才更新，防止重复推送"""
-    updated = execute_query(
-        "UPDATE orders SET notified=1 WHERE id=? AND notified=0", (oid,)
-    )
-    # 如果有行被更新，说明本次可以推送，否则已被推送过
-    return updated is not None
+    current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    db_path = os.path.join(current_dir, "orders.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE orders SET notified=1 WHERE id=? AND notified=0", (oid,))
+    affected = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return affected > 0
 
 async def send_new_order_notification(data):
     """发送新订单通知到所有卖家"""
