@@ -319,7 +319,7 @@
                 <td>{{ request[3] }}</td>
                 <td>
                   {% if request[4] %}
-                    <img src="{{ request[4] }}" class="preview-image" onclick="openModal('{{ request[4] }}')">
+                    <img src="{{ request[4] }}" class="preview-image" onclick="openModal('{{ request[4] }}')" onerror="this.src='/static/placeholder.png'">
                   {% else %}
                     无凭证
                   {% endif %}

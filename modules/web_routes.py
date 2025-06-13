@@ -948,9 +948,17 @@ def register_routes(app, notification_queue):
                 if file and file.filename:
                     try:
                         # 确保上传目录存在
-                        upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'uploads')
+                        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                        upload_dir = os.path.join(current_dir, 'static', 'uploads')
+                        logger.info(f"上传目录路径: {upload_dir}")
+                        
                         if not os.path.exists(upload_dir):
-                            os.makedirs(upload_dir)
+                            try:
+                                os.makedirs(upload_dir)
+                                logger.info(f"创建上传目录: {upload_dir}")
+                            except Exception as mkdir_error:
+                                logger.error(f"创建上传目录失败: {str(mkdir_error)}", exc_info=True)
+                                return jsonify({"success": False, "error": f"创建上传目录失败: {str(mkdir_error)}"}), 500
                         
                         # 生成唯一文件名
                         filename = f"{int(time.time())}_{file.filename}"
@@ -958,8 +966,16 @@ def register_routes(app, notification_queue):
                         
                         # 保存文件
                         file.save(file_path)
+                        logger.info(f"已保存文件到: {file_path}")
+                        
+                        # 确保URL路径正确
                         proof_image = f"/static/uploads/{filename}"
-                        logger.info(f"已保存充值凭证: {proof_image}")
+                        logger.info(f"设置凭证URL: {proof_image}")
+                        
+                        # 验证文件是否成功保存
+                        if not os.path.exists(file_path):
+                            logger.error(f"文件保存失败，路径不存在: {file_path}")
+                            return jsonify({"success": False, "error": "文件保存失败，请重试"}), 500
                     except Exception as e:
                         logger.error(f"保存充值凭证失败: {str(e)}", exc_info=True)
                         return jsonify({"success": False, "error": f"保存充值凭证失败: {str(e)}"}), 500

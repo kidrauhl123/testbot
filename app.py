@@ -78,6 +78,16 @@ app.secret_key = os.environ.get('FLASK_SECRET', 'secret_' + str(time.time()))
 app.config['DEBUG'] = False
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
+# 确保静态文件目录存在
+static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
+uploads_dir = os.path.join(static_dir, 'uploads')
+if not os.path.exists(uploads_dir):
+    try:
+        os.makedirs(uploads_dir)
+        logger.info(f"创建上传目录: {uploads_dir}")
+    except Exception as e:
+        logger.error(f"创建上传目录失败: {str(e)}", exc_info=True)
+
 # 注册Web路由，并将队列传递给它
 register_routes(app, notification_queue)
 
