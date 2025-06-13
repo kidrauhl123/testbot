@@ -94,7 +94,8 @@ def init_sqlite_db():
             first_name TEXT,
             is_active INTEGER DEFAULT 1,
             added_at TEXT NOT NULL,
-            added_by TEXT
+            added_by TEXT,
+            is_admin BOOLEAN DEFAULT FALSE
         )
     """)
     
@@ -223,7 +224,8 @@ def init_postgres_db():
             first_name TEXT,
             is_active BOOLEAN DEFAULT TRUE,
             added_at TEXT NOT NULL,
-            added_by TEXT
+            added_by TEXT,
+            is_admin BOOLEAN DEFAULT FALSE
         )
     """)
     
