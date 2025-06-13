@@ -1466,6 +1466,11 @@ async def bot_main(notification_queue):
         stats_handler = CallbackQueryHandler(on_stats_callback, pattern="^stats_")
         bot_application.add_handler(stats_handler)
         
+        # 添加充值请求回调处理程序
+        recharge_handler = CallbackQueryHandler(on_callback_query)
+        bot_application.add_handler(recharge_handler)
+        print(f"DEBUG: 已添加通用回调处理程序: {recharge_handler}")
+        
         # 添加文本消息处理程序
         bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
         
