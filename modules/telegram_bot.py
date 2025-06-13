@@ -1338,6 +1338,8 @@ async def send_recharge_request_notification(data):
         payment_method = data.get('payment_method')
         proof_image = data.get('proof_image')
         
+        logger.info(f"准备发送充值请求通知: 请求ID={request_id}, 用户={username}, 金额={amount}, 管理员ID={admin_id}")
+        
         # 构建消息文本
         message_text = (
             f"📥 <b>新充值请求</b> #{request_id}\n\n"
@@ -1357,33 +1359,58 @@ async def send_recharge_request_notification(data):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        # 发送通知
-        if proof_image:
-            # 如果有支付凭证，先发送图片
-            # 获取完整的图片URL
-            server_url = os.environ.get('SERVER_URL', 'http://localhost:5000')
-            full_image_url = f"{server_url}{proof_image}"
-            
-            # 发送图片和文本
-            await bot_application.bot.send_photo(
-                chat_id=admin_id,
-                photo=full_image_url,
-                caption=message_text,
-                reply_markup=reply_markup,
-                parse_mode='HTML'
-            )
-        else:
-            # 如果没有支付凭证，只发送文本
-            await bot_application.bot.send_message(
-                chat_id=admin_id,
-                text=message_text,
-                reply_markup=reply_markup,
-                parse_mode='HTML'
-            )
+        # 检查bot是否已初始化
+        if not bot_application or not bot_application.bot:
+            logger.error(f"无法发送充值请求通知: bot未初始化")
+            print(f"ERROR: 无法发送充值请求通知: bot未初始化")
+            return
         
-        logger.info(f"已发送充值请求 #{request_id} 通知到管理员")
+        # 发送通知
+        try:
+            if proof_image:
+                # 如果有支付凭证，先发送图片
+                # 获取完整的图片URL
+                server_url = os.environ.get('SERVER_URL', 'http://localhost:5000')
+                full_image_url = f"{server_url}{proof_image}"
+                logger.info(f"尝试发送图片通知，图片URL: {full_image_url}")
+                
+                try:
+                    # 发送图片和文本
+                    await bot_application.bot.send_photo(
+                        chat_id=admin_id,
+                        photo=full_image_url,
+                        caption=message_text,
+                        reply_markup=reply_markup,
+                        parse_mode='HTML'
+                    )
+                    logger.info(f"已成功发送充值请求图片通知到管理员 {admin_id}")
+                except Exception as img_error:
+                    logger.error(f"发送图片通知失败: {str(img_error)}, 尝试发送纯文本通知")
+                    # 如果图片发送失败，回退到纯文本通知
+                    message_text += f"\n\n⚠️ <i>图片加载失败，请在网页管理界面查看</i>"
+                    await bot_application.bot.send_message(
+                        chat_id=admin_id,
+                        text=message_text,
+                        reply_markup=reply_markup,
+                        parse_mode='HTML'
+                    )
+                    logger.info(f"已成功发送充值请求纯文本通知到管理员 {admin_id}")
+            else:
+                # 如果没有支付凭证，只发送文本
+                await bot_application.bot.send_message(
+                    chat_id=admin_id,
+                    text=message_text,
+                    reply_markup=reply_markup,
+                    parse_mode='HTML'
+                )
+                logger.info(f"已成功发送充值请求通知到管理员 {admin_id}")
+        except Exception as send_error:
+            logger.error(f"发送通知到管理员 {admin_id} 失败: {str(send_error)}", exc_info=True)
+            print(f"ERROR: 发送通知到管理员 {admin_id} 失败: {str(send_error)}")
     except Exception as e:
         logger.error(f"发送充值请求通知时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 发送充值请求通知时出错: {str(e)}")
+        traceback.print_exc()
 
 # ===== 主函数 =====
 def run_bot(notification_queue):
