@@ -137,6 +137,29 @@
       content: '💰';
       margin-right: 5px;
     }
+    
+    /* 充值按钮样式 */
+    .recharge-btn {
+      background: linear-gradient(135deg, #ff9966 0%, #ff5e62 100%);
+      color: white;
+      padding: 3px 8px;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 600;
+      margin-left: 8px;
+      cursor: pointer;
+      box-shadow: 0 2px 5px rgba(255,94,98,0.3);
+      transition: all 0.3s ease;
+    }
+    .recharge-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(255,94,98,0.4);
+    }
+    .recharge-btn::before {
+      content: '➕';
+      margin-right: 3px;
+    }
+    
     .btn {
       border: none;
       padding: 10px 18px;
@@ -801,6 +824,7 @@
     {% if balance is defined %}
     <div class="balance-badge {% if balance < 0 %}negative{% endif %}">
       余额: {{ balance }}元{% if credit_limit is defined and credit_limit > 0 %} (额度: {{ credit_limit }}元){% endif %}
+      <a href="/recharge" class="recharge-btn">充值</a>
     </div>
     {% endif %}
   </div>

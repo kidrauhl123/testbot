@@ -32,6 +32,9 @@ def init_db():
         init_postgres_db()
     else:
         init_sqlite_db()
+    
+    # 创建充值记录表
+    create_recharge_tables()
         
 def init_sqlite_db():
     """初始化SQLite数据库"""
@@ -770,3 +773,170 @@ def create_order_with_deduction_atomic(account, password, package, remark, usern
         finally:
             if conn:
                 conn.close() 
+
+# ===== 充值相关函数 =====
+def create_recharge_tables():
+    """创建充值记录表"""
+    if DATABASE_URL.startswith('postgres'):
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS recharge_requests (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                status TEXT NOT NULL,
+                payment_method TEXT NOT NULL,
+                proof_image TEXT,
+                created_at TEXT NOT NULL,
+                processed_at TEXT,
+                processed_by TEXT,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        """)
+    else:
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS recharge_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                status TEXT NOT NULL,
+                payment_method TEXT NOT NULL,
+                proof_image TEXT,
+                created_at TEXT NOT NULL,
+                processed_at TEXT,
+                processed_by TEXT,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        """)
+
+def create_recharge_request(user_id, amount, payment_method, proof_image):
+    """创建充值请求"""
+    try:
+        # 获取当前时间
+        now = get_china_time()
+        
+        # 插入充值请求记录
+        result = execute_query("""
+            INSERT INTO recharge_requests (user_id, amount, status, payment_method, proof_image, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (user_id, amount, 'pending', payment_method, proof_image, now), fetch=True)
+        
+        # 获取新创建的充值请求ID
+        if DATABASE_URL.startswith('postgres'):
+            request_id = result[0][0]
+        else:
+            request_id = result
+            
+        return request_id, True, "充值请求已提交"
+    except Exception as e:
+        logger.error(f"创建充值请求失败: {str(e)}", exc_info=True)
+        return None, False, f"创建充值请求失败: {str(e)}"
+
+def get_user_recharge_requests(user_id):
+    """获取用户的充值请求记录"""
+    try:
+        requests = execute_query("""
+            SELECT id, amount, status, payment_method, proof_image, created_at, processed_at
+            FROM recharge_requests
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+        """, (user_id,), fetch=True)
+        
+        return requests
+    except Exception as e:
+        logger.error(f"获取用户充值请求失败: {str(e)}", exc_info=True)
+        return []
+
+def get_pending_recharge_requests():
+    """获取所有待处理的充值请求"""
+    try:
+        requests = execute_query("""
+            SELECT r.id, r.user_id, r.amount, r.payment_method, r.proof_image, r.created_at, u.username
+            FROM recharge_requests r
+            JOIN users u ON r.user_id = u.id
+            WHERE r.status = 'pending'
+            ORDER BY r.created_at ASC
+        """, fetch=True)
+        
+        return requests
+    except Exception as e:
+        logger.error(f"获取待处理充值请求失败: {str(e)}", exc_info=True)
+        return []
+
+def approve_recharge_request(request_id, admin_id):
+    """批准充值请求并增加用户余额"""
+    try:
+        # 获取充值请求详情
+        request = execute_query("""
+            SELECT user_id, amount
+            FROM recharge_requests
+            WHERE id = ? AND status = 'pending'
+        """, (request_id,), fetch=True)
+        
+        if not request:
+            return False, "充值请求不存在或已处理"
+            
+        user_id, amount = request[0]
+        
+        # 开始事务
+        conn = None
+        if DATABASE_URL.startswith('postgres'):
+            conn = psycopg2.connect(DATABASE_URL)
+            conn.autocommit = False
+        else:
+            # 使用绝对路径访问数据库
+            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(current_dir, "orders.db")
+            conn = sqlite3.connect(db_path)
+        
+        try:
+            cursor = conn.cursor()
+            now = get_china_time()
+            
+            # 更新充值请求状态
+            cursor.execute("""
+                UPDATE recharge_requests
+                SET status = 'approved', processed_at = ?, processed_by = ?
+                WHERE id = ?
+            """, (now, admin_id, request_id))
+            
+            # 增加用户余额
+            cursor.execute("""
+                UPDATE users
+                SET balance = balance + ?
+                WHERE id = ?
+            """, (amount, user_id))
+            
+            # 提交事务
+            conn.commit()
+            
+            return True, f"已成功批准充值 {amount} 元"
+        except Exception as e:
+            # 回滚事务
+            if conn:
+                conn.rollback()
+            logger.error(f"批准充值请求失败: {str(e)}", exc_info=True)
+            return False, f"批准充值请求失败: {str(e)}"
+        finally:
+            if conn:
+                conn.close()
+    except Exception as e:
+        logger.error(f"批准充值请求失败: {str(e)}", exc_info=True)
+        return False, f"批准充值请求失败: {str(e)}"
+
+def reject_recharge_request(request_id, admin_id):
+    """拒绝充值请求"""
+    try:
+        # 获取当前时间
+        now = get_china_time()
+        
+        # 更新充值请求状态
+        execute_query("""
+            UPDATE recharge_requests
+            SET status = 'rejected', processed_at = ?, processed_by = ?
+            WHERE id = ? AND status = 'pending'
+        """, (now, admin_id, request_id))
+        
+        return True, "已拒绝充值请求"
+    except Exception as e:
+        logger.error(f"拒绝充值请求失败: {str(e)}", exc_info=True)
+        return False, f"拒绝充值请求失败: {str(e)}" 

@@ -30,7 +30,7 @@ from modules.constants import (
 )
 from modules.database import (
     get_order_details, accept_order_atomic, execute_query, 
-    get_unnotified_orders, get_active_seller_ids
+    get_unnotified_orders, get_active_seller_ids, approve_recharge_request, reject_recharge_request
 )
 
 # 设置日志
@@ -1206,135 +1206,184 @@ async def check_and_push_orders():
 async def send_notification_from_queue(data):
     """根据队列中的数据发送通知"""
     global bot_application
+    
     if not bot_application:
-        logger.error("机器人未初始化，无法发送通知")
+        logger.error("机器人应用未初始化，无法发送通知")
         return
-
+    
     try:
-        notification_type = data.get('type')
-        
-        if notification_type == 'new_order':
-            # 处理新订单通知
-            oid = data.get('order_id')
-            try:
-                # 确保订单ID是整数
-                oid = int(oid)
-                logger.info(f"处理new_order通知，订单ID: {oid}（整数类型）")
-            except (TypeError, ValueError) as e:
-                logger.error(f"订单ID格式错误: {oid}, 错误: {str(e)}")
-                return
-                
-            account = data.get('account')
-            password = data.get('password')
-            package = data.get('package')
-            web_user_id = data.get('web_user_id')
-            
-            # 验证订单是否真实存在
-            if not check_order_exists(oid):
-                logger.error(f"无法发送通知：订单 #{oid} 不存在")
-                return
-            
-            user_info = f" from web user: {web_user_id}" if web_user_id else ""
-            
-            message = (
-                f"📢 New Order #{oid}{user_info}\n"
-                f"Account: `{account}`\n"
-                f"Password: `********` (hidden until accepted)\n"
-                f"Package: {package} month(s)"
-            )
-            
-            # 创建接单按钮
-            callback_data = f'accept_{oid}'
-            keyboard = [[InlineKeyboardButton("Accept", callback_data=callback_data)]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            # 向所有卖家发送通知
-            seller_ids = get_active_seller_ids()
-            if not seller_ids:
-                logger.warning("没有活跃的卖家，无法推送订单")
-                return
-                
-            success_count = 0
-            for seller_id in seller_ids:
-                try:
-                    sent_message = await bot_application.bot.send_message(
-                        chat_id=seller_id, 
-                        text=message, 
-                        reply_markup=reply_markup,
-                        parse_mode='Markdown'
-                    )
-                    success_count += 1
-                    logger.info(f"成功向卖家 {seller_id} 推送订单 #{oid}, 消息ID: {sent_message.message_id}")
-                except Exception as e:
-                    logger.error(f"向卖家 {seller_id} 发送订单 #{oid} 通知失败: {str(e)}", exc_info=True)
-            
-            if success_count > 0:
-                # 标记订单为已通知
-                try:
-                    execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
-                    logger.info(f"订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家")
-                except Exception as update_error:
-                    logger.error(f"更新订单 #{oid} 通知状态时出错: {str(update_error)}", exc_info=True)
-            else:
-                logger.error(f"订单 #{oid} 未能成功推送给任何卖家")
-            
-            return
-            
-        seller_id = data.get('seller_id')
+        if data['type'] == 'new_order':
+            await send_new_order_notification(data)
+        elif data['type'] == 'order_status_change':
+            await send_status_change_notification(data)
+        elif data['type'] == 'recharge_request':
+            await send_recharge_request_notification(data)
+        else:
+            logger.warning(f"未知的通知类型: {data['type']}")
+    except Exception as e:
+        logger.error(f"发送通知时出错: {str(e)}", exc_info=True)
+
+async def send_new_order_notification(data):
+    """发送新订单通知到所有卖家"""
+    global bot_application
+    
+    try:
+        # 获取新订单详情
         oid = data.get('order_id')
-        try:
-            # 确保订单ID是整数
-            oid = int(oid)
-        except (TypeError, ValueError) as e:
-            logger.error(f"订单ID格式错误: {oid}, 错误: {str(e)}")
-            return
-            
         account = data.get('account')
         password = data.get('password')
         package = data.get('package')
-
-        message = ""
-        if notification_type == 'dispute':
-            message = (
-                f"⚠️ *Order Dispute Notification* ⚠️\n\n"
-                f"Order #{oid} has been disputed by the buyer.\n"
-                f"Account: `{account}`\n"
-                f"Password: `{password}`\n"
-                f"Package: {package} month(s)\n\n"
-                f"Please handle this issue and update the status."
-            )
-        elif notification_type == 'urge':
-            accepted_at = data.get('accepted_at')
-            message = (
-                f"🔔 *Order Urge Notification* 🔔\n\n"
-                f"The buyer is urging for the completion of order #{oid}.\n"
-                f"Account: `{account}`\n"
-                f"Password: `{password}`\n"
-                f"Package: {package} month(s)\n"
-                f"Accepted at: {accepted_at}\n\n"
-                f"Please process this order quickly."
-            )
-        else:
-            logger.warning(f"未知的通知类型: {notification_type}")
+        web_user_id = data.get('web_user_id')
+        
+        # 构建消息文本
+        message_text = (
+            f"📢 New Order #{oid}\n"
+            f"Account: `{account}`\n"
+            f"Password: `********` (hidden until accepted)\n"
+            f"Package: {package} month(s)"
+        )
+        
+        # 创建接单按钮
+        callback_data = f'accept_{oid}'
+        keyboard = [[InlineKeyboardButton("Accept", callback_data=callback_data)]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        # 向所有卖家发送通知
+        seller_ids = get_active_seller_ids()
+        if not seller_ids:
+            logger.warning("没有活跃的卖家，无法推送订单")
             return
         
+        success_count = 0
+        for seller_id in seller_ids:
+            try:
+                sent_message = await bot_application.bot.send_message(
+                    chat_id=seller_id, 
+                    text=message_text, 
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+                success_count += 1
+                logger.info(f"成功向卖家 {seller_id} 推送订单 #{oid}, 消息ID: {sent_message.message_id}")
+            except Exception as e:
+                logger.error(f"向卖家 {seller_id} 发送订单 #{oid} 通知失败: {str(e)}", exc_info=True)
+        
+        if success_count > 0:
+            # 标记订单为已通知
+            try:
+                execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
+                logger.info(f"订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家")
+            except Exception as update_error:
+                logger.error(f"更新订单 #{oid} 通知状态时出错: {str(update_error)}", exc_info=True)
+        else:
+            logger.error(f"订单 #{oid} 未能成功推送给任何卖家")
+    except Exception as e:
+        logger.error(f"发送新订单通知时出错: {str(e)}", exc_info=True)
+
+async def send_status_change_notification(data):
+    """发送订单状态变更通知到超级管理员"""
+    global bot_application
+    
+    try:
+        # 超级管理员的Telegram ID
+        admin_id = 1878943383
+        
+        # 获取订单状态变更详情
+        oid = data.get('order_id')
+        status = data.get('status')
+        handler_id = data.get('handler_id')
+        
+        # 构建消息文本
+        message_text = (
+            f"📢 *Order Status Change Notification* 📢\n\n"
+            f"Order #{oid} has been updated to status: {status}\n"
+            f"Handler ID: {handler_id}\n"
+            f"⏰ 时间: {get_china_time()}\n\n"
+            f"Please handle this order accordingly."
+        )
+        
+        # 创建审核按钮
         keyboard = [
-            [InlineKeyboardButton("✅ Mark as Complete", callback_data=f"done_{oid}"),
-             InlineKeyboardButton("❌ Mark as Failed", callback_data=f"fail_{oid}")]
+            [
+                InlineKeyboardButton("✅ 已批准", callback_data=f"approve_status_change:{oid}"),
+                InlineKeyboardButton("❌ 已拒绝", callback_data=f"reject_status_change:{oid}")
+            ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-
+        
+        # 发送通知
         await bot_application.bot.send_message(
-            chat_id=seller_id,
-            text=message,
+            chat_id=admin_id,
+            text=message_text,
             reply_markup=reply_markup,
             parse_mode='Markdown'
         )
-        logger.info(f"成功向 {seller_id} 发送了 {notification_type} 通知 (订单 #{oid})")
-
+        
+        logger.info(f"已发送订单状态变更 #{oid} 通知到管理员")
     except Exception as e:
-        logger.error(f"从队列发送通知时出错: {e}", exc_info=True)
+        logger.error(f"发送订单状态变更通知时出错: {str(e)}", exc_info=True)
 
+async def send_recharge_request_notification(data):
+    """发送充值请求通知到超级管理员"""
+    global bot_application
+    
+    try:
+        # 超级管理员的Telegram ID
+        admin_id = 1878943383
+        
+        # 获取充值请求详情
+        request_id = data.get('request_id')
+        username = data.get('username')
+        amount = data.get('amount')
+        payment_method = data.get('payment_method')
+        proof_image = data.get('proof_image')
+        
+        # 构建消息文本
+        message_text = (
+            f"📥 <b>新充值请求</b> #{request_id}\n\n"
+            f"👤 用户: <code>{username}</code>\n"
+            f"💰 金额: <b>{amount} 元</b>\n"
+            f"💳 支付方式: {payment_method}\n"
+            f"⏰ 时间: {get_china_time()}\n\n"
+            f"请审核此充值请求。"
+        )
+        
+        # 创建审核按钮
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ 批准", callback_data=f"approve_recharge:{request_id}"),
+                InlineKeyboardButton("❌ 拒绝", callback_data=f"reject_recharge:{request_id}")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        # 发送通知
+        if proof_image:
+            # 如果有支付凭证，先发送图片
+            # 获取完整的图片URL
+            server_url = os.environ.get('SERVER_URL', 'http://localhost:5000')
+            full_image_url = f"{server_url}{proof_image}"
+            
+            # 发送图片和文本
+            await bot_application.bot.send_photo(
+                chat_id=admin_id,
+                photo=full_image_url,
+                caption=message_text,
+                reply_markup=reply_markup,
+                parse_mode='HTML'
+            )
+        else:
+            # 如果没有支付凭证，只发送文本
+            await bot_application.bot.send_message(
+                chat_id=admin_id,
+                text=message_text,
+                reply_markup=reply_markup,
+                parse_mode='HTML'
+            )
+        
+        logger.info(f"已发送充值请求 #{request_id} 通知到管理员")
+    except Exception as e:
+        logger.error(f"发送充值请求通知时出错: {str(e)}", exc_info=True)
 
 # ===== 主函数 =====
 def run_bot(notification_queue):
@@ -1659,3 +1708,88 @@ def update_order_status(order_id, status, handler_id=None):
         logger.error(f"更新订单 {order_id} 状态时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 更新订单 {order_id} 状态时出错: {str(e)}")
         return False 
+
+@callback_error_handler
+async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理回调查询"""
+    query = update.callback_query
+    data = query.data
+    user_id = update.effective_user.id
+    
+    logger.info(f"收到回调查询: {data} 来自用户 {user_id}")
+    
+    # 处理不同类型的回调
+    if data.startswith("accept:"):
+        await on_accept(update, context)
+    elif data.startswith("feedback:"):
+        await on_feedback_button(update, context)
+    elif data.startswith("stats:"):
+        await on_stats_callback(update, context)
+    elif data.startswith("approve_recharge:"):
+        await on_approve_recharge(update, context)
+    elif data.startswith("reject_recharge:"):
+        await on_reject_recharge(update, context)
+    else:
+        await query.answer("Unknown command")
+
+@callback_error_handler
+async def on_approve_recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理批准充值请求的回调"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    # 只允许超级管理员处理充值请求
+    if user_id != 1878943383:
+        await query.answer("您没有权限执行此操作", show_alert=True)
+        return
+    
+    # 获取充值请求ID
+    request_id = int(query.data.split(":")[1])
+    
+    # 批准充值请求
+    success, message = approve_recharge_request(request_id, str(user_id))
+    
+    if success:
+        # 更新消息
+        keyboard = [[InlineKeyboardButton("✅ 已批准", callback_data="dummy_action")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        try:
+            await query.edit_message_reply_markup(reply_markup=reply_markup)
+            await query.answer("充值请求已批准", show_alert=True)
+        except Exception as e:
+            logger.error(f"更新消息失败: {str(e)}")
+            await query.answer("操作成功，但更新消息失败", show_alert=True)
+    else:
+        await query.answer(f"操作失败: {message}", show_alert=True)
+
+@callback_error_handler
+async def on_reject_recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理拒绝充值请求的回调"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    # 只允许超级管理员处理充值请求
+    if user_id != 1878943383:
+        await query.answer("您没有权限执行此操作", show_alert=True)
+        return
+    
+    # 获取充值请求ID
+    request_id = int(query.data.split(":")[1])
+    
+    # 拒绝充值请求
+    success, message = reject_recharge_request(request_id, str(user_id))
+    
+    if success:
+        # 更新消息
+        keyboard = [[InlineKeyboardButton("❌ 已拒绝", callback_data="dummy_action")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        try:
+            await query.edit_message_reply_markup(reply_markup=reply_markup)
+            await query.answer("充值请求已拒绝", show_alert=True)
+        except Exception as e:
+            logger.error(f"更新消息失败: {str(e)}")
+            await query.answer("操作成功，但更新消息失败", show_alert=True)
+    else:
+        await query.answer(f"操作失败: {message}", show_alert=True) 

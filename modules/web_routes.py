@@ -12,7 +12,8 @@ from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, 
 from modules.database import (
     execute_query, hash_password, get_all_sellers, add_seller, remove_seller, toggle_seller_status,
     get_user_balance, get_user_credit_limit, set_user_credit_limit, refund_order, 
-    create_order_with_deduction_atomic
+    create_order_with_deduction_atomic, get_user_recharge_requests, create_recharge_request,
+    get_pending_recharge_requests, approve_recharge_request, reject_recharge_request
 )
 import modules.constants as constants
 
@@ -899,4 +900,120 @@ def register_routes(app, notification_queue):
             return jsonify({"success": False, "error": "订单ID必须是有效的数字"}), 400
         except Exception as e:
             logger.error(f"批量删除订单时出错: {e}", exc_info=True)
-            return jsonify({"success": False, "error": "服务器内部错误"}), 500 
+            return jsonify({"success": False, "error": "服务器内部错误"}), 500
+
+    # ===== 充值相关路由 =====
+    @app.route('/recharge', methods=['GET'])
+    @login_required
+    def recharge_page():
+        """显示充值页面"""
+        user_id = session.get('user_id')
+        balance = get_user_balance(user_id)
+        
+        # 获取用户的充值记录
+        recharge_history = get_user_recharge_requests(user_id)
+        
+        return render_template('recharge.html',
+                              username=session.get('username'),
+                              is_admin=session.get('is_admin'),
+                              balance=balance,
+                              recharge_history=recharge_history)
+    
+    @app.route('/recharge', methods=['POST'])
+    @login_required
+    def submit_recharge():
+        """提交充值请求"""
+        user_id = session.get('user_id')
+        amount = request.form.get('amount')
+        payment_method = request.form.get('payment_method')
+        
+        # 验证输入
+        try:
+            amount = float(amount)
+            if amount <= 0:
+                return jsonify({"success": False, "error": "充值金额必须大于0"}), 400
+        except ValueError:
+            return jsonify({"success": False, "error": "请输入有效的金额"}), 400
+        
+        if not payment_method:
+            payment_method = "未指定"
+        
+        # 处理上传的支付凭证
+        proof_image = None
+        if 'proof_image' in request.files:
+            file = request.files['proof_image']
+            if file and file.filename:
+                # 确保上传目录存在
+                upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'uploads')
+                if not os.path.exists(upload_dir):
+                    os.makedirs(upload_dir)
+                
+                # 生成唯一文件名
+                filename = f"{int(time.time())}_{file.filename}"
+                file_path = os.path.join(upload_dir, filename)
+                
+                # 保存文件
+                file.save(file_path)
+                proof_image = f"/static/uploads/{filename}"
+        
+        # 创建充值请求
+        request_id, success, message = create_recharge_request(user_id, amount, payment_method, proof_image)
+        
+        if success:
+            # 发送通知到TG管理员
+            username = session.get('username')
+            notification_queue.put({
+                'type': 'recharge_request',
+                'request_id': request_id,
+                'username': username,
+                'amount': amount,
+                'payment_method': payment_method,
+                'proof_image': proof_image
+            })
+            
+            return jsonify({
+                "success": True,
+                "message": "充值请求已提交，请等待管理员审核"
+            })
+        else:
+            return jsonify({"success": False, "error": message}), 500
+    
+    @app.route('/admin/recharge-requests', methods=['GET'])
+    @login_required
+    @admin_required
+    def admin_recharge_requests():
+        """管理员查看充值请求列表"""
+        pending_requests = get_pending_recharge_requests()
+        
+        return render_template('admin_recharge.html',
+                              username=session.get('username'),
+                              is_admin=session.get('is_admin'),
+                              pending_requests=pending_requests)
+    
+    @app.route('/admin/api/recharge/<int:request_id>/approve', methods=['POST'])
+    @login_required
+    @admin_required
+    def approve_recharge(request_id):
+        """批准充值请求"""
+        admin_id = session.get('user_id')
+        
+        success, message = approve_recharge_request(request_id, admin_id)
+        
+        if success:
+            return jsonify({"success": True, "message": message})
+        else:
+            return jsonify({"success": False, "error": message}), 400
+    
+    @app.route('/admin/api/recharge/<int:request_id>/reject', methods=['POST'])
+    @login_required
+    @admin_required
+    def reject_recharge(request_id):
+        """拒绝充值请求"""
+        admin_id = session.get('user_id')
+        
+        success, message = reject_recharge_request(request_id, admin_id)
+        
+        if success:
+            return jsonify({"success": True, "message": message})
+        else:
+            return jsonify({"success": False, "error": message}), 400 
