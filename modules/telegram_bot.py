@@ -557,11 +557,10 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if (user_id, query.data) in processing_accepts_time:
                 del processing_accepts_time[(user_id, query.data)]
             
-                
-                            await query.answer("This order has already been accepted or completed", show_alert=True)
-                logger.warning(f"接单失败: 订单 {oid} 状态为 {order['status']}")
-                print(f"WARNING: 接单失败: 订单 {oid} 状态为 {order['status']}")
-                return
+            await query.answer("This order has already been accepted or completed", show_alert=True)
+            logger.warning(f"接单失败: 订单 {oid} 状态为 {order['status']}")
+            print(f"WARNING: 接单失败: 订单 {oid} 状态为 {order['status']}")
+            return
         
         # 更新订单状态
         conn = get_db_connection()
@@ -590,10 +589,10 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 processing_accepts.remove((user_id, query.data))
             if (user_id, query.data) in processing_accepts_time:
                 del processing_accepts_time[(user_id, query.data)]
-                
-                            await query.answer("Failed to update order status, please try again later", show_alert=True)
-                logger.error(f"更新订单 {oid} 状态失败")
-                return
+            
+            await query.answer("Failed to update order status, please try again later", show_alert=True)
+            logger.error(f"更新订单 {oid} 状态失败")
+            return
         
         # 确认回调
         await query.answer("You have successfully accepted the order!", show_alert=True)
