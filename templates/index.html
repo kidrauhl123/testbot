@@ -781,6 +781,21 @@
     .urge-btn:hover {
       background: rgba(52,152,219,0.2);
     }
+    
+    /* 价格显示样式 */
+    .price-display {
+      font-size: 22px;
+      font-weight: 700;
+      color: #e74c3c;
+      background: rgba(231, 76, 60, 0.05);
+      padding: 10px 15px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    
+    #selectedPrice {
+      margin-left: 5px;
+    }
   </style>
 </head>
 <body>
@@ -841,7 +856,19 @@
                 <form id="orderForm" autocomplete="off">
                   <div class="form-group"><label>破天账号</label><input name="account" class="form-control" required placeholder="请输入您的破天账号"></div>
                   <div class="form-group"><label>密码</label><input name="password" type="text" class="form-control" required placeholder="请输入密码"></div>
-                  <div class="form-group"><label>套餐类型</label><select name="package" class="form-control" required><option value="1">1个月</option><option value="2">2个月</option><option value="3">3个月</option><option value="6">6个月</option><option value="12">12个月</option></select></div>
+                  <div class="form-group"><label>套餐类型</label>
+                    <select name="package" class="form-control" id="packageSelect" required>
+                      <option value="1">1个月 - ¥12</option>
+                      <option value="2">2个月 - ¥18</option>
+                      <option value="3">3个月 - ¥30</option>
+                      <option value="6">6个月 - ¥50</option>
+                      <option value="12">12个月 - ¥84</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>价格</label>
+                    <div class="price-display">¥<span id="selectedPrice">12</span></div>
+                  </div>
                   <div class="form-group"><label>备注 (可选)</label><input name="remark" class="form-control" placeholder="如有特殊要求请备注"></div>
                   <button type="submit" class="submit-btn">提交订单</button>
                 </form>
@@ -890,6 +917,20 @@
     '6': 50,
     '12': 84
   };
+  
+  // 套餐选择处理
+  document.addEventListener('DOMContentLoaded', function() {
+    const packageSelect = document.getElementById('packageSelect');
+    const selectedPrice = document.getElementById('selectedPrice');
+    
+    // 初始价格设置
+    selectedPrice.textContent = WEB_PRICES[packageSelect.value];
+    
+    // 监听套餐选择变化
+    packageSelect.addEventListener('change', function() {
+      selectedPrice.textContent = WEB_PRICES[this.value];
+    });
+  });
   
   // 显示自定义提示框
   function showCustomAlert(message, type = 'success') {
