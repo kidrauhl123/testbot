@@ -608,7 +608,7 @@
   </div>
 </div>
 
-<!-- 订单编辑模态框 -->
+<!-- 修改订单编辑模态框 -->
 <div class="modal-backdrop" id="edit-order-modal">
   <div class="modal">
     <div class="modal-header">
@@ -656,6 +656,40 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" data-dismiss="modal">取消</button>
       <button class="btn btn-primary" onclick="saveOrderEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 添加卖家模态框 -->
+<div class="modal-backdrop" id="add-seller-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>添加卖家</h3>
+      <button class="modal-close" data-dismiss="modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="add-seller-error" class="error-message" style="display:none;"></div>
+      <form id="add-seller-form">
+        <div class="form-group">
+          <label for="new-seller-id">Telegram ID <span class="text-danger">*</span></label>
+          <input type="number" id="new-seller-id" class="form-control" required>
+          <small class="text-muted">必填，Telegram用户的数字ID</small>
+        </div>
+        <div class="form-group">
+          <label for="new-seller-username">用户名</label>
+          <input type="text" id="new-seller-username" class="form-control">
+          <small class="text-muted">选填，Telegram用户名（不含@）</small>
+        </div>
+        <div class="form-group">
+          <label for="new-seller-firstname">昵称</label>
+          <input type="text" id="new-seller-firstname" class="form-control">
+          <small class="text-muted">选填，Telegram昵称</small>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
+      <button class="btn btn-primary" onclick="addSeller()">添加</button>
     </div>
   </div>
 </div>
@@ -874,6 +908,7 @@
     
     // 这里直接添加卖家，不使用模态框
     // openModal('add-seller-modal');
+    openModal('add-seller-modal');
   }
 
   async function loadSellers() {
