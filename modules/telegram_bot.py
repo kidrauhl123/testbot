@@ -451,14 +451,22 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # 首先尝试直接使用整数ID
-        cursor.execute("SELECT COUNT(*) FROM orders WHERE id = ?", (oid,))
+        # 首先尝试直接使用整数ID，根据数据库类型使用不同的占位符
+        if DATABASE_URL.startswith('postgres'):
+            cursor.execute("SELECT COUNT(*) FROM orders WHERE id = %s", (oid,))
+        else:
+            cursor.execute("SELECT COUNT(*) FROM orders WHERE id = ?", (oid,))
+            
         count = cursor.fetchone()[0]
         
         # 如果直接使用整数ID失败，尝试使用字符串ID
         if count == 0:
             logger.warning(f"使用整数ID={oid}未找到订单，尝试字符串ID")
-            cursor.execute("SELECT COUNT(*) FROM orders WHERE id = ?", (str(oid),))
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("SELECT COUNT(*) FROM orders WHERE id = %s", (str(oid),))
+            else:
+                cursor.execute("SELECT COUNT(*) FROM orders WHERE id = ?", (str(oid),))
+                
             count = cursor.fetchone()[0]
             
             if count > 0:
@@ -474,7 +482,11 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 列出最近订单以进行调试
             conn = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT id FROM orders ORDER BY id DESC LIMIT 5")
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("SELECT id FROM orders ORDER BY id DESC LIMIT 5")
+            else:
+                cursor.execute("SELECT id FROM orders ORDER BY id DESC LIMIT 5")
+                
             recent_orders = cursor.fetchall()
             if recent_orders:
                 recent_ids = [str(order[0]) for order in recent_orders]
@@ -503,12 +515,19 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             del processing_accepts_time[(user_id, query.data)]
             
         await query.answer("查询订单时出错", show_alert=True)
-
+        return
+    
     # 检查订单状态
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM orders WHERE id = ?", (oid,))
+        
+        # 根据数据库类型使用不同的占位符
+        if DATABASE_URL.startswith('postgres'):
+            cursor.execute("SELECT * FROM orders WHERE id = %s", (oid,))
+        else:
+            cursor.execute("SELECT * FROM orders WHERE id = ?", (oid,))
+            
         order_row = cursor.fetchone()
         
         if not order_row:
@@ -547,10 +566,19 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn = get_db_connection()
         cursor = conn.cursor()
         timestamp = get_china_time()
-        cursor.execute(
-            "UPDATE orders SET status = ?, accepted_at = ?, accepted_by = ? WHERE id = ?",
-            (STATUS['ACCEPTED'], timestamp, str(user_id), oid)
-        )
+        
+        # 根据数据库类型使用不同的语法
+        if DATABASE_URL.startswith('postgres'):
+            cursor.execute(
+                "UPDATE orders SET status = %s, accepted_at = %s, accepted_by = %s WHERE id = %s",
+                (STATUS['ACCEPTED'], timestamp, str(user_id), oid)
+            )
+        else:
+            cursor.execute(
+                "UPDATE orders SET status = ?, accepted_at = ?, accepted_by = ? WHERE id = ?",
+                (STATUS['ACCEPTED'], timestamp, str(user_id), oid)
+            )
+            
         conn.commit()
         conn.close()
         success = True
