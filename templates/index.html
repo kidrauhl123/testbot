@@ -1157,12 +1157,20 @@
     // 为管理员统计每个用户的金额
     const userAmounts = {};
     
+    // 计算全站总额（用于超级管理员）
+    let globalTotalAmount = 0;
+    
     todayOrders.forEach(order => {
       totalCount++;
-      // 只计算已完成订单的金额
+      // 计算订单价格（不管状态）
+      const price = WEB_PRICES[order.package] || 0;
+      
+      // 只有已完成订单才计入用户消费
       if (order.status === 'completed') {
-        const price = WEB_PRICES[order.package] || 0;
         totalAmount += price;
+        
+        // 同时累计全站总额
+        globalTotalAmount += price;
         
         // 如果是管理员，记录每个用户的金额
         if (isAdmin && order.creator) {
@@ -1175,35 +1183,27 @@
           userAmounts[order.creator].amount += price;
         }
       }
+      
+      // 如果订单状态不是已完成，但是管理员查看全站总额时也要计入
+      else if (isAdmin) {
+        globalTotalAmount += price;
+      }
     });
     
-    return { totalAmount, totalCount, userAmounts };
+    return { totalAmount, totalCount, userAmounts, globalTotalAmount };
   }
   
   // 显示今日总金额
   function updateTodayTotal(orders) {
-    const { totalAmount, totalCount, userAmounts } = calculateTodayTotal(orders);
+    const { totalAmount, totalCount, userAmounts, globalTotalAmount } = calculateTodayTotal(orders);
     const todayTotalElement = document.getElementById('today-total');
     
     if (todayTotalElement) {
       if (isAdmin) {
-        // 转换为数组并按金额排序
-        const userList = Object.values(userAmounts).sort((a, b) => b.amount - a.amount);
-        // 只取前三名
-        const topUsers = userList.slice(0, 3);
-        
-        if (topUsers.length > 0) {
-          let html = '今日排行: ';
-          topUsers.forEach((user, index) => {
-            html += `${index + 1}. ${user.username}: ¥${user.amount.toFixed(2)}`;
-            if (index < topUsers.length - 1) html += ' | ';
-          });
-          todayTotalElement.innerHTML = html;
-        } else {
-          todayTotalElement.innerHTML = '今日总额: ¥0.00';
-        }
+        // 超级管理员显示全站总额
+        todayTotalElement.innerHTML = `今日总额: ¥${globalTotalAmount.toFixed(2)}`;
       } else {
-        // 普通用户只显示总金额
+        // 普通用户只显示自己的总金额
         todayTotalElement.innerHTML = `今日总额: ¥${totalAmount.toFixed(2)}`;
       }
     }

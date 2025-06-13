@@ -465,6 +465,7 @@
               <th>最后登录</th>
                 <th>余额</th>
                 <th>透支额度</th>
+                <th>今日消费</th>
                 <th>角色</th>
               <th>操作</th>
             </tr>
@@ -770,6 +771,7 @@
           <td>${lastLogin}</td>
           <td class="user-balance">${user.balance ? user.balance.toFixed(2) : '0.00'} 元</td>
           <td class="user-credit">${user.credit_limit ? user.credit_limit.toFixed(2) : '0.00'} 元</td>
+          <td class="user-consumption">${user.today_consumption ? user.today_consumption.toFixed(2) : '0.00'} 元</td>
           <td>${user.is_admin ? '<span class="badge badge-warning">管理员</span>' : '<span class="badge badge-secondary">普通用户</span>'}</td>
           <td>
             <button class="btn btn-sm btn-primary" onclick="editUserBalance(${user.id}, '${user.username}', ${user.balance || 0})">
