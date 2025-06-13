@@ -11,7 +11,7 @@ from flask import Flask, request, render_template, jsonify, session, redirect, u
 from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH
 from modules.database import (
     execute_query, hash_password, get_all_sellers, add_seller, remove_seller, toggle_seller_status,
-    get_user_balance, get_user_credit_limit, set_user_credit_limit, refund_order, 
+    get_user_balance, get_user_credit_limit, set_user_balance, set_user_credit_limit, refund_order, 
     create_order_with_deduction_atomic, get_user_recharge_requests, create_recharge_request,
     get_pending_recharge_requests, approve_recharge_request, reject_recharge_request
 )
@@ -927,8 +927,13 @@ def register_routes(app, notification_queue):
             user_id = session.get('user_id')
             amount = request.form.get('amount')
             payment_method = request.form.get('payment_method')
+            payment_command = request.form.get('payment_command', '')
+            details = None
+
+            if payment_method == '支付宝口令红包':
+                details = payment_command
             
-            logger.info(f"收到充值请求: 用户ID={user_id}, 金额={amount}, 支付方式={payment_method}")
+            logger.info(f"收到充值请求: 用户ID={user_id}, 金额={amount}, 支付方式={payment_method}, 详情={details}")
             
             # 验证输入
             try:
@@ -982,7 +987,7 @@ def register_routes(app, notification_queue):
             
             # 创建充值请求
             logger.info(f"正在创建充值请求: 用户ID={user_id}, 金额={amount}, 支付方式={payment_method}")
-            request_id, success, message = create_recharge_request(user_id, amount, payment_method, proof_image)
+            request_id, success, message = create_recharge_request(user_id, amount, payment_method, proof_image, details)
             
             if success:
                 # 发送通知到TG管理员
@@ -993,7 +998,8 @@ def register_routes(app, notification_queue):
                     'username': username,
                     'amount': amount,
                     'payment_method': payment_method,
-                    'proof_image': proof_image
+                    'proof_image': proof_image,
+                    'details': details
                 })
                 logger.info(f"充值请求 #{request_id} 已提交成功，已加入通知队列")
                 

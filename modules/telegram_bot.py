@@ -1337,6 +1337,7 @@ async def send_recharge_request_notification(data):
         amount = data.get('amount')
         payment_method = data.get('payment_method')
         proof_image = data.get('proof_image')
+        details = data.get('details')
         
         logger.info(f"准备发送充值请求通知: 请求ID={request_id}, 用户={username}, 金额={amount}, 管理员ID={admin_id}")
         
@@ -1346,9 +1347,12 @@ async def send_recharge_request_notification(data):
             f"👤 用户: <code>{username}</code>\n"
             f"💰 金额: <b>{amount} 元</b>\n"
             f"💳 支付方式: {payment_method}\n"
-            f"⏰ 时间: {get_china_time()}\n\n"
-            f"请审核此充值请求。"
         )
+
+        if details:
+            message_text += f"💬 详情: <code>{details}</code>\n"
+
+        message_text += f"⏰ 时间: {get_china_time()}\n\n请审核此充值请求。"
         
         # 创建审核按钮
         keyboard = [

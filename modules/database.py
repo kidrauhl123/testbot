@@ -135,6 +135,17 @@ def init_sqlite_db():
         logger.info("为users表添加credit_limit列")
         c.execute("ALTER TABLE users ADD COLUMN credit_limit REAL DEFAULT 0")
     
+    # 检查recharge_requests表中是否需要添加新列
+    try:
+        c.execute("PRAGMA table_info(recharge_requests)")
+        recharge_columns = [column[1] for column in c.fetchall()]
+        if 'details' not in recharge_columns:
+            logger.info("为recharge_requests表添加details列")
+            c.execute("ALTER TABLE recharge_requests ADD COLUMN details TEXT")
+    except sqlite3.OperationalError:
+        # Table might not exist yet, will be created by create_recharge_tables()
+        pass
+    
     # 创建超级管理员账号（如果不存在）
     admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
     c.execute("SELECT id FROM users WHERE username = ?", (ADMIN_USERNAME,))
@@ -256,6 +267,16 @@ def init_postgres_db():
     except psycopg2.errors.UndefinedColumn:
         logger.info("为orders表添加accepted_by_first_name列")
         c.execute("ALTER TABLE orders ADD COLUMN accepted_by_first_name TEXT")
+    
+    # 检查是否需要添加details列（充值详情，如口令）
+    try:
+        c.execute("SELECT details FROM recharge_requests LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为recharge_requests表添加details列")
+        c.execute("ALTER TABLE recharge_requests ADD COLUMN details TEXT")
+    except psycopg2.errors.UndefinedTable:
+        # Table might not exist yet
+        pass
     
     # 创建超级管理员账号（如果不存在）
     admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
@@ -799,6 +820,7 @@ def create_recharge_tables():
                         status TEXT NOT NULL,
                         payment_method TEXT NOT NULL,
                         proof_image TEXT,
+                        details TEXT,
                         created_at TEXT NOT NULL,
                         processed_at TEXT,
                         processed_by TEXT,
@@ -824,6 +846,7 @@ def create_recharge_tables():
                         status TEXT NOT NULL,
                         payment_method TEXT NOT NULL,
                         proof_image TEXT,
+                        details TEXT,
                         created_at TEXT NOT NULL,
                         processed_at TEXT,
                         processed_by TEXT,
@@ -840,7 +863,7 @@ def create_recharge_tables():
         logger.error(f"创建充值记录表失败: {str(e)}", exc_info=True)
         return False
 
-def create_recharge_request(user_id, amount, payment_method, proof_image):
+def create_recharge_request(user_id, amount, payment_method, proof_image, details=None):
     """创建充值请求"""
     try:
         # 获取当前时间
@@ -850,19 +873,19 @@ def create_recharge_request(user_id, amount, payment_method, proof_image):
         if DATABASE_URL.startswith('postgres'):
             # PostgreSQL需要使用RETURNING子句获取新ID
             result = execute_query("""
-                INSERT INTO recharge_requests (user_id, amount, status, payment_method, proof_image, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO recharge_requests (user_id, amount, status, payment_method, proof_image, details, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-            """, (user_id, amount, 'pending', payment_method, proof_image, now), fetch=True)
+            """, (user_id, amount, 'pending', payment_method, proof_image, details, now), fetch=True)
             request_id = result[0][0]
         else:
             # SQLite可以直接获取lastrowid
             conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO recharge_requests (user_id, amount, status, payment_method, proof_image, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (user_id, amount, 'pending', payment_method, proof_image, now))
+                INSERT INTO recharge_requests (user_id, amount, status, payment_method, proof_image, details, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (user_id, amount, 'pending', payment_method, proof_image, details, now))
             request_id = cursor.lastrowid
             conn.commit()
             conn.close()
@@ -877,14 +900,14 @@ def get_user_recharge_requests(user_id):
     try:
         if DATABASE_URL.startswith('postgres'):
             requests = execute_query("""
-                SELECT id, amount, status, payment_method, proof_image, created_at, processed_at
+                SELECT id, amount, status, payment_method, proof_image, created_at, processed_at, details
                 FROM recharge_requests
                 WHERE user_id = %s
                 ORDER BY created_at DESC
             """, (user_id,), fetch=True)
         else:
             requests = execute_query("""
-                SELECT id, amount, status, payment_method, proof_image, created_at, processed_at
+                SELECT id, amount, status, payment_method, proof_image, created_at, processed_at, details
                 FROM recharge_requests
                 WHERE user_id = ?
                 ORDER BY created_at DESC
@@ -900,7 +923,7 @@ def get_pending_recharge_requests():
     try:
         if DATABASE_URL.startswith('postgres'):
             requests = execute_query("""
-                SELECT r.id, r.user_id, r.amount, r.payment_method, r.proof_image, r.created_at, u.username
+                SELECT r.id, r.user_id, r.amount, r.payment_method, r.proof_image, r.created_at, u.username, r.details
                 FROM recharge_requests r
                 JOIN users u ON r.user_id = u.id
                 WHERE r.status = %s
@@ -908,7 +931,7 @@ def get_pending_recharge_requests():
             """, ('pending',), fetch=True)
         else:
             requests = execute_query("""
-                SELECT r.id, r.user_id, r.amount, r.payment_method, r.proof_image, r.created_at, u.username
+                SELECT r.id, r.user_id, r.amount, r.payment_method, r.proof_image, r.created_at, u.username, r.details
                 FROM recharge_requests r
                 JOIN users u ON r.user_id = u.id
                 WHERE r.status = ?
