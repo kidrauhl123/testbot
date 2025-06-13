@@ -1142,9 +1142,8 @@ async def send_new_order_notification(data):
         
         # 构建消息文本
         message_text = (
-            f"📢 New Order #{oid}\n"
+            f"📦 New Order #{oid}\n"
             f"Account: `{account}`\n"
-            f"Password: `********` (hidden until accepted)\n"
             f"Package: {package} month(s)"
         )
         
@@ -1348,10 +1347,21 @@ async def send_dispute_notification(data):
             f"Package: {package} month(s)\n\n"
             f"Please check and handle this order as soon as possible."
         )
+        
+        # 添加反馈按钮
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Complete", callback_data=f"done_{oid}"),
+                InlineKeyboardButton("❌ Failed", callback_data=f"fail_{oid}")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
         await bot_application.bot.send_message(
             chat_id=seller_id,
             text=message_text,
-            parse_mode='HTML'
+            parse_mode='HTML',
+            reply_markup=reply_markup
         )
         logger.info(f"已向卖家 {seller_id} 发送订单质疑通知 #{oid}")
     except Exception as e:
