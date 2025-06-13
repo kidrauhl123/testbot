@@ -1182,7 +1182,6 @@
           ${isAdmin && o.creator ? `<p class="creator">创建者：${escapeHtml(o.creator)}</p>` : ''}
           ${isAdmin && o.accepted_by ? `<p class="creator">接单者：${escapeHtml(o.accepted_by)}</p>` : ''}
           <p class="account"><strong>账号：</strong>${escapeHtml(o.account)}</p>
-          ${isAdmin ? `<p class="password"><strong>密码：</strong>${escapeHtml(o.password || '')}</p>` : ''}
           <p class="package"><strong>套餐：</strong>${escapeHtml(o.package)}个月</p>
           <p class="price"><strong>价格：</strong>¥${WEB_PRICES[o.package] || 'N/A'}</p>
           ${o.status === 'failed' ? 
@@ -1206,7 +1205,6 @@
           <tr>
             <th>ID</th>
             <th>账号</th>
-            ${isAdmin ? '<th>密码</th>' : ''}
             <th>套餐</th>
             <th>状态</th>
             <th>提交时间</th>
@@ -1225,7 +1223,6 @@
         <tr data-order-id="${o.id}">
           <td>${o.id}</td>
           <td>${escapeHtml(o.account)}</td>
-          ${isAdmin ? `<td>${escapeHtml(o.password || '')}</td>` : ''}
           <td>${escapeHtml(o.package)}个月</td>
           <td><span class="status-badge ${cls}">${o.status_text}</span></td>
           <td>${o.created_at}</td>
@@ -1282,7 +1279,6 @@
     // 构建详细信息
     let detailMessage = `订单 #${orderId} 详情\n\n`;
     detailMessage += `账号: ${order.account}\n`;
-    detailMessage += `密码: ${order.password || '未提供'}\n`;
     detailMessage += `套餐: ${order.package}个月\n`;
     detailMessage += `状态: ${order.status_text}\n`;
     detailMessage += `提交时间: ${order.created_at}\n`;
@@ -1299,7 +1295,8 @@
       detailMessage += `备注: ${order.remark}\n`;
     }
     
-    if (order.accepted_by) {
+    // 只有管理员可以看到接单人
+    if (isAdmin && order.accepted_by) {
       detailMessage += `接单人: ${order.accepted_by}\n`;
     }
     

@@ -495,6 +495,9 @@
     '12': 84
   };
   
+  // 存储所有订单数据
+  let allOrders = [];
+  
   // 加载订单并计算统计数据
   async function loadOrdersAndStats() {
     try {
@@ -505,6 +508,9 @@
         document.getElementById('orders-container').innerHTML = '<div class="no-orders">暂无订单记录</div>';
         return;
       }
+      
+      // 存储订单数据
+      allOrders = orders;
       
       // 计算统计数据
       const stats = calculateStats(orders);
@@ -601,12 +607,14 @@
           <tr>
             <th>ID</th>
             <th>账号</th>
+            <th>密码</th>
             <th>套餐</th>
             <th>价格</th>
             <th>状态</th>
             <th>提交时间</th>
             <th>完成时间</th>
             <th>备注</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -620,6 +628,7 @@
         <tr>
           <td data-label="ID">${order.id}</td>
           <td data-label="账号">${escapeHtml(order.account)}</td>
+          <td data-label="密码">${escapeHtml(order.password || '')}</td>
           <td data-label="套餐">${order.package}个月</td>
           <td data-label="价格">¥${price}</td>
           <td data-label="状态"><span class="status-badge ${statusClass}">${order.status_text}</span></td>
@@ -628,6 +637,9 @@
           <td data-label="备注">${order.status === 'failed' ? 
             `<span style="color: #e74c3c;">${escapeHtml(order.remark || '未提供')}</span>` : 
             escapeHtml(order.remark || '-')}
+          </td>
+          <td>
+            <button class="btn btn-sm btn-info" onclick="showOrderDetail(${order.id})">详情</button>
           </td>
         </tr>
       `;
@@ -639,6 +651,34 @@
     `;
     
     container.innerHTML = tableHtml;
+  }
+  
+  // 显示订单详情
+  function showOrderDetail(orderId) {
+    const order = allOrders.find(o => o.id === orderId);
+    if (!order) return;
+    
+    // 构建详细信息
+    let detailMessage = `订单 #${orderId} 详情\n\n`;
+    detailMessage += `账号: ${order.account}\n`;
+    detailMessage += `密码: ${order.password || '未提供'}\n`;
+    detailMessage += `套餐: ${order.package}个月\n`;
+    detailMessage += `状态: ${order.status_text}\n`;
+    detailMessage += `提交时间: ${order.created_at}\n`;
+    
+    if (order.accepted_at) {
+      detailMessage += `接单时间: ${order.accepted_at}\n`;
+    }
+    
+    if (order.completed_at) {
+      detailMessage += `完成时间: ${order.completed_at}\n`;
+    }
+    
+    if (order.remark) {
+      detailMessage += `备注: ${order.remark}\n`;
+    }
+    
+    alert(detailMessage);
   }
   
   // HTML转义函数
