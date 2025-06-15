@@ -13,7 +13,11 @@ import pytz
 from modules.constants import STATUS
 
 # 从环境变量中直接获取配置
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
+try:
+    DATABASE_URL = os.environ['DATABASE_URL']
+except KeyError:
+    raise RuntimeError("错误: 环境变量 DATABASE_URL 未设置。请在 Railway 的 Variables 中设置该变量。")
+
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "password")
 

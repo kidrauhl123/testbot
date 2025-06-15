@@ -30,51 +30,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 导入自定义模块
-from modules.database import init_db, execute_query
+from modules.database import init_db
 from modules.telegram_bot import run_bot, process_telegram_update
 from modules.web_routes import register_routes
 from modules.constants import sync_env_sellers_to_db
 
 # 创建一个线程安全的队列用于在Flask和Telegram机器人之间通信
 notification_queue = queue.Queue()
-
-# 锁目录路径
-lock_dir = 'bot.lock'
-
-# 清理锁目录和数据库 journal 文件的函数
-def cleanup_resources():
-    """清理应用锁目录和数据库 journal 文件。"""
-    # 清理应用锁目录
-    if os.path.exists(lock_dir):
-        try:
-            if os.path.isdir(lock_dir):
-                os.rmdir(lock_dir)
-                logger.info(f"已清理锁目录: {lock_dir}")
-            else:
-                os.remove(lock_dir) # 如果意外地成了文件
-                logger.info(f"已清理锁文件: {lock_dir}")
-        except Exception as e:
-            logger.error(f"清理锁目录时出错: {str(e)}", exc_info=True)
-
-    # 清理数据库 journal 文件
-    try:
-        journal_path = "orders.db-journal"
-        if os.path.exists(journal_path):
-            os.remove(journal_path)
-            logger.info(f"已清理残留的 journal 文件: {journal_path}")
-    except Exception as e:
-        logger.error(f"清理 journal 文件时出错: {str(e)}", exc_info=True)
-
-# 信号处理函数
-def signal_handler(sig, frame):
-    logger.info(f"收到信号 {sig}，正在清理资源...")
-    cleanup_resources()
-    sys.exit(0)
-
-# 注册信号处理器和退出钩子
-signal.signal(signal.SIGINT, signal_handler)
-signal.signal(signal.SIGTERM, signal_handler)
-atexit.register(cleanup_resources)
 
 # ===== Flask 应用 =====
 app = Flask(__name__)
@@ -94,6 +56,11 @@ if not os.path.exists(uploads_dir):
 
 # 注册Web路由，并将队列传递给它
 register_routes(app, notification_queue)
+
+# 添加一个空的 favicon 路由，防止 404 错误刷屏
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204
 
 # 添加Telegram webhook路由
 @app.route('/telegram-webhook', methods=['POST'])
@@ -129,25 +96,6 @@ def handle_exception(e):
     return jsonify({"error": str(e)}), 500
 
 # ===== 应用初始化 =====
-# 将初始化代码移出 if __name__ == "__main__":
-# 确保在任何环境下都能执行
-
-# 在启动前先尝试清理可能存在的锁文件和目录
-cleanup_resources()
-
-# 使用锁目录确保只有一个实例运行
-# 注意：在某些无服务器平台这可能不是最佳实践，但暂时保留
-try:
-    os.mkdir(lock_dir)
-    logger.info("成功获取锁，启动主程序。")
-except FileExistsError:
-    logger.error("锁目录已存在，另一个实例可能正在运行。程序退出。")
-    # 在非主程序入口，我们只记录错误，不退出
-    # sys.exit(1) 
-except Exception as e:
-    logger.error(f"创建锁目录时发生未知错误: {e}")
-    # sys.exit(1)
-
 # 初始化数据库
 logger.info("正在初始化数据库...")
 init_db()
@@ -163,7 +111,6 @@ logger.info("正在启动Telegram机器人...")
 bot_thread = threading.Thread(target=run_bot, args=(notification_queue,), daemon=True)
 bot_thread.start()
 logger.info("Telegram机器人线程已启动")
-
 
 # ===== 主程序入口（仅用于本地开发） =====
 if __name__ == "__main__":
