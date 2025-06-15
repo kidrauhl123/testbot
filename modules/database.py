@@ -324,7 +324,22 @@ def init_postgres_db():
     except psycopg2.errors.UndefinedTable:
         # Table might not exist yet
         pass
-    
+
+    # 余额明细表
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS balance_records (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            amount REAL NOT NULL,
+            type TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            reference_id INTEGER,
+            balance_after REAL NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    """)
+
     # 创建超级管理员账号（如果不存在）
     admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
     c.execute("SELECT id FROM users WHERE username = %s", (ADMIN_USERNAME,))
