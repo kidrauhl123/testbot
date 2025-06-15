@@ -14,7 +14,7 @@ from modules.database import (
     get_user_balance, get_user_credit_limit, set_user_balance, set_user_credit_limit, refund_order, 
     create_order_with_deduction_atomic, get_user_recharge_requests, create_recharge_request,
     get_pending_recharge_requests, approve_recharge_request, reject_recharge_request, toggle_seller_admin,
-    get_balance_records
+    get_balance_records, add_product, update_product, delete_product, get_all_products, get_product, set_product_price, get_product_price, get_all_product_prices, delete_product_price
 )
 import modules.constants as constants
 
@@ -699,6 +699,27 @@ def register_routes(app, notification_queue):
         else:
             return jsonify({"error": "更新透支额度失败"}), 500
 
+    @app.route('/admin/api/users/<int:user_id>/tag', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_update_user_tag(user_id):
+        data = request.json
+        tag = data.get('tag')
+        if not tag:
+            return jsonify({'error': '标签不能为空'}), 400
+        execute_query("UPDATE users SET tag = ? WHERE id = ?", (tag, user_id))
+        return jsonify({'success': True})
+
+    @app.route('/admin/api/users/<int:user_id>/tag', methods=['GET'])
+    @login_required
+    @admin_required
+    def admin_get_user_tag(user_id):
+        row = execute_query("SELECT tag FROM users WHERE id = ?", (user_id,), fetch=True)
+        if row:
+            return jsonify({'tag': row[0][0]})
+        else:
+            return jsonify({'error': '用户不存在'}), 404
+
     @app.route('/admin/api/orders')
     @login_required
     @admin_required
@@ -1147,3 +1168,102 @@ def register_routes(app, notification_queue):
                 "success": False,
                 "error": "获取余额明细记录失败，请刷新重试"
             }), 500 
+
+    @app.route('/admin/api/products', methods=['GET'])
+    @login_required
+    @admin_required
+    def admin_api_products():
+        """获取所有商品列表"""
+        products = get_all_products()
+        result = []
+        for p in products:
+            prices = get_all_product_prices(p[0])
+            price_dict = {tag: price for tag, price in prices}
+            result.append({
+                'id': p[0],
+                'name': p[1],
+                'description': p[2],
+                'created_at': p[3],
+                'prices': price_dict
+            })
+        return jsonify(result)
+
+    @app.route('/admin/api/products', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_api_add_product():
+        data = request.json
+        name = data.get('name')
+        description = data.get('description', '')
+        if not name:
+            return jsonify({'error': '商品名不能为空'}), 400
+        pid = add_product(name, description)
+        return jsonify({'success': True, 'id': pid})
+
+    @app.route('/admin/api/products/<int:product_id>', methods=['PUT'])
+    @login_required
+    @admin_required
+    def admin_api_update_product(product_id):
+        data = request.json
+        name = data.get('name')
+        description = data.get('description', '')
+        if not name:
+            return jsonify({'error': '商品名不能为空'}), 400
+        update_product(product_id, name, description)
+        return jsonify({'success': True})
+
+    @app.route('/admin/api/products/<int:product_id>', methods=['DELETE'])
+    @login_required
+    @admin_required
+    def admin_api_delete_product(product_id):
+        delete_product(product_id)
+        return jsonify({'success': True})
+
+    @app.route('/admin/api/products/<int:product_id>/prices', methods=['GET'])
+    @login_required
+    @admin_required
+    def admin_api_get_product_prices(product_id):
+        prices = get_all_product_prices(product_id)
+        return jsonify({tag: price for tag, price in prices})
+
+    @app.route('/admin/api/products/<int:product_id>/prices', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_api_set_product_price(product_id):
+        data = request.json
+        tag = data.get('tag')
+        price = data.get('price')
+        if not tag or price is None:
+            return jsonify({'error': '标签和价格不能为空'}), 400
+        try:
+            price = float(price)
+        except Exception:
+            return jsonify({'error': '价格必须为数字'}), 400
+        set_product_price(product_id, tag, price)
+        return jsonify({'success': True})
+
+    @app.route('/admin/api/products/<int:product_id>/prices/<tag>', methods=['DELETE'])
+    @login_required
+    @admin_required
+    def admin_api_delete_product_price(product_id, tag):
+        delete_product_price(product_id, tag)
+        return jsonify({'success': True})
+
+    @app.route('/api/products', methods=['GET'])
+    @login_required
+    def api_products():
+        user_id = session.get('user_id')
+        row = execute_query("SELECT tag FROM users WHERE id = ?", (user_id,), fetch=True)
+        tag = row[0][0] if row else 'v1'
+        products = get_all_products()
+        result = []
+        for p in products:
+            price = get_product_price(p[0], tag)
+            result.append({
+                'id': p[0],
+                'name': p[1],
+                'description': p[2],
+                'created_at': p[3],
+                'price': price
+            })
+        return jsonify(result) 

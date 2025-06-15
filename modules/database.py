@@ -127,7 +127,8 @@ def init_sqlite_db():
             created_at TEXT NOT NULL,
             last_login TEXT,
             balance REAL DEFAULT 0,
-            credit_limit REAL DEFAULT 0
+            credit_limit REAL DEFAULT 0,
+            tag TEXT DEFAULT 'v1'
         )
     """)
     
@@ -181,6 +182,11 @@ def init_sqlite_db():
         logger.info("为users表添加credit_limit列")
         c.execute("ALTER TABLE users ADD COLUMN credit_limit REAL DEFAULT 0")
     
+    # 检查是否需要添加tag字段（用户标签）
+    if 'tag' not in users_columns:
+        logger.info("为users表添加tag列")
+        c.execute("ALTER TABLE users ADD COLUMN tag TEXT DEFAULT 'v1'")
+    
     # 检查recharge_requests表中是否需要添加新列
     try:
         c.execute("PRAGMA table_info(recharge_requests)")
@@ -201,6 +207,27 @@ def init_sqlite_db():
             INSERT INTO users (username, password_hash, is_admin, created_at) 
             VALUES (?, ?, 1, ?)
         """, (ADMIN_USERNAME, admin_hash, get_china_time()))
+    
+    # 新增商品表
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    # 新增商品价格表（支持多标签）
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS product_prices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            tag TEXT NOT NULL,
+            price REAL NOT NULL,
+            FOREIGN KEY(product_id) REFERENCES products(id)
+        )
+    """)
     
     conn.commit()
     conn.close()
@@ -257,7 +284,8 @@ def init_postgres_db():
             created_at TEXT NOT NULL,
             last_login TEXT,
             balance REAL DEFAULT 0,
-            credit_limit REAL DEFAULT 0
+            credit_limit REAL DEFAULT 0,
+            tag TEXT DEFAULT 'v1'
         )
     """)
     
@@ -333,6 +361,34 @@ def init_postgres_db():
             INSERT INTO users (username, password_hash, is_admin, created_at) 
             VALUES (%s, %s, 1, %s)
         """, (ADMIN_USERNAME, admin_hash, get_china_time()))
+    
+    # 商品表
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS products (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    # 商品价格表（多标签）
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS product_prices (
+            id SERIAL PRIMARY KEY,
+            product_id INTEGER NOT NULL,
+            tag TEXT NOT NULL,
+            price REAL NOT NULL,
+            FOREIGN KEY(product_id) REFERENCES products(id)
+        )
+    """)
+    
+    # 检查是否需要添加tag字段（用户标签）
+    try:
+        c.execute("SELECT tag FROM users LIMIT 1")
+    except Exception:
+        logger.info("为users表添加tag列")
+        c.execute("ALTER TABLE users ADD COLUMN tag TEXT DEFAULT 'v1'")
     
     conn.close()
 
@@ -1460,4 +1516,44 @@ def reject_recharge_request(request_id, admin_id):
         return True, "已拒绝充值请求"
     except Exception as e:
         logger.error(f"拒绝充值请求失败: {str(e)}", exc_info=True)
-        return False, f"拒绝充值请求失败: {str(e)}" 
+        return False, f"拒绝充值请求失败: {str(e)}"
+
+def add_product(name, description):
+    created_at = get_china_time()
+    query = "INSERT INTO products (name, description, created_at) VALUES (?, ?, ?)"
+    product_id = execute_query(query, (name, description, created_at), fetch=False, return_cursor=True).lastrowid
+    return product_id
+
+def update_product(product_id, name, description):
+    query = "UPDATE products SET name = ?, description = ? WHERE id = ?"
+    execute_query(query, (name, description, product_id))
+
+def delete_product(product_id):
+    execute_query("DELETE FROM products WHERE id = ?", (product_id,))
+    execute_query("DELETE FROM product_prices WHERE product_id = ?", (product_id,))
+
+def get_all_products():
+    return execute_query("SELECT id, name, description, created_at FROM products ORDER BY id DESC", fetch=True)
+
+def get_product(product_id):
+    return execute_query("SELECT id, name, description, created_at FROM products WHERE id = ?", (product_id,), fetch=True)
+
+# 商品价格相关
+
+def set_product_price(product_id, tag, price):
+    # 先查有无记录
+    row = execute_query("SELECT id FROM product_prices WHERE product_id = ? AND tag = ?", (product_id, tag), fetch=True)
+    if row:
+        execute_query("UPDATE product_prices SET price = ? WHERE product_id = ? AND tag = ?", (price, product_id, tag))
+    else:
+        execute_query("INSERT INTO product_prices (product_id, tag, price) VALUES (?, ?, ?)", (product_id, tag, price))
+
+def get_product_price(product_id, tag):
+    row = execute_query("SELECT price FROM product_prices WHERE product_id = ? AND tag = ?", (product_id, tag), fetch=True)
+    return row[0][0] if row else None
+
+def get_all_product_prices(product_id):
+    return execute_query("SELECT tag, price FROM product_prices WHERE product_id = ?", (product_id,), fetch=True)
+
+def delete_product_price(product_id, tag):
+    execute_query("DELETE FROM product_prices WHERE product_id = ? AND tag = ?", (product_id, tag)) 
