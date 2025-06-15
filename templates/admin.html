@@ -2061,13 +2061,8 @@
             <td>${user.username}</td>
             <td style="min-width:110px;">${createdAt}</td>
             <td style="min-width:110px;">${lastLogin}</td>
-            <td style="min-width:180px;">
-              <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
-                <input type="number" id="edit-balance-input-${user.id}" value="${user.balance}" style="width:70px;">
-                <input type="text" id="edit-balance-delta-${user.id}" placeholder="+/-金额" style="width:60px;">
-                <button class="btn btn-sm btn-secondary" style="padding:2px 8px;" onclick="applyBalanceDelta(${user.id})">应用</button>
-                <span>元</span>
-              </div>
+            <td style="min-width:120px;">
+              <input type="number" id="edit-balance-input-${user.id}" value="${user.balance}" style="width:80px;"> 元
             </td>
             <td style="min-width:100px;"><input type="number" id="edit-credit-input-${user.id}" value="${user.credit_limit}" style="width:70px;"> 元</td>
             <td style="min-width:80px;">${user.today_consumption ? user.today_consumption.toFixed(2) : '0.00'} 元</td>
