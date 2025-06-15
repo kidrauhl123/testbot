@@ -5,27 +5,14 @@ import hashlib
 import logging
 import psycopg2
 from functools import wraps
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from urllib.parse import urlparse
 import pytz
 
-# 从 'modules.constants' 导入 STATUS
-from modules.constants import STATUS
-
-# 从环境变量中直接获取配置
-try:
-    DATABASE_URL = os.environ['DATABASE_URL']
-except KeyError:
-    raise RuntimeError("错误: 环境变量 DATABASE_URL 未设置。请在 Railway 的 Variables 中设置该变量。")
-
-ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "password")
+from modules.constants import DATABASE_URL, STATUS, ADMIN_USERNAME, ADMIN_PASSWORD
 
 # 设置日志
 logger = logging.getLogger(__name__)
-
-# 添加关键调试日志，检查环境变量是否正确加载
-logger.warning(f"检测到的 DATABASE_URL 是: '{DATABASE_URL}'")
 
 # 中国时区
 CN_TIMEZONE = pytz.timezone('Asia/Shanghai')
@@ -205,11 +192,11 @@ def init_sqlite_db():
         # Table might not exist yet, will be created by create_recharge_tables()
         pass
     
-    # 只有当不存在任何管理员时，才创建超级管理员账号
-    c.execute("SELECT id FROM users WHERE is_admin = 1")
+    # 创建超级管理员账号（如果不存在）
+    admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
+    c.execute("SELECT id FROM users WHERE username = ?", (ADMIN_USERNAME,))
     if not c.fetchone():
-        logger.info(f"未找到管理员, 正在创建默认管理员: {ADMIN_USERNAME}")
-        admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
+        logger.info(f"创建默认管理员账号: {ADMIN_USERNAME}")
         c.execute("""
             INSERT INTO users (username, password_hash, is_admin, created_at) 
             VALUES (?, ?, 1, ?)
@@ -338,26 +325,10 @@ def init_postgres_db():
         # Table might not exist yet
         pass
     
-    # 余额明细表
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS balance_records (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER NOT NULL,
-            amount REAL NOT NULL,
-            type TEXT NOT NULL,
-            reason TEXT NOT NULL,
-            reference_id INTEGER,
-            balance_after REAL NOT NULL,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-    """)
-
-    # 只有当不存在任何管理员时，才创建超级管理员账号
-    c.execute("SELECT id FROM users WHERE is_admin = 1")
+    # 创建超级管理员账号（如果不存在）
+    admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
+    c.execute("SELECT id FROM users WHERE username = %s", (ADMIN_USERNAME,))
     if not c.fetchone():
-        logger.info(f"未找到管理员, 正在创建默认管理员: {ADMIN_USERNAME}")
-        admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
         c.execute("""
             INSERT INTO users (username, password_hash, is_admin, created_at) 
             VALUES (%s, %s, 1, %s)
