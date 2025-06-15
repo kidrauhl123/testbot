@@ -13,7 +13,8 @@ from modules.database import (
     execute_query, hash_password, get_all_sellers, add_seller, remove_seller, toggle_seller_status,
     get_user_balance, get_user_credit_limit, set_user_balance, set_user_credit_limit, refund_order, 
     create_order_with_deduction_atomic, get_user_recharge_requests, create_recharge_request,
-    get_pending_recharge_requests, approve_recharge_request, reject_recharge_request, toggle_seller_admin
+    get_pending_recharge_requests, approve_recharge_request, reject_recharge_request, toggle_seller_admin,
+    get_balance_records
 )
 import modules.constants as constants
 
@@ -1114,4 +1115,35 @@ def register_routes(app, notification_queue):
         if success:
             return jsonify({"success": True, "message": message})
         else:
-            return jsonify({"success": False, "error": message}), 400 
+            return jsonify({"success": False, "error": message}), 400
+
+    @app.route('/api/balance/records')
+    @login_required
+    def api_balance_records():
+        """获取用户余额明细记录"""
+        try:
+            limit = int(request.args.get('limit', 50))
+            offset = int(request.args.get('offset', 0))
+            user_id = session.get('user_id')
+            is_admin = session.get('is_admin', False)
+            
+            # 如果是管理员，可以查看指定用户的记录或所有用户的记录
+            view_user_id = None
+            if is_admin and 'user_id' in request.args:
+                view_user_id = int(request.args.get('user_id'))
+            elif not is_admin:
+                view_user_id = user_id  # 普通用户只能查看自己的记录
+            
+            # 获取余额明细记录
+            records = get_balance_records(view_user_id, limit, offset)
+            
+            return jsonify({
+                "success": True,
+                "records": records
+            })
+        except Exception as e:
+            logger.error(f"获取余额明细记录失败: {str(e)}", exc_info=True)
+            return jsonify({
+                "success": False,
+                "error": "获取余额明细记录失败，请刷新重试"
+            }), 500 

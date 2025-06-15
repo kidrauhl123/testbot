@@ -829,26 +829,48 @@
     const transactionTbody = document.getElementById('transaction-tbody');
     
     try {
-      // 目前显示一些模拟数据
-      // 实际项目中应该从API获取真实数据
-      const mockTransactions = [
-        { id: 1001, type: '充值', amount: '+100.00', balance: '100.00', time: '2023-06-01 13:22:45', description: '用户充值' },
-        { id: 1002, type: '消费', amount: '-12.00', balance: '88.00', time: '2023-06-02 09:15:30', description: '订单 #12345' },
-        { id: 1003, type: '消费', amount: '-18.00', balance: '70.00', time: '2023-06-05 14:33:21', description: '订单 #12346' },
-        { id: 1004, type: '退款', amount: '+12.00', balance: '82.00', time: '2023-06-07 11:05:18', description: '订单 #12345 退款' }
-      ];
+      // 从API获取余额明细
+      const response = await fetch('/api/balance/records?limit=50');
+      
+      if (!response.ok) {
+        throw new Error(`获取余额明细失败: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || '获取余额明细失败');
+      }
+      
+      const records = data.records;
+      
+      if (!records || records.length === 0) {
+        transactionTbody.innerHTML = '<tr><td colspan="6" class="no-data">暂无余额变动记录</td></tr>';
+        return;
+      }
       
       let html = '';
-      mockTransactions.forEach(tx => {
-        const isPositive = tx.amount.startsWith('+');
+      records.forEach(record => {
+        // 类型显示转换
+        const typeMap = {
+          'recharge': '充值',
+          'consume': '消费',
+          'refund': '退款'
+        };
+        
+        // 根据类型设置样式
+        const isPositive = record.amount > 0;
+        const typeDisplay = typeMap[record.type] || record.type;
+        const amount = isPositive ? `+${record.amount}` : record.amount;
+        
         html += `
           <tr>
-            <td>${tx.id}</td>
-            <td>${tx.type}</td>
-            <td class="${isPositive ? 'text-success' : 'text-danger'}">${tx.amount}</td>
-            <td>${tx.balance}</td>
-            <td>${tx.time}</td>
-            <td>${tx.description}</td>
+            <td>${record.id}</td>
+            <td>${typeDisplay}</td>
+            <td class="${isPositive ? 'text-success' : 'text-danger'}">${amount}</td>
+            <td>${record.balance_after}</td>
+            <td>${record.created_at}</td>
+            <td>${record.reason}</td>
           </tr>
         `;
       });
@@ -856,7 +878,7 @@
       transactionTbody.innerHTML = html;
     } catch (error) {
       console.error('加载余额明细失败:', error);
-      transactionTbody.innerHTML = '<tr><td colspan="6" class="error">加载失败，请刷新重试</td></tr>';
+      transactionTbody.innerHTML = '<tr><td colspan="6" class="error">加载失败，请刷新重试: ' + error.message + '</td></tr>';
     }
   }
 </script>

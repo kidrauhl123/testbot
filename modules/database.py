@@ -737,6 +737,122 @@ def set_user_credit_limit(user_id, credit_limit):
     execute_query("UPDATE users SET credit_limit=? WHERE id=?", (credit_limit, user_id))
     return True, credit_limit
 
+def add_balance_record(user_id, amount, type_name, reason, reference_id=None, balance_after=None):
+    """
+    添加余额变动记录
+    
+    参数:
+    - user_id: 用户ID
+    - amount: 变动金额（正数表示收入，负数表示支出）
+    - type_name: 类型（'recharge'-充值, 'consume'-消费, 'refund'-退款）
+    - reason: 原因描述
+    - reference_id: 关联的ID（如订单ID或充值请求ID）
+    - balance_after: 变动后余额，如果不提供会自动获取当前余额
+    
+    返回:
+    - 记录ID
+    """
+    try:
+        # 如果未提供变动后余额，则获取当前余额
+        if balance_after is None:
+            balance_after = get_user_balance(user_id)
+            
+        now = get_china_time()
+        
+        # 添加记录
+        if DATABASE_URL.startswith('postgres'):
+            result = execute_query("""
+                INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (user_id, amount, type_name, reason, reference_id, balance_after, now), fetch=True)
+            return result[0][0]
+        else:
+            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (user_id, amount, type_name, reason, reference_id, balance_after, now))
+            record_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            return record_id
+    except Exception as e:
+        logger.error(f"添加余额变动记录失败: {str(e)}", exc_info=True)
+        return None
+
+def get_balance_records(user_id=None, limit=50, offset=0):
+    """
+    获取余额变动记录
+    
+    参数:
+    - user_id: 用户ID，如果不提供则获取所有用户的记录（仅限管理员）
+    - limit: 最大记录数
+    - offset: 偏移量
+    
+    返回:
+    - 记录列表
+    """
+    try:
+        if user_id:
+            if DATABASE_URL.startswith('postgres'):
+                records = execute_query("""
+                    SELECT br.id, br.user_id, u.username, br.amount, br.type, br.reason, br.reference_id, br.balance_after, br.created_at
+                    FROM balance_records br
+                    JOIN users u ON br.user_id = u.id
+                    WHERE br.user_id = %s
+                    ORDER BY br.id DESC
+                    LIMIT %s OFFSET %s
+                """, (user_id, limit, offset), fetch=True)
+            else:
+                records = execute_query("""
+                    SELECT br.id, br.user_id, u.username, br.amount, br.type, br.reason, br.reference_id, br.balance_after, br.created_at
+                    FROM balance_records br
+                    JOIN users u ON br.user_id = u.id
+                    WHERE br.user_id = ?
+                    ORDER BY br.id DESC
+                    LIMIT ? OFFSET ?
+                """, (user_id, limit, offset), fetch=True)
+        else:
+            # 管理员查看所有记录
+            if DATABASE_URL.startswith('postgres'):
+                records = execute_query("""
+                    SELECT br.id, br.user_id, u.username, br.amount, br.type, br.reason, br.reference_id, br.balance_after, br.created_at
+                    FROM balance_records br
+                    JOIN users u ON br.user_id = u.id
+                    ORDER BY br.id DESC
+                    LIMIT %s OFFSET %s
+                """, (limit, offset), fetch=True)
+            else:
+                records = execute_query("""
+                    SELECT br.id, br.user_id, u.username, br.amount, br.type, br.reason, br.reference_id, br.balance_after, br.created_at
+                    FROM balance_records br
+                    JOIN users u ON br.user_id = u.id
+                    ORDER BY br.id DESC
+                    LIMIT ? OFFSET ?
+                """, (limit, offset), fetch=True)
+        
+        # 格式化记录
+        formatted_records = []
+        for record in records:
+            formatted_records.append({
+                'id': record[0],
+                'user_id': record[1],
+                'username': record[2],
+                'amount': record[3],
+                'type': record[4],
+                'reason': record[5],
+                'reference_id': record[6],
+                'balance_after': record[7],
+                'created_at': record[8]
+            })
+        
+        return formatted_records
+    except Exception as e:
+        logger.error(f"获取余额变动记录失败: {str(e)}", exc_info=True)
+        return []
+
 def update_user_balance(user_id, amount):
     """更新用户余额（增加或减少）"""
     # 获取当前余额
@@ -752,15 +868,35 @@ def update_user_balance(user_id, amount):
     
     # 更新余额
     execute_query("UPDATE users SET balance=? WHERE id=?", (new_balance, user_id))
+    
+    # 记录余额变动
+    type_name = 'recharge' if amount > 0 else 'consume'
+    reason = '手动调整余额' if amount > 0 else '消费'
+    add_balance_record(user_id, amount, type_name, reason, None, new_balance)
+    
     return True, new_balance
 
 def set_user_balance(user_id, balance):
     """设置用户余额（仅限管理员使用）"""
+    # 获取当前余额
+    current_balance = get_user_balance(user_id)
+    
+    # 计算变动金额
+    change_amount = balance - current_balance
+    
     # 确保余额不为负
     if balance < 0:
         balance = 0
+        change_amount = -current_balance
     
+    # 更新余额
     execute_query("UPDATE users SET balance=? WHERE id=?", (balance, user_id))
+    
+    # 记录余额变动
+    if change_amount != 0:
+        type_name = 'recharge' if change_amount > 0 else 'consume'
+        add_balance_record(user_id, change_amount, type_name, '管理员调整余额', None, balance)
+    
     return True, balance
 
 def check_balance_for_package(user_id, package):
@@ -825,6 +961,9 @@ def refund_order(order_id):
     # 标记订单为已退款
     execute_query("UPDATE orders SET refunded=1 WHERE id=?", (order_id,))
     
+    # 记录余额变动
+    add_balance_record(user_id, price, 'refund', f'订单退款: #{order_id}', order_id, new_balance)
+    
     logger.info(f"订单退款成功: ID={order_id}, 用户ID={user_id}, 金额={price}, 新余额={new_balance}")
     return True, new_balance
 
@@ -871,6 +1010,9 @@ def create_order_with_deduction_atomic(account, password, package, remark, usern
                 
                 new_balance = balance - price
                 c.execute("UPDATE users SET balance = %s WHERE id = %s", (new_balance, user_id))
+                
+                # 记录余额变动
+                add_balance_record(user_id, -price, 'consume', f'创建订单: 套餐{package}个月', None, new_balance)
 
             return True, "订单创建成功", new_balance, credit_limit
         except (Exception, psycopg2.Error) as e:
@@ -904,6 +1046,9 @@ def create_order_with_deduction_atomic(account, password, package, remark, usern
 
                 new_balance = balance - price
                 c.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
+                
+                # 记录余额变动
+                add_balance_record(user_id, -price, 'consume', f'创建订单: 套餐{package}个月', None, new_balance)
 
             return True, "订单创建成功", new_balance, credit_limit
         except sqlite3.Error as e:
@@ -915,7 +1060,7 @@ def create_order_with_deduction_atomic(account, password, package, remark, usern
 
 # ===== 充值相关函数 =====
 def create_recharge_tables():
-    """创建充值记录表"""
+    """创建充值记录表和余额明细表"""
     try:
         if DATABASE_URL.startswith('postgres'):
             # 检查表是否存在
@@ -944,6 +1089,31 @@ def create_recharge_tables():
                     )
                 """)
                 logger.info("已创建充值记录表(PostgreSQL)")
+                
+            # 检查余额明细表是否存在
+            balance_table_exists = execute_query("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'balance_records'
+                )
+            """, fetch=True)
+            
+            if not balance_table_exists or not balance_table_exists[0][0]:
+                execute_query("""
+                    CREATE TABLE balance_records (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL,
+                        amount REAL NOT NULL,
+                        type TEXT NOT NULL,
+                        reason TEXT NOT NULL,
+                        reference_id INTEGER,
+                        balance_after REAL NOT NULL,
+                        created_at TEXT NOT NULL,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )
+                """)
+                logger.info("已创建余额明细表(PostgreSQL)")
         else:
             # SQLite连接
             current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -951,7 +1121,7 @@ def create_recharge_tables():
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             
-            # 检查表是否存在
+            # 检查充值表是否存在
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='recharge_requests'")
             if not cursor.fetchone():
                 cursor.execute("""
@@ -971,12 +1141,31 @@ def create_recharge_tables():
                 """)
                 conn.commit()
                 logger.info("已创建充值记录表(SQLite)")
+                
+            # 检查余额明细表是否存在
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='balance_records'")
+            if not cursor.fetchone():
+                cursor.execute("""
+                    CREATE TABLE balance_records (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        amount REAL NOT NULL,
+                        type TEXT NOT NULL,
+                        reason TEXT NOT NULL,
+                        reference_id INTEGER,
+                        balance_after REAL NOT NULL,
+                        created_at TEXT NOT NULL,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )
+                """)
+                conn.commit()
+                logger.info("已创建余额明细表(SQLite)")
             
             conn.close()
         
         return True
     except Exception as e:
-        logger.error(f"创建充值记录表失败: {str(e)}", exc_info=True)
+        logger.error(f"创建充值记录表或余额明细表失败: {str(e)}", exc_info=True)
         return False
 
 def create_recharge_request(user_id, amount, payment_method, proof_image, details=None):
@@ -1109,7 +1298,15 @@ def approve_recharge_request(request_id, admin_id):
                     UPDATE users
                     SET balance = balance + %s
                     WHERE id = %s
+                    RETURNING balance
                 """, (amount, user_id))
+                new_balance = cursor.fetchone()[0]
+                
+                # 记录余额变动
+                cursor.execute("""
+                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (user_id, amount, 'recharge', f'充值: 请求#{request_id}', request_id, new_balance, now))
             else:
                 cursor.execute("""
                     UPDATE recharge_requests
@@ -1123,6 +1320,16 @@ def approve_recharge_request(request_id, admin_id):
                     SET balance = balance + ?
                     WHERE id = ?
                 """, (amount, user_id))
+                
+                # 获取新余额
+                cursor.execute("SELECT balance FROM users WHERE id = ?", (user_id,))
+                new_balance = cursor.fetchone()[0]
+                
+                # 记录余额变动
+                cursor.execute("""
+                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (user_id, amount, 'recharge', f'充值: 请求#{request_id}', request_id, new_balance, now))
             
             # 提交事务
             conn.commit()
