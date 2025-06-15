@@ -5,11 +5,14 @@ import hashlib
 import logging
 import psycopg2
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 import pytz
 
-from modules.constants import DATABASE_URL, STATUS, ADMIN_USERNAME, ADMIN_PASSWORD
+# 从环境变量中直接获取配置
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "password")
 
 # 设置日志
 logger = logging.getLogger(__name__)
@@ -324,7 +327,7 @@ def init_postgres_db():
     except psycopg2.errors.UndefinedTable:
         # Table might not exist yet
         pass
-
+    
     # 余额明细表
     c.execute("""
         CREATE TABLE IF NOT EXISTS balance_records (

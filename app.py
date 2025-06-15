@@ -1,4 +1,5 @@
 import os
+from dotenv import load_dotenv
 import threading
 import logging
 import time
@@ -11,6 +12,9 @@ import traceback
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash
 import sqlite3
 import shutil
+
+# 在所有其他导入之前加载环境变量
+load_dotenv()
 
 # 根据环境变量确定是否为生产环境
 is_production = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('PRODUCTION')
