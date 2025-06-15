@@ -755,7 +755,7 @@ async def on_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text("Please select a time period to view statistics:", reply_markup=reply_markup)
         return
-
+    
     # 新增：管理员all sellers日期选择菜单
     if data == "stats_all_sellers_menu":
         today = datetime.now().date()
@@ -1183,6 +1183,8 @@ async def send_notification_from_queue(data):
             await send_recharge_request_notification(data)
         elif data['type'] == 'dispute':
             await send_dispute_notification(data)
+        elif data['type'] == 'urge':
+            await send_urge_notification(data)
         else:
             logger.warning(f"未知的通知类型: {data['type']}")
     except Exception as e:
@@ -1442,6 +1444,32 @@ async def send_dispute_notification(data):
         logger.info(f"已向卖家 {seller_id} 发送订单质疑通知 #{oid}")
     except Exception as e:
         logger.error(f"发送订单质疑通知时出错: {str(e)}", exc_info=True)
+
+# ===== 催单推送函数 =====
+async def send_urge_notification(data):
+    global bot_application
+    try:
+        seller_id = data.get('seller_id')
+        oid = data.get('order_id')
+        account = data.get('account')
+        package = data.get('package')
+        accepted_at = data.get('accepted_at')
+        message = (
+            f"⏰ <b>Order Urge Reminder</b>\n\n"
+            f"Order ID: <code>{oid}</code>\n"
+            f"Account: <code>{account}</code>\n"
+            f"Package: {package} month(s)\n"
+            f"Accepted At: {accepted_at}\n\n"
+            f"Please process this order as soon as possible!"
+        )
+        await bot_application.bot.send_message(
+            chat_id=seller_id,
+            text=message,
+            parse_mode='HTML'
+        )
+        logger.info(f"Urge notification sent to seller {seller_id} for order {oid}")
+    except Exception as e:
+        logger.error(f"Failed to send urge notification: {str(e)}", exc_info=True)
 
 # ===== 主函数 =====
 def run_bot(notification_queue):

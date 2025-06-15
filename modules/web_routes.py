@@ -605,7 +605,7 @@ def register_routes(app, notification_queue):
         """获取所有用户列表（仅限管理员）"""
         # 获取所有用户基础信息
         users = execute_query("""
-            SELECT id, username, password, is_admin, created_at, last_login, balance, credit_limit 
+            SELECT id, username, is_admin, created_at, last_login, balance, credit_limit 
             FROM users ORDER BY created_at DESC
         """, fetch=True)
         
@@ -617,7 +617,6 @@ def register_routes(app, notification_queue):
         for user in users:
             user_id = user[0]
             username = user[1]
-            password = user[2]
             
             # 查询该用户今日已完成订单的消费总额
             today_orders = execute_query("""
@@ -636,12 +635,11 @@ def register_routes(app, notification_queue):
             user_data.append({
                 "id": user_id,
                 "username": username,
-                "password": password,
-                "is_admin": bool(user[3]),
-                "created_at": user[4],
-                "last_login": user[5],
-                "balance": user[6] if len(user) > 6 else 0,
-                "credit_limit": user[7] if len(user) > 7 else 0,
+                "is_admin": bool(user[2]),
+                "created_at": user[3],
+                "last_login": user[4],
+                "balance": user[5] if len(user) > 5 else 0,
+                "credit_limit": user[6] if len(user) > 6 else 0,
                 "today_consumption": today_consumption
             })
         

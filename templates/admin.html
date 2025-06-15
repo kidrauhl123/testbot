@@ -462,7 +462,6 @@
             <tr>
               <th>ID</th>
               <th>用户名</th>
-              <th>密码</th>
               <th>注册时间</th>
               <th>最后登录</th>
               <th>余额</th>
@@ -825,7 +824,6 @@
         tr.innerHTML = `
           <td>${user.id}</td>
           <td>${user.username}</td>
-          <td>${escapeHtml(user.password)}</td>
           <td>${createdAt}</td>
           <td>${lastLogin}</td>
           <td class="user-balance">${user.balance ? user.balance.toFixed(2) : '0.00'} 元</td>
