@@ -24,6 +24,51 @@ def get_china_time():
     china_now = utc_now.astimezone(CN_TIMEZONE)
     return china_now.strftime("%Y-%m-%d %H:%M:%S")
 
+def add_balance_record(user_id, amount, type_name, reason, reference_id=None, balance_after=None):
+    """
+    添加余额变动记录
+    
+    参数:
+    - user_id: 用户ID
+    - amount: 变动金额（正数表示收入，负数表示支出）
+    - type_name: 类型（'recharge'-充值, 'consume'-消费, 'refund'-退款）
+    - reason: 原因描述
+    - reference_id: 关联的ID（如订单ID或充值请求ID）
+    - balance_after: 变动后余额，如果不提供会自动获取当前余额
+    
+    返回:
+    - 记录ID
+    """
+    try:
+        # 如果未提供变动后余额，则获取当前余额
+        if balance_after is None:
+            balance_after = get_user_balance(user_id)
+            
+        now = get_china_time()
+        
+        # 添加记录
+        if DATABASE_URL.startswith('postgres'):
+            result = execute_query("""
+                INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (user_id, amount, type_name, reason, reference_id, balance_after, now), fetch=True)
+            return result[0][0]
+        else:
+            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (user_id, amount, type_name, reason, reference_id, balance_after, now))
+            record_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            return record_id
+    except Exception as e:
+        logger.error(f"添加余额变动记录失败: {str(e)}", exc_info=True)
+        return None
+
 # ===== 数据库 =====
 def init_db():
     """根据环境配置初始化数据库"""
@@ -737,51 +782,6 @@ def set_user_credit_limit(user_id, credit_limit):
     execute_query("UPDATE users SET credit_limit=? WHERE id=?", (credit_limit, user_id))
     return True, credit_limit
 
-def add_balance_record(user_id, amount, type_name, reason, reference_id=None, balance_after=None):
-    """
-    添加余额变动记录
-    
-    参数:
-    - user_id: 用户ID
-    - amount: 变动金额（正数表示收入，负数表示支出）
-    - type_name: 类型（'recharge'-充值, 'consume'-消费, 'refund'-退款）
-    - reason: 原因描述
-    - reference_id: 关联的ID（如订单ID或充值请求ID）
-    - balance_after: 变动后余额，如果不提供会自动获取当前余额
-    
-    返回:
-    - 记录ID
-    """
-    try:
-        # 如果未提供变动后余额，则获取当前余额
-        if balance_after is None:
-            balance_after = get_user_balance(user_id)
-            
-        now = get_china_time()
-        
-        # 添加记录
-        if DATABASE_URL.startswith('postgres'):
-            result = execute_query("""
-                INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-            """, (user_id, amount, type_name, reason, reference_id, balance_after, now), fetch=True)
-            return result[0][0]
-        else:
-            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (user_id, amount, type_name, reason, reference_id, balance_after, now))
-            record_id = cursor.lastrowid
-            conn.commit()
-            conn.close()
-            return record_id
-    except Exception as e:
-        logger.error(f"添加余额变动记录失败: {str(e)}", exc_info=True)
-        return None
-
 def get_balance_records(user_id=None, limit=50, offset=0):
     """
     获取余额变动记录
@@ -866,15 +866,39 @@ def update_user_balance(user_id, amount):
     if new_balance < -credit_limit:
         return False, "余额和透支额度不足"
     
-    # 更新余额
-    execute_query("UPDATE users SET balance=? WHERE id=?", (new_balance, user_id))
+    # 使用事务处理
+    conn = None
+    try:
+        # 使用绝对路径访问数据库
+        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        db_path = os.path.join(current_dir, "orders.db")
+        conn = sqlite3.connect(db_path, timeout=10)
+        
+        with conn:
+            c = conn.cursor()
+            
+            # 更新余额
+            c.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
+            
+            # 记录余额变动
+            type_name = 'recharge' if amount > 0 else 'consume'
+            reason = '手动调整余额' if amount > 0 else '消费'
+            now = get_china_time()
+            
+            c.execute("""
+                INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (user_id, amount, type_name, reason, None, new_balance, now))
+        
+        return True, new_balance
     
-    # 记录余额变动
-    type_name = 'recharge' if amount > 0 else 'consume'
-    reason = '手动调整余额' if amount > 0 else '消费'
-    add_balance_record(user_id, amount, type_name, reason, None, new_balance)
+    except Exception as e:
+        logger.error(f"更新用户余额失败: {str(e)}", exc_info=True)
+        return False, f"更新用户余额失败: {str(e)}"
     
-    return True, new_balance
+    finally:
+        if conn:
+            conn.close()
 
 def set_user_balance(user_id, balance):
     """设置用户余额（仅限管理员使用）"""
@@ -889,15 +913,43 @@ def set_user_balance(user_id, balance):
         balance = 0
         change_amount = -current_balance
     
-    # 更新余额
-    execute_query("UPDATE users SET balance=? WHERE id=?", (balance, user_id))
+    # 如果没有变化，直接返回
+    if change_amount == 0:
+        return True, balance
     
-    # 记录余额变动
-    if change_amount != 0:
-        type_name = 'recharge' if change_amount > 0 else 'consume'
-        add_balance_record(user_id, change_amount, type_name, '管理员调整余额', None, balance)
+    # 使用事务处理
+    conn = None
+    try:
+        # 使用绝对路径访问数据库
+        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        db_path = os.path.join(current_dir, "orders.db")
+        conn = sqlite3.connect(db_path, timeout=10)
+        
+        with conn:
+            c = conn.cursor()
+            
+            # 更新余额
+            c.execute("UPDATE users SET balance = ? WHERE id = ?", (balance, user_id))
+            
+            # 记录余额变动
+            if change_amount != 0:
+                type_name = 'recharge' if change_amount > 0 else 'consume'
+                now = get_china_time()
+                
+                c.execute("""
+                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (user_id, change_amount, type_name, '管理员调整余额', None, balance, now))
+        
+        return True, balance
     
-    return True, balance
+    except Exception as e:
+        logger.error(f"设置用户余额失败: {str(e)}", exc_info=True)
+        return False, f"设置用户余额失败: {str(e)}"
+    
+    finally:
+        if conn:
+            conn.close()
 
 def check_balance_for_package(user_id, package):
     """检查用户余额是否足够购买指定套餐"""
@@ -952,20 +1004,47 @@ def refund_order(order_id):
         logger.warning(f"退款失败: 套餐价格无效 (ID={order_id}, 套餐={package}, 价格={price})")
         return False, "套餐价格无效"
     
-    # 退款到用户余额
-    success, new_balance = update_user_balance(user_id, price)
-    if not success:
-        logger.error(f"退款到用户余额失败: 订单ID={order_id}, 用户ID={user_id}, 金额={price}")
-        return False, "退款到用户余额失败"
+    # 使用事务处理退款
+    conn = None
+    try:
+        # 使用绝对路径访问数据库
+        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        db_path = os.path.join(current_dir, "orders.db")
+        conn = sqlite3.connect(db_path, timeout=10)
+        
+        with conn:
+            c = conn.cursor()
+            
+            # 获取当前余额
+            c.execute("SELECT balance FROM users WHERE id = ?", (user_id,))
+            current_balance = c.fetchone()[0]
+            
+            # 计算新余额
+            new_balance = current_balance + price
+            
+            # 更新用户余额
+            c.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
+            
+            # 标记订单为已退款
+            c.execute("UPDATE orders SET refunded = 1 WHERE id = ?", (order_id,))
+            
+            # 记录余额变动
+            now = get_china_time()
+            c.execute("""
+                INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (user_id, price, 'refund', f'订单退款: #{order_id}', order_id, new_balance, now))
+        
+        logger.info(f"订单退款成功: ID={order_id}, 用户ID={user_id}, 金额={price}, 新余额={new_balance}")
+        return True, new_balance
     
-    # 标记订单为已退款
-    execute_query("UPDATE orders SET refunded=1 WHERE id=?", (order_id,))
+    except Exception as e:
+        logger.error(f"退款到用户余额失败: {str(e)}", exc_info=True)
+        return False, f"退款到用户余额失败: {str(e)}"
     
-    # 记录余额变动
-    add_balance_record(user_id, price, 'refund', f'订单退款: #{order_id}', order_id, new_balance)
-    
-    logger.info(f"订单退款成功: ID={order_id}, 用户ID={user_id}, 金额={price}, 新余额={new_balance}")
-    return True, new_balance
+    finally:
+        if conn:
+            conn.close()
 
 def create_order_with_deduction_atomic(account, password, package, remark, username, user_id):
     """
@@ -1012,7 +1091,10 @@ def create_order_with_deduction_atomic(account, password, package, remark, usern
                 c.execute("UPDATE users SET balance = %s WHERE id = %s", (new_balance, user_id))
                 
                 # 记录余额变动
-                add_balance_record(user_id, -price, 'consume', f'创建订单: 套餐{package}个月', None, new_balance)
+                c.execute("""
+                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (user_id, -price, 'consume', f'创建订单: 套餐{package}个月', None, new_balance, timestamp))
 
             return True, "订单创建成功", new_balance, credit_limit
         except (Exception, psycopg2.Error) as e:
@@ -1025,7 +1107,11 @@ def create_order_with_deduction_atomic(account, password, package, remark, usern
         # SQLite 的事务逻辑
         conn = None
         try:
-            conn = sqlite3.connect("orders.db", timeout=10)
+            # 使用绝对路径访问数据库
+            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(current_dir, "orders.db")
+            conn = sqlite3.connect(db_path, timeout=10)
+            
             with conn:
                 conn.isolation_level = 'EXCLUSIVE'
                 c = conn.cursor()
@@ -1047,16 +1133,19 @@ def create_order_with_deduction_atomic(account, password, package, remark, usern
                 new_balance = balance - price
                 c.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
                 
-                # 记录余额变动
-                add_balance_record(user_id, -price, 'consume', f'创建订单: 套餐{package}个月', None, new_balance)
+                # 记录余额变动直接在事务中执行
+                c.execute("""
+                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (user_id, -price, 'consume', f'创建订单: 套餐{package}个月', None, new_balance, timestamp))
 
             return True, "订单创建成功", new_balance, credit_limit
         except sqlite3.Error as e:
             logger.error(f"创建SQLite订单事务失败: {e}", exc_info=True)
-            return False, "数据库操作失败，订单未创建", None, None
+            return False, f"数据库操作失败，订单未创建: {e}", None, None
         finally:
             if conn:
-                conn.close() 
+                conn.close()
 
 # ===== 充值相关函数 =====
 def create_recharge_tables():
