@@ -9,6 +9,9 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 import pytz
 
+# 从 'modules.constants' 导入 STATUS
+from modules.constants import STATUS
+
 # 从环境变量中直接获取配置
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
