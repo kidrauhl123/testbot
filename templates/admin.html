@@ -445,6 +445,7 @@
       <ul class="sidebar-menu">
         <li><a href="#users" class="active" onclick="showTab('users'); return false;"><i class="fas fa-users"></i> 用户管理</a></li>
         <li><a href="#orders" onclick="showTab('orders'); return false;"><i class="fas fa-file-invoice-dollar"></i> 订单管理</a></li>
+        <li><a href="#products" onclick="showTab('products'); return false;"><i class="fas fa-box"></i> 商品管理</a></li>
         <li><a href="#sellers" onclick="showTab('sellers'); return false;"><i class="fas fa-user-tie"></i> 卖家管理</a></li>
         <li><a href="#balance" onclick="showTab('balance'); return false;"><i class="fas fa-money-bill-wave"></i> 余额明细</a></li>
       </ul>
@@ -467,13 +468,14 @@
               <th>余额</th>
               <th>透支额度</th>
               <th>今日消费</th>
+              <th>标签</th>
               <th>角色</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody id="users-table-body">
               <tr>
-                <td colspan="7" class="loading">加载中...</td>
+                <td colspan="10" class="loading">加载中...</td>
               </tr>
           </tbody>
         </table>
@@ -512,6 +514,33 @@
           </table>
         </div>
         <div class="pagination"></div>
+      </div>
+      
+      <!-- 商品管理 -->
+      <div id="products" class="tab-content">
+        <div class="content-header">
+          <h2><i class="fas fa-box"></i> 商品管理</h2>
+          <div class="header-actions">
+            <button class="btn btn-primary" onclick="showAddProductModal()">添加商品</button>
+          </div>
+        </div>
+        <div class="products-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>商品名</th>
+                <th>描述</th>
+                <th>创建时间</th>
+                <th>价格设置</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="products-table-body">
+              <tr><td colspan="6" class="loading">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
       
       <!-- 卖家管理 -->
@@ -730,6 +759,119 @@
   </div>
 </div>
 
+<!-- 添加商品模态框 -->
+<div class="modal-backdrop" id="add-product-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>添加商品</h3>
+      <button class="modal-close" data-dismiss="modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="add-product-form">
+        <div class="form-group">
+          <label for="new-product-name">商品名</label>
+          <input type="text" id="new-product-name" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label for="new-product-desc">描述</label>
+          <textarea id="new-product-desc" class="form-control"></textarea>
+        </div>
+      </form>
+      <div id="add-product-error" class="error-message" style="display:none;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
+      <button class="btn btn-primary" onclick="addProduct()">添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 编辑商品模态框 -->
+<div class="modal-backdrop" id="edit-product-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>编辑商品</h3>
+      <button class="modal-close" data-dismiss="modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="edit-product-form">
+        <input type="hidden" id="edit-product-id">
+        <div class="form-group">
+          <label for="edit-product-name">商品名</label>
+          <input type="text" id="edit-product-name" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label for="edit-product-desc">描述</label>
+          <textarea id="edit-product-desc" class="form-control"></textarea>
+        </div>
+      </form>
+      <div id="edit-product-error" class="error-message" style="display:none;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
+      <button class="btn btn-primary" onclick="saveProductEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 设置价格模态框 -->
+<div class="modal-backdrop" id="set-price-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>设置商品价格</h3>
+      <button class="modal-close" data-dismiss="modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="set-price-form">
+        <input type="hidden" id="set-price-product-id">
+        <div class="form-group">
+          <label for="set-price-tag">标签</label>
+          <input type="text" id="set-price-tag" class="form-control" placeholder="如 v1、v2" required>
+        </div>
+        <div class="form-group">
+          <label for="set-price-value">价格</label>
+          <input type="number" id="set-price-value" class="form-control" step="0.01" min="0" required>
+        </div>
+      </form>
+      <div id="set-price-error" class="error-message" style="display:none;"></div>
+      <div id="price-list-container"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
+      <button class="btn btn-primary" onclick="saveProductPrice()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 修改用户标签模态框 -->
+<div class="modal-backdrop" id="edit-user-tag-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>修改用户标签</h3>
+      <button class="modal-close" data-dismiss="modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="edit-user-tag-form">
+        <input type="hidden" id="edit-user-tag-user-id">
+        <div class="form-group">
+          <label for="edit-user-tag-value">标签</label>
+          <select id="edit-user-tag-value" class="form-control">
+            <option value="v1">v1</option>
+            <option value="v2">v2</option>
+            <option value="vip">vip</option>
+            <option value="test">test</option>
+          </select>
+        </div>
+      </form>
+      <div id="edit-user-tag-error" class="error-message" style="display:none;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
+      <button class="btn btn-primary" onclick="saveUserTag()">保存</button>
+    </div>
+  </div>
+</div>
+
 <script>
   // 显示指定标签页
   function showTab(tabId) {
@@ -760,6 +902,10 @@
       populateUserFilter();
       balanceDataLoaded = true;
     }
+    else if (tabId === 'products' && !productDataLoaded) {
+      loadProducts();
+      productDataLoaded = true;
+    }
   }
   
   // 全局变量
@@ -767,6 +913,7 @@
   let orderDataLoaded = false;
   let sellerDataLoaded = false;
   let balanceDataLoaded = false;
+  let productDataLoaded = false;
   let allUsers = []; // 存储所有用户数据
 
   // 转义HTML
@@ -795,12 +942,12 @@
         return;
       }
       
-      tbody.innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" class="loading">加载中...</td></tr>';
       
       const resp = await fetch('/admin/api/users');
       if (!resp.ok) {
         console.error("加载用户数据失败:", resp.status, resp.statusText);
-        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="loading">加载失败，请刷新重试</td></tr>';
         return;
       }
       
@@ -810,7 +957,7 @@
     tbody.innerHTML = '';
       
       if (users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="loading">暂无用户数据</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="loading">暂无用户数据</td></tr>';
         return;
       }
       
@@ -829,6 +976,7 @@
           <td class="user-balance">${user.balance ? user.balance.toFixed(2) : '0.00'} 元</td>
           <td class="user-credit">${user.credit_limit ? user.credit_limit.toFixed(2) : '0.00'} 元</td>
           <td class="user-consumption">${user.today_consumption ? user.today_consumption.toFixed(2) : '0.00'} 元</td>
+          <td><span class="badge badge-info">${user.tag || 'v1'}</span> <button class="btn btn-sm btn-primary" onclick="showEditUserTagModal(${user.id}, '${user.tag || 'v1'}')">修改</button></td>
           <td>${user.is_admin ? '<span class="badge badge-warning">管理员</span>' : '<span class="badge badge-secondary">普通用户</span>'}</td>
           <td>
             <button class="btn btn-sm btn-primary" onclick="editUserBalance(${user.id}, '${user.username}', ${user.balance || 0})">
@@ -849,7 +997,7 @@
       console.error('加载用户失败', e);
       const tbody = document.getElementById('users-table-body');
       if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="loading">加载失败，请刷新重试</td></tr>';
       }
     }
   }
@@ -1651,6 +1799,232 @@
       option.textContent = `${user.username} (ID: ${user.id})`;
       selectElement.appendChild(option);
     });
+  }
+
+  // 商品管理Tab相关JS
+  async function loadProducts() {
+    const tbody = document.getElementById('products-table-body');
+    tbody.innerHTML = '<tr><td colspan="6" class="loading">加载中...</td></tr>';
+    try {
+      const resp = await fetch('/admin/api/products');
+      const products = await resp.json();
+      tbody.innerHTML = '';
+      if (products.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="loading">暂无商品</td></tr>';
+        return;
+      }
+      products.forEach(product => {
+        let priceHtml = '';
+        if (product.prices) {
+          for (const tag in product.prices) {
+            priceHtml += `<span class="badge badge-info">${tag}: ${product.prices[tag]}元</span> `;
+          }
+        }
+        tbody.innerHTML += `
+          <tr>
+            <td>${product.id}</td>
+            <td>${escapeHtml(product.name)}</td>
+            <td>${escapeHtml(product.description)}</td>
+            <td>${product.created_at}</td>
+            <td>${priceHtml}<button class="btn btn-sm btn-primary" onclick="showSetPriceModal(${product.id}, '${escapeHtml(product.name)}')">设置价格</button></td>
+            <td>
+              <button class="btn btn-sm btn-warning" onclick="showEditProductModal(${product.id}, '${escapeHtml(product.name)}', '${escapeHtml(product.description)}')">编辑</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteProduct(${product.id})">删除</button>
+            </td>
+          </tr>
+        `;
+      });
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="6" class="loading">加载失败</td></tr>';
+    }
+  }
+
+  function showAddProductModal() {
+    document.getElementById('add-product-form').reset();
+    document.getElementById('add-product-error').style.display = 'none';
+    openModal('add-product-modal');
+  }
+
+  async function addProduct() {
+    const name = document.getElementById('new-product-name').value.trim();
+    const desc = document.getElementById('new-product-desc').value.trim();
+    if (!name) {
+      document.getElementById('add-product-error').textContent = '商品名不能为空';
+      document.getElementById('add-product-error').style.display = 'block';
+      return;
+    }
+    try {
+      const resp = await fetch('/admin/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description: desc })
+      });
+      const result = await resp.json();
+      if (result.success) {
+        closeModal('add-product-modal');
+        loadProducts();
+      } else {
+        document.getElementById('add-product-error').textContent = result.error || '添加失败';
+        document.getElementById('add-product-error').style.display = 'block';
+      }
+    } catch (e) {
+      document.getElementById('add-product-error').textContent = '请求失败';
+      document.getElementById('add-product-error').style.display = 'block';
+    }
+  }
+
+  function showEditProductModal(id, name, desc) {
+    document.getElementById('edit-product-id').value = id;
+    document.getElementById('edit-product-name').value = name;
+    document.getElementById('edit-product-desc').value = desc;
+    document.getElementById('edit-product-error').style.display = 'none';
+    openModal('edit-product-modal');
+  }
+
+  async function saveProductEdit() {
+    const id = document.getElementById('edit-product-id').value;
+    const name = document.getElementById('edit-product-name').value.trim();
+    const desc = document.getElementById('edit-product-desc').value.trim();
+    if (!name) {
+      document.getElementById('edit-product-error').textContent = '商品名不能为空';
+      document.getElementById('edit-product-error').style.display = 'block';
+      return;
+    }
+    try {
+      const resp = await fetch(`/admin/api/products/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description: desc })
+      });
+      const result = await resp.json();
+      if (result.success) {
+        closeModal('edit-product-modal');
+        loadProducts();
+      } else {
+        document.getElementById('edit-product-error').textContent = result.error || '保存失败';
+        document.getElementById('edit-product-error').style.display = 'block';
+      }
+    } catch (e) {
+      document.getElementById('edit-product-error').textContent = '请求失败';
+      document.getElementById('edit-product-error').style.display = 'block';
+    }
+  }
+
+  async function deleteProduct(id) {
+    if (!confirm('确定要删除该商品吗？')) return;
+    try {
+      const resp = await fetch(`/admin/api/products/${id}`, { method: 'DELETE' });
+      const result = await resp.json();
+      if (result.success) {
+        loadProducts();
+      } else {
+        alert(result.error || '删除失败');
+      }
+    } catch (e) {
+      alert('请求失败');
+    }
+  }
+
+  function showSetPriceModal(productId, productName) {
+    document.getElementById('set-price-product-id').value = productId;
+    document.getElementById('set-price-tag').value = '';
+    document.getElementById('set-price-value').value = '';
+    document.getElementById('set-price-error').style.display = 'none';
+    loadProductPrices(productId);
+    openModal('set-price-modal');
+  }
+
+  async function loadProductPrices(productId) {
+    const container = document.getElementById('price-list-container');
+    container.innerHTML = '加载中...';
+    try {
+      const resp = await fetch(`/admin/api/products/${productId}/prices`);
+      const prices = await resp.json();
+      let html = '<div style="margin-bottom:10px;">';
+      for (const tag in prices) {
+        html += `<span class="badge badge-info">${tag}: ${prices[tag]}元</span> <button class="btn btn-sm btn-danger" onclick="deleteProductPrice(${productId}, '${tag}')">删除</button> `;
+      }
+      html += '</div>';
+      container.innerHTML = html;
+    } catch (e) {
+      container.innerHTML = '加载失败';
+    }
+  }
+
+  async function saveProductPrice() {
+    const productId = document.getElementById('set-price-product-id').value;
+    const tag = document.getElementById('set-price-tag').value.trim();
+    const price = document.getElementById('set-price-value').value;
+    if (!tag || !price) {
+      document.getElementById('set-price-error').textContent = '标签和价格不能为空';
+      document.getElementById('set-price-error').style.display = 'block';
+      return;
+    }
+    try {
+      const resp = await fetch(`/admin/api/products/${productId}/prices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tag, price })
+      });
+      const result = await resp.json();
+      if (result.success) {
+        loadProductPrices(productId);
+        document.getElementById('set-price-tag').value = '';
+        document.getElementById('set-price-value').value = '';
+      } else {
+        document.getElementById('set-price-error').textContent = result.error || '保存失败';
+        document.getElementById('set-price-error').style.display = 'block';
+      }
+    } catch (e) {
+      document.getElementById('set-price-error').textContent = '请求失败';
+      document.getElementById('set-price-error').style.display = 'block';
+    }
+  }
+
+  async function deleteProductPrice(productId, tag) {
+    if (!confirm('确定要删除该标签价格吗？')) return;
+    try {
+      const resp = await fetch(`/admin/api/products/${productId}/prices/${tag}`, { method: 'DELETE' });
+      const result = await resp.json();
+      if (result.success) {
+        loadProductPrices(productId);
+      } else {
+        alert(result.error || '删除失败');
+      }
+    } catch (e) {
+      alert('请求失败');
+    }
+  }
+
+  // 用户标签管理相关
+  function showEditUserTagModal(userId, currentTag) {
+    document.getElementById('edit-user-tag-user-id').value = userId;
+    document.getElementById('edit-user-tag-value').value = currentTag;
+    document.getElementById('edit-user-tag-error').style.display = 'none';
+    openModal('edit-user-tag-modal');
+  }
+
+  async function saveUserTag() {
+    const userId = document.getElementById('edit-user-tag-user-id').value;
+    const tag = document.getElementById('edit-user-tag-value').value;
+    try {
+      const resp = await fetch(`/admin/api/users/${userId}/tag`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tag })
+      });
+      const result = await resp.json();
+      if (result.success) {
+        closeModal('edit-user-tag-modal');
+        loadUsers();
+      } else {
+        document.getElementById('edit-user-tag-error').textContent = result.error || '保存失败';
+        document.getElementById('edit-user-tag-error').style.display = 'block';
+      }
+    } catch (e) {
+      document.getElementById('edit-user-tag-error').textContent = '请求失败';
+      document.getElementById('edit-user-tag-error').style.display = 'block';
+    }
   }
 </script>
 </body>
