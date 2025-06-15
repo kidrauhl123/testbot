@@ -20,6 +20,9 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "password")
 # 设置日志
 logger = logging.getLogger(__name__)
 
+# 添加关键调试日志，检查环境变量是否正确加载
+logger.warning(f"检测到的 DATABASE_URL 是: '{DATABASE_URL}'")
+
 # 中国时区
 CN_TIMEZONE = pytz.timezone('Asia/Shanghai')
 
