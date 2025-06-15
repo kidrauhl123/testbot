@@ -198,11 +198,11 @@ def init_sqlite_db():
         # Table might not exist yet, will be created by create_recharge_tables()
         pass
     
-    # 创建超级管理员账号（如果不存在）
-    admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
-    c.execute("SELECT id FROM users WHERE username = ?", (ADMIN_USERNAME,))
+    # 只有当不存在任何管理员时，才创建超级管理员账号
+    c.execute("SELECT id FROM users WHERE is_admin = 1")
     if not c.fetchone():
-        logger.info(f"创建默认管理员账号: {ADMIN_USERNAME}")
+        logger.info(f"未找到管理员, 正在创建默认管理员: {ADMIN_USERNAME}")
+        admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
         c.execute("""
             INSERT INTO users (username, password_hash, is_admin, created_at) 
             VALUES (?, ?, 1, ?)
@@ -346,10 +346,11 @@ def init_postgres_db():
         )
     """)
 
-    # 创建超级管理员账号（如果不存在）
-    admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
-    c.execute("SELECT id FROM users WHERE username = %s", (ADMIN_USERNAME,))
+    # 只有当不存在任何管理员时，才创建超级管理员账号
+    c.execute("SELECT id FROM users WHERE is_admin = 1")
     if not c.fetchone():
+        logger.info(f"未找到管理员, 正在创建默认管理员: {ADMIN_USERNAME}")
+        admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
         c.execute("""
             INSERT INTO users (username, password_hash, is_admin, created_at) 
             VALUES (%s, %s, 1, %s)
