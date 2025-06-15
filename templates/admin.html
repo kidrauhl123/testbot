@@ -2031,6 +2031,7 @@
   // 用户管理表格渲染增加行内编辑支持
   let editingUserId = null;
   let originalUserRow = null;
+  let balanceDelta = {};
 
   async function loadUsers() {
     try {
@@ -2054,37 +2055,36 @@
         const createdAt = user.created_at ? new Date(user.created_at).toLocaleString() : '未知';
         const lastLogin = user.last_login ? new Date(user.last_login).toLocaleString() : '未登录';
         if (editingUserId === user.id) {
-          // 编辑模式
           originalUserRow = user;
           tr.innerHTML = `
             <td>${user.id}</td>
             <td>${user.username}</td>
-            <td>${createdAt}</td>
-            <td>${lastLogin}</td>
-            <td>
-              <div style="display:flex;align-items:center;gap:4px;">
-                <button class="btn btn-sm btn-secondary" onclick="changeBalance(${user.id}, 100)">+100</button>
-                <button class="btn btn-sm btn-secondary" onclick="changeBalance(${user.id}, 10)">+10</button>
-                <input type="number" id="edit-balance-input-${user.id}" value="${user.balance}" style="width:80px;">
-                <button class="btn btn-sm btn-secondary" onclick="changeBalance(${user.id}, -10)">-10</button>
-                <button class="btn btn-sm btn-secondary" onclick="changeBalance(${user.id}, -100)">-100</button>
-                元
+            <td style="min-width:110px;">${createdAt}</td>
+            <td style="min-width:110px;">${lastLogin}</td>
+            <td style="min-width:180px;">
+              <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+                <input type="number" id="edit-balance-input-${user.id}" value="${user.balance}" style="width:70px;">
+                <input type="text" id="edit-balance-delta-${user.id}" placeholder="+/-金额" style="width:60px;">
+                <button class="btn btn-sm btn-secondary" style="padding:2px 8px;" onclick="applyBalanceDelta(${user.id})">应用</button>
+                <span>元</span>
               </div>
             </td>
-            <td><input type="number" id="edit-credit-input-${user.id}" value="${user.credit_limit}" style="width:80px;"> 元</td>
-            <td>${user.today_consumption ? user.today_consumption.toFixed(2) : '0.00'} 元</td>
-            <td>
-              <select id="edit-tag-input-${user.id}" class="form-control" style="width:80px;display:inline-block;">
+            <td style="min-width:100px;"><input type="number" id="edit-credit-input-${user.id}" value="${user.credit_limit}" style="width:70px;"> 元</td>
+            <td style="min-width:80px;">${user.today_consumption ? user.today_consumption.toFixed(2) : '0.00'} 元</td>
+            <td style="min-width:90px;">
+              <select id="edit-tag-input-${user.id}" class="form-control" style="width:70px;display:inline-block;">
                 <option value="v1" ${user.tag==='v1'?'selected':''}>v1</option>
                 <option value="v2" ${user.tag==='v2'?'selected':''}>v2</option>
                 <option value="vip" ${user.tag==='vip'?'selected':''}>vip</option>
                 <option value="test" ${user.tag==='test'?'selected':''}>test</option>
               </select>
             </td>
-            <td>${user.is_admin ? '<span class="badge badge-warning">管理员</span>' : '<span class="badge badge-secondary">普通用户</span>'}</td>
-            <td>
-              <button class="btn btn-sm btn-success" onclick="saveUserEdit(${user.id})">保存</button>
-              <button class="btn btn-sm btn-secondary" onclick="cancelUserEdit()">取消</button>
+            <td style="min-width:70px;">${user.is_admin ? '<span class=\"badge badge-warning\">管理员</span>' : '<span class=\"badge badge-secondary\">普通用户</span>'}</td>
+            <td style="min-width:60px;">
+              <div style="display:flex;flex-direction:column;gap:4px;align-items:stretch;">
+                <button class="btn btn-sm btn-success" onclick="saveUserEdit(${user.id})">保存</button>
+                <button class="btn btn-sm btn-secondary" onclick="cancelUserEdit()">取消</button>
+              </div>
             </td>
           `;
         } else {
@@ -2097,10 +2097,8 @@
             <td class="user-credit">${user.credit_limit ? user.credit_limit.toFixed(2) : '0.00'} 元</td>
             <td class="user-consumption">${user.today_consumption ? user.today_consumption.toFixed(2) : '0.00'} 元</td>
             <td><span class="badge badge-info">${user.tag || 'v1'}</span></td>
-            <td>${user.is_admin ? '<span class="badge badge-warning">管理员</span>' : '<span class="badge badge-secondary">普通用户</span>'}</td>
-            <td>
-              <button class="btn btn-sm btn-primary" onclick="editUserRow(${user.id})">编辑</button>
-            </td>
+            <td>${user.is_admin ? '<span class=\"badge badge-warning\">管理员</span>' : '<span class=\"badge badge-secondary\">普通用户</span>'}</td>
+            <td><button class="btn btn-sm btn-primary" onclick="editUserRow(${user.id})">编辑</button></td>
           `;
         }
         tbody.appendChild(tr);
@@ -2118,10 +2116,21 @@
     editingUserId = null;
     loadUsers();
   }
-  function changeBalance(userId, delta) {
+  function applyBalanceDelta(userId) {
     const input = document.getElementById(`edit-balance-input-${userId}`);
-    if (input) {
-      input.value = (parseFloat(input.value) + delta).toFixed(2);
+    const deltaInput = document.getElementById(`edit-balance-delta-${userId}`);
+    if (input && deltaInput) {
+      let delta = parseFloat(deltaInput.value);
+      if (!isNaN(delta)) {
+        input.value = (parseFloat(input.value) + delta).toFixed(2);
+        deltaInput.value = '';
+      } else if (/^[+-]\d+(\.\d+)?$/.test(deltaInput.value)) {
+        delta = parseFloat(deltaInput.value);
+        input.value = (parseFloat(input.value) + delta).toFixed(2);
+        deltaInput.value = '';
+      } else {
+        showToast('请输入有效的加减金额，如+50或-20', 'warning');
+      }
     }
   }
   async function saveUserEdit(userId) {
@@ -2129,22 +2138,18 @@
     const credit = document.getElementById(`edit-credit-input-${userId}`).value;
     const tag = document.getElementById(`edit-tag-input-${userId}`).value;
     try {
-      // 依次提交余额、额度、标签
       let ok = true;
       let msg = '';
-      // 余额
       const resp1 = await fetch(`/admin/api/users/${userId}/balance`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ balance })
       });
       const r1 = await resp1.json();
       if (!r1.success) { ok = false; msg += '余额'; }
-      // 额度
       const resp2 = await fetch(`/admin/api/users/${userId}/credit`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credit_limit: credit })
       });
       const r2 = await resp2.json();
       if (!r2.success) { ok = false; msg += ' 额度'; }
-      // 标签
       const resp3 = await fetch(`/admin/api/users/${userId}/tag`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tag })
       });
