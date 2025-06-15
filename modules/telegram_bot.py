@@ -717,8 +717,7 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 只有超级管理员（ID: 1878943383）可以查看所有人的统计
     if user_id == 1878943383:
         keyboard.append([
-            InlineKeyboardButton("👥 All Sellers Today", callback_data="stats_today_all"),
-            InlineKeyboardButton("👥 All Sellers This Month", callback_data="stats_month_all")
+            InlineKeyboardButton("👥 All Sellers", callback_data="stats_all_sellers_menu")
         ])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -749,17 +748,55 @@ async def on_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("📊 This Month", callback_data="stats_month_personal")
             ]
         ]
-        
-        # 只有超级管理员（ID: 1878943383）可以查看所有人的统计
         if user_id == 1878943383:
             keyboard.append([
-                InlineKeyboardButton("👥 All Sellers Today", callback_data="stats_today_all"),
-                InlineKeyboardButton("👥 All Sellers This Month", callback_data="stats_month_all")
+                InlineKeyboardButton("👥 All Sellers", callback_data="stats_all_sellers_menu")
             ])
-        
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text("Please select a time period to view statistics:", reply_markup=reply_markup)
         return
+
+    # 新增：管理员all sellers日期选择菜单
+    if data == "stats_all_sellers_menu":
+        today = datetime.now().date()
+        yesterday = today - timedelta(days=1)
+        day_before_yesterday = today - timedelta(days=2)
+        start_of_week = today - timedelta(days=today.weekday())
+        start_of_month = today.replace(day=1)
+        keyboard = [
+            [
+                InlineKeyboardButton(f"{day_before_yesterday.strftime('%Y-%m-%d')}", callback_data=f"stats_all_sellers_{day_before_yesterday}"),
+                InlineKeyboardButton(f"{yesterday.strftime('%Y-%m-%d')}", callback_data=f"stats_all_sellers_{yesterday}"),
+                InlineKeyboardButton(f"{today.strftime('%Y-%m-%d')}", callback_data=f"stats_all_sellers_{today}")
+            ],
+            [
+                InlineKeyboardButton("本周", callback_data="stats_all_sellers_week"),
+                InlineKeyboardButton("本月", callback_data="stats_all_sellers_month")
+            ],
+            [
+                InlineKeyboardButton("⬅️ Back", callback_data="stats_back")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text("请选择要统计的日期：", reply_markup=reply_markup)
+        return
+
+    # 新增：管理员all sellers具体日期统计
+    if data.startswith("stats_all_sellers_"):
+        arg = data[len("stats_all_sellers_"):]
+        today = datetime.now().date()
+        start_of_week = today - timedelta(days=today.weekday())
+        start_of_month = today.replace(day=1)
+        if arg == "week":
+            await show_all_stats(query, start_of_week.strftime("%Y-%m-%d"), "This Week")
+            return
+        elif arg == "month":
+            await show_all_stats(query, start_of_month.strftime("%Y-%m-%d"), "This Month")
+            return
+        else:
+            # 具体日期
+            await show_all_stats(query, arg, arg)
+            return
     
     today = datetime.now().date()
     
