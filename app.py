@@ -128,38 +128,45 @@ def handle_exception(e):
     traceback.print_exc()
     return jsonify({"error": str(e)}), 500
 
-# ===== 主程序 =====
-if __name__ == "__main__":
-    # 在启动前先尝试清理可能存在的锁文件和目录
-    cleanup_resources()
-            
-    # 使用锁目录确保只有一个实例运行
-    try:
-        os.mkdir(lock_dir)
-        logger.info("成功获取锁，启动主程序。")
-    except FileExistsError:
-        logger.error("锁目录已存在，另一个实例可能正在运行。程序退出。")
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"创建锁目录时发生未知错误: {e}")
-        sys.exit(1)
+# ===== 应用初始化 =====
+# 将初始化代码移出 if __name__ == "__main__":
+# 确保在任何环境下都能执行
 
-    # 初始化数据库
-    logger.info("正在初始化数据库...")
-    init_db()
-    logger.info("数据库初始化完成")
-    
-    # 同步环境变量中的卖家到数据库
-    logger.info("同步环境变量卖家到数据库...")
-    sync_env_sellers_to_db()
-    logger.info("环境变量卖家同步完成")
-    
-    # 启动 Bot 线程，并将队列传递给它
-    logger.info("正在启动Telegram机器人...")
-    bot_thread = threading.Thread(target=run_bot, args=(notification_queue,), daemon=True)
-    bot_thread.start()
-    logger.info("Telegram机器人线程已启动")
-    
+# 在启动前先尝试清理可能存在的锁文件和目录
+cleanup_resources()
+
+# 使用锁目录确保只有一个实例运行
+# 注意：在某些无服务器平台这可能不是最佳实践，但暂时保留
+try:
+    os.mkdir(lock_dir)
+    logger.info("成功获取锁，启动主程序。")
+except FileExistsError:
+    logger.error("锁目录已存在，另一个实例可能正在运行。程序退出。")
+    # 在非主程序入口，我们只记录错误，不退出
+    # sys.exit(1) 
+except Exception as e:
+    logger.error(f"创建锁目录时发生未知错误: {e}")
+    # sys.exit(1)
+
+# 初始化数据库
+logger.info("正在初始化数据库...")
+init_db()
+logger.info("数据库初始化完成")
+
+# 同步环境变量中的卖家到数据库
+logger.info("同步环境变量卖家到数据库...")
+sync_env_sellers_to_db()
+logger.info("环境变量卖家同步完成")
+
+# 启动 Bot 线程，并将队列传递给它
+logger.info("正在启动Telegram机器人...")
+bot_thread = threading.Thread(target=run_bot, args=(notification_queue,), daemon=True)
+bot_thread.start()
+logger.info("Telegram机器人线程已启动")
+
+
+# ===== 主程序入口（仅用于本地开发） =====
+if __name__ == "__main__":
     # 启动 Flask
     port = int(os.environ.get("PORT", 5000))
     logger.info(f"正在启动Flask服务器，端口：{port}...")
