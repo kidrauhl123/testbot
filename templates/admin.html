@@ -2134,9 +2134,21 @@
     }
   }
   async function saveUserEdit(userId) {
-    const balance = document.getElementById(`edit-balance-input-${userId}`).value;
-    const credit = document.getElementById(`edit-credit-input-${userId}`).value;
+    const balanceInput = document.getElementById(`edit-balance-input-${userId}`);
+    const creditInput = document.getElementById(`edit-credit-input-${userId}`);
     const tag = document.getElementById(`edit-tag-input-${userId}`).value;
+    const balance = balanceInput.value;
+    const credit = creditInput.value;
+    if (balance === '' || isNaN(balance)) {
+      showToast('余额必须为数字且不能为空', 'error');
+      balanceInput.focus();
+      return;
+    }
+    if (credit === '' || isNaN(credit)) {
+      showToast('透支额度必须为数字且不能为空', 'error');
+      creditInput.focus();
+      return;
+    }
     try {
       let ok = true;
       let msg = '';
