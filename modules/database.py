@@ -82,6 +82,11 @@ def init_db():
     logger.info("正在创建充值记录表和余额记录表...")
     create_recharge_tables()
     logger.info("充值记录表和余额记录表创建完成")
+    
+    # 创建激活码表
+    logger.info("正在创建激活码表...")
+    create_activation_code_table()
+    logger.info("激活码表创建完成")
         
 def init_sqlite_db():
     """初始化SQLite数据库"""
@@ -1556,4 +1561,290 @@ def reject_recharge_request(request_id, admin_id):
         return True, "已拒绝充值请求"
     except Exception as e:
         logger.error(f"拒绝充值请求失败: {str(e)}", exc_info=True)
-        return False, f"拒绝充值请求失败: {str(e)}" 
+        return False, f"拒绝充值请求失败: {str(e)}"
+
+# ===== 激活码相关函数 =====
+def create_activation_code_table():
+    """创建激活码表"""
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL
+            table_exists = execute_query("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'activation_codes'
+                )
+            """, fetch=True)
+            
+            if not table_exists or not table_exists[0][0]:
+                execute_query("""
+                    CREATE TABLE activation_codes (
+                        id SERIAL PRIMARY KEY,
+                        code TEXT UNIQUE NOT NULL,
+                        package TEXT NOT NULL,
+                        is_used INTEGER DEFAULT 0,
+                        created_at TEXT NOT NULL,
+                        used_at TEXT,
+                        used_by INTEGER,
+                        created_by INTEGER,
+                        FOREIGN KEY (used_by) REFERENCES users (id),
+                        FOREIGN KEY (created_by) REFERENCES users (id)
+                    )
+                """)
+                logger.info("已创建激活码表(PostgreSQL)")
+        else:
+            # SQLite
+            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(current_dir, "orders.db")
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # 检查激活码表是否存在
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='activation_codes'")
+            if not cursor.fetchone():
+                cursor.execute("""
+                    CREATE TABLE activation_codes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        code TEXT UNIQUE NOT NULL,
+                        package TEXT NOT NULL,
+                        is_used INTEGER DEFAULT 0,
+                        created_at TEXT NOT NULL,
+                        used_at TEXT,
+                        used_by INTEGER,
+                        created_by INTEGER,
+                        FOREIGN KEY (used_by) REFERENCES users (id),
+                        FOREIGN KEY (created_by) REFERENCES users (id)
+                    )
+                """)
+                conn.commit()
+                logger.info("已创建激活码表(SQLite)")
+            
+            conn.close()
+        
+        return True
+    except Exception as e:
+        logger.error(f"创建激活码表失败: {str(e)}", exc_info=True)
+        return False
+
+def generate_activation_code(length=16):
+    """生成唯一的激活码"""
+    import random
+    import string
+    
+    while True:
+        # 生成随机激活码
+        code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
+        
+        # 检查是否已存在
+        existing = execute_query("SELECT id FROM activation_codes WHERE code = ?", (code,), fetch=True)
+        if not existing:
+            return code
+
+def create_activation_code(package, created_by=None, count=1):
+    """创建激活码"""
+    codes = []
+    now = get_china_time()
+    
+    for _ in range(count):
+        code = generate_activation_code()
+        
+        if DATABASE_URL.startswith('postgres'):
+            result = execute_query("""
+                INSERT INTO activation_codes (code, package, created_at, created_by, is_used)
+                VALUES (%s, %s, %s, %s, 0)
+                RETURNING id
+            """, (code, package, now, created_by), fetch=True)
+            code_id = result[0][0]
+        else:
+            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO activation_codes (code, package, created_at, created_by, is_used)
+                VALUES (?, ?, ?, ?, 0)
+            """, (code, package, now, created_by))
+            code_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+        
+        codes.append({"id": code_id, "code": code})
+    
+    return codes
+
+def get_activation_code(code):
+    """获取激活码信息"""
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            result = execute_query("""
+                SELECT id, code, package, is_used, created_at, used_at, used_by
+                FROM activation_codes
+                WHERE code = %s
+            """, (code,), fetch=True)
+        else:
+            result = execute_query("""
+                SELECT id, code, package, is_used, created_at, used_at, used_by
+                FROM activation_codes
+                WHERE code = ?
+            """, (code,), fetch=True)
+        
+        if result and len(result) > 0:
+            return {
+                "id": result[0][0],
+                "code": result[0][1],
+                "package": result[0][2],
+                "is_used": result[0][3],
+                "created_at": result[0][4],
+                "used_at": result[0][5],
+                "used_by": result[0][6]
+            }
+        return None
+    except Exception as e:
+        logger.error(f"获取激活码信息失败: {str(e)}", exc_info=True)
+        return None
+
+def mark_activation_code_used(code_id, user_id):
+    """标记激活码为已使用"""
+    now = get_china_time()
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            execute_query("""
+                UPDATE activation_codes
+                SET is_used = 1, used_at = %s, used_by = %s
+                WHERE id = %s AND is_used = 0
+            """, (now, user_id, code_id))
+        else:
+            execute_query("""
+                UPDATE activation_codes
+                SET is_used = 1, used_at = ?, used_by = ?
+                WHERE id = ? AND is_used = 0
+            """, (now, user_id, code_id))
+        
+        # 检查是否真的更新了记录
+        if DATABASE_URL.startswith('postgres'):
+            result = execute_query("""
+                SELECT count(*) FROM activation_codes 
+                WHERE id = %s AND is_used = 1 AND used_by = %s
+            """, (code_id, user_id), fetch=True)
+        else:
+            result = execute_query("""
+                SELECT count(*) FROM activation_codes 
+                WHERE id = ? AND is_used = 1 AND used_by = ?
+            """, (code_id, user_id), fetch=True)
+        
+        return result[0][0] > 0
+    except Exception as e:
+        logger.error(f"标记激活码已使用失败: {str(e)}", exc_info=True)
+        return False
+
+def get_admin_activation_codes(limit=100, offset=0):
+    """获取所有激活码（管理员用）"""
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            result = execute_query("""
+                SELECT a.id, a.code, a.package, a.is_used, a.created_at, a.used_at, 
+                       c.username as creator, u.username as user
+                FROM activation_codes a
+                LEFT JOIN users c ON a.created_by = c.id
+                LEFT JOIN users u ON a.used_by = u.id
+                ORDER BY a.created_at DESC
+                LIMIT %s OFFSET %s
+            """, (limit, offset), fetch=True)
+        else:
+            result = execute_query("""
+                SELECT a.id, a.code, a.package, a.is_used, a.created_at, a.used_at, 
+                       c.username as creator, u.username as user
+                FROM activation_codes a
+                LEFT JOIN users c ON a.created_by = c.id
+                LEFT JOIN users u ON a.used_by = u.id
+                ORDER BY a.created_at DESC
+                LIMIT ? OFFSET ?
+            """, (limit, offset), fetch=True)
+        
+        codes = []
+        for r in result:
+            codes.append({
+                "id": r[0],
+                "code": r[1],
+                "package": r[2],
+                "is_used": r[3],
+                "created_at": r[4],
+                "used_at": r[5],
+                "creator": r[6],
+                "user": r[7]
+            })
+        return codes
+    except Exception as e:
+        logger.error(f"获取激活码列表失败: {str(e)}", exc_info=True)
+        return []
+
+def redeem_activation_code(code, user_id):
+    """兑换激活码，创建订单并标记为已使用"""
+    try:
+        # 获取激活码信息
+        code_info = get_activation_code(code)
+        if not code_info:
+            return False, "无效的激活码"
+        
+        if code_info['is_used']:
+            return False, "此激活码已被使用"
+        
+        # 获取用户信息
+        user = execute_query("SELECT username FROM users WHERE id = ?", (user_id,), fetch=True)
+        if not user:
+            return False, "用户不存在"
+        
+        username = user[0][0]
+        
+        # 开始事务
+        conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
+        conn.isolation_level = None  # 开启手动事务控制
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("BEGIN TRANSACTION")
+            
+            # 标记激活码为已使用
+            now = get_china_time()
+            cursor.execute("""
+                UPDATE activation_codes
+                SET is_used = 1, used_at = ?, used_by = ?
+                WHERE id = ? AND is_used = 0
+            """, (now, user_id, code_info['id']))
+            
+            # 检查是否成功更新
+            cursor.execute("SELECT changes()")
+            if cursor.fetchone()[0] == 0:
+                cursor.execute("ROLLBACK")
+                return False, "激活码已被使用或不存在"
+            
+            # 创建订单记录（已完成状态）
+            cursor.execute("""
+                INSERT INTO orders 
+                (account, password, package, status, created_at, completed_at, user_id, remark)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                f"激活码兑换-{username}", 
+                code, 
+                code_info['package'],
+                STATUS['COMPLETED'],
+                now,
+                now,
+                user_id,
+                f"通过激活码 {code} 兑换"
+            ))
+            
+            # 提交事务
+            cursor.execute("COMMIT")
+            
+            return True, f"成功兑换{code_info['package']}个月会员套餐!"
+            
+        except Exception as e:
+            cursor.execute("ROLLBACK")
+            logger.error(f"兑换激活码事务失败: {str(e)}", exc_info=True)
+            return False, f"兑换失败: {str(e)}"
+        finally:
+            conn.close()
+            
+    except Exception as e:
+        logger.error(f"兑换激活码失败: {str(e)}", exc_info=True)
+        return False, f"处理请求时出错: {str(e)}" 

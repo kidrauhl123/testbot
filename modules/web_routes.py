@@ -5,6 +5,7 @@ import asyncio
 from functools import wraps
 from datetime import datetime, timedelta
 import pytz
+import sqlite3
 
 from flask import Flask, request, render_template, jsonify, session, redirect, url_for, flash
 
@@ -14,7 +15,8 @@ from modules.database import (
     get_user_balance, get_user_credit_limit, set_user_balance, set_user_credit_limit, refund_order, 
     create_order_with_deduction_atomic, get_user_recharge_requests, create_recharge_request,
     get_pending_recharge_requests, approve_recharge_request, reject_recharge_request, toggle_seller_admin,
-    get_balance_records
+    get_balance_records, get_activation_code, mark_activation_code_used, create_activation_code, 
+    get_admin_activation_codes, redeem_activation_code
 )
 import modules.constants as constants
 
@@ -67,10 +69,21 @@ def register_routes(app, notification_queue):
                             (get_china_time(), user_id))
                 
                 logger.info(f"用户 {username} 登录成功")
+                
+                # 检查是否有待处理的激活码
+                if 'pending_activation_code' in session:
+                    code = session.pop('pending_activation_code')
+                    return redirect(url_for('redeem') + f"?code={code}")
+                
                 return redirect(url_for('index'))
             else:
                 logger.warning(f"用户 {username} 登录失败 - 密码错误")
                 return render_template('login.html', error='用户名或密码错误')
+        
+        # 检查是否有激活码参数
+        code = request.args.get('code')
+        if code:
+            session['pending_activation_code'] = code
         
         return render_template('login.html')
 
@@ -98,9 +111,29 @@ def register_routes(app, notification_queue):
             execute_query("""
                 INSERT INTO users (username, password_hash, is_admin, created_at) 
                 VALUES (?, ?, 0, ?)
-            """, (username, hashed_password, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+            """, (username, hashed_password, get_china_time()))
+            
+            # 获取新用户ID
+            new_user = execute_query("SELECT id FROM users WHERE username=?", (username,), fetch=True)
+            if new_user:
+                user_id = new_user[0][0]
+                
+                # 登录用户
+                session['user_id'] = user_id
+                session['username'] = username
+                session['is_admin'] = 0
+                
+                # 检查是否有待处理的激活码
+                if 'pending_activation_code' in session:
+                    code = session.pop('pending_activation_code')
+                    return redirect(url_for('redeem') + f"?code={code}")
             
             return redirect(url_for('login'))
+        
+        # 检查是否有激活码参数
+        code = request.args.get('code')
+        if code:
+            session['pending_activation_code'] = code
         
         return render_template('register.html')
 
@@ -1147,3 +1180,136 @@ def register_routes(app, notification_queue):
                 "success": False,
                 "error": "获取余额明细记录失败，请刷新重试"
             }), 500 
+
+    # 添加激活码相关的路由
+    @app.route('/redeem', methods=['GET'])
+    def redeem_page():
+        """激活码兑换页面"""
+        # 从URL获取激活码参数
+        code = request.args.get('code', '')
+        return render_template('redeem.html', code=code)
+
+    @app.route('/redeem/<code>', methods=['GET'])
+    def redeem_with_code(code):
+        """带激活码的兑换链接"""
+        return render_template('redeem.html', code=code)
+
+    @app.route('/api/redeem', methods=['POST'])
+    def process_redeem():
+        """处理激活码兑换请求"""
+        try:
+            # 从JSON或表单数据获取激活码
+            if request.is_json:
+                code = request.json.get('code', '')
+            else:
+                code = request.form.get('code', '')
+            
+            if not code:
+                return jsonify({"success": False, "message": "请输入激活码"}), 400
+            
+            # 如果用户已登录，直接为其账户添加会员时长
+            if 'user_id' in session:
+                user_id = session.get('user_id')
+                username = session.get('username')
+                
+                # 兑换激活码
+                success, message = redeem_activation_code(code, user_id)
+                
+                if success:
+                    logger.info(f"用户 {username} 成功兑换激活码 {code}")
+                    
+                    # 返回成功消息和重定向URL
+                    return jsonify({
+                        "success": True, 
+                        "message": message,
+                        "redirect": url_for('dashboard')
+                    })
+                else:
+                    logger.warning(f"用户 {username} 兑换激活码 {code} 失败: {message}")
+                    return jsonify({"success": False, "message": message}), 400
+            else:
+                # 如果用户未登录，保存激活码到session并重定向到登录页面
+                session['pending_activation_code'] = code
+                
+                return jsonify({
+                    "success": True,
+                    "message": "请登录或注册账户以完成兑换",
+                    "redirect": url_for('login')
+                })
+            
+        except Exception as e:
+            logger.error(f"处理激活码兑换请求时出错: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "message": f"处理请求时出错: {str(e)}"}), 500
+
+    # 添加管理员管理激活码的路由
+    @app.route('/admin/activation-codes', methods=['GET'])
+    @login_required
+    @admin_required
+    def admin_activation_codes():
+        """管理员管理激活码页面"""
+        return render_template('admin_activation_codes.html')
+
+    @app.route('/admin/api/activation-codes', methods=['GET'])
+    @login_required
+    @admin_required
+    def admin_api_get_activation_codes():
+        """获取激活码列表"""
+        limit = int(request.args.get('limit', 100))
+        offset = int(request.args.get('offset', 0))
+        
+        codes = get_admin_activation_codes(limit, offset)
+        return jsonify({"success": True, "codes": codes})
+
+    @app.route('/admin/api/activation-codes', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_api_create_activation_code():
+        """创建新激活码"""
+        package = request.json.get('package')
+        count = int(request.json.get('count', 1))
+        
+        if not package:
+            return jsonify({"success": False, "message": "请选择套餐"}), 400
+        
+        if count < 1 or count > 100:
+            return jsonify({"success": False, "message": "生成数量必须在1-100之间"}), 400
+        
+        user_id = session.get('user_id')
+        codes = create_activation_code(package, user_id, count)
+        
+        return jsonify({
+            "success": True, 
+            "message": f"成功生成{len(codes)}个激活码",
+            "codes": codes
+        })
+
+    @app.route('/admin/api/activation-codes/<int:code_id>', methods=['DELETE'])
+    @login_required
+    @admin_required
+    def admin_api_delete_activation_code(code_id):
+        """删除未使用的激活码"""
+        try:
+            # 检查激活码是否存在且未使用
+            if DATABASE_URL.startswith('postgres'):
+                result = execute_query("""
+                    DELETE FROM activation_codes 
+                    WHERE id = %s AND is_used = 0
+                    RETURNING id
+                """, (code_id,), fetch=True)
+                success = result and len(result) > 0
+            else:
+                # SQLite
+                conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM activation_codes WHERE id = ? AND is_used = 0", (code_id,))
+                success = cursor.rowcount > 0
+                conn.commit()
+                conn.close()
+            
+            if success:
+                return jsonify({"success": True, "message": "激活码删除成功"})
+            else:
+                return jsonify({"success": False, "message": "激活码不存在或已被使用，无法删除"}), 400
+        except Exception as e:
+            logger.error(f"删除激活码时出错: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "message": f"删除激活码时出错: {str(e)}"}), 500 
