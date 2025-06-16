@@ -15,8 +15,8 @@ from modules.database import (
     get_user_balance, get_user_credit_limit, set_user_balance, set_user_credit_limit, refund_order, 
     create_order_with_deduction_atomic, get_user_recharge_requests, create_recharge_request,
     get_pending_recharge_requests, approve_recharge_request, reject_recharge_request, toggle_seller_admin,
-    get_balance_records, get_activation_code, mark_activation_code_used, create_activation_code, 
-    get_admin_activation_codes, redeem_activation_code
+    get_balance_records, get_activation_code, mark_activation_code_used, create_activation_code,
+    get_admin_activation_codes
 )
 import modules.constants as constants
 
@@ -73,7 +73,14 @@ def register_routes(app, notification_queue):
                 # 检查是否有待处理的激活码
                 if 'pending_activation_code' in session:
                     code = session.pop('pending_activation_code')
-                    return redirect(url_for('redeem') + f"?code={code}")
+                    
+                    # 如果同时有账号密码，直接跳转到激活码页面
+                    if 'pending_account' in session and 'pending_password' in session:
+                        account = session.pop('pending_account')
+                        password = session.pop('pending_password')
+                        return redirect(url_for('redeem_page', code=code))
+                    
+                    return redirect(url_for('redeem_page', code=code))
                 
                 return redirect(url_for('index'))
             else:
@@ -111,29 +118,9 @@ def register_routes(app, notification_queue):
             execute_query("""
                 INSERT INTO users (username, password_hash, is_admin, created_at) 
                 VALUES (?, ?, 0, ?)
-            """, (username, hashed_password, get_china_time()))
-            
-            # 获取新用户ID
-            new_user = execute_query("SELECT id FROM users WHERE username=?", (username,), fetch=True)
-            if new_user:
-                user_id = new_user[0][0]
-                
-                # 登录用户
-                session['user_id'] = user_id
-                session['username'] = username
-                session['is_admin'] = 0
-                
-                # 检查是否有待处理的激活码
-                if 'pending_activation_code' in session:
-                    code = session.pop('pending_activation_code')
-                    return redirect(url_for('redeem') + f"?code={code}")
+            """, (username, hashed_password, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
             
             return redirect(url_for('login'))
-        
-        # 检查是否有激活码参数
-        code = request.args.get('code')
-        if code:
-            session['pending_activation_code'] = code
         
         return render_template('register.html')
 
@@ -1181,75 +1168,200 @@ def register_routes(app, notification_queue):
                 "error": "获取余额明细记录失败，请刷新重试"
             }), 500 
 
-    # 添加激活码相关的路由
+    # 激活码兑换相关路由
     @app.route('/redeem', methods=['GET'])
     def redeem_page():
         """激活码兑换页面"""
         # 从URL获取激活码参数
         code = request.args.get('code', '')
-        return render_template('redeem.html', code=code)
+        
+        try:
+            orders = execute_query("SELECT id, account, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
+            
+            return render_template('redeem.html', 
+                                   code=code,
+                                   orders=orders, 
+                                   status_text=STATUS_TEXT_ZH,
+                                   username=session.get('username'),
+                                   is_admin=session.get('is_admin'),
+                                   balance=get_user_balance(session.get('user_id', 0)))
+        except Exception as e:
+            logger.error(f"加载兑换页面失败: {str(e)}", exc_info=True)
+            return render_template('redeem.html', 
+                                   code=code,
+                                   error='加载数据失败', 
+                                   username=session.get('username'),
+                                   is_admin=session.get('is_admin'))
 
     @app.route('/redeem/<code>', methods=['GET'])
     def redeem_with_code(code):
-        """带激活码的兑换链接 - 直接跳转到填充好激活码的兑换页面"""
-        # 自动提交标志
-        auto_submit = True
-        return render_template('redeem.html', code=code, auto_submit=auto_submit)
+        """带激活码的兑换链接"""
+        return redirect(url_for('redeem_page', code=code))
 
-    @app.route('/api/redeem', methods=['POST'])
-    def process_redeem():
-        """处理激活码兑换请求"""
+    @app.route('/api/verify-code', methods=['POST'])
+    def verify_activation_code():
+        """验证激活码"""
         try:
-            # 从JSON或表单数据获取激活码
-            if request.is_json:
-                code = request.json.get('code', '')
-            else:
-                code = request.form.get('code', '')
+            code = request.json.get('code', '')
             
             if not code:
                 return jsonify({"success": False, "message": "请输入激活码"}), 400
             
-            # 如果用户已登录，直接为其账户添加会员时长
-            if 'user_id' in session:
-                user_id = session.get('user_id')
-                username = session.get('username')
+            # 获取激活码信息
+            code_info = get_activation_code(code)
+            
+            # 检查激活码是否存在
+            if not code_info:
+                logger.warning(f"无效的激活码: {code}")
+                return jsonify({"success": False, "message": "无效的激活码"}), 400
+            
+            # 检查激活码是否已使用
+            if code_info['is_used']:
+                logger.warning(f"激活码已被使用: {code}")
+                return jsonify({"success": False, "message": "此激活码已被使用"}), 400
+            
+            # 返回成功和套餐信息
+            return jsonify({
+                "success": True, 
+                "package": code_info['package'],
+                "message": "有效的激活码"
+            })
                 
-                # 兑换激活码
-                success, message = redeem_activation_code(code, user_id)
-                
-                if success:
-                    logger.info(f"用户 {username} 成功兑换激活码 {code}")
-                    
-                    # 返回成功消息和重定向URL
-                    return jsonify({
-                        "success": True, 
-                        "message": message,
-                        "redirect": url_for('dashboard')
-                    })
-                else:
-                    logger.warning(f"用户 {username} 兑换激活码 {code} 失败: {message}")
-                    return jsonify({"success": False, "message": message}), 400
-            else:
-                # 如果用户未登录，保存激活码到session并重定向到登录页面
+        except Exception as e:
+            logger.error(f"验证激活码失败: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "message": "验证失败，请稍后再试"}), 500
+
+    @app.route('/redeem', methods=['POST'])
+    def process_redeem():
+        """处理激活码兑换请求"""
+        try:
+            # 从JSON获取数据
+            data = request.json
+            code = data.get('code', '')
+            account = data.get('account', '')
+            password = data.get('password', '')
+            remark = data.get('remark', '')
+            
+            if not code:
+                return jsonify({"success": False, "error": "请输入激活码"}), 400
+            
+            if not account or not password:
+                return jsonify({"success": False, "error": "请输入账号和密码"}), 400
+            
+            # 获取激活码信息
+            code_info = get_activation_code(code)
+            
+            # 检查激活码是否存在
+            if not code_info:
+                logger.warning(f"无效的激活码: {code}")
+                return jsonify({"success": False, "error": "无效的激活码"}), 400
+            
+            # 检查激活码是否已使用
+            if code_info['is_used']:
+                logger.warning(f"激活码已被使用: {code}")
+                return jsonify({"success": False, "error": "此激活码已被使用"}), 400
+            
+            # 检查用户是否已登录
+            if 'user_id' not in session:
+                # 保存到session，等待用户登录
                 session['pending_activation_code'] = code
+                session['pending_account'] = account
+                session['pending_password'] = password
                 
                 return jsonify({
                     "success": True,
-                    "message": "请登录或注册账户以完成兑换",
+                    "message": "请先登录以完成兑换",
                     "redirect": url_for('login')
                 })
             
+            user_id = session.get('user_id')
+            username = session.get('username')
+            
+            # 标记激活码为已使用
+            if not mark_activation_code_used(code_info['id'], user_id):
+                return jsonify({"success": False, "error": "激活码使用失败，请稍后再试"}), 500
+            
+            # 创建订单记录（自动完成状态）
+            now = get_china_time()
+            
+            if DATABASE_URL.startswith('postgres'):
+                order_result = execute_query("""
+                    INSERT INTO orders (account, password, package, remark, status, created_at, completed_at, user_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (
+                    account,
+                    password,
+                    code_info['package'],
+                    f"通过激活码兑换: {code}",
+                    STATUS['COMPLETED'],
+                    now,
+                    now,
+                    user_id
+                ), fetch=True)
+                order_id = order_result[0][0]
+            else:
+                conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO orders (account, password, package, remark, status, created_at, completed_at, user_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    account,
+                    password,
+                    code_info['package'],
+                    f"通过激活码兑换: {code}",
+                    STATUS['COMPLETED'],
+                    now,
+                    now,
+                    user_id
+                ))
+                order_id = cursor.lastrowid
+                conn.commit()
+                conn.close()
+            
+            logger.info(f"用户 {username} 成功兑换激活码 {code}, 套餐: {code_info['package']}, 订单ID: {order_id}")
+            
+            # 获取最新订单列表
+            orders_raw = execute_query("SELECT id, account, password, package, status, created_at, user_id FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
+            orders = []
+            
+            for o in orders_raw:
+                orders.append({
+                    "id": o[0],
+                    "account": o[1],
+                    "password": o[2],
+                    "package": o[3],
+                    "status": o[4],
+                    "status_text": STATUS_TEXT_ZH.get(o[4], o[4]),
+                    "created_at": o[5],
+                    "accepted_at": "",
+                    "completed_at": "",
+                    "remark": "",
+                    "creator": username,
+                    "accepted_by": "",
+                    "can_cancel": False  # 已完成的订单不能取消
+                })
+            
+            # 返回成功消息和订单数据
+            return jsonify({
+                "success": True, 
+                "message": f"成功兑换{code_info['package']}个月会员!",
+                "orders": orders,
+                "redirect": url_for('dashboard')
+            })
+                
         except Exception as e:
-            logger.error(f"处理激活码兑换请求时出错: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "message": f"处理请求时出错: {str(e)}"}), 500
+            logger.error(f"处理激活码兑换请求失败: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": "处理请求失败，请稍后再试"}), 500
 
-    # 修改admin_activation_codes路由
+    # 管理员激活码管理页面
     @app.route('/admin/activation-codes', methods=['GET'])
     @login_required
     @admin_required
     def admin_activation_codes():
-        """重定向到管理页面的激活码标签"""
-        return redirect(url_for('admin_dashboard') + '#activation-codes')
+        """管理员管理激活码页面"""
+        return render_template('admin_activation_codes.html')
 
     @app.route('/admin/api/activation-codes', methods=['GET'])
     @login_required
@@ -1283,35 +1395,4 @@ def register_routes(app, notification_queue):
             "success": True, 
             "message": f"成功生成{len(codes)}个激活码",
             "codes": codes
-        })
-
-    @app.route('/admin/api/activation-codes/<int:code_id>', methods=['DELETE'])
-    @login_required
-    @admin_required
-    def admin_api_delete_activation_code(code_id):
-        """删除未使用的激活码"""
-        try:
-            # 检查激活码是否存在且未使用
-            if DATABASE_URL.startswith('postgres'):
-                result = execute_query("""
-                    DELETE FROM activation_codes 
-                    WHERE id = %s AND is_used = 0
-                    RETURNING id
-                """, (code_id,), fetch=True)
-                success = result and len(result) > 0
-            else:
-                # SQLite
-                conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM activation_codes WHERE id = ? AND is_used = 0", (code_id,))
-                success = cursor.rowcount > 0
-                conn.commit()
-                conn.close()
-            
-            if success:
-                return jsonify({"success": True, "message": "激活码删除成功"})
-            else:
-                return jsonify({"success": False, "message": "激活码不存在或已被使用，无法删除"}), 400
-        except Exception as e:
-            logger.error(f"删除激活码时出错: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "message": f"删除激活码时出错: {str(e)}"}), 500 
+        }) 

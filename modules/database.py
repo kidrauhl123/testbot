@@ -87,7 +87,7 @@ def init_db():
     logger.info("正在创建激活码表...")
     create_activation_code_table()
     logger.info("激活码表创建完成")
-        
+
 def init_sqlite_db():
     """初始化SQLite数据库"""
     logger.info("使用SQLite数据库")
@@ -1563,7 +1563,7 @@ def reject_recharge_request(request_id, admin_id):
         logger.error(f"拒绝充值请求失败: {str(e)}", exc_info=True)
         return False, f"拒绝充值请求失败: {str(e)}"
 
-# ===== 激活码相关函数 =====
+# ===== 激活码系统 =====
 def create_activation_code_table():
     """创建激活码表"""
     try:
@@ -1637,7 +1637,9 @@ def generate_activation_code(length=16):
         code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
         
         # 检查是否已存在
-        existing = execute_query("SELECT id FROM activation_codes WHERE code = ?", (code,), fetch=True)
+        existing = execute_query(
+            "SELECT id FROM activation_codes WHERE code = %s" if DATABASE_URL.startswith('postgres') else "SELECT id FROM activation_codes WHERE code = ?", 
+            (code,), fetch=True)
         if not existing:
             return code
 
@@ -1775,76 +1777,4 @@ def get_admin_activation_codes(limit=100, offset=0):
         return codes
     except Exception as e:
         logger.error(f"获取激活码列表失败: {str(e)}", exc_info=True)
-        return []
-
-def redeem_activation_code(code, user_id):
-    """兑换激活码，创建订单并标记为已使用"""
-    try:
-        # 获取激活码信息
-        code_info = get_activation_code(code)
-        if not code_info:
-            return False, "无效的激活码"
-        
-        if code_info['is_used']:
-            return False, "此激活码已被使用"
-        
-        # 获取用户信息
-        user = execute_query("SELECT username FROM users WHERE id = ?", (user_id,), fetch=True)
-        if not user:
-            return False, "用户不存在"
-        
-        username = user[0][0]
-        
-        # 开始事务
-        conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
-        conn.isolation_level = None  # 开启手动事务控制
-        cursor = conn.cursor()
-        
-        try:
-            cursor.execute("BEGIN TRANSACTION")
-            
-            # 标记激活码为已使用
-            now = get_china_time()
-            cursor.execute("""
-                UPDATE activation_codes
-                SET is_used = 1, used_at = ?, used_by = ?
-                WHERE id = ? AND is_used = 0
-            """, (now, user_id, code_info['id']))
-            
-            # 检查是否成功更新
-            cursor.execute("SELECT changes()")
-            if cursor.fetchone()[0] == 0:
-                cursor.execute("ROLLBACK")
-                return False, "激活码已被使用或不存在"
-            
-            # 创建订单记录（已完成状态）
-            cursor.execute("""
-                INSERT INTO orders 
-                (account, password, package, status, created_at, completed_at, user_id, remark)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                f"激活码兑换-{username}", 
-                code, 
-                code_info['package'],
-                STATUS['COMPLETED'],
-                now,
-                now,
-                user_id,
-                f"通过激活码 {code} 兑换"
-            ))
-            
-            # 提交事务
-            cursor.execute("COMMIT")
-            
-            return True, f"成功兑换{code_info['package']}个月会员套餐!"
-            
-        except Exception as e:
-            cursor.execute("ROLLBACK")
-            logger.error(f"兑换激活码事务失败: {str(e)}", exc_info=True)
-            return False, f"兑换失败: {str(e)}"
-        finally:
-            conn.close()
-            
-    except Exception as e:
-        logger.error(f"兑换激活码失败: {str(e)}", exc_info=True)
-        return False, f"处理请求时出错: {str(e)}" 
+        return [] 

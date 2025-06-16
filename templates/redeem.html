@@ -1,134 +1,711 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>激活码兑换</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css">
-    <style>
-        body {
-            background-color: #f8f9fa;
-            padding-top: 50px;
-        }
-        .card {
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        }
-        .card-header {
-            background-color: #007bff;
-            color: white;
-            border-radius: 10px 10px 0 0 !important;
-        }
-        .btn-primary {
-            background-color: #007bff;
-            border: none;
-        }
-        .btn-primary:hover {
-            background-color: #0069d9;
-        }
-    </style>
+  <meta charset="utf-8">
+  <title>激活码兑换 - 破天充值系统</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- 添加Font Awesome图标库 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * { box-sizing: border-box; }
+    body { 
+      font-family: 'Microsoft YaHei', Arial, sans-serif; 
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      margin: 0; padding: 0; min-height: 100vh;
+      color: #333;
+      font-size: 14px;
+      overflow-y: auto;
+    }
+    
+    /* 自定义提示框样式 */
+    .custom-alert {
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 15px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 9999;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      min-width: 300px;
+      max-width: 80%;
+      animation: slideDown 0.3s ease-out;
+    }
+    
+    .custom-alert.success {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
+    }
+    
+    .custom-alert.warning {
+      background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%);
+      color: #333;
+    }
+    
+    .custom-alert.error {
+      background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+      color: white;
+    }
+    
+    .custom-alert-icon {
+      margin-right: 10px;
+      font-size: 18px;
+    }
+    
+    .custom-alert-close {
+      margin-left: auto;
+      cursor: pointer;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+    }
+    
+    .custom-alert-close:hover {
+      opacity: 1;
+    }
+    
+    @keyframes slideDown {
+      0% {
+        transform: translate(-50%, -20px);
+        opacity: 0;
+      }
+      100% {
+        transform: translate(-50%, 0);
+        opacity: 1;
+      }
+    }
+    
+    .navbar {
+      background: rgba(255,255,255,0.9);
+      padding: 12px 20px;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+    }
+    .navbar-brand {
+      font-size: 18px;
+      font-weight: bold;
+      color: #667eea;
+      display: flex;
+      align-items: center;
+    }
+    .navbar-brand::before {
+      content: '🎵';
+      margin-right: 6px;
+      font-size: 20px;
+    }
+    .navbar-user {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      position: relative;
+    }
+    .admin-badge {
+      background: linear-gradient(135deg, #ffb347 0%, #ffcc33 100%);
+      color: #333;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 2px 5px rgba(255,195,51,0.3);
+    }
+    .balance-badge {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 2px 5px rgba(56,239,125,0.3);
+      display: flex;
+      align-items: center;
+    }
+    .balance-badge.negative {
+      background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+    }
+    .balance-badge::before {
+      content: '💰';
+      margin-right: 5px;
+    }
+    
+    /* 充值按钮样式 */
+    .recharge-btn {
+      background: linear-gradient(135deg, #ff9966 0%, #ff5e62 100%);
+      color: white;
+      padding: 3px 8px;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 600;
+      margin-left: 8px;
+      cursor: pointer;
+      box-shadow: 0 2px 5px rgba(255,94,98,0.3);
+      transition: all 0.3s ease;
+    }
+    .recharge-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(255,94,98,0.4);
+    }
+    .recharge-btn::before {
+      content: '➕';
+      margin-right: 3px;
+    }
+    
+    .btn {
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+      font-weight: 600;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .btn:hover { 
+      transform: translateY(-3px); 
+      box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+    }
+    .btn-primary { 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+      color: white; 
+    }
+    .btn-danger { 
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5253 100%); 
+      color: white; 
+    }
+    
+    .main-container {
+      max-width: 1200px;
+      margin: 30px auto;
+      padding: 0 20px;
+    }
+    
+    .container {
+      display: flex;
+      gap: 40px;
+      align-items: flex-start;
+    }
+
+    .left {
+      width: 35%;
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+      backdrop-filter: blur(10px);
+      position: relative;
+      transition: all 0.3s ease;
+    }
+    .left:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 15px 30px rgba(0,0,0,0.18);
+    }
+    
+    .left h2 {
+      margin-top: 0;
+      color: #4f46e5;
+      font-weight: 600;
+      margin-bottom: 20px;
+      border-bottom: 2px solid rgba(99,102,241,0.1);
+      padding-bottom: 10px;
+    }
+
+    .right {
+      width: 65%;
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+      backdrop-filter: blur(10px);
+    }
+    
+    .right h2 {
+      margin-top: 0;
+      color: #4f46e5;
+      font-weight: 600;
+      margin-bottom: 20px;
+      border-bottom: 2px solid rgba(99,102,241,0.1);
+      padding-bottom: 10px;
+    }
+    
+    .form-group {
+      margin-bottom: 15px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      color: #4b5563;
+      font-weight: 500;
+    }
+    
+    .form-control {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      transition: all 0.3s;
+      outline: none;
+      font-size: 14px;
+    }
+    
+    .form-control:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+    }
+    
+    .form-select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      transition: all 0.3s;
+      outline: none;
+      background-color: white;
+      font-size: 14px;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%234b5563' viewBox='0 0 16 16'%3E%3Cpath d='M8 12l-6-6h12l-6 6z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      background-size: 16px;
+    }
+    
+    .form-select:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+    }
+    
+    .submit-btn {
+      width: 100%;
+      margin-top: 10px;
+    }
+    
+    /* 订单列表样式 */
+    .orders-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    
+    .orders-table th, .orders-table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .orders-table th {
+      font-weight: 600;
+      color: #374151;
+    }
+    
+    .orders-table tr:hover {
+      background-color: #f9fafb;
+    }
+    
+    .orders-table .status-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .status-submitted { background: #eef2ff; color: #4f46e5; }
+    .status-accepted { background: #fff7ed; color: #f97316; }
+    .status-completed { background: #ecfdf5; color: #10b981; }
+    .status-failed { background: #fef2f2; color: #ef4444; }
+    .status-cancelled { background: #f3f4f6; color: #6b7280; }
+    .status-disputing { background: #fffbeb; color: #f59e0b; }
+    
+    .action-btn {
+      padding: 4px 8px;
+      font-size: 12px;
+      border-radius: 6px;
+      margin-right: 5px;
+    }
+    
+    .plan-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #dbeafe;
+      color: #3b82f6;
+    }
+    
+    .empty-orders {
+      text-align: center;
+      padding: 30px;
+      color: #6b7280;
+    }
+    
+    .empty-orders i {
+      font-size: 40px;
+      margin-bottom: 15px;
+      color: #d1d5db;
+    }
+    
+    /* 响应式调整 */
+    @media screen and (max-width: 768px) {
+      .container {
+        flex-direction: column;
+      }
+      .left, .right {
+        width: 100%;
+      }
+      
+      .orders-table {
+        font-size: 12px;
+      }
+      
+      .orders-table th, .orders-table td {
+        padding: 8px 6px;
+      }
+      
+      .action-btn {
+        padding: 3px 6px;
+        font-size: 11px;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header text-center">
-                        <h4>会员激活码兑换</h4>
-                    </div>
-                    <div class="card-body">
-                        <div id="message" class="alert d-none"></div>
-                        
-                        <form id="redeemForm">
-                            <div class="mb-3">
-                                <label for="activationCode" class="form-label">激活码</label>
-                                <input type="text" class="form-control" id="activationCode" name="code" placeholder="请输入激活码" required>
-                            </div>
-                            
-                            <div class="d-grid gap-2">
-                                <button type="submit" class="btn btn-primary">立即兑换</button>
-                            </div>
-                        </form>
-                        
-                        <div class="mt-3 text-center">
-                            <a href="/login">已有账号？点击登录</a>
-                            <span class="mx-2">|</span>
-                            <a href="/register">注册新账号</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
+  <!-- 导航栏 -->
+  <div class="navbar">
+    <div class="navbar-brand">破天充值系统</div>
+    <div class="navbar-user">
+      {% if username %}
+        {% if is_admin %}
+          <div class="admin-badge">管理员</div>
+        {% endif %}
+        <div class="balance-badge {% if balance < 0 %}negative{% endif %}">
+          ¥{{ balance|round(2) }}
+          <a href="/recharge" class="recharge-btn">充值</a>
         </div>
+        <a href="/dashboard" class="btn btn-primary" style="margin-right: 10px;">用户中心</a>
+        {% if is_admin %}
+          <a href="/admin" class="btn btn-primary" style="margin-right: 10px;">管理后台</a>
+        {% endif %}
+        <a href="/logout" class="btn btn-danger">退出</a>
+      {% else %}
+        <a href="/login" class="btn btn-primary" style="margin-right: 10px;">登录</a>
+        <a href="/register" class="btn btn-primary">注册</a>
+      {% endif %}
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // 检查URL中是否有激活码参数
-            const urlParams = new URLSearchParams(window.location.search);
-            const codeParam = urlParams.get('code');
-            
-            if (codeParam) {
-                document.getElementById('activationCode').value = codeParam;
-            }
-            
-            // 获取代码中的激活码（如果有）
-            const codeInput = document.getElementById('activationCode');
-            // 使用Jinja2传递auto_submit变量
-            const autoSubmit = {% if auto_submit|default(false) %}true{% else %}false{% endif %};
-            
-            // 如果有激活码参数且启用自动提交，自动提交表单
-            if (codeInput.value && autoSubmit) {
-                setTimeout(() => {
-                    document.getElementById('redeemForm').dispatchEvent(new Event('submit'));
-                }, 500);
-            }
-            
-            // 处理表单提交
-            document.getElementById('redeemForm').addEventListener('submit', function(e) {
-                e.preventDefault();
-                
-                const code = document.getElementById('activationCode').value.trim();
-                if (!code) {
-                    showMessage('请输入激活码', 'danger');
-                    return;
-                }
-                
-                // 发送兑换请求
-                fetch('/api/redeem', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ code: code })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showMessage(data.message, 'success');
-                        if (data.redirect) {
-                            setTimeout(() => {
-                                window.location.href = data.redirect;
-                            }, 1500);
-                        }
-                    } else {
-                        showMessage(data.message, 'danger');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showMessage('请求失败，请稍后再试', 'danger');
-                });
-            });
-            
-            // 显示消息的函数
-            function showMessage(message, type) {
-                const messageEl = document.getElementById('message');
-                messageEl.textContent = message;
-                messageEl.classList.remove('d-none', 'alert-success', 'alert-danger');
-                messageEl.classList.add('alert-' + type);
-            }
+  </div>
+  
+  <!-- 主内容 -->
+  <div class="main-container">
+    <div class="container">
+      <!-- 左侧表单 -->
+      <div class="left">
+        <h2>激活码兑换</h2>
+        <form id="redeemForm">
+          <div class="form-group">
+            <label for="account">账号</label>
+            <input type="text" class="form-control" id="account" name="account" placeholder="请输入账号" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="password">密码</label>
+            <input type="password" class="form-control" id="password" name="password" placeholder="请输入密码" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="code">激活码</label>
+            <input type="text" class="form-control" id="code" name="code" placeholder="请输入激活码" value="{{ code }}" required {% if code %}readonly{% endif %}>
+          </div>
+          
+          <div class="form-group">
+            <label for="package">套餐</label>
+            <input type="text" class="form-control" id="package_display" readonly>
+            <input type="hidden" id="package" name="package">
+          </div>
+          
+          <div class="form-group">
+            <label for="remark">备注 (选填)</label>
+            <input type="text" class="form-control" id="remark" name="remark" placeholder="可选填写备注信息">
+          </div>
+          
+          <button type="submit" class="btn btn-primary submit-btn" id="submitBtn">立即兑换</button>
+        </form>
+      </div>
+      
+      <!-- 右侧订单列表 -->
+      <div class="right">
+        <h2>最近订单</h2>
+        {% if orders and orders|length > 0 %}
+          <table class="orders-table">
+            <thead>
+              <tr>
+                <th>订单号</th>
+                <th>账号</th>
+                <th>套餐</th>
+                <th>状态</th>
+                <th>创建时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="ordersTableBody">
+              {% for order in orders %}
+              <tr>
+                <td>#{{ order[0] }}</td>
+                <td>{{ order[1] }}</td>
+                <td><span class="plan-badge">{{ order[2] }}个月</span></td>
+                <td>
+                  <span class="status-badge status-{{ order[3] }}">
+                    {{ status_text.get(order[3], order[3]) }}
+                  </span>
+                </td>
+                <td>{{ order[4] }}</td>
+                <td>
+                  <button class="btn btn-primary action-btn view-order" data-id="{{ order[0] }}">详情</button>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <div class="empty-orders">
+            <i class="fas fa-inbox"></i>
+            <p>暂无订单记录</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  
+  <!-- JS部分 -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // 激活码兑换相关功能
+      const redeemForm = document.getElementById('redeemForm');
+      const codeInput = document.getElementById('code');
+      const packageDisplay = document.getElementById('package_display');
+      const packageInput = document.getElementById('package');
+      const submitBtn = document.getElementById('submitBtn');
+      
+      // 检查初始激活码
+      if (codeInput.value) {
+        verifyActivationCode(codeInput.value);
+      }
+      
+      // 当激活码输入框值变化时
+      codeInput.addEventListener('input', function() {
+        if (this.value.trim()) {
+          verifyActivationCode(this.value.trim());
+        } else {
+          packageDisplay.value = '';
+          packageInput.value = '';
+        }
+      });
+      
+      // 验证激活码
+      function verifyActivationCode(code) {
+        // 显示正在验证
+        packageDisplay.value = '正在验证激活码...';
+        
+        // 发送请求验证激活码
+        fetch('/api/verify-code', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ code: code })
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            // 如果成功
+            packageDisplay.value = data.package + '个月';
+            packageInput.value = data.package;
+            submitBtn.disabled = false;
+          } else {
+            // 如果失败
+            packageDisplay.value = '无效的激活码';
+            packageInput.value = '';
+            submitBtn.disabled = true;
+            showAlert('error', data.message || '无效的激活码');
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          packageDisplay.value = '验证失败';
+          packageInput.value = '';
+          submitBtn.disabled = true;
         });
-    </script>
+      }
+      
+      // 表单提交
+      redeemForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // 获取表单数据
+        const formData = {
+          account: document.getElementById('account').value,
+          password: document.getElementById('password').value,
+          code: codeInput.value,
+          package: packageInput.value,
+          remark: document.getElementById('remark').value
+        };
+        
+        // 禁用提交按钮
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '提交中...';
+        
+        // 发送请求
+        fetch('/redeem', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(formData)
+        })
+        .then(response => response.json())
+        .then(data => {
+          // 重新启用提交按钮
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '立即兑换';
+          
+          if (data.success) {
+            // 成功
+            showAlert('success', data.message || '兑换成功！');
+            
+            // 如果有订单数据，更新订单列表
+            if (data.orders) {
+              updateOrdersTable(data.orders);
+            }
+            
+            // 如果有余额数据，更新余额显示
+            if (data.balance !== undefined) {
+              updateBalanceDisplay(data.balance);
+            }
+            
+            // 如果有重定向，延迟后跳转
+            if (data.redirect) {
+              setTimeout(function() {
+                window.location.href = data.redirect;
+              }, 1500);
+            }
+          } else {
+            // 失败
+            showAlert('error', data.error || '兑换失败');
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '立即兑换';
+          showAlert('error', '请求失败，请稍后再试');
+        });
+      });
+      
+      // 更新订单表格
+      function updateOrdersTable(orders) {
+        const tbody = document.getElementById('ordersTableBody');
+        if (!tbody) return;
+        
+        // 清空现有行
+        tbody.innerHTML = '';
+        
+        // 添加新行
+        orders.forEach(order => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>#${order.id}</td>
+            <td>${order.account}</td>
+            <td><span class="plan-badge">${order.package}个月</span></td>
+            <td>
+              <span class="status-badge status-${order.status}">
+                ${order.status_text}
+              </span>
+            </td>
+            <td>${order.created_at}</td>
+            <td>
+              <button class="btn btn-primary action-btn view-order" data-id="${order.id}">详情</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+      
+      // 更新余额显示
+      function updateBalanceDisplay(balance) {
+        const balanceBadge = document.querySelector('.balance-badge');
+        if (balanceBadge) {
+          // 更新余额文本
+          balanceBadge.innerHTML = `¥${parseFloat(balance).toFixed(2)}<a href="/recharge" class="recharge-btn">充值</a>`;
+          
+          // 更新样式
+          if (parseFloat(balance) < 0) {
+            balanceBadge.classList.add('negative');
+          } else {
+            balanceBadge.classList.remove('negative');
+          }
+        }
+      }
+      
+      // 显示提示框
+      function showAlert(type, message) {
+        // 移除已有的提示框
+        const existingAlert = document.querySelector('.custom-alert');
+        if (existingAlert) {
+          existingAlert.remove();
+        }
+        
+        // 创建新提示框
+        const alert = document.createElement('div');
+        alert.className = `custom-alert ${type}`;
+        
+        // 图标
+        let icon = '';
+        switch (type) {
+          case 'success':
+            icon = '<i class="fas fa-check-circle custom-alert-icon"></i>';
+            break;
+          case 'warning':
+            icon = '<i class="fas fa-exclamation-triangle custom-alert-icon"></i>';
+            break;
+          case 'error':
+            icon = '<i class="fas fa-times-circle custom-alert-icon"></i>';
+            break;
+        }
+        
+        // 设置内容
+        alert.innerHTML = `
+          ${icon}
+          <span>${message}</span>
+          <span class="custom-alert-close">&times;</span>
+        `;
+        
+        // 添加到页面
+        document.body.appendChild(alert);
+        
+        // 添加关闭按钮事件
+        alert.querySelector('.custom-alert-close').addEventListener('click', function() {
+          alert.remove();
+        });
+        
+        // 自动关闭
+        setTimeout(function() {
+          if (alert.parentNode) {
+            alert.remove();
+          }
+        }, 5000);
+      }
+    });
+  </script>
 </body>
 </html> 
