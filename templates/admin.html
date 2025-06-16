@@ -447,8 +447,7 @@
         <li><a href="#orders" onclick="showTab('orders'); return false;"><i class="fas fa-file-invoice-dollar"></i> 订单管理</a></li>
         <li><a href="#sellers" onclick="showTab('sellers'); return false;"><i class="fas fa-user-tie"></i> 卖家管理</a></li>
         <li><a href="#balance" onclick="showTab('balance'); return false;"><i class="fas fa-money-bill-wave"></i> 余额明细</a></li>
-        <li><a href="/admin/recharge-requests"><i class="fas fa-wallet"></i> 充值管理</a></li>
-        <li><a href="/admin/activation-codes"><i class="fas fa-key"></i> 激活码管理</a></li>
+        <li><a href="#activation-codes" onclick="showTab('activation-codes'); return false;"><i class="fas fa-key"></i> 激活码管理</a></li>
         <li><a href="/"><i class="fas fa-home"></i> 返回前台</a></li>
         <li><a href="/logout"><i class="fas fa-sign-out-alt"></i> 安全退出</a></li>
       </ul>
@@ -580,6 +579,90 @@
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- 激活码管理 -->
+      <div id="activation-codes" class="tab-content">
+        <div class="content-header">
+          <h2><i class="fas fa-key"></i> 激活码管理</h2>
+          <div class="header-actions">
+            <button id="generateCodesBtn" class="btn btn-primary">
+              <i class="fas fa-plus"></i> 生成激活码
+            </button>
+          </div>
+        </div>
+        
+        <!-- 生成激活码表单 -->
+        <div id="generateCodesForm" class="card mb-4" style="display: none;">
+          <div class="card-body">
+            <form id="codesGenerateForm" class="row g-3">
+              <div class="col-md-4">
+                <label for="package" class="form-label">套餐</label>
+                <select class="form-select" id="package" name="package" required>
+                  <option value="">选择套餐</option>
+                  <option value="1">1个月</option>
+                  <option value="3">3个月</option>
+                  <option value="6">6个月</option>
+                  <option value="12">12个月</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label for="count" class="form-label">生成数量</label>
+                <input type="number" class="form-control" id="count" name="count" min="1" max="100" value="1" required>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">&nbsp;</label>
+                <button type="submit" class="btn btn-primary w-100">生成激活码</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        
+        <!-- 生成的激活码展示区域 -->
+        <div id="generatedCodes" class="card mb-4" style="display: none;">
+          <div class="card-body">
+            <h5 class="mb-3">新生成的激活码</h5>
+            <div class="code-container mb-3" style="max-height: 200px; overflow-y: auto; border: 1px solid #dee2e6; padding: 10px; background-color: #f8f9fa;">
+              <div id="codesList"></div>
+            </div>
+            <div class="d-flex justify-content-between">
+              <button id="copyAllBtn" class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-clipboard"></i> 复制全部
+              </button>
+              <button id="copyWithLinksBtn" class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-link"></i> 复制带链接的激活码
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 激活码列表 -->
+        <div class="card">
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-striped table-hover">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>激活码</th>
+                    <th>套餐</th>
+                    <th>状态</th>
+                    <th>创建时间</th>
+                    <th>使用时间</th>
+                    <th>创建者</th>
+                    <th>使用者</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="codesTableBody">
+                  <tr>
+                    <td colspan="9" class="text-center">加载中...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1485,6 +1568,215 @@
     if (userSearchInput) {
       // ... existing code ...
     }
+
+    // 激活码相关功能
+    $("#generateCodesBtn").click(function() {
+      $("#generateCodesForm").slideToggle();
+    });
+    
+    // 加载激活码列表
+    function loadActivationCodes() {
+      $.ajax({
+        url: "/admin/api/activation-codes",
+        method: "GET",
+        success: function(response) {
+          if (response.success) {
+            renderActivationCodes(response.codes);
+          } else {
+            $("#codesTableBody").html(`<tr><td colspan="9" class="text-center text-danger">${response.message || '加载失败'}</td></tr>`);
+          }
+        },
+        error: function() {
+          $("#codesTableBody").html(`<tr><td colspan="9" class="text-center text-danger">请求失败，请稍后再试</td></tr>`);
+        }
+      });
+    }
+    
+    // 渲染激活码列表
+    function renderActivationCodes(codes) {
+      if (codes.length === 0) {
+        $("#codesTableBody").html(`<tr><td colspan="9" class="text-center">暂无激活码</td></tr>`);
+        return;
+      }
+      
+      let html = '';
+      
+      codes.forEach(code => {
+        html += `
+          <tr>
+            <td>${code.id}</td>
+            <td>
+              <div class="d-flex align-items-center">
+                <span class="me-2">${code.code}</span>
+                <i class="fas fa-clipboard copy-code" data-code="${code.code}" style="cursor: pointer;"></i>
+              </div>
+            </td>
+            <td>${code.package}个月</td>
+            <td>
+              <span class="badge ${code.is_used ? 'bg-danger' : 'bg-success'}">
+                ${code.is_used ? '已使用' : '未使用'}
+              </span>
+            </td>
+            <td>${code.created_at}</td>
+            <td>${code.used_at || '-'}</td>
+            <td>${code.creator || '-'}</td>
+            <td>${code.user || '-'}</td>
+            <td>
+              <div class="d-flex">
+                <button class="btn btn-sm btn-outline-primary me-1 copy-link" data-code="${code.code}">
+                  <i class="fas fa-link"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger delete-code" data-id="${code.id}" ${code.is_used ? 'disabled' : ''}>
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      });
+      
+      $("#codesTableBody").html(html);
+      
+      // 复制激活码
+      $(".copy-code").click(function() {
+        const code = $(this).data("code");
+        copyToClipboard(code);
+        showToast("已复制激活码: " + code);
+      });
+      
+      // 复制激活码链接
+      $(".copy-link").click(function() {
+        const code = $(this).data("code");
+        const link = window.location.origin + "/redeem/" + code;
+        copyToClipboard(link);
+        showToast("已复制兑换链接: " + link);
+      });
+      
+      // 删除激活码
+      $(".delete-code").click(function() {
+        const id = $(this).data("id");
+        if (confirm("确定要删除这个激活码吗？此操作不可撤销。")) {
+          $.ajax({
+            url: `/admin/api/activation-codes/${id}`,
+            method: "DELETE",
+            success: function(response) {
+              if (response.success) {
+                showToast("删除成功");
+                loadActivationCodes();
+              } else {
+                showToast(response.message || "删除失败", "error");
+              }
+            },
+            error: function() {
+              showToast("请求失败，请稍后再试", "error");
+            }
+          });
+        }
+      });
+    }
+    
+    // 生成激活码表单提交
+    $("#codesGenerateForm").submit(function(e) {
+      e.preventDefault();
+      
+      const package = $("#package").val();
+      const count = $("#count").val();
+      
+      if (!package) {
+        showToast("请选择套餐", "error");
+        return;
+      }
+      
+      $.ajax({
+        url: "/admin/api/activation-codes",
+        method: "POST",
+        contentType: "application/json",
+        data: JSON.stringify({ package, count }),
+        success: function(response) {
+          if (response.success) {
+            showToast(response.message);
+            showGeneratedCodes(response.codes);
+            loadActivationCodes();
+          } else {
+            showToast(response.message || "生成激活码失败", "error");
+          }
+        },
+        error: function() {
+          showToast("请求失败，请稍后再试", "error");
+        }
+      });
+    });
+    
+    // 显示生成的激活码
+    function showGeneratedCodes(codes) {
+      let html = '';
+      
+      codes.forEach(code => {
+        html += `
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="code-text">${code.code}</span>
+            <i class="fas fa-clipboard copy-gen-code" data-code="${code.code}" style="cursor: pointer;"></i>
+          </div>
+        `;
+      });
+      
+      $("#codesList").html(html);
+      $("#generatedCodes").show();
+      
+      // 复制单个激活码
+      $(".copy-gen-code").click(function() {
+        const code = $(this).data("code");
+        copyToClipboard(code);
+        showToast("已复制激活码: " + code);
+      });
+    }
+    
+    // 复制全部激活码
+    $("#copyAllBtn").click(function() {
+      let allCodes = '';
+      
+      $("#codesList .code-text").each(function() {
+        allCodes += $(this).text() + '\n';
+      });
+      
+      if (allCodes) {
+        copyToClipboard(allCodes);
+        showToast("已复制全部激活码");
+      }
+    });
+    
+    // 复制带链接的激活码
+    $("#copyWithLinksBtn").click(function() {
+      let allCodes = '';
+      const baseUrl = window.location.origin;
+      
+      $("#codesList .code-text").each(function() {
+        const codeText = $(this).text();
+        allCodes += `${codeText} - ${baseUrl}/redeem/${codeText}\n`;
+      });
+      
+      if (allCodes) {
+        copyToClipboard(allCodes);
+        showToast("已复制带链接的激活码");
+      }
+    });
+    
+    // 复制到剪贴板函数
+    function copyToClipboard(text) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+    
+    // 当选择激活码标签页时加载激活码列表
+    $(document).on("tabShown", function(e, tabId) {
+      if (tabId === "activation-codes") {
+        loadActivationCodes();
+      }
+    });
   });
 
   // 显示消息提示

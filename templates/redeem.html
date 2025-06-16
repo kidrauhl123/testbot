@@ -70,7 +70,15 @@
             
             if (codeParam) {
                 document.getElementById('activationCode').value = codeParam;
-                // 如果有激活码参数，自动提交表单
+            }
+            
+            // 获取代码中的激活码（如果有）
+            const codeInput = document.getElementById('activationCode');
+            // 使用Jinja2传递auto_submit变量
+            const autoSubmit = {% if auto_submit|default(false) %}true{% else %}false{% endif %};
+            
+            // 如果有激活码参数且启用自动提交，自动提交表单
+            if (codeInput.value && autoSubmit) {
                 setTimeout(() => {
                     document.getElementById('redeemForm').dispatchEvent(new Event('submit'));
                 }, 500);

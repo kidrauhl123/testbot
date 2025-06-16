@@ -1191,8 +1191,10 @@ def register_routes(app, notification_queue):
 
     @app.route('/redeem/<code>', methods=['GET'])
     def redeem_with_code(code):
-        """带激活码的兑换链接"""
-        return render_template('redeem.html', code=code)
+        """带激活码的兑换链接 - 直接跳转到填充好激活码的兑换页面"""
+        # 自动提交标志
+        auto_submit = True
+        return render_template('redeem.html', code=code, auto_submit=auto_submit)
 
     @app.route('/api/redeem', methods=['POST'])
     def process_redeem():
@@ -1241,13 +1243,13 @@ def register_routes(app, notification_queue):
             logger.error(f"处理激活码兑换请求时出错: {str(e)}", exc_info=True)
             return jsonify({"success": False, "message": f"处理请求时出错: {str(e)}"}), 500
 
-    # 添加管理员管理激活码的路由
+    # 修改admin_activation_codes路由
     @app.route('/admin/activation-codes', methods=['GET'])
     @login_required
     @admin_required
     def admin_activation_codes():
-        """管理员管理激活码页面"""
-        return render_template('admin_activation_codes.html')
+        """重定向到管理页面的激活码标签"""
+        return redirect(url_for('admin_dashboard') + '#activation-codes')
 
     @app.route('/admin/api/activation-codes', methods=['GET'])
     @login_required
