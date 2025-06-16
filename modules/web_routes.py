@@ -9,7 +9,7 @@ import sqlite3
 
 from flask import Flask, request, render_template, jsonify, session, redirect, url_for, flash
 
-from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH
+from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH, DATABASE_URL
 from modules.database import (
     execute_query, hash_password, get_all_sellers, add_seller, remove_seller, toggle_seller_status,
     get_user_balance, get_user_credit_limit, set_user_balance, set_user_credit_limit, refund_order, 
@@ -944,7 +944,6 @@ def register_routes(app, notification_queue):
             total_count = execute_query("SELECT COUNT(*) FROM orders", fetch=True)[0][0]
             if len(order_ids) == total_count:
                 # 全部删除，直接truncate并重置自增ID
-                from modules.constants import DATABASE_URL
                 if DATABASE_URL.startswith('postgres'):
                     import psycopg2
                     from urllib.parse import urlparse
