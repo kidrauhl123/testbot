@@ -1712,26 +1712,26 @@ def mark_activation_code_used(code_id, user_id):
             execute_query("""
                 UPDATE activation_codes
                 SET is_used = 1, used_at = %s, used_by = %s
-                WHERE id = %s AND is_used = 0
+                WHERE id = %s
             """, (now, user_id, code_id))
         else:
             execute_query("""
                 UPDATE activation_codes
                 SET is_used = 1, used_at = ?, used_by = ?
-                WHERE id = ? AND is_used = 0
+                WHERE id = ?
             """, (now, user_id, code_id))
         
         # 检查是否真的更新了记录
         if DATABASE_URL.startswith('postgres'):
             result = execute_query("""
                 SELECT count(*) FROM activation_codes 
-                WHERE id = %s AND is_used = 1 AND used_by = %s
-            """, (code_id, user_id), fetch=True)
+                WHERE id = %s AND is_used = 1
+            """, (code_id,), fetch=True)
         else:
             result = execute_query("""
                 SELECT count(*) FROM activation_codes 
-                WHERE id = ? AND is_used = 1 AND used_by = ?
-            """, (code_id, user_id), fetch=True)
+                WHERE id = ? AND is_used = 1
+            """, (code_id,), fetch=True)
         
         return result[0][0] > 0
     except Exception as e:

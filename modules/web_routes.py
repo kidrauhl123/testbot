@@ -1265,10 +1265,6 @@ def register_routes(app, notification_queue):
             user_id = session.get('user_id', 0)  # 未登录用户使用0作为ID
             username = session.get('username', '未登录用户')
             
-            # 标记激活码为已使用
-            if not mark_activation_code_used(code_info['id'], user_id):
-                return jsonify({"success": False, "error": "激活码使用失败，请稍后再试"}), 500
-            
             # 创建订单记录（自动完成状态）
             now = get_china_time()
             
@@ -1308,28 +1304,28 @@ def register_routes(app, notification_queue):
                 conn.commit()
                 conn.close()
             
+            # 标记激活码为已使用 - 移动到创建订单后，避免订单创建失败但激活码被标记
+            if not mark_activation_code_used(code_info['id'], user_id):
+                logger.warning(f"激活码 {code} 标记失败，但订单已创建: {order_id}")
+                # 继续处理，不中断流程，因为订单已经创建成功
+            
             logger.info(f"用户 {username} 成功兑换激活码 {code}, 套餐: {code_info['package']}, 订单ID: {order_id}")
             
-            # 获取最新订单列表
-            orders_raw = execute_query("SELECT id, account, password, package, status, created_at, user_id FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
-            orders = []
-            
-            for o in orders_raw:
-                orders.append({
-                    "id": o[0],
-                    "account": o[1],
-                    "password": o[2],
-                    "package": o[3],
-                    "status": o[4],
-                    "status_text": STATUS_TEXT_ZH.get(o[4], o[4]),
-                    "created_at": o[5],
-                    "accepted_at": "",
-                    "completed_at": "",
-                    "remark": "",
-                    "creator": username,
-                    "accepted_by": "",
-                    "can_cancel": False  # 已完成的订单不能取消
-                })
+            # 只返回当前创建的订单信息，而不是最近5个订单
+            order = {
+                "id": order_id,
+                "account": account,
+                "password": password,
+                "package": code_info['package'],
+                "status": STATUS['COMPLETED'],
+                "status_text": STATUS_TEXT_ZH.get(STATUS['COMPLETED'], STATUS['COMPLETED']),
+                "created_at": now,
+                "completed_at": now,
+                "remark": f"通过激活码兑换: {code}",
+                "creator": username,
+                "accepted_by": "",
+                "can_cancel": False  # 已完成的订单不能取消
+            }
             
             # 如果用户已登录并成功完成兑换，可以选择重定向到仪表板
             redirect_url = url_for('dashboard') if 'user_id' in session else None
@@ -1338,7 +1334,7 @@ def register_routes(app, notification_queue):
             return jsonify({
                 "success": True, 
                 "message": f"成功兑换{code_info['package']}个月会员!",
-                "orders": orders,
+                "orders": [order],  # 返回包含单个订单的数组
                 "redirect": redirect_url
             })
                 

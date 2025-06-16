@@ -414,6 +414,42 @@
       border-radius: 6px;
       margin-top: 10px;
     }
+    
+    /* 成功消息样式 */
+    .success-message {
+      background-color: #ecfdf5;
+      color: #10b981;
+      padding: 12px 15px;
+      border-radius: 8px;
+      margin-top: 15px;
+      display: flex;
+      align-items: center;
+      font-weight: 500;
+      box-shadow: 0 2px 5px rgba(16, 185, 129, 0.1);
+      border-left: 4px solid #10b981;
+    }
+    
+    .success-message i {
+      margin-right: 10px;
+      font-size: 18px;
+    }
+    
+    /* 提示信息样式 */
+    .instruction-message {
+      text-align: center;
+      padding: 30px;
+      color: #6b7280;
+      background-color: #f9fafb;
+      border-radius: 8px;
+      border: 1px dashed #e5e7eb;
+    }
+    
+    .instruction-message i {
+      font-size: 30px;
+      margin-bottom: 10px;
+      color: #6366f1;
+      display: block;
+    }
   </style>
 </head>
 <body>
@@ -480,27 +516,11 @@
       
       <!-- 右侧订单列表 -->
       <div class="right">
-        <h2>最近订单</h2>
-        {% if orders and orders|length > 0 %}
-          <div class="order-list-container">
-            {% for order in orders %}
-            <div class="order-list-item">
-              <h4>订单 #{{ order[0] }} <span class="status-badge status-{{ order[3] }}">{{ status_text.get(order[3], order[3]) }}</span></h4>
-              <p class="account"><strong>账号：</strong>{{ order[1] }}</p>
-              <p class="package"><strong>套餐：</strong>{{ order[2] }}个月</p>
-              <div class="time-info">
-                <p class="time">提交时间：{{ order[4] }}</p>
-              </div>
-              <button class="btn btn-primary action-btn view-order" data-id="{{ order[0] }}">详情</button>
-            </div>
-            {% endfor %}
-          </div>
-        {% else %}
-          <div class="empty-orders">
-            <i class="fas fa-inbox"></i>
-            <p>暂无订单记录</p>
-          </div>
-        {% endif %}
+        <h2>兑换结果</h2>
+        <div class="instruction-message">
+          <i class="fas fa-info-circle"></i>
+          <p>请输入激活码并填写账号信息，兑换后会显示结果</p>
+        </div>
       </div>
     </div>
   </div>
@@ -514,6 +534,9 @@
       const packageDisplay = document.getElementById('package_display');
       const packageInput = document.getElementById('package');
       const submitBtn = document.getElementById('submitBtn');
+      
+      // 禁用提交按钮，直到验证激活码
+      submitBtn.disabled = true;
       
       // 检查初始激活码
       if (codeInput.value) {
@@ -636,7 +659,7 @@
         if (!container) return;
         
         // 清除现有内容
-        container.innerHTML = '<h2>最近订单</h2>';
+        container.innerHTML = '<h2>兑换结果</h2>';
         
         if (orders.length === 0) {
           // 无订单时显示空状态
@@ -649,37 +672,30 @@
           return;
         }
         
+        // 获取当前兑换的订单（只有一个）
+        const order = orders[0];
+        
         // 创建订单卡片容器
         const orderListContainer = document.createElement('div');
         orderListContainer.className = 'order-list-container';
         
         // 添加订单卡片
-        orders.forEach(order => {
-          const orderItem = document.createElement('div');
-          orderItem.className = 'order-list-item';
-          orderItem.innerHTML = `
-            <h4>订单 #${order.id} <span class="status-badge status-${order.status}">${order.status_text}</span></h4>
-            <p class="account"><strong>账号：</strong>${order.account}</p>
-            <p class="package"><strong>套餐：</strong>${order.package}个月</p>
-            <div class="time-info">
-              <p class="time">提交时间：${order.created_at}</p>
-            </div>
-            <button class="btn btn-primary action-btn view-order" data-id="${order.id}">详情</button>
-          `;
-          orderListContainer.appendChild(orderItem);
-        });
+        const orderItem = document.createElement('div');
+        orderItem.className = 'order-list-item';
+        orderItem.innerHTML = `
+          <h4>订单 #${order.id} <span class="status-badge status-${order.status}">${order.status_text}</span></h4>
+          <p class="account"><strong>账号：</strong>${order.account}</p>
+          <p class="package"><strong>套餐：</strong>${order.package}个月</p>
+          <div class="time-info">
+            <p class="time">提交时间：${order.created_at}</p>
+            <p class="time">完成时间：${order.completed_at || order.created_at}</p>
+          </div>
+          <p class="success-message"><i class="fas fa-check-circle"></i> 恭喜您，会员已成功充值！</p>
+        `;
+        orderListContainer.appendChild(orderItem);
         
         // 添加到容器
         container.appendChild(orderListContainer);
-        
-        // 重新绑定详情按钮事件
-        document.querySelectorAll('.view-order').forEach(btn => {
-          btn.addEventListener('click', function() {
-            const orderId = this.getAttribute('data-id');
-            // 这里添加查看订单详情的逻辑
-            alert(`查看订单 #${orderId} 的详情`);
-          });
-        });
       }
       
       // 更新余额显示
