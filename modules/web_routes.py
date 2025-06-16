@@ -1261,21 +1261,9 @@ def register_routes(app, notification_queue):
                 logger.warning(f"激活码已被使用: {code}")
                 return jsonify({"success": False, "error": "此激活码已被使用"}), 400
             
-            # 检查用户是否已登录
-            if 'user_id' not in session:
-                # 保存到session，等待用户登录
-                session['pending_activation_code'] = code
-                session['pending_account'] = account
-                session['pending_password'] = password
-                
-                return jsonify({
-                    "success": True,
-                    "message": "请先登录以完成兑换",
-                    "redirect": url_for('login')
-                })
-            
-            user_id = session.get('user_id')
-            username = session.get('username')
+            # 用户ID和用户名 - 如果已登录则使用登录信息，否则使用临时值
+            user_id = session.get('user_id', 0)  # 未登录用户使用0作为ID
+            username = session.get('username', '未登录用户')
             
             # 标记激活码为已使用
             if not mark_activation_code_used(code_info['id'], user_id):
@@ -1343,12 +1331,15 @@ def register_routes(app, notification_queue):
                     "can_cancel": False  # 已完成的订单不能取消
                 })
             
+            # 如果用户已登录并成功完成兑换，可以选择重定向到仪表板
+            redirect_url = url_for('dashboard') if 'user_id' in session else None
+            
             # 返回成功消息和订单数据
             return jsonify({
                 "success": True, 
                 "message": f"成功兑换{code_info['package']}个月会员!",
                 "orders": orders,
-                "redirect": url_for('dashboard')
+                "redirect": redirect_url
             })
                 
         except Exception as e:
