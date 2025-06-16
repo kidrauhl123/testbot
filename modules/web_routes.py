@@ -1264,21 +1264,20 @@ def register_routes(app, notification_queue):
             user_id = session.get('user_id', 0)  # 未登录用户使用0作为ID
             username = session.get('username', '未登录用户')
             
-            # 创建订单记录（自动完成状态）
+            # 创建订单记录（状态为已提交，而非已完成）
             now = get_china_time()
             
             if DATABASE_URL.startswith('postgres'):
                 order_result = execute_query("""
-                    INSERT INTO orders (account, password, package, remark, status, created_at, completed_at, user_id)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO orders (account, password, package, remark, status, created_at, user_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                 """, (
                     account,
                     password,
                     code_info['package'],
                     f"通过激活码兑换: {code}",
-                    STATUS['COMPLETED'],
-                    now,
+                    STATUS['SUBMITTED'],  # 改为已提交状态，需要卖家处理
                     now,
                     user_id
                 ), fetch=True)
@@ -1287,15 +1286,14 @@ def register_routes(app, notification_queue):
                 conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
                 cursor = conn.cursor()
                 cursor.execute("""
-                    INSERT INTO orders (account, password, package, remark, status, created_at, completed_at, user_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO orders (account, password, package, remark, status, created_at, user_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (
                     account,
                     password,
                     code_info['package'],
                     f"通过激活码兑换: {code}",
-                    STATUS['COMPLETED'],
-                    now,
+                    STATUS['SUBMITTED'],  # 改为已提交状态，需要卖家处理
                     now,
                     user_id
                 ))
@@ -1316,14 +1314,14 @@ def register_routes(app, notification_queue):
                 "account": account,
                 "password": password,
                 "package": code_info['package'],
-                "status": STATUS['COMPLETED'],
-                "status_text": STATUS_TEXT_ZH.get(STATUS['COMPLETED'], STATUS['COMPLETED']),
+                "status": STATUS['SUBMITTED'],  # 改为已提交状态
+                "status_text": STATUS_TEXT_ZH.get(STATUS['SUBMITTED'], STATUS['SUBMITTED']),
                 "created_at": now,
-                "completed_at": now,
+                "completed_at": None,  # 未完成
                 "remark": f"通过激活码兑换: {code}",
                 "creator": username,
                 "accepted_by": "",
-                "can_cancel": False  # 已完成的订单不能取消
+                "can_cancel": True  # 已提交的订单可以取消
             }
             
             # 如果用户已登录并成功完成兑换，可以选择重定向到仪表板
@@ -1332,7 +1330,7 @@ def register_routes(app, notification_queue):
             # 返回成功消息和订单数据
             return jsonify({
                 "success": True, 
-                "message": f"成功兑换{code_info['package']}个月会员!",
+                "message": f"激活码兑换成功，订单已提交，等待处理!",
                 "orders": [order],  # 返回包含单个订单的数组
                 "redirect": redirect_url
             })

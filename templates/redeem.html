@@ -434,6 +434,25 @@
       font-size: 18px;
     }
     
+    /* 等待处理消息样式 */
+    .pending-message {
+      background-color: #fff7ed;
+      color: #f97316;
+      padding: 12px 15px;
+      border-radius: 8px;
+      margin-top: 15px;
+      display: flex;
+      align-items: center;
+      font-weight: 500;
+      box-shadow: 0 2px 5px rgba(249, 115, 22, 0.1);
+      border-left: 4px solid #f97316;
+    }
+    
+    .pending-message i {
+      margin-right: 10px;
+      font-size: 18px;
+    }
+    
     /* 提示信息样式 */
     .instruction-message {
       text-align: center;
@@ -682,15 +701,24 @@
         // 添加订单卡片
         const orderItem = document.createElement('div');
         orderItem.className = 'order-list-item';
+        
+        // 根据订单状态显示不同的消息
+        let statusMessage = '';
+        if (order.status === 'completed') {
+          statusMessage = `<p class="success-message"><i class="fas fa-check-circle"></i> 恭喜您，会员已成功充值！</p>`;
+        } else {
+          statusMessage = `<p class="pending-message"><i class="fas fa-clock"></i> 订单已提交，等待卖家处理</p>`;
+        }
+        
         orderItem.innerHTML = `
           <h4>订单 #${order.id} <span class="status-badge status-${order.status}">${order.status_text}</span></h4>
           <p class="account"><strong>账号：</strong>${order.account}</p>
           <p class="package"><strong>套餐：</strong>${order.package}个月</p>
           <div class="time-info">
             <p class="time">提交时间：${order.created_at}</p>
-            <p class="time">完成时间：${order.completed_at || order.created_at}</p>
+            ${order.completed_at ? `<p class="time">完成时间：${order.completed_at}</p>` : ''}
           </div>
-          <p class="success-message"><i class="fas fa-check-circle"></i> 恭喜您，会员已成功充值！</p>
+          ${statusMessage}
         `;
         orderListContainer.appendChild(orderItem);
         
