@@ -1666,28 +1666,11 @@ def create_activation_code_table():
                         used_at TEXT,
                         used_by INTEGER,
                         created_by INTEGER,
-                        order_source TEXT,
-                        order_external_id TEXT,
                         FOREIGN KEY (used_by) REFERENCES users (id),
                         FOREIGN KEY (created_by) REFERENCES users (id)
                     )
                 """)
                 logger.info("已创建激活码表(PostgreSQL)")
-            else:
-                # 检查是否需要添加新列
-                columns = execute_query("""
-                    SELECT column_name FROM information_schema.columns 
-                    WHERE table_schema = 'public' AND table_name = 'activation_codes'
-                """, fetch=True)
-                columns = [col[0] for col in columns]
-                
-                if 'order_source' not in columns:
-                    execute_query("ALTER TABLE activation_codes ADD COLUMN order_source TEXT")
-                    logger.info("已向激活码表添加 order_source 列")
-                
-                if 'order_external_id' not in columns:
-                    execute_query("ALTER TABLE activation_codes ADD COLUMN order_external_id TEXT")
-                    logger.info("已向激活码表添加 order_external_id 列")
         else:
             # SQLite
             current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -1708,34 +1691,18 @@ def create_activation_code_table():
                         used_at TEXT,
                         used_by INTEGER,
                         created_by INTEGER,
-                        order_source TEXT,
-                        order_external_id TEXT,
                         FOREIGN KEY (used_by) REFERENCES users (id),
                         FOREIGN KEY (created_by) REFERENCES users (id)
                     )
                 """)
                 conn.commit()
                 logger.info("已创建激活码表(SQLite)")
-            else:
-                # 检查是否需要添加新列
-                cursor.execute("PRAGMA table_info(activation_codes)")
-                columns = [column[1] for column in cursor.fetchall()]
-                
-                if 'order_source' not in columns:
-                    cursor.execute("ALTER TABLE activation_codes ADD COLUMN order_source TEXT")
-                    logger.info("已向激活码表添加 order_source 列")
-                
-                if 'order_external_id' not in columns:
-                    cursor.execute("ALTER TABLE activation_codes ADD COLUMN order_external_id TEXT")
-                    logger.info("已向激活码表添加 order_external_id 列")
-                
-                conn.commit()
             
             conn.close()
         
         return True
     except Exception as e:
-        logger.error(f"创建或更新激活码表失败: {str(e)}", exc_info=True)
+        logger.error(f"创建激活码表失败: {str(e)}", exc_info=True)
         return False
 
 def generate_activation_code(length=16):
@@ -1756,9 +1723,10 @@ def generate_activation_code(length=16):
 
 def create_activation_code(package, created_by=None, count=1):
     """创建激活码"""
-    if count == 1:
-        # 单个激活码，返回(id, code)
-        now = get_china_time()
+    codes = []
+    now = get_china_time()
+    
+    for _ in range(count):
         code = generate_activation_code()
         
         if DATABASE_URL.startswith('postgres'):
@@ -1779,55 +1747,24 @@ def create_activation_code(package, created_by=None, count=1):
             conn.commit()
             conn.close()
         
-        return code_id, code
-    else:
-        # 多个激活码，返回列表
-        codes = []
-        now = get_china_time()
-        
-        for _ in range(count):
-            code = generate_activation_code()
-            
-            if DATABASE_URL.startswith('postgres'):
-                result = execute_query("""
-                    INSERT INTO activation_codes (code, package, created_at, created_by, is_used)
-                    VALUES (%s, %s, %s, %s, 0)
-                    RETURNING id
-                """, (code, package, now, created_by), fetch=True)
-                code_id = result[0][0]
-            else:
-                conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO activation_codes (code, package, created_at, created_by, is_used)
-                    VALUES (?, ?, ?, ?, 0)
-                """, (code, package, now, created_by))
-                code_id = cursor.lastrowid
-                conn.commit()
-                conn.close()
-            
-            codes.append({"id": code_id, "code": code})
-        
-        return codes
+        codes.append({"id": code_id, "code": code})
+    
+    return codes
 
 def get_activation_code(code):
     """获取激活码信息"""
     try:
         if DATABASE_URL.startswith('postgres'):
             result = execute_query("""
-                SELECT ac.id, ac.code, ac.package, ac.is_used, ac.created_at, ac.used_at, ac.used_by,
-                    ac.order_source, ac.order_external_id, u.username as used_by_username
-                FROM activation_codes ac
-                LEFT JOIN users u ON ac.used_by = u.id
-                WHERE ac.code = %s
+                SELECT id, code, package, is_used, created_at, used_at, used_by
+                FROM activation_codes
+                WHERE code = %s
             """, (code,), fetch=True)
         else:
             result = execute_query("""
-                SELECT ac.id, ac.code, ac.package, ac.is_used, ac.created_at, ac.used_at, ac.used_by,
-                    ac.order_source, ac.order_external_id, u.username as used_by_username
-                FROM activation_codes ac
-                LEFT JOIN users u ON ac.used_by = u.id
-                WHERE ac.code = ?
+                SELECT id, code, package, is_used, created_at, used_at, used_by
+                FROM activation_codes
+                WHERE code = ?
             """, (code,), fetch=True)
         
         if result and len(result) > 0:
@@ -1835,13 +1772,10 @@ def get_activation_code(code):
                 "id": result[0][0],
                 "code": result[0][1],
                 "package": result[0][2],
-                "used": result[0][3] == 1,  # 转换为布尔值，方便使用
+                "is_used": result[0][3],
                 "created_at": result[0][4],
                 "used_at": result[0][5],
-                "used_by": result[0][6],
-                "order_source": result[0][7],
-                "order_external_id": result[0][8],
-                "used_by_username": result[0][9]
+                "used_by": result[0][6]
             }
         return None
     except Exception as e:
