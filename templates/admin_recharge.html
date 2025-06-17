@@ -277,6 +277,32 @@
       font-size: 16px;
       margin: 0;
     }
+    
+    /* -- 移动端响应式 -- */
+    @media (max-width: 768px) {
+      .navbar { flex-wrap: wrap; padding: 10px; }
+      .navbar-brand { font-size: 18px; }
+      .navbar-user { gap: 10px; }
+
+      .main-container {
+        max-width: 100%;
+        margin: 10px auto;
+        padding: 0 10px;
+      }
+      .card {
+        padding: 15px;
+      }
+      /* 表格横向滚动 */
+      .recharge-requests table {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      .recharge-requests th, .recharge-requests td {
+        font-size: 12px;
+      }
+    }
   </style>
 </head>
 <body>

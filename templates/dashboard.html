@@ -273,7 +273,7 @@
     
     .stats-container {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      grid-template-columns: repeat(2, 1fr);
       gap: 15px;
       margin-bottom: 20px;
     }
@@ -449,40 +449,45 @@
     .text-warning { color: #ffc107; }
     .text-info { color: #17a2b8; }
     
+    /* -- 移动端响应式增强 -- */
     @media (max-width: 768px) {
-      .stats-container {
-        grid-template-columns: repeat(2, 1fr);
+      .navbar { flex-wrap: wrap; padding: 10px; }
+      .navbar-brand { font-size: 18px; }
+      .navbar-user { gap: 10px; }
+
+      .dashboard-container { flex-direction: column; }
+      .sidebar {
+        width: 100%;
+        margin-bottom: 15px;
+        flex-direction: row;
+        overflow-x: auto;
       }
-      .orders-table {
-        display: block;
+      .sidebar-menu {
+        display: flex;
+        gap: 8px;
       }
-      .orders-table thead {
-        display: none;
+      .sidebar-menu a {
+        flex: 1 0 auto;
+        justify-content: center;
+        padding: 10px 8px;
       }
-      .orders-table tbody,
-      .orders-table tr,
-      .orders-table td {
+      .content {
+        padding: 15px 10px;
+      }
+      .main-container {
+        max-width: 100%;
+        margin: 10px auto;
+        padding: 0 10px;
+      }
+      /* 表格横向滚动 */
+      .orders-table, .transaction-table {
         display: block;
         width: 100%;
+        overflow-x: auto;
+        white-space: nowrap;
       }
-      .orders-table tr {
-        margin-bottom: 15px;
-        border: 1px solid #e9ecef;
-        border-radius: 8px;
-        padding: 10px;
-      }
-      .orders-table td {
-        text-align: right;
-        padding: 8px 10px;
-        position: relative;
-        border-bottom: none;
-      }
-      .orders-table td::before {
-        content: attr(data-label);
-        position: absolute;
-        left: 10px;
-        font-weight: 600;
-        color: #666;
+      .orders-table th, .orders-table td, .transaction-table th, .transaction-table td {
+        font-size: 12px;
       }
     }
   </style>

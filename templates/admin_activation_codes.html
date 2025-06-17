@@ -349,6 +349,48 @@
       cursor: not-allowed;
       opacity: 0.5;
     }
+
+    /* -- 移动端响应式 -- */
+    @media (max-width: 768px) {
+      .navbar { flex-wrap: wrap; padding: 10px; }
+      .navbar-brand { font-size: 18px; }
+      .navbar-user { gap: 10px; }
+
+      .admin-container { flex-direction: column; }
+      .sidebar {
+        width: 100%;
+        margin-bottom: 15px;
+        flex-direction: row;
+        overflow-x: auto;
+      }
+      .sidebar-menu {
+        display: flex;
+        gap: 8px;
+      }
+      .sidebar-menu a {
+        flex: 1 0 auto;
+        justify-content: center;
+        padding: 10px 8px;
+      }
+      .content {
+        padding: 15px 10px;
+      }
+      .main-container {
+        max-width: 100%;
+        margin: 10px auto;
+        padding: 0 10px;
+      }
+      /* 让宽表横向滚动 */
+      .data-table {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      .data-table th, .data-table td {
+        font-size: 12px;
+      }
+    }
   </style>
 </head>
 <body>
