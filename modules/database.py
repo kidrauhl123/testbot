@@ -294,6 +294,19 @@ def init_postgres_db():
         )
     """)
     
+    # 用户定制价格表
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS user_custom_prices (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            package TEXT NOT NULL,
+            price REAL NOT NULL,
+            created_at TEXT NOT NULL,
+            created_by INTEGER NOT NULL,
+            UNIQUE(user_id, package)
+        )
+    """)
+    
     # 检查是否需要添加新列
     try:
         c.execute("SELECT user_id FROM orders LIMIT 1")
@@ -1826,10 +1839,16 @@ def get_user_custom_prices(user_id):
     - 用户定制价格的字典，键为套餐（如'1'），值为价格
     """
     try:
-        results = execute_query("""
-            SELECT package, price FROM user_custom_prices
-            WHERE user_id = ?
-        """, (user_id,), fetch=True)
+        if DATABASE_URL.startswith('postgres'):
+            results = execute_query("""
+                SELECT package, price FROM user_custom_prices
+                WHERE user_id = %s
+            """, (user_id,), fetch=True)
+        else:
+            results = execute_query("""
+                SELECT package, price FROM user_custom_prices
+                WHERE user_id = ?
+            """, (user_id,), fetch=True)
         
         if not results:
             return {}
@@ -1860,25 +1879,46 @@ def set_user_custom_price(user_id, package, price, admin_id):
         now = get_china_time()
         
         # 检查是否已存在该用户的该套餐定制价格
-        existing = execute_query("""
-            SELECT id FROM user_custom_prices
-            WHERE user_id = ? AND package = ?
-        """, (user_id, package), fetch=True)
-        
-        if existing:
-            # 更新已有价格
-            execute_query("""
-                UPDATE user_custom_prices
-                SET price = ?, created_at = ?, created_by = ?
-                WHERE user_id = ? AND package = ?
-            """, (price, now, admin_id, user_id, package))
+        if DATABASE_URL.startswith('postgres'):
+            existing = execute_query("""
+                SELECT id FROM user_custom_prices
+                WHERE user_id = %s AND package = %s
+            """, (user_id, package), fetch=True)
+            
+            if existing:
+                # 更新已有价格
+                execute_query("""
+                    UPDATE user_custom_prices
+                    SET price = %s, created_at = %s, created_by = %s
+                    WHERE user_id = %s AND package = %s
+                """, (price, now, admin_id, user_id, package))
+            else:
+                # 添加新价格
+                execute_query("""
+                    INSERT INTO user_custom_prices
+                    (user_id, package, price, created_at, created_by)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (user_id, package, price, now, admin_id))
         else:
-            # 添加新价格
-            execute_query("""
-                INSERT INTO user_custom_prices
-                (user_id, package, price, created_at, created_by)
-                VALUES (?, ?, ?, ?, ?)
-            """, (user_id, package, price, now, admin_id))
+            existing = execute_query("""
+                SELECT id FROM user_custom_prices
+                WHERE user_id = ? AND package = ?
+            """, (user_id, package), fetch=True)
+            
+            if existing:
+                # 更新已有价格
+                execute_query("""
+                    UPDATE user_custom_prices
+                    SET price = ?, created_at = ?, created_by = ?
+                    WHERE user_id = ? AND package = ?
+                """, (price, now, admin_id, user_id, package))
+            else:
+                # 添加新价格
+                execute_query("""
+                    INSERT INTO user_custom_prices
+                    (user_id, package, price, created_at, created_by)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (user_id, package, price, now, admin_id))
             
         return True
     except Exception as e:
@@ -1897,10 +1937,16 @@ def delete_user_custom_price(user_id, package):
     - 成功返回True，失败返回False
     """
     try:
-        execute_query("""
-            DELETE FROM user_custom_prices
-            WHERE user_id = ? AND package = ?
-        """, (user_id, package))
+        if DATABASE_URL.startswith('postgres'):
+            execute_query("""
+                DELETE FROM user_custom_prices
+                WHERE user_id = %s AND package = %s
+            """, (user_id, package))
+        else:
+            execute_query("""
+                DELETE FROM user_custom_prices
+                WHERE user_id = ? AND package = ?
+            """, (user_id, package))
         return True
     except Exception as e:
         logger.error(f"删除用户定制价格失败: {str(e)}", exc_info=True)
