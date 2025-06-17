@@ -236,7 +236,7 @@
       flex: 1;
       background: rgba(255,255,255,0.95);
       border-radius: 15px;
-      padding: 20px;
+      padding: 30px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.1);
       backdrop-filter: blur(10px);
     }
@@ -251,303 +251,238 @@
       margin-bottom: 20px;
       padding-bottom: 15px;
       border-bottom: 1px solid #f0f0f0;
-      flex-wrap: wrap;
-      gap: 10px;
     }
     
     .content-header h2 {
       margin: 0;
       font-weight: 400;
-      font-size: 1.5rem;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .card {
+      background: rgba(255,255,255,0.95);
+      border-radius: 15px;
+      padding: 20px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      backdrop-filter: blur(10px);
     }
     
-    .data-table {
+    .stats-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    
+    .stat-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+      padding: 20px;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+    
+    .stat-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+    }
+    
+    .stat-icon {
+      font-size: 28px;
+      margin-bottom: 10px;
+      color: #667eea;
+    }
+    
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 5px;
+    }
+    
+    .stat-label {
+      font-size: 14px;
+      color: #666;
+    }
+    
+    /* 订单表格样式 */
+    .orders-table-container {
+      overflow-x: auto;
+    }
+    
+    .orders-table {
       width: 100%;
       border-collapse: collapse;
-      overflow-x: auto;
-      display: block;
-    }
-    
-    .data-table th, .data-table td {
-      padding: 10px 12px;
-      text-align: left;
-      border-bottom: 1px solid #e9ecef;
-      vertical-align: middle;
-      white-space: nowrap;
-    }
-    
-    .data-table th {
-      background: #f8f9fa;
-      font-weight: 600;
-    }
-    
-    .data-table tr:hover {
-      background: #f8f9fa;
-    }
-    
-    .form-group {
-      margin-bottom: 15px;
-    }
-    
-    .form-group label {
-      display: block;
-      margin-bottom: 5px;
-      font-weight: 500;
-    }
-    
-    .form-control {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: 5px;
+      margin-top: 15px;
       font-size: 14px;
     }
     
-    .error-message {
-      color: #dc3545;
-      margin-bottom: 15px;
-      padding: 8px;
-      background: #f8d7da;
-      border-radius: 5px;
-    }
-    
-    /* 移动端菜单收起/展开功能 */
-    .menu-toggle {
-      display: none;
-      background: none;
-      border: none;
-      color: #333;
-      font-size: 20px;
-      cursor: pointer;
-      padding: 5px;
-    }
-    
-    /* 卡片式订单样式 */
-    .order-cards {
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
-    }
-    
-    .order-card {
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-      overflow: hidden;
-      border-left: 4px solid #667eea;
-    }
-    
-    .order-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+    .orders-table th {
+      background-color: #f8f9fa;
       padding: 12px 15px;
-      background: #f8f9fa;
-      border-bottom: 1px solid #eee;
-    }
-    
-    .order-id {
+      text-align: left;
       font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 5px;
+      color: #333;
+      border-bottom: 2px solid #e9ecef;
     }
     
-    .order-status {
-      padding: 4px 10px;
+    .orders-table td {
+      padding: 12px 15px;
+      border-bottom: 1px solid #e9ecef;
+      vertical-align: middle;
+    }
+    
+    .orders-table tr:hover {
+      background-color: #f8f9fa;
+    }
+    
+    .orders-table tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .status-badge {
+      display: inline-block;
+      padding: 3px 10px;
       border-radius: 20px;
       font-size: 12px;
       font-weight: 600;
     }
     
-    .status-completed {
-      background: #e6f8f1;
-      color: #2ecc71;
+    .status-submitted { background: #e9f5fe; color: #3498db; }
+    .status-accepted { background: #fef2e5; color: #f39c12; }
+    .status-completed { background: #e6f8f1; color: #2ecc71; }
+    .status-failed { background: #feeaea; color: #e74c3c; }
+    .status-cancelled { background: #f4f4f4; color: #7f8c8d; }
+    
+    .no-orders {
+      text-align: center;
+      padding: 30px;
+      color: #999;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 50px;
+      color: #667eea;
     }
     
-    .status-submitted {
-      background: #e9f5fe;
-      color: #3498db;
-    }
-    
-    .status-accepted {
-      background: #fef2e5;
-      color: #f39c12;
-    }
-    
-    .status-failed {
-      background: #feeaea;
-      color: #e74c3c;
-    }
-    
-    .status-cancelled {
-      background: #f4f4f4;
-      color: #7f8c8d;
-    }
-    
-    .order-card-body {
-      padding: 15px;
-    }
-    
-    .order-info-item {
+    .package-stats {
       display: flex;
-      margin-bottom: 10px;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    
+    .package-stat {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 10px 15px;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
       align-items: center;
     }
     
-    .order-info-label {
-      width: 24px;
-      color: #666;
-      font-size: 14px;
-      text-align: center;
-      margin-right: 10px;
-    }
-    
-    .order-info-value {
-      flex: 1;
-      font-size: 14px;
-    }
-    
-    .order-times {
-      background: #f8f9fa;
-      padding: 10px 15px;
-      font-size: 12px;
-      color: #666;
-      border-top: 1px solid #eee;
-    }
-    
-    .order-time-item {
-      display: flex;
-      justify-content: space-between;
+    .package-stat-value {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
       margin-bottom: 5px;
     }
     
-    .order-actions {
+    .package-stat-label {
+      color: #666;
+    }
+    
+    .balance-summary {
       display: flex;
-      gap: 10px;
-      padding: 10px 15px;
-      background: #fff;
-      border-top: 1px solid #eee;
+      gap: 20px;
+      margin-bottom: 30px;
     }
     
-    /* 添加移动端适配的媒体查询 */
-    @media (min-width: 768px) {
-      .content-header h2 {
-        font-size: 1.8rem;
+    .balance-info {
+      background: #f8f9fa;
+      padding: 15px 25px;
+      border-radius: 10px;
+      flex: 1;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+    }
+    
+    .balance-label {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 5px;
+    }
+    
+    .balance-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #333;
+    }
+    
+    .transaction-container {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+    }
+    
+    .transaction-container h3 {
+      margin-top: 0;
+      margin-bottom: 15px;
+      font-weight: 500;
+      color: #333;
+    }
+    
+    .transaction-table {
+      width: 100%;
+      margin-top: 0;
+    }
+    
+    .text-success { color: #28a745; }
+    .text-danger { color: #dc3545; }
+    .text-warning { color: #ffc107; }
+    .text-info { color: #17a2b8; }
+    
+    @media (max-width: 768px) {
+      .stats-container {
+        grid-template-columns: repeat(2, 1fr);
       }
-      
-      .data-table {
-        display: table;
-      }
-      
-      /* 桌面端显示表格视图，隐藏卡片视图 */
       .orders-table {
-        display: table !important;
+        display: block;
       }
-      
-      .order-cards {
-        display: none !important;
+      .orders-table thead {
+        display: none;
       }
-      
-      /* 隐藏移动端菜单按钮 */
-      .menu-toggle {
-        display: none !important;
-      }
-    }
-    
-    /* 添加表格响应式处理 */
-    @media (max-width: 767px) {
-      .navbar {
-        flex-wrap: wrap;
-      }
-      
-      .navbar-user {
-        margin-top: 5px;
-      }
-      
-      .dashboard-container {
-        flex-direction: column;
-      }
-      
-      .sidebar {
-        width: 100%;
-        padding: 15px;
-      }
-      
-      .sidebar-menu {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 5px;
-      }
-      
-      .sidebar-menu a {
-        padding: 10px 12px;
-        flex: 1 0 auto;
-        min-width: 120px;
-        justify-content: center;
-      }
-      
-      .sidebar-menu i {
-        margin-right: 8px;
-        width: 16px;
-      }
-      
-      .data-table, .data-table tbody, .data-table tr {
+      .orders-table tbody,
+      .orders-table tr,
+      .orders-table td {
         display: block;
         width: 100%;
       }
-      
-      .data-table thead {
-        display: none;
-      }
-      
-      .data-table td {
-        display: flex;
-        padding: 8px 10px;
-        border: none;
-        justify-content: space-between;
-        align-items: center;
-        position: relative;
-      }
-      
-      .data-table td:before {
-        content: attr(data-label);
-        font-weight: 600;
-        margin-right: 10px;
-      }
-      
-      .data-table tr {
+      .orders-table tr {
         margin-bottom: 15px;
         border: 1px solid #e9ecef;
         border-radius: 8px;
-        overflow: hidden;
+        padding: 10px;
       }
-      
-      .btn-sm {
-        padding: 6px 10px;
-        margin: 2px 0;
+      .orders-table td {
+        text-align: right;
+        padding: 8px 10px;
+        position: relative;
+        border-bottom: none;
       }
-      
-      .header-actions .btn {
-        padding: 6px 12px;
-      }
-      
-      .menu-toggle {
-        display: block;
-        margin-bottom: 10px;
-      }
-      
-      .sidebar-menu.collapsed {
-        display: none;
-      }
-      
-      /* 移动端显示卡片视图，隐藏表格视图 */
-      .orders-table {
-        display: none !important;
-      }
-      
-      .order-cards {
-        display: flex !important;
+      .orders-table td::before {
+        content: attr(data-label);
+        position: absolute;
+        left: 10px;
+        font-weight: 600;
+        color: #666;
       }
     }
   </style>
@@ -600,8 +535,7 @@
 <div class="main-container">
   <div class="dashboard-container">
     <div class="sidebar">
-      <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i> 菜单</button>
-      <ul class="sidebar-menu" id="sidebarMenu">
+      <ul class="sidebar-menu">
         <li><a href="#orders" class="active"><i class="fas fa-shopping-cart"></i> 订单管理</a></li>
         <li><a href="#balance"><i class="fas fa-dollar-sign"></i> 余额明细</a></li>
       </ul>
@@ -674,38 +608,6 @@
   
   // 存储所有订单数据
   let allOrders = [];
-  
-  // 移动端菜单切换
-  const menuToggle = document.getElementById('menuToggle');
-  const sidebarMenu = document.getElementById('sidebarMenu');
-  
-  if (menuToggle && sidebarMenu) {
-    menuToggle.addEventListener('click', function() {
-      sidebarMenu.classList.toggle('collapsed');
-      
-      // 切换图标
-      const icon = this.querySelector('i');
-      if (icon) {
-        if (sidebarMenu.classList.contains('collapsed')) {
-          icon.className = 'fas fa-bars';
-        } else {
-          icon.className = 'fas fa-times';
-        }
-      }
-    });
-    
-    // 在移动端点击菜单项后自动收起菜单
-    sidebarMenu.querySelectorAll('a').forEach(link => {
-      link.addEventListener('click', function() {
-        if (window.innerWidth < 768) {
-          sidebarMenu.classList.add('collapsed');
-          if (menuToggle.querySelector('i')) {
-            menuToggle.querySelector('i').className = 'fas fa-bars';
-          }
-        }
-      });
-    });
-  }
   
   // 显示指定的标签页
   function showTab(tabId) {
@@ -811,7 +713,6 @@
   function renderOrdersTable(orders) {
     const container = document.getElementById('orders-container');
     
-    // 表格视图 (用于桌面端)
     let tableHtml = `
       <table class="orders-table">
         <thead>
@@ -862,75 +763,7 @@
       </table>
     `;
     
-    // 卡片视图 (用于移动端)
-    let cardsHtml = `<div class="order-cards">`;
-    
-    for (const order of orders) {
-      const statusClass = 'status-' + order.status;
-      const price = WEB_PRICES[order.package] || 'N/A';
-      
-      cardsHtml += `
-        <div class="order-card">
-          <div class="order-card-header">
-            <div class="order-id">
-              <i class="fas fa-receipt"></i> 订单 #${order.id}
-            </div>
-            <div class="order-status ${statusClass}">${order.status_text}</div>
-          </div>
-          <div class="order-card-body">
-            <div class="order-info-item">
-              <div class="order-info-label"><i class="fas fa-user-circle"></i></div>
-              <div class="order-info-value">账号: ${escapeHtml(order.account)}</div>
-            </div>
-            ${order.password ? `
-            <div class="order-info-item">
-              <div class="order-info-label"><i class="fas fa-key"></i></div>
-              <div class="order-info-value">密码: ${escapeHtml(order.password)}</div>
-            </div>` : ''}
-            <div class="order-info-item">
-              <div class="order-info-label"><i class="fas fa-box"></i></div>
-              <div class="order-info-value">套餐: ${order.package}个月</div>
-            </div>
-            <div class="order-info-item">
-              <div class="order-info-label"><i class="fas fa-tag"></i></div>
-              <div class="order-info-value">价格: ¥${price}</div>
-            </div>
-            ${order.remark ? `
-            <div class="order-info-item">
-              <div class="order-info-label"><i class="fas fa-comment"></i></div>
-              <div class="order-info-value" style="${order.status === 'failed' ? 'color: #e74c3c;' : ''}">
-                备注: ${escapeHtml(order.remark)}
-              </div>
-            </div>` : ''}
-          </div>
-          <div class="order-times">
-            <div class="order-time-item">
-              <span>提交时间:</span>
-              <span>${order.created_at}</span>
-            </div>
-            ${order.accepted_at ? `
-            <div class="order-time-item">
-              <span>接单时间:</span>
-              <span>${order.accepted_at}</span>
-            </div>` : ''}
-            ${order.completed_at ? `
-            <div class="order-time-item">
-              <span>完成时间:</span>
-              <span>${order.completed_at}</span>
-            </div>` : ''}
-          </div>
-          <div class="order-actions">
-            <button class="btn btn-sm btn-info" onclick="showOrderDetail(${order.id})">详情</button>
-            ${order.status === 'completed' ? `<button class="btn btn-sm btn-danger" onclick="disputeOrder(${order.id})">质疑</button>` : ''}
-          </div>
-        </div>
-      `;
-    }
-    
-    cardsHtml += `</div>`;
-    
-    // 合并两种视图
-    container.innerHTML = tableHtml + cardsHtml;
+    container.innerHTML = tableHtml;
   }
   
   // 显示订单详情
@@ -945,6 +778,10 @@
     detailMessage += `套餐: ${order.package}个月\n`;
     detailMessage += `状态: ${order.status_text}\n`;
     detailMessage += `提交时间: ${order.created_at}\n`;
+    
+    if (order.accepted_at) {
+      detailMessage += `接单时间: ${order.accepted_at}\n`;
+    }
     
     if (order.completed_at) {
       detailMessage += `完成时间: ${order.completed_at}\n`;
