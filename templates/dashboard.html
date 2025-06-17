@@ -50,6 +50,8 @@
     }
     .btn-primary { background: #667eea; color: white; }
     .btn-danger { background: #dc3545; color: white; }
+    .btn-info { background: #17a2b8; color: white; }
+    .btn-sm { padding: 4px 8px; font-size: 12px; margin: 2px; }
     
     /* 用户下拉菜单样式 */
     .user-dropdown {
@@ -750,6 +752,7 @@
           </td>
           <td>
             <button class="btn btn-sm btn-info" onclick="showOrderDetail(${order.id})">详情</button>
+            ${order.status === 'completed' ? `<button class="btn btn-sm btn-danger" onclick="disputeOrder(${order.id})">质疑</button>` : ''}
           </td>
         </tr>
       `;
@@ -799,6 +802,33 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
+  }
+  
+  // 质疑订单（当订单显示充值成功但实际未成功时）
+  async function disputeOrder(orderId) {
+    if (!confirm('您确定要质疑此订单吗？如果订单显示充值成功但实际未成功，请点击确定。')) return;
+    
+    try {
+      const response = await fetch(`/orders/dispute/${orderId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        alert('质疑已提交，订单状态已更新，卖家将收到通知处理此问题');
+        // 重新加载订单列表
+        loadOrdersAndStats();
+      } else {
+        alert(result.error || '质疑提交失败，请重试');
+      }
+    } catch (e) {
+      console.error('质疑订单失败', e);
+      alert('质疑提交失败，请重试');
+    }
   }
   
   // 页面加载完成后执行
