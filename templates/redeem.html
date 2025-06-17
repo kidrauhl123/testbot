@@ -502,7 +502,9 @@
       <!-- 左侧表单 -->
       <div class="left">
         <h2>激活码兑换</h2>
-        <form id="redeemForm">
+        <form id="redeemForm" 
+              data-has-order-info="{% if order_info %}true{% else %}false{% endif %}" 
+              data-is-code-used="{% if code_info and code_info.is_used %}true{% else %}false{% endif %}">
           <div class="form-group">
             <label for="account">账号</label>
             <input type="text" class="form-control" id="account" name="account" placeholder="请输入账号" required>
@@ -536,10 +538,38 @@
       <!-- 右侧订单列表 -->
       <div class="right">
         <h2>兑换结果</h2>
+        {% if order_info %}
+        <!-- 如果有订单信息，显示订单卡片 -->
+        <div class="order-list-container">
+          <div class="order-list-item">
+            <h4>订单 #{{ order_info.id }} <span class="status-badge status-{{ order_info.status }}">{{ order_info.status_text }}</span></h4>
+            <p class="account"><strong>账号：</strong>{{ order_info.account }}</p>
+            <p class="package"><strong>套餐：</strong>{{ order_info.package }}个月</p>
+            <div class="time-info">
+              <p class="time">提交时间：{{ order_info.created_at }}</p>
+              {% if order_info.completed_at %}
+              <p class="time">完成时间：{{ order_info.completed_at }}</p>
+              {% endif %}
+            </div>
+            {% if order_info.status == 'completed' %}
+            <p class="success-message"><i class="fas fa-check-circle"></i> 恭喜您，会员已成功充值！</p>
+            {% else %}
+            <p class="pending-message"><i class="fas fa-clock"></i> 订单已提交，等待卖家处理</p>
+            {% endif %}
+          </div>
+        </div>
+        {% elif code_info and code_info.is_used %}
+        <!-- 如果激活码已使用但没有找到订单 -->
+        <div class="instruction-message" style="background-color: #fef2f2; border-color: #ef4444;">
+          <i class="fas fa-exclamation-circle" style="color: #ef4444;"></i>
+          <p style="color: #ef4444;">此激活码已被使用，但未找到关联订单</p>
+        </div>
+        {% else %}
         <div class="instruction-message">
           <i class="fas fa-info-circle"></i>
           <p>请输入激活码并填写账号信息，兑换后会显示结果</p>
         </div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -554,12 +584,23 @@
       const packageInput = document.getElementById('package');
       const submitBtn = document.getElementById('submitBtn');
       
+      // 从HTML数据属性获取服务器变量
+      const hasOrderInfo = redeemForm.dataset.hasOrderInfo === 'true';
+      const isCodeUsed = redeemForm.dataset.isCodeUsed === 'true';
+      
       // 禁用提交按钮，直到验证激活码
       submitBtn.disabled = true;
       
       // 检查初始激活码
       if (codeInput.value) {
-        verifyActivationCode(codeInput.value);
+        // 如果已经有订单信息，说明激活码已被使用，不需要再验证
+        if (hasOrderInfo || isCodeUsed) {
+          packageDisplay.value = '此激活码已被使用';
+          packageInput.value = '';
+          submitBtn.disabled = true;
+        } else {
+          verifyActivationCode(codeInput.value);
+        }
       }
       
       // 当激活码输入框值变化时
@@ -657,7 +698,7 @@
             if (data.redirect) {
               setTimeout(function() {
                 window.location.href = data.redirect;
-              }, 1500);
+              }, data.redirect_delay || 1500);
             }
           } else {
             // 失败

@@ -1177,13 +1177,40 @@ def register_routes(app, notification_queue):
         try:
             orders = execute_query("SELECT id, account, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             
+            # 如果有激活码参数，检查是否已被使用，并获取相关订单信息
+            order_info = None
+            code_info = None
+            if code:
+                code_info = get_activation_code(code)
+                if code_info and code_info['is_used']:
+                    # 如果激活码已使用，查找使用此激活码创建的订单
+                    order_query = execute_query(
+                        "SELECT id, account, package, status, created_at, completed_at, remark FROM orders WHERE remark LIKE ? ORDER BY id DESC LIMIT 1", 
+                        (f"%通过激活码兑换: {code}%",), 
+                        fetch=True
+                    )
+                    if order_query and len(order_query) > 0:
+                        order = order_query[0]
+                        order_info = {
+                            "id": order[0],
+                            "account": order[1],
+                            "package": order[2],
+                            "status": order[3],
+                            "status_text": STATUS_TEXT_ZH.get(order[3], order[3]),
+                            "created_at": order[4],
+                            "completed_at": order[5] or "",
+                            "remark": order[6]
+                        }
+            
             return render_template('redeem.html', 
                                    code=code,
                                    orders=orders, 
                                    status_text=STATUS_TEXT_ZH,
                                    username=session.get('username'),
                                    is_admin=session.get('is_admin'),
-                                   balance=get_user_balance(session.get('user_id', 0)))
+                                   balance=get_user_balance(session.get('user_id', 0)),
+                                   order_info=order_info,
+                                   code_info=code_info)
         except Exception as e:
             logger.error(f"加载兑换页面失败: {str(e)}", exc_info=True)
             return render_template('redeem.html', 
@@ -1216,8 +1243,25 @@ def register_routes(app, notification_queue):
             
             # 检查激活码是否已使用
             if code_info['is_used']:
-                logger.warning(f"激活码已被使用: {code}")
-                return jsonify({"success": False, "message": "此激活码已被使用"}), 400
+                # 查找使用此激活码创建的订单
+                order_query = execute_query(
+                    "SELECT id, status FROM orders WHERE remark LIKE ? ORDER BY id DESC LIMIT 1", 
+                    (f"%通过激活码兑换: {code}%",), 
+                    fetch=True
+                )
+                
+                if order_query and len(order_query) > 0:
+                    order_id = order_query[0][0]
+                    order_status = order_query[0][1]
+                    status_text = STATUS_TEXT_ZH.get(order_status, order_status)
+                    logger.warning(f"激活码已被使用: {code}, 关联订单 #{order_id}, 状态: {status_text}")
+                    return jsonify({
+                        "success": False, 
+                        "message": f"此激活码已被使用，关联订单 #{order_id}，状态: {status_text}"
+                    }), 400
+                else:
+                    logger.warning(f"激活码已被使用: {code}, 但未找到关联订单")
+                    return jsonify({"success": False, "message": "此激活码已被使用"}), 400
             
             # 返回成功和套餐信息
             return jsonify({
@@ -1257,8 +1301,25 @@ def register_routes(app, notification_queue):
             
             # 检查激活码是否已使用
             if code_info['is_used']:
-                logger.warning(f"激活码已被使用: {code}")
-                return jsonify({"success": False, "error": "此激活码已被使用"}), 400
+                # 查找使用此激活码创建的订单
+                order_query = execute_query(
+                    "SELECT id, status FROM orders WHERE remark LIKE ? ORDER BY id DESC LIMIT 1", 
+                    (f"%通过激活码兑换: {code}%",), 
+                    fetch=True
+                )
+                
+                if order_query and len(order_query) > 0:
+                    order_id = order_query[0][0]
+                    order_status = order_query[0][1]
+                    status_text = STATUS_TEXT_ZH.get(order_status, order_status)
+                    logger.warning(f"激活码已被使用: {code}, 关联订单 #{order_id}, 状态: {status_text}")
+                    return jsonify({
+                        "success": False, 
+                        "error": f"此激活码已被使用，关联订单 #{order_id}，状态: {status_text}"
+                    }), 400
+                else:
+                    logger.warning(f"激活码已被使用: {code}, 但未找到关联订单")
+                    return jsonify({"success": False, "error": "此激活码已被使用"}), 400
             
             # 用户ID和用户名 - 如果已登录则使用登录信息，否则使用临时值
             user_id = session.get('user_id', 0)  # 未登录用户使用0作为ID
@@ -1308,7 +1369,7 @@ def register_routes(app, notification_queue):
             
             logger.info(f"用户 {username} 成功兑换激活码 {code}, 套餐: {code_info['package']}, 订单ID: {order_id}")
             
-            # 只返回当前创建的订单信息，而不是最近5个订单
+            # 获取完整的订单信息
             order = {
                 "id": order_id,
                 "account": account,
@@ -1332,7 +1393,8 @@ def register_routes(app, notification_queue):
                 "success": True, 
                 "message": f"激活码兑换成功，订单已提交，等待处理!",
                 "orders": [order],  # 返回包含单个订单的数组
-                "redirect": redirect_url
+                "redirect": redirect_url,
+                "redirect_delay": 3000  # 延迟3秒后重定向，给用户足够时间查看结果
             })
                 
         except Exception as e:
