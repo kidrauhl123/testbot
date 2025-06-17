@@ -21,7 +21,6 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      flex-wrap: wrap;
     }
     .navbar-brand {
       font-size: 24px;
@@ -35,7 +34,6 @@
       align-items: center;
       gap: 20px;
       position: relative;
-      margin-top: 5px;
     }
     .btn {
       border: none;
@@ -187,45 +185,40 @@
     .main-container {
       max-width: 1400px;
       margin: 20px auto;
-      padding: 10px;
+      padding: 20px;
     }
     
     .dashboard-container {
       display: flex;
       gap: 20px;
-      flex-direction: column;
     }
     
     .sidebar {
-      width: 100%;
+      width: 240px;
+      flex-shrink: 0;
       background: rgba(255,255,255,0.95);
       border-radius: 15px;
-      padding: 15px;
+      padding: 20px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.1);
       backdrop-filter: blur(10px);
+      align-self: flex-start;
     }
     
     .sidebar-menu {
       list-style: none;
       padding: 0;
       margin: 0;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 5px;
     }
     
     .sidebar-menu a {
       display: flex;
       align-items: center;
-      padding: 10px 12px;
+      padding: 12px 15px;
       color: #333;
       text-decoration: none;
       border-radius: 8px;
       transition: all 0.3s ease;
       font-weight: 500;
-      flex: 1 0 auto;
-      min-width: 120px;
-      justify-content: center;
     }
     
     .sidebar-menu a:hover, .sidebar-menu a.active {
@@ -234,8 +227,8 @@
     }
     
     .sidebar-menu i {
-      margin-right: 8px;
-      width: 16px;
+      margin-right: 12px;
+      width: 20px;
       text-align: center;
     }
     
@@ -439,27 +432,6 @@
     
     /* 添加移动端适配的媒体查询 */
     @media (min-width: 768px) {
-      .dashboard-container {
-        flex-direction: row;
-      }
-      
-      .sidebar {
-        width: 240px;
-        flex-shrink: 0;
-      }
-      
-      .sidebar-menu {
-        flex-direction: column;
-      }
-      
-      .sidebar-menu a {
-        justify-content: flex-start;
-      }
-      
-      .navbar-user {
-        margin-top: 0;
-      }
-      
       .content-header h2 {
         font-size: 1.8rem;
       }
@@ -468,18 +440,58 @@
         display: table;
       }
       
-      /* 桌面端可以使用表格视图 */
-      .order-cards {
-        display: none;
+      /* 桌面端显示表格视图，隐藏卡片视图 */
+      .orders-table {
+        display: table !important;
       }
       
-      .orders-table {
-        display: table;
+      .order-cards {
+        display: none !important;
+      }
+      
+      /* 隐藏移动端菜单按钮 */
+      .menu-toggle {
+        display: none !important;
       }
     }
     
     /* 添加表格响应式处理 */
     @media (max-width: 767px) {
+      .navbar {
+        flex-wrap: wrap;
+      }
+      
+      .navbar-user {
+        margin-top: 5px;
+      }
+      
+      .dashboard-container {
+        flex-direction: column;
+      }
+      
+      .sidebar {
+        width: 100%;
+        padding: 15px;
+      }
+      
+      .sidebar-menu {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+      }
+      
+      .sidebar-menu a {
+        padding: 10px 12px;
+        flex: 1 0 auto;
+        min-width: 120px;
+        justify-content: center;
+      }
+      
+      .sidebar-menu i {
+        margin-right: 8px;
+        width: 16px;
+      }
+      
       .data-table, .data-table tbody, .data-table tr {
         display: block;
         width: 100%;
@@ -529,13 +541,13 @@
         display: none;
       }
       
-      /* 移动端使用卡片视图 */
+      /* 移动端显示卡片视图，隐藏表格视图 */
       .orders-table {
-        display: none;
+        display: none !important;
       }
       
       .order-cards {
-        display: flex;
+        display: flex !important;
       }
     }
   </style>
@@ -867,10 +879,6 @@
           </div>
           <div class="order-card-body">
             <div class="order-info-item">
-              <div class="order-info-label"><i class="fas fa-user"></i></div>
-              <div class="order-info-value">接单者: ${order.accepted_by || '-'}</div>
-            </div>
-            <div class="order-info-item">
               <div class="order-info-label"><i class="fas fa-user-circle"></i></div>
               <div class="order-info-value">账号: ${escapeHtml(order.account)}</div>
             </div>
@@ -937,10 +945,6 @@
     detailMessage += `套餐: ${order.package}个月\n`;
     detailMessage += `状态: ${order.status_text}\n`;
     detailMessage += `提交时间: ${order.created_at}\n`;
-    
-    if (order.accepted_at) {
-      detailMessage += `接单时间: ${order.accepted_at}\n`;
-    }
     
     if (order.completed_at) {
       detailMessage += `完成时间: ${order.completed_at}\n`;
