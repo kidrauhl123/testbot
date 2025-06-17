@@ -258,96 +258,136 @@
       font-weight: 500;
     }
     
-    /* 用户信息下拉菜单样式 */
+    /* 用户下拉菜单样式 */
     .user-dropdown {
       position: relative;
+      display: inline-block;
       cursor: pointer;
     }
-    
+
     .user-info {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 5px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background-color: rgba(0,0,0,0.05);
+      transition: all 0.3s ease;
     }
-    
+
+    .user-info:hover {
+      background-color: rgba(0,0,0,0.1);
+    }
+
     .user-avatar {
-      width: 30px;
-      height: 30px;
-      background: #667eea;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background-color: #764ba2;
       color: white;
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: 50%;
-      font-weight: bold;
+      font-size: 14px;
+      font-weight: 600;
     }
-    
+
     .user-name {
-      font-weight: 500;
+      font-weight: 600;
     }
-    
+
     .dropdown-menu {
-      display: none;
       position: absolute;
-      right: 0;
       top: 100%;
-      background: white;
+      right: 0;
+      width: 200px;
+      background-color: white;
       border-radius: 8px;
       box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-      min-width: 200px;
-      z-index: 10;
+      padding: 10px 0;
       margin-top: 10px;
-      overflow: hidden;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+      transition: all 0.3s ease;
+      z-index: 1000;
     }
-    
-    .dropdown-menu-header {
-      padding: 10px 15px;
-      background: #f8f9fa;
-      font-weight: 500;
-      border-bottom: 1px solid #eee;
+
+    .user-dropdown:hover .dropdown-menu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
     }
-    
+
+    .dropdown-menu::before {
+      content: '';
+      position: absolute;
+      top: -6px;
+      right: 20px;
+      width: 12px;
+      height: 12px;
+      background-color: white;
+      transform: rotate(45deg);
+      border-radius: 2px;
+    }
+
     .dropdown-menu-item {
+      padding: 8px 15px;
       display: flex;
       align-items: center;
-      padding: 10px 15px;
+      gap: 10px;
       color: #333;
       text-decoration: none;
-      gap: 10px;
-      transition: background 0.2s;
+      transition: all 0.2s ease;
     }
-    
+
     .dropdown-menu-item:hover {
-      background: #f5f5f5;
+      background-color: rgba(0,0,0,0.05);
     }
-    
+
     .dropdown-menu-item.danger {
-      color: #dc3545;
+      color: #e74c3c;
     }
-    
+
+    .dropdown-menu-item.danger:hover {
+      background-color: rgba(231,76,60,0.1);
+    }
+
     .dropdown-divider {
       height: 1px;
-      background: #eee;
+      background-color: rgba(0,0,0,0.1);
       margin: 5px 0;
     }
-    
-    .user-dropdown:hover .dropdown-menu {
-      display: block;
+
+    .dropdown-menu-header {
+      padding: 8px 15px;
+      font-size: 12px;
+      color: #666;
+      font-weight: 600;
     }
     
     .text-danger { color: #dc3545; }
     .text-success { color: #28a745; }
     
     .balance-badge {
-      background: #f8f9fa;
-      padding: 5px 10px;
-      border-radius: 6px;
-      font-size: 14px;
-      color: #28a745;
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 2px 5px rgba(56,239,125,0.3);
+      display: flex;
+      align-items: center;
     }
     
     .balance-badge.negative {
-      color: #dc3545;
+      background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+    }
+    
+    .balance-badge::before {
+      content: '💰';
+      margin-right: 5px;
     }
 
     /* 电脑端样式 - 保持原始布局 */
@@ -1010,248 +1050,401 @@
 </div>
 
 <script>
-  // 显示指定标签页
-  function showTab(tabId) {
-    document.querySelectorAll('.tab-content').forEach(tab => {
-      tab.classList.remove('active');
-    });
-    document.querySelectorAll('.sidebar-menu a').forEach(link => {
-      link.classList.remove('active');
-    });
-    document.getElementById(tabId).classList.add('active');
-    document.querySelector(`.sidebar-menu a[href="#${tabId}"]`).classList.add('active');
+  document.addEventListener('DOMContentLoaded', function() {
+    // 初始化
+    showTab('users');
     
-    // 加载对应标签页的数据
-    if (tabId === 'users' && !userDataLoaded) {
-      loadUsers();
-      userDataLoaded = true;
-    }
-    else if (tabId === 'orders' && !orderDataLoaded) {
-      loadOrders();
-      orderDataLoaded = true;
-    }
-    else if (tabId === 'sellers' && !sellerDataLoaded) {
-      loadSellers();
-      sellerDataLoaded = true;
-    }
-    else if (tabId === 'balance' && !balanceDataLoaded) {
-      loadBalanceRecords();
-      populateUserFilter();
-      balanceDataLoaded = true;
-    }
-  }
-  
-  // 全局变量
-  let userDataLoaded = false;
-  let orderDataLoaded = false;
-  let sellerDataLoaded = false;
-  let balanceDataLoaded = false;
-  let allUsers = []; // 存储所有用户数据
+    // 初始化所有模态框关闭按钮
+    document.querySelectorAll('.modal-close, [data-dismiss="modal"]').forEach(button => {
+      button.addEventListener('click', function() {
+        const modal = this.closest('.modal-backdrop');
+        if (modal) modal.classList.remove('show');
+      });
+    });
 
-  // 转义HTML
-  function escapeHtml(str) {
-    if (!str) return '';
-    return str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
-  // 显示加载中
-  function renderLoading(elementId) {
-    document.getElementById(elementId).innerHTML = '<tr><td colspan="12" class="loading">加载中...</td></tr>';
-  }
-
-  // 用户管理
-  async function loadUsers() {
-    try {
-      console.log("开始加载用户数据...");
-    const tbody = document.getElementById('users-table-body');
-      if (!tbody) {
-        console.error("找不到users-table-body元素");
-        return;
-      }
+    // 优化数据加载: 添加重试机制和超时处理
+    const fetchWithTimeout = async (url, options = {}, timeout = 10000) => {
+      const controller = new AbortController();
+      const signal = controller.signal;
       
-      tbody.innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
-      
-      const resp = await fetch('/admin/api/users');
-      if (!resp.ok) {
-        console.error("加载用户数据失败:", resp.status, resp.statusText);
-        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
-        return;
-      }
-      
-      const users = await resp.json();
-      console.log("成功获取用户数据:", users);
-      
-    tbody.innerHTML = '';
-      
-      if (users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="loading">暂无用户数据</td></tr>';
-        return;
-      }
-      
-    users.forEach(user => {
-        const tr = document.createElement('tr');
-        
-        // 格式化日期
-        const createdAt = user.created_at ? new Date(user.created_at).toLocaleString() : '未知';
-        const lastLogin = user.last_login ? new Date(user.last_login).toLocaleString() : '未登录';
-        
-        tr.innerHTML = `
-          <td>${user.id}</td>
-          <td>${user.username}</td>
-          <td>${createdAt}</td>
-          <td>${lastLogin}</td>
-          <td class="user-balance">${user.balance ? user.balance.toFixed(2) : '0.00'} 元</td>
-          <td class="user-credit">${user.credit_limit ? user.credit_limit.toFixed(2) : '0.00'} 元</td>
-          <td class="user-consumption">${user.today_consumption ? user.today_consumption.toFixed(2) : '0.00'} 元</td>
-          <td>${user.is_admin ? '<span class="badge badge-warning">管理员</span>' : '<span class="badge badge-secondary">普通用户</span>'}</td>
-          <td>
-            <button class="btn btn-sm btn-primary" onclick="editUserBalance(${user.id}, '${user.username}', ${user.balance || 0})">
-              修改余额
-            </button>
-            <button class="btn btn-sm btn-warning" onclick="editUserCredit(${user.id}, '${user.username}', ${user.credit_limit || 0})">
-              修改额度
-            </button>
-            <button class="btn btn-sm btn-info" onclick="editUserCustomPrice(${user.id}, '${user.username}')">
-              定制价格
-            </button>
-          </td>
-        `;
-        
-        tbody.appendChild(tr);
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          controller.abort();
+          reject(new Error('请求超时，请稍后重试'));
+        }, timeout);
       });
       
-      console.log("用户数据渲染完成");
-      console.log("用户管理加载完成");
-    } catch (e) {
-      console.error('加载用户失败', e);
-      const tbody = document.getElementById('users-table-body');
-      if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
+      try {
+        const fetchPromise = fetch(url, { ...options, signal });
+        return await Promise.race([fetchPromise, timeoutPromise]);
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          throw new Error('请求超时，请稍后重试');
+        }
+        throw error;
       }
-    }
-  }
-
-  // 修改用户余额函数
-  function editUserBalance(userId, username, balance) {
-    console.log("修改用户余额:", userId, username, balance);
+    };
     
-    document.getElementById('edit-balance-user-id').value = userId;
-    document.getElementById('edit-balance-username').value = username;
-    document.getElementById('edit-balance-current').value = balance;
-    document.getElementById('edit-balance-new').value = balance;
-    
-    openModal('editBalanceModal');
-  }
-
-  // 修改用户透支额度函数
-  function editUserCredit(userId, username, credit) {
-    console.log("修改用户透支额度:", userId, username, credit);
-    
-    document.getElementById('edit-credit-user-id').value = userId;
-    document.getElementById('edit-credit-username').value = username;
-    document.getElementById('edit-credit-current').value = credit;
-    document.getElementById('edit-credit-new').value = credit;
-    
-    openModal('editCreditModal');
-  }
-
-  // 编辑用户定制价格函数
-  async function editUserCustomPrice(userId, username) {
-    console.log("修改用户定制价格:", userId, username);
-    
-    // 设置基本信息
-    document.getElementById('edit-custom-price-user-id').value = userId;
-    document.getElementById('edit-custom-price-username').value = username;
-    
-    try {
-      // 获取用户的定制价格
-      const response = await fetch(`/admin/api/users/${userId}/custom-prices`);
-      
-      if (!response.ok) {
-        throw new Error(`获取定制价格失败: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.error || '获取定制价格失败');
-      }
-      
-      // 获取默认价格和定制价格
-      const defaultPrices = data.default_prices;
-      const customPrices = data.custom_prices;
-      
-      // 获取套餐选择器
-      const packageSelect = document.getElementById('edit-custom-price-package');
-      
-      // 设置默认选中的套餐为1个月
-      packageSelect.value = '1';
-      
-      // 更新价格显示
-      updateCustomPriceDisplay(packageSelect.value, defaultPrices, customPrices);
-      
-      // 为套餐选择器添加事件监听器
-      packageSelect.onchange = function() {
-        updateCustomPriceDisplay(this.value, defaultPrices, customPrices);
-      };
-      
-      // 打开模态框
-      openModal('editCustomPriceModal');
-    } catch (error) {
-      console.error('获取用户定制价格失败:', error);
-      alert(`获取用户定制价格失败: ${error.message}`);
-    }
-  }
-  
-  // 更新定制价格显示
-  function updateCustomPriceDisplay(package, defaultPrices, customPrices) {
-    const defaultPrice = defaultPrices[package] || '未知';
-    const customPrice = customPrices[package] || '默认';
-    
-    document.getElementById('edit-custom-price-default').value = defaultPrice;
-    document.getElementById('edit-custom-price-current').value = customPrice === '默认' ? '默认' : customPrice;
-    document.getElementById('edit-custom-price-new').value = customPrice === '默认' ? '' : customPrice;
-  }
-
-  // 移动端菜单切换
-  const menuToggle = document.getElementById('menuToggle');
-  const sidebarMenu = document.getElementById('sidebarMenu');
-  
-  if (menuToggle && sidebarMenu) {
-    menuToggle.addEventListener('click', function() {
-      sidebarMenu.classList.toggle('collapsed');
-      
-      // 切换图标
-      const icon = this.querySelector('i');
-      if (icon) {
-        if (sidebarMenu.classList.contains('collapsed')) {
-          icon.className = 'fas fa-bars';
+    // 加载用户数据，添加重试逻辑
+    async function loadUsers(retry = 0) {
+      const maxRetries = 3;
+      try {
+        const usersTableBody = document.getElementById('users-table-body');
+        
+        if (!usersTableBody) return;
+        
+        usersTableBody.innerHTML = '<tr><td colspan="9" class="loading">加载中...</td></tr>';
+        
+        // 使用带超时的fetch
+        const response = await fetchWithTimeout('/admin/api/users', {}, 8000);
+        
+        // 检查响应状态
+        if (!response.ok) {
+          throw new Error(`服务器返回错误: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+          throw new Error(data.error || '加载失败');
+        }
+        
+        let html = '';
+        data.users.forEach(user => {
+          html += `
+            <tr>
+              <td data-label="ID">${user.id}</td>
+              <td data-label="用户名">${user.username}</td>
+              <td data-label="注册时间">${user.registered_at}</td>
+              <td data-label="最后登录">${user.last_login || '-'}</td>
+              <td data-label="余额">${user.balance}</td>
+              <td data-label="透支额度">${user.credit_limit}</td>
+              <td data-label="今日消费">${user.today_consumption || '0.00'}</td>
+              <td data-label="角色">${user.is_admin ? '<span class="badge badge-warning">管理员</span>' : '<span class="badge badge-info">普通用户</span>'}</td>
+              <td data-label="操作">
+                <button class="btn btn-sm btn-primary" onclick="showEditBalanceModal(${user.id}, '${user.username}', ${user.balance})">修改余额</button>
+                <button class="btn btn-sm btn-info" onclick="showEditCreditModal(${user.id}, '${user.username}', ${user.credit_limit})">修改额度</button>
+                <button class="btn btn-sm btn-warning" onclick="showCustomPriceModal(${user.id}, '${user.username}')">定制价格</button>
+              </td>
+            </tr>
+          `;
+        });
+        
+        usersTableBody.innerHTML = html || '<tr><td colspan="9" class="no-data">暂无用户数据</td></tr>';
+      } catch (error) {
+        console.error('加载用户失败:', error);
+        
+        if (retry < maxRetries) {
+          // 重试逻辑，每次等待时间递增
+          const retryDelay = 1000 * Math.pow(2, retry);
+          console.log(`第${retry + 1}次重试，等待${retryDelay}ms...`);
+          
+          setTimeout(() => {
+            loadUsers(retry + 1);
+          }, retryDelay);
         } else {
-          icon.className = 'fas fa-times';
+          // 达到最大重试次数，显示错误
+          const errorMsg = `<tr><td colspan="9" class="error">加载失败: ${error.message}，请刷新页面重试</td></tr>`;
+          if (document.getElementById('users-table-body')) {
+            document.getElementById('users-table-body').innerHTML = errorMsg;
+          }
         }
       }
+    }
+
+    // 加载卖家数据，添加重试逻辑
+    async function loadSellers(retry = 0) {
+      const maxRetries = 3;
+      try {
+        const sellersTableBody = document.getElementById('sellers-table-body');
+        
+        if (!sellersTableBody) return;
+        
+        sellersTableBody.innerHTML = '<tr><td colspan="8" class="loading">加载中...</td></tr>';
+        
+        const response = await fetchWithTimeout('/admin/api/sellers', {}, 8000);
+        
+        if (!response.ok) {
+          throw new Error(`服务器返回错误: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+          throw new Error(data.error || '加载失败');
+        }
+        
+        let html = '';
+        data.sellers.forEach(seller => {
+          html += `
+            <tr>
+              <td data-label="Telegram ID">${seller.telegram_id}</td>
+              <td data-label="用户名">${seller.username || '-'}</td>
+              <td data-label="昵称">${seller.name || '-'}</td>
+              <td data-label="状态">${seller.active ? '<span class="badge badge-success">已激活</span>' : '<span class="badge badge-secondary">未激活</span>'}</td>
+              <td data-label="身份">${seller.is_admin ? '<span class="badge badge-warning">管理员</span>' : '<span class="badge badge-info">普通卖家</span>'}</td>
+              <td data-label="添加时间">${seller.added_at}</td>
+              <td data-label="添加人">${seller.added_by || '-'}</td>
+              <td data-label="操作">
+                <button class="btn btn-sm btn-danger" onclick="deleteSeller(${seller.id})">删除</button>
+                ${seller.active ? 
+                  `<button class="btn btn-sm btn-secondary" onclick="toggleSellerStatus(${seller.id}, false)">禁用</button>` : 
+                  `<button class="btn btn-sm btn-success" onclick="toggleSellerStatus(${seller.id}, true)">启用</button>`
+                }
+              </td>
+            </tr>
+          `;
+        });
+        
+        sellersTableBody.innerHTML = html || '<tr><td colspan="8" class="no-data">暂无卖家数据</td></tr>';
+      } catch (error) {
+        console.error('加载卖家失败:', error);
+        
+        if (retry < maxRetries) {
+          const retryDelay = 1000 * Math.pow(2, retry);
+          console.log(`第${retry + 1}次重试，等待${retryDelay}ms...`);
+          
+          setTimeout(() => {
+            loadSellers(retry + 1);
+          }, retryDelay);
+        } else {
+          const errorMsg = `<tr><td colspan="8" class="error">加载失败: ${error.message}，请刷新页面重试</td></tr>`;
+          if (document.getElementById('sellers-table-body')) {
+            document.getElementById('sellers-table-body').innerHTML = errorMsg;
+          }
+        }
+      }
+    }
+
+    // 加载余额明细数据
+    async function loadBalanceRecords(userId = '', retry = 0) {
+      const maxRetries = 3;
+      try {
+        const balanceRecordsTbody = document.getElementById('balance-records-tbody');
+        
+        if (!balanceRecordsTbody) return;
+        
+        balanceRecordsTbody.innerHTML = '<tr><td colspan="8" class="loading">加载中...</td></tr>';
+        
+        const url = userId ? `/admin/api/balance?user_id=${userId}` : '/admin/api/balance';
+        const response = await fetchWithTimeout(url, {}, 8000);
+        
+        if (!response.ok) {
+          throw new Error(`服务器返回错误: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+          throw new Error(data.error || '加载失败');
+        }
+        
+        let html = '';
+        data.records.forEach(record => {
+          html += `
+            <tr>
+              <td data-label="ID">${record.id}</td>
+              <td data-label="用户">${record.username}</td>
+              <td data-label="类型">${record.type}</td>
+              <td data-label="金额">${record.amount}</td>
+              <td data-label="变动后余额">${record.balance_after}</td>
+              <td data-label="原因">${record.reason}</td>
+              <td data-label="参考ID">${record.reference_id || '-'}</td>
+              <td data-label="时间">${record.created_at}</td>
+            </tr>
+          `;
+        });
+        
+        balanceRecordsTbody.innerHTML = html || '<tr><td colspan="8" class="no-data">暂无余额明细数据</td></tr>';
+        
+        // 加载用户下拉框
+        if (!userId) {
+          loadBalanceUserFilter();
+        }
+      } catch (error) {
+        console.error('加载余额明细失败:', error);
+        
+        if (retry < maxRetries) {
+          const retryDelay = 1000 * Math.pow(2, retry);
+          console.log(`第${retry + 1}次重试，等待${retryDelay}ms...`);
+          
+          setTimeout(() => {
+            loadBalanceRecords(userId, retry + 1);
+          }, retryDelay);
+        } else {
+          const errorMsg = `<tr><td colspan="8" class="error">加载失败: ${error.message}，请刷新页面重试</td></tr>`;
+          if (document.getElementById('balance-records-tbody')) {
+            document.getElementById('balance-records-tbody').innerHTML = errorMsg;
+          }
+        }
+      }
+    }
+    
+    // 加载用户筛选下拉框
+    async function loadBalanceUserFilter() {
+      try {
+        const response = await fetchWithTimeout('/admin/api/users?simple=1', {}, 8000);
+        
+        if (!response.ok) {
+          throw new Error(`服务器返回错误: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+          throw new Error(data.error || '加载失败');
+        }
+        
+        const filterSelect = document.getElementById('balance-user-filter');
+        if (!filterSelect) return;
+        
+        let html = '<option value="">所有用户</option>';
+        data.users.forEach(user => {
+          html += `<option value="${user.id}">${user.username}</option>`;
+        });
+        
+        filterSelect.innerHTML = html;
+        
+        // 添加事件监听
+        filterSelect.addEventListener('change', function() {
+          loadBalanceRecords(this.value);
+        });
+      } catch (error) {
+        console.error('加载用户筛选器失败:', error);
+      }
+    }
+    
+    // 保存余额修改
+    window.saveBalanceEdit = async function() {
+      try {
+        const userId = document.getElementById('edit-balance-user-id').value;
+        const newBalance = document.getElementById('edit-balance-new').value;
+        
+        if (!userId || !newBalance) {
+          alert('请填写完整信息');
+          return;
+        }
+        
+        const response = await fetchWithTimeout('/admin/api/users/balance', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            balance: parseFloat(newBalance)
+          })
+        }, 8000);
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+          throw new Error(data.error || '操作失败');
+        }
+        
+        // 关闭模态框
+        document.getElementById('editBalanceModal').classList.remove('show');
+        
+        // 重新加载用户列表
+        loadUsers();
+        
+        alert('修改成功');
+      } catch (error) {
+        console.error('保存余额修改失败:', error);
+        alert(`操作失败: ${error.message}`);
+      }
+    }
+    
+    // 初始加载数据
+    document.querySelectorAll('.sidebar-menu a').forEach(link => {
+      link.addEventListener('click', function(e) {
+        e.preventDefault();
+        const targetId = this.getAttribute('href').substr(1);
+        showTab(targetId);
+      });
     });
     
-    // 在移动端点击菜单项后自动收起菜单
-    sidebarMenu.querySelectorAll('a').forEach(link => {
-      link.addEventListener('click', function() {
-        if (window.innerWidth < 768) {
-          sidebarMenu.classList.add('collapsed');
-          if (menuToggle.querySelector('i')) {
-            menuToggle.querySelector('i').className = 'fas fa-bars';
+    // 加载余额用户筛选下拉框变更事件
+    const balanceUserFilter = document.getElementById('balance-user-filter');
+    if (balanceUserFilter) {
+      balanceUserFilter.addEventListener('change', function() {
+        loadBalanceRecords(this.value);
+      });
+    }
+
+    // 移动端菜单切换
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebarMenu = document.getElementById('sidebarMenu');
+    
+    if (menuToggle && sidebarMenu) {
+      menuToggle.addEventListener('click', function() {
+        sidebarMenu.classList.toggle('collapsed');
+        
+        // 切换图标
+        const icon = this.querySelector('i');
+        if (icon) {
+          if (sidebarMenu.classList.contains('collapsed')) {
+            icon.className = 'fas fa-bars';
+          } else {
+            icon.className = 'fas fa-times';
           }
         }
       });
+      
+      // 在移动端点击菜单项后自动收起菜单
+      sidebarMenu.querySelectorAll('a').forEach(link => {
+        link.addEventListener('click', function() {
+          if (window.innerWidth < 768) {
+            sidebarMenu.classList.add('collapsed');
+            if (menuToggle.querySelector('i')) {
+              menuToggle.querySelector('i').className = 'fas fa-bars';
+            }
+          }
+        });
+      });
+    }
+  });
+
+  // 显示标签页
+  function showTab(tabId) {
+    // 更新导航激活状态
+    document.querySelectorAll('.sidebar-menu a').forEach(link => {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === '#' + tabId) {
+        link.classList.add('active');
+      }
     });
+    
+    // 更新内容显示
+    document.querySelectorAll('.tab-content').forEach(tab => {
+      tab.classList.remove('active');
+    });
+    
+    const activeTab = document.getElementById(tabId);
+    if (activeTab) {
+      activeTab.classList.add('active');
+      
+      // 根据不同标签页加载对应数据
+      switch(tabId) {
+        case 'users':
+          loadUsers();
+          break;
+        case 'orders':
+          loadOrders();
+          break;
+        case 'sellers':
+          loadSellers();
+          break;
+        case 'balance':
+          loadBalanceRecords();
+          break;
+      }
+    }
   }
 
   // 加载订单数据
-  async function loadOrders(page = 1, query = '') {
+  async function loadOrders(page = 1, query = '', retry = 0) {
+    const maxRetries = 3;
     try {
       const ordersTableBody = document.getElementById('orders-table-body');
       const ordersCardsContainer = document.getElementById('orders-cards-container');
@@ -1262,6 +1455,11 @@
       ordersCardsContainer.innerHTML = '<div class="loading">加载中...</div>';
       
       const response = await fetch(`/admin/api/orders?page=${page}&query=${encodeURIComponent(query)}`);
+      
+      if (!response.ok) {
+        throw new Error(`服务器返回错误: ${response.status}`);
+      }
+      
       const data = await response.json();
       
       if (!data.success) {
@@ -1278,12 +1476,22 @@
       renderPagination(data.pagination);
     } catch (error) {
       console.error('加载订单失败:', error);
-      const errorMsg = `<tr><td colspan="9" class="error">加载失败: ${error.message}</td></tr>`;
-      if (document.getElementById('orders-table-body')) {
-        document.getElementById('orders-table-body').innerHTML = errorMsg;
-      }
-      if (document.getElementById('orders-cards-container')) {
-        document.getElementById('orders-cards-container').innerHTML = `<div class="error">加载失败: ${error.message}</div>`;
+      
+      if (retry < maxRetries) {
+        const retryDelay = 1000 * Math.pow(2, retry);
+        console.log(`第${retry + 1}次重试，等待${retryDelay}ms...`);
+        
+        setTimeout(() => {
+          loadOrders(page, query, retry + 1);
+        }, retryDelay);
+      } else {
+        const errorMsg = `<tr><td colspan="9" class="error">加载失败: ${error.message}，请刷新页面重试</td></tr>`;
+        if (document.getElementById('orders-table-body')) {
+          document.getElementById('orders-table-body').innerHTML = errorMsg;
+        }
+        if (document.getElementById('orders-cards-container')) {
+          document.getElementById('orders-cards-container').innerHTML = `<div class="error">加载失败: ${error.message}，请刷新页面重试</div>`;
+        }
       }
     }
   }
@@ -1388,12 +1596,61 @@
     }
   }
   
-  // 页面加载完成后执行
-  document.addEventListener('DOMContentLoaded', function() {
-    // ... existing code ...
-  });
-
-  // ... rest of the existing code ...
+  // HTML转义函数
+  function escapeHtml(unsafe) {
+    if (!unsafe) return '';
+    return unsafe
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+  
+  // 显示修改余额模态框
+  window.showEditBalanceModal = function(userId, username, balance) {
+    document.getElementById('edit-balance-user-id').value = userId;
+    document.getElementById('edit-balance-username').value = username;
+    document.getElementById('edit-balance-current').value = balance;
+    document.getElementById('edit-balance-new').value = balance;
+    document.getElementById('editBalanceModal').classList.add('show');
+  }
+  
+  // 余额保存按钮事件
+  document.getElementById('saveBalanceBtn').addEventListener('click', saveBalanceEdit);
+  
+  // 渲染分页
+  function renderPagination(pagination) {
+    const paginationContainer = document.querySelector('.pagination');
+    if (!paginationContainer) return;
+    
+    // 如果总页数小于等于1，不显示分页
+    if (pagination.total_pages <= 1) {
+      paginationContainer.innerHTML = '';
+      return;
+    }
+    
+    let html = '<div class="pagination-controls">';
+    
+    // 上一页按钮
+    html += `<button class="pagination-btn ${pagination.current_page <= 1 ? 'disabled' : ''}" 
+      ${pagination.current_page <= 1 ? 'disabled' : `onclick="loadOrders(${pagination.current_page - 1})"`}>
+      <i class="fas fa-chevron-left"></i> 上一页
+    </button>`;
+    
+    // 页码显示
+    html += `<span class="pagination-info">第 ${pagination.current_page} 页，共 ${pagination.total_pages} 页</span>`;
+    
+    // 下一页按钮
+    html += `<button class="pagination-btn ${pagination.current_page >= pagination.total_pages ? 'disabled' : ''}" 
+      ${pagination.current_page >= pagination.total_pages ? 'disabled' : `onclick="loadOrders(${pagination.current_page + 1})"`}>
+      下一页 <i class="fas fa-chevron-right"></i>
+    </button>`;
+    
+    html += '</div>';
+    
+    paginationContainer.innerHTML = html;
+  }
 </script>
 </body>
 </html> 
