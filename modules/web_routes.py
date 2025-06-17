@@ -623,6 +623,9 @@ def register_routes(app, notification_queue):
     @admin_required
     def admin_api_users():
         """获取所有用户列表（仅限管理员）"""
+        # 检查是否请求简化版数据
+        simple = request.args.get('simple', '0') == '1'
+        
         # 获取所有用户基础信息
         users = execute_query("""
             SELECT id, username, is_admin, created_at, last_login, balance, credit_limit 
@@ -663,7 +666,7 @@ def register_routes(app, notification_queue):
                 "today_consumption": today_consumption
             })
         
-        return jsonify(user_data)
+        return jsonify({"success": True, "users": user_data})
     
     @app.route('/admin/api/users/<int:user_id>/balance', methods=['POST'])
     @login_required

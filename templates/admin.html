@@ -1226,7 +1226,7 @@
         
         balanceRecordsTbody.innerHTML = '<tr><td colspan="8" class="loading">加载中...</td></tr>';
         
-        const url = userId ? `/admin/api/balance?user_id=${userId}` : '/admin/api/balance';
+        const url = userId ? `/api/balance/records?user_id=${userId}` : '/api/balance/records';
         const response = await fetchWithTimeout(url, {}, 8000);
         
         if (!response.ok) {
@@ -1235,12 +1235,16 @@
         
         const data = await response.json();
         
-        if (!data.success) {
-          throw new Error(data.error || '加载失败');
+        // 处理不同的API响应格式
+        const records = Array.isArray(data) ? data : (data.records || []);
+        
+        if (records.length === 0) {
+          balanceRecordsTbody.innerHTML = '<tr><td colspan="8" class="no-data">暂无余额明细数据</td></tr>';
+          return;
         }
         
         let html = '';
-        data.records.forEach(record => {
+        records.forEach(record => {
           html += `
             <tr>
               <td data-label="ID">${record.id}</td>
@@ -1255,9 +1259,9 @@
           `;
         });
         
-        balanceRecordsTbody.innerHTML = html || '<tr><td colspan="8" class="no-data">暂无余额明细数据</td></tr>';
+        balanceRecordsTbody.innerHTML = html;
         
-        // 加载用户下拉框
+        // 加载用户下拉框（仅在未指定用户ID时）
         if (!userId) {
           loadBalanceUserFilter();
         }
@@ -1273,8 +1277,13 @@
           }, retryDelay);
         } else {
           const errorMsg = `<tr><td colspan="8" class="error">加载失败: ${error.message}，请刷新页面重试</td></tr>`;
-          if (document.getElementById('balance-records-tbody')) {
-            document.getElementById('balance-records-tbody').innerHTML = errorMsg;
+          if (balanceRecordsTbody) {
+            balanceRecordsTbody.innerHTML = errorMsg;
+          }
+          
+          // 即使加载失败，也尝试加载用户筛选器
+          if (!userId) {
+            loadBalanceUserFilter();
           }
         }
       }
@@ -1283,7 +1292,12 @@
     // 加载用户筛选下拉框
     async function loadBalanceUserFilter() {
       try {
-        const response = await fetchWithTimeout('/admin/api/users?simple=1', {}, 8000);
+        const filterSelect = document.getElementById('balance-user-filter');
+        if (!filterSelect) return;
+        
+        filterSelect.innerHTML = '<option value="">加载中...</option>';
+        
+        const response = await fetchWithTimeout('/admin/api/users', {}, 8000);
         
         if (!response.ok) {
           throw new Error(`服务器返回错误: ${response.status}`);
@@ -1291,15 +1305,12 @@
         
         const data = await response.json();
         
-        if (!data.success) {
-          throw new Error(data.error || '加载失败');
-        }
-        
-        const filterSelect = document.getElementById('balance-user-filter');
-        if (!filterSelect) return;
-        
         let html = '<option value="">所有用户</option>';
-        data.users.forEach(user => {
+        
+        // 处理不同的API响应格式
+        const users = Array.isArray(data) ? data : (data.users || []);
+        
+        users.forEach(user => {
           html += `<option value="${user.id}">${user.username}</option>`;
         });
         
@@ -1311,6 +1322,13 @@
         });
       } catch (error) {
         console.error('加载用户筛选器失败:', error);
+        const filterSelect = document.getElementById('balance-user-filter');
+        if (filterSelect) {
+          filterSelect.innerHTML = '<option value="">加载失败，请刷新重试</option>';
+        }
+        
+        // 尝试重新加载
+        setTimeout(() => loadBalanceUserFilter(), 3000);
       }
     }
     
@@ -1363,6 +1381,18 @@
         showTab(targetId);
       });
     });
+    
+    // 全局错误处理和页面初始化增强
+    window.addEventListener('error', function(event) {
+      console.error('全局错误:', event.error);
+    });
+    
+    // 确保默认加载用户页面
+    setTimeout(() => {
+      if (document.getElementById('users').classList.contains('active')) {
+        loadUsers();
+      }
+    }, 100);
     
     // 加载余额用户筛选下拉框变更事件
     const balanceUserFilter = document.getElementById('balance-user-filter');
