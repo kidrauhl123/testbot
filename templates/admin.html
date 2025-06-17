@@ -21,6 +21,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
     }
     .navbar-brand {
       font-size: 24px;
@@ -34,6 +35,7 @@
       align-items: center;
       gap: 20px;
       position: relative;
+      margin-top: 5px;
     }
     .admin-badge {
       background: linear-gradient(135deg, #ffb347 0%, #ffcc33 100%);
@@ -63,40 +65,45 @@
     .main-container {
       max-width: 1400px;
       margin: 20px auto;
-      padding: 20px;
+      padding: 10px;
     }
     
     .admin-container {
       display: flex;
       gap: 20px;
+      flex-direction: column;
     }
     
     .sidebar {
-      width: 240px;
-      flex-shrink: 0;
+      width: 100%;
       background: rgba(255,255,255,0.95);
       border-radius: 15px;
-      padding: 20px;
+      padding: 15px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.1);
       backdrop-filter: blur(10px);
-      align-self: flex-start;
     }
     
     .sidebar-menu {
       list-style: none;
       padding: 0;
       margin: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
     }
     
     .sidebar-menu a {
       display: flex;
       align-items: center;
-      padding: 12px 15px;
+      padding: 10px 12px;
       color: #333;
       text-decoration: none;
       border-radius: 8px;
       transition: all 0.3s ease;
       font-weight: 500;
+      flex: 1 0 auto;
+      min-width: 120px;
+      justify-content: center;
     }
     
     .sidebar-menu a:hover, .sidebar-menu a.active {
@@ -105,8 +112,8 @@
     }
     
     .sidebar-menu i {
-      margin-right: 12px;
-      width: 20px;
+      margin-right: 8px;
+      width: 16px;
       text-align: center;
     }
     
@@ -114,7 +121,7 @@
       flex: 1;
       background: rgba(255,255,255,0.95);
       border-radius: 15px;
-      padding: 30px;
+      padding: 20px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.1);
       backdrop-filter: blur(10px);
     }
@@ -129,27 +136,34 @@
       margin-bottom: 20px;
       padding-bottom: 15px;
       border-bottom: 1px solid #f0f0f0;
+      flex-wrap: wrap;
+      gap: 10px;
     }
     
     .content-header h2 {
       margin: 0;
       font-weight: 400;
+      font-size: 1.5rem;
     }
 
     .header-actions {
       display: flex;
       gap: 10px;
+      flex-wrap: wrap;
     }
 
     .data-table {
       width: 100%;
       border-collapse: collapse;
+      overflow-x: auto;
+      display: block;
     }
     .data-table th, .data-table td {
-      padding: 12px 15px;
+      padding: 10px 12px;
       text-align: left;
       border-bottom: 1px solid #e9ecef;
       vertical-align: middle;
+      white-space: nowrap;
     }
     .data-table th {
       background: #f8f9fa;
@@ -238,6 +252,7 @@
       display: flex;
       justify-content: flex-end;
       gap: 10px;
+      flex-wrap: wrap;
     }
     
     .form-group {
@@ -250,154 +265,101 @@
       font-weight: 500;
     }
     
-    .form-control {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: 5px;
-      font-size: 14px;
+    /* 添加移动端适配的媒体查询 */
+    @media (min-width: 768px) {
+      .admin-container {
+        flex-direction: row;
+      }
+      
+      .sidebar {
+        width: 240px;
+        flex-shrink: 0;
+      }
+      
+      .sidebar-menu {
+        flex-direction: column;
+      }
+      
+      .sidebar-menu a {
+        justify-content: flex-start;
+      }
+      
+      .navbar-user {
+        margin-top: 0;
+      }
+      
+      .content-header h2 {
+        font-size: 1.8rem;
+      }
+      
+      .data-table {
+        display: table;
+      }
     }
     
-    .error-message {
-      color: #dc3545;
-      margin-bottom: 15px;
-      padding: 8px;
-      background: #f8d7da;
-      border-radius: 5px;
+    /* 添加表格响应式处理 */
+    @media (max-width: 767px) {
+      .data-table, .data-table tbody, .data-table tr {
+        display: block;
+        width: 100%;
+      }
+      
+      .data-table thead {
+        display: none;
+      }
+      
+      .data-table td {
+        display: flex;
+        padding: 8px 10px;
+        border: none;
+        justify-content: space-between;
+        align-items: center;
+        position: relative;
+      }
+      
+      .data-table td:before {
+        content: attr(data-label);
+        font-weight: 600;
+        margin-right: 10px;
+      }
+      
+      .data-table tr {
+        margin-bottom: 15px;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      
+      .btn-sm {
+        padding: 6px 10px;
+        margin: 2px 0;
+      }
+      
+      .header-actions .btn {
+        padding: 6px 12px;
+      }
     }
     
-    .btn-secondary {
-      background: #6c757d;
-      color: white;
-    }
-
-    /* 用户下拉菜单样式 */
-    .user-dropdown {
-      position: relative;
-      display: inline-block;
-      cursor: pointer;
-    }
-
-    .user-info {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      padding: 6px 12px;
-      border-radius: 20px;
-      background-color: rgba(0,0,0,0.05);
-      transition: all 0.3s ease;
-    }
-
-    .user-info:hover {
-      background-color: rgba(0,0,0,0.1);
-    }
-
-    .user-avatar {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      background-color: #764ba2;
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 14px;
-      font-weight: 600;
-    }
-
-    .user-name {
-      font-weight: 600;
-    }
-
-    .dropdown-menu {
-      position: absolute;
-      top: 100%;
-      right: 0;
-      width: 200px;
-      background-color: white;
-      border-radius: 8px;
-      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-      padding: 10px 0;
-      margin-top: 10px;
-      opacity: 0;
-      visibility: hidden;
-      transform: translateY(-10px);
-      transition: all 0.3s ease;
-      z-index: 1000;
-    }
-
-    .user-dropdown:hover .dropdown-menu {
-      opacity: 1;
-      visibility: visible;
-      transform: translateY(0);
-    }
-
-    .dropdown-menu::before {
-      content: '';
-      position: absolute;
-      top: -6px;
-      right: 20px;
-      width: 12px;
-      height: 12px;
-      background-color: white;
-      transform: rotate(45deg);
-      border-radius: 2px;
-    }
-
-    .dropdown-menu-item {
-      padding: 8px 15px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
+    /* 移动端菜单收起/展开功能 */
+    .menu-toggle {
+      display: none;
+      background: none;
+      border: none;
       color: #333;
-      text-decoration: none;
-      transition: all 0.2s ease;
-    }
-
-    .dropdown-menu-item:hover {
-      background-color: rgba(0,0,0,0.05);
-    }
-
-    .dropdown-menu-item.danger {
-      color: #e74c3c;
-    }
-
-    .dropdown-menu-item.danger:hover {
-      background-color: rgba(231,76,60,0.1);
-    }
-
-    .dropdown-divider {
-      height: 1px;
-      background-color: rgba(0,0,0,0.1);
-      margin: 5px 0;
-    }
-
-    .dropdown-menu-header {
-      padding: 8px 15px;
-      font-size: 12px;
-      color: #666;
-      font-weight: 600;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 5px;
     }
     
-    .balance-badge {
-      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-      color: white;
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 600;
-      box-shadow: 0 2px 5px rgba(56,239,125,0.3);
-      display: flex;
-      align-items: center;
-    }
-    
-    .balance-badge.negative {
-      background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
-    }
-    
-    .balance-badge::before {
-      content: '💰';
-      margin-right: 5px;
+    @media (max-width: 767px) {
+      .menu-toggle {
+        display: block;
+        margin-bottom: 10px;
+      }
+      
+      .sidebar-menu.collapsed {
+        display: none;
+      }
     }
   </style>
 </head>
@@ -442,7 +404,8 @@
 <div class="main-container">
   <div class="admin-container">
     <div class="sidebar">
-      <ul class="sidebar-menu">
+      <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i> 菜单</button>
+      <ul class="sidebar-menu" id="sidebarMenu">
         <li><a href="#users" class="active" onclick="showTab('users'); return false;"><i class="fas fa-users"></i> 用户管理</a></li>
         <li><a href="#orders" onclick="showTab('orders'); return false;"><i class="fas fa-file-invoice-dollar"></i> 订单管理</a></li>
         <li><a href="#sellers" onclick="showTab('sellers'); return false;"><i class="fas fa-user-tie"></i> 卖家管理</a></li>
@@ -464,12 +427,12 @@
             <tr>
               <th>ID</th>
               <th>用户名</th>
-                <th>注册时间</th>
+              <th>注册时间</th>
               <th>最后登录</th>
-                <th>余额</th>
-                <th>透支额度</th>
-                <th>今日消费</th>
-                <th>角色</th>
+              <th>余额</th>
+              <th>透支额度</th>
+              <th>今日消费</th>
+              <th>角色</th>
               <th>操作</th>
             </tr>
           </thead>
@@ -1739,6 +1702,38 @@
     }
   `;
   document.head.appendChild(style);
+
+  // 移动端菜单切换
+  const menuToggle = document.getElementById('menuToggle');
+  const sidebarMenu = document.getElementById('sidebarMenu');
+  
+  if (menuToggle && sidebarMenu) {
+    menuToggle.addEventListener('click', function() {
+      sidebarMenu.classList.toggle('collapsed');
+      
+      // 切换图标
+      const icon = this.querySelector('i');
+      if (icon) {
+        if (sidebarMenu.classList.contains('collapsed')) {
+          icon.className = 'fas fa-bars';
+        } else {
+          icon.className = 'fas fa-times';
+        }
+      }
+    });
+    
+    // 在移动端点击菜单项后自动收起菜单
+    sidebarMenu.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth < 768) {
+          sidebarMenu.classList.add('collapsed');
+          if (menuToggle.querySelector('i')) {
+            menuToggle.querySelector('i').className = 'fas fa-bars';
+          }
+        }
+      });
+    });
+  }
 
   // 加载余额明细记录
   async function loadBalanceRecords(userId = null) {
