@@ -1776,3 +1776,110 @@ def register_routes(app, notification_queue):
         except Exception as e:
             logger.error(f"导出激活码失败: {str(e)}", exc_info=True)
             return jsonify({"success": False, "message": f"导出失败: {str(e)}"}), 500 
+
+    @app.route('/api/xianyu/auto-delivery', methods=['POST'])
+    def xianyu_auto_delivery():
+        """闲鱼自动发货API，用于机器人调用"""
+        try:
+            # 验证密钥
+            api_key = request.headers.get('X-API-Key')
+            if not api_key or api_key != os.environ.get('XIANYU_API_KEY', 'xianyu_secret_key'):
+                return jsonify({"success": False, "error": "未授权访问"}), 401
+                
+            # 解析请求数据
+            data = request.get_json()
+            if not data:
+                return jsonify({"success": False, "error": "无效请求数据"}), 400
+                
+            package = data.get('package')
+            order_id = data.get('order_id')
+            
+            if not package:
+                return jsonify({"success": False, "error": "缺少套餐信息"}), 400
+                
+            # 验证套餐是否有效
+            package_str = str(package)
+            if package_str not in constants.WEB_PRICES:
+                return jsonify({"success": False, "error": f"无效的套餐: {package}"}), 400
+                
+            # 获取或创建API用户
+            api_user_id = get_or_create_api_user()
+            
+            # 创建激活码
+            code_id, code = create_activation_code(package_str, created_by=api_user_id, count=1)
+            
+            if not code:
+                return jsonify({"success": False, "error": "创建激活码失败"}), 500
+                
+            # 生成兑换链接
+            redeem_url = f"{request.url_root.rstrip('/')}/redeem/{code}"
+            
+            # 记录闲鱼订单关联信息（如果提供了订单ID）
+            if order_id:
+                execute_query(
+                    "UPDATE activation_codes SET order_source = ?, order_external_id = ? WHERE id = ?",
+                    ("xianyu", order_id, code_id)
+                )
+            
+            return jsonify({
+                "success": True, 
+                "code": code, 
+                "redeem_url": redeem_url,
+                "package": package_str,
+                "package_name": constants.PLAN_LABELS_ZH.get(package_str, f"{package_str}个月")
+            })
+            
+        except Exception as e:
+            logger.error(f"闲鱼自动发货API错误: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": f"服务器错误: {str(e)}"}), 500
+    
+    # 查询激活码状态的API
+    @app.route('/api/xianyu/check-code/<code>', methods=['GET'])
+    def xianyu_check_code(code):
+        """检查激活码状态API，用于闲鱼机器人调用"""
+        try:
+            # 验证密钥
+            api_key = request.headers.get('X-API-Key')
+            if not api_key or api_key != os.environ.get('XIANYU_API_KEY', 'xianyu_secret_key'):
+                return jsonify({"success": False, "error": "未授权访问"}), 401
+            
+            # 获取激活码信息
+            code_info = get_activation_code(code)
+            if not code_info:
+                return jsonify({"success": False, "error": "激活码不存在"}), 404
+            
+            # 返回激活码状态
+            return jsonify({
+                "success": True,
+                "code": code,
+                "status": "used" if code_info['used'] else "active",
+                "package": code_info['package'],
+                "created_at": code_info['created_at'],
+                "used_at": code_info['used_at'] or "",
+                "used_by": code_info['used_by_username'] or ""
+            })
+            
+        except Exception as e:
+            logger.error(f"检查激活码状态API错误: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": f"服务器错误: {str(e)}"}), 500
+    
+    def get_or_create_api_user():
+        """获取或创建API用户"""
+        # 检查API用户是否存在
+        api_username = "xianyu_api_user"
+        api_user = execute_query("SELECT id FROM users WHERE username = ?", (api_username,), fetch=True)
+        
+        if api_user:
+            return api_user[0][0]
+        
+        # 创建API用户
+        api_password = os.environ.get('XIANYU_API_PASSWORD', 'api_user_password')
+        api_password_hash = hash_password(api_password)
+        
+        execute_query(
+            "INSERT INTO users (username, password_hash, is_admin, created_at) VALUES (?, ?, 0, ?)",
+            (api_username, api_password_hash, get_china_time())
+        )
+        
+        new_user = execute_query("SELECT id FROM users WHERE username = ?", (api_username,), fetch=True)
+        return new_user[0][0] if new_user else None 

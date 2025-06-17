@@ -10,3 +10,5 @@ pytz==2023.3
 requests
 schedule
 aiohttp
+selenium==4.16.0
+webdriver-manager==4.0.1

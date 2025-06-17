@@ -1,0 +1,9 @@
+{
+  "api_key": "xianyu_secret_key",
+  "api_base_url": "https://testbot-production-5440.up.railway.app",
+  "xianyu_username": "您的淘宝/闲鱼账号",
+  "xianyu_password": "密码（通常不需要，使用浏览器自动登录）",
+  "check_interval": 300,
+  "headless": false,
+  "browser_data_dir": "C:\\Users\\您的用户名\\AppData\\Local\\Google\\Chrome\\User Data\\XianyuProfile"
+} 
