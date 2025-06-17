@@ -383,6 +383,34 @@
           <h2>激活码管理</h2>
           <div class="header-actions">
             <button class="btn btn-primary" id="createCodeBtn"><i class="fas fa-plus-circle"></i> 生成激活码</button>
+            <button class="btn btn-success" id="exportCodesBtn"><i class="fas fa-file-export"></i> 导出激活码</button>
+            <button class="btn btn-danger" id="batchDeleteBtn" style="display: none;"><i class="fas fa-trash-alt"></i> 批量删除</button>
+          </div>
+        </div>
+        
+        <!-- 过滤选项 -->
+        <div class="filter-options" style="margin-bottom: 15px;">
+          <div class="form-group" style="display: flex; gap: 15px; align-items: center;">
+            <div style="display: flex; align-items: center;">
+              <label for="statusFilter" style="margin-right: 10px; margin-bottom: 0;">状态:</label>
+              <select class="form-control" id="statusFilter" style="width: auto;">
+                <option value="">全部</option>
+                <option value="0">未使用</option>
+                <option value="1">已使用</option>
+              </select>
+            </div>
+            <div style="display: flex; align-items: center;">
+              <label for="packageFilter" style="margin-right: 10px; margin-bottom: 0;">套餐:</label>
+              <select class="form-control" id="packageFilter" style="width: auto;">
+                <option value="">全部</option>
+                <option value="1">1个月</option>
+                <option value="2">2个月</option>
+                <option value="3">3个月</option>
+                <option value="6">6个月</option>
+                <option value="12">12个月</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" id="applyFilterBtn"><i class="fas fa-filter"></i> 应用筛选</button>
           </div>
         </div>
         
@@ -439,9 +467,76 @@
     </div>
   </div>
   
+  <!-- 导出激活码模态框 -->
+  <div class="modal-backdrop" id="exportModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>导出激活码</h3>
+        <button class="modal-close" id="closeExportModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="exportForm">
+          <div class="form-group">
+            <label>导出选项</label>
+            <div style="margin-top: 10px;">
+              <label style="font-weight: normal; display: block; margin-bottom: 10px;">
+                <input type="radio" name="exportOption" value="all" checked> 导出所有激活码
+              </label>
+              <label style="font-weight: normal; display: block; margin-bottom: 10px;">
+                <input type="radio" name="exportOption" value="unused"> 仅导出未使用的激活码
+              </label>
+              <label style="font-weight: normal; display: block;">
+                <input type="radio" name="exportOption" value="used"> 仅导出已使用的激活码
+              </label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="exportPackage">套餐筛选</label>
+            <select class="form-control" id="exportPackage">
+              <option value="">所有套餐</option>
+              <option value="1">1个月</option>
+              <option value="2">2个月</option>
+              <option value="3">3个月</option>
+              <option value="6">6个月</option>
+              <option value="12">12个月</option>
+            </select>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="doExportBtn">导出</button>
+        <button class="btn btn-danger" id="cancelExportBtn">取消</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 批量删除确认模态框 -->
+  <div class="modal-backdrop" id="deleteConfirmModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>确认删除</h3>
+        <button class="modal-close" id="closeDeleteModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>确定要删除选中的激活码吗？</p>
+        <p style="color: #dc3545; font-weight: bold;">此操作不可恢复，只会删除未使用的激活码。</p>
+        <p id="deleteCountInfo"></p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-danger" id="confirmDeleteBtn">确认删除</button>
+        <button class="btn btn-secondary" id="cancelDeleteBtn">取消</button>
+      </div>
+    </div>
+  </div>
+  
   <!-- JS部分 -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      // 全局变量
+      let selectedCodes = [];
+      let currentStatusFilter = '';
+      let currentPackageFilter = '';
+      
       // 加载激活码列表
       loadActivationCodes();
       
@@ -505,7 +600,7 @@
             document.getElementById('generatedCodesContainer').style.display = 'block';
             
             // 重新加载激活码列表
-            loadActivationCodes();
+            loadActivationCodes(1, currentStatusFilter, currentPackageFilter);
           } else {
             alert(data.message || '生成激活码失败');
           }
@@ -543,18 +638,153 @@
         alert('带链接的激活码已复制到剪贴板');
       });
       
-      // 复制到剪贴板函数
-      function copyToClipboard(text) {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
+      // 选中所有激活码
+      document.addEventListener('click', function(e) {
+        if (e.target && e.target.id === 'selectAllCodes') {
+          const isChecked = e.target.checked;
+          document.querySelectorAll('.code-checkbox:not([disabled])').forEach(checkbox => {
+            checkbox.checked = isChecked;
+          });
+          updateSelectedCodes();
+        }
+      });
+      
+      // 更新选中的激活码
+      function updateSelectedCodes() {
+        selectedCodes = [];
+        document.querySelectorAll('.code-checkbox:checked').forEach(checkbox => {
+          selectedCodes.push(parseInt(checkbox.getAttribute('data-id')));
+        });
+        
+        // 显示或隐藏批量删除按钮
+        document.getElementById('batchDeleteBtn').style.display = selectedCodes.length > 0 ? 'block' : 'none';
       }
       
+      // 监听复选框变化
+      document.addEventListener('change', function(e) {
+        if (e.target && e.target.classList.contains('code-checkbox')) {
+          updateSelectedCodes();
+        }
+      });
+      
+      // 批量删除按钮点击事件
+      document.getElementById('batchDeleteBtn').addEventListener('click', function() {
+        if (selectedCodes.length === 0) {
+          alert('请选择要删除的激活码');
+          return;
+        }
+        
+        // 显示确认对话框
+        document.getElementById('deleteConfirmModal').classList.add('show');
+        document.getElementById('deleteCountInfo').textContent = `已选择 ${selectedCodes.length} 个激活码`;
+      });
+      
+      // 关闭删除确认对话框
+      document.getElementById('closeDeleteModal').addEventListener('click', function() {
+        document.getElementById('deleteConfirmModal').classList.remove('show');
+      });
+      
+      document.getElementById('cancelDeleteBtn').addEventListener('click', function() {
+        document.getElementById('deleteConfirmModal').classList.remove('show');
+      });
+      
+      // 确认删除激活码
+      document.getElementById('confirmDeleteBtn').addEventListener('click', function() {
+        if (selectedCodes.length === 0) {
+          alert('请选择要删除的激活码');
+          document.getElementById('deleteConfirmModal').classList.remove('show');
+          return;
+        }
+        
+        // 禁用按钮
+        this.disabled = true;
+        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 删除中...';
+        
+        // 发送删除请求
+        fetch('/admin/api/activation-codes/batch-delete', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ code_ids: selectedCodes })
+        })
+        .then(response => response.json())
+        .then(data => {
+          // 恢复按钮
+          document.getElementById('confirmDeleteBtn').disabled = false;
+          document.getElementById('confirmDeleteBtn').innerHTML = '确认删除';
+          
+          // 关闭对话框
+          document.getElementById('deleteConfirmModal').classList.remove('show');
+          
+          if (data.success) {
+            alert(data.message || `成功删除 ${data.deleted_count} 个激活码`);
+            // 重新加载激活码列表
+            loadActivationCodes(1, currentStatusFilter, currentPackageFilter);
+          } else {
+            alert(data.message || '删除失败');
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          document.getElementById('confirmDeleteBtn').disabled = false;
+          document.getElementById('confirmDeleteBtn').innerHTML = '确认删除';
+          document.getElementById('deleteConfirmModal').classList.remove('show');
+          alert('请求失败，请稍后再试');
+        });
+      });
+      
+      // 导出激活码按钮点击事件
+      document.getElementById('exportCodesBtn').addEventListener('click', function() {
+        document.getElementById('exportModal').classList.add('show');
+      });
+      
+      // 关闭导出对话框
+      document.getElementById('closeExportModal').addEventListener('click', function() {
+        document.getElementById('exportModal').classList.remove('show');
+      });
+      
+      document.getElementById('cancelExportBtn').addEventListener('click', function() {
+        document.getElementById('exportModal').classList.remove('show');
+      });
+      
+      // 执行导出
+      document.getElementById('doExportBtn').addEventListener('click', function() {
+        const exportOption = document.querySelector('input[name="exportOption"]:checked').value;
+        const packageFilter = document.getElementById('exportPackage').value;
+        
+        let params = new URLSearchParams();
+        
+        if (exportOption === 'unused') {
+          params.append('is_used', '0');
+        } else if (exportOption === 'used') {
+          params.append('is_used', '1');
+        }
+        
+        if (packageFilter) {
+          params.append('package', packageFilter);
+        }
+        
+        // 关闭对话框
+        document.getElementById('exportModal').classList.remove('show');
+        
+        // 执行导出
+        window.location.href = `/admin/api/activation-codes/export?${params.toString()}`;
+      });
+      
+      // 应用筛选
+      document.getElementById('applyFilterBtn').addEventListener('click', function() {
+        const statusFilter = document.getElementById('statusFilter').value;
+        const packageFilter = document.getElementById('packageFilter').value;
+        
+        currentStatusFilter = statusFilter;
+        currentPackageFilter = packageFilter;
+        
+        loadActivationCodes(1, statusFilter, packageFilter);
+      });
+      
       // 加载激活码列表
-      function loadActivationCodes(page = 1) {
+      function loadActivationCodes(page = 1, status = '', package = '') {
         const container = document.getElementById('activationCodesContainer');
         container.innerHTML = `
           <div class="loading">
@@ -567,7 +797,18 @@
         const limit = 20;
         const offset = (page - 1) * limit;
         
-        fetch(`/admin/api/activation-codes?limit=${limit}&offset=${offset}`)
+        let url = `/admin/api/activation-codes?limit=${limit}&offset=${offset}`;
+        
+        // 添加筛选参数
+        if (status) {
+          url += `&is_used=${status}`;
+        }
+        
+        if (package) {
+          url += `&package=${package}`;
+        }
+        
+        fetch(url)
           .then(response => response.json())
           .then(data => {
             if (data.success) {
@@ -601,6 +842,7 @@
           <table class="data-table">
             <thead>
               <tr>
+                <th style="width: 50px;"><input type="checkbox" id="selectAllCodes"></th>
                 <th>ID</th>
                 <th>激活码</th>
                 <th>套餐</th>
@@ -618,6 +860,7 @@
         codes.forEach(code => {
           html += `
             <tr>
+              <td><input type="checkbox" class="code-checkbox" data-id="${code.id}" ${code.is_used ? 'disabled' : ''}></td>
               <td>${code.id}</td>
               <td>
                 ${code.code}
@@ -722,9 +965,19 @@
         document.querySelectorAll('.pagination-btn:not(.disabled)').forEach(btn => {
           btn.addEventListener('click', function() {
             const page = parseInt(this.getAttribute('data-page'));
-            loadActivationCodes(page);
+            loadActivationCodes(page, currentStatusFilter, currentPackageFilter);
           });
         });
+      }
+      
+      // 复制到剪贴板函数
+      function copyToClipboard(text) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
       }
     });
   </script>

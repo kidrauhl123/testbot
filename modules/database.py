@@ -1766,29 +1766,43 @@ def mark_activation_code_used(code_id, user_id):
         logger.error(f"标记激活码已使用失败: {str(e)}", exc_info=True)
         return False
 
-def get_admin_activation_codes(limit=100, offset=0):
+def get_admin_activation_codes(limit=100, offset=0, conditions=None, params=None):
     """获取所有激活码（管理员用）"""
     try:
+        # 构建WHERE子句
+        where_clause = ""
+        query_params = []
+        
+        if conditions and params:
+            where_clause = " WHERE " + " AND ".join(conditions)
+            query_params.extend(params)
+        
+        # 添加分页参数
+        query_params.extend([limit, offset])
+        
         if DATABASE_URL.startswith('postgres'):
-            result = execute_query("""
+            placeholders = ["%s"] * len(query_params)
+            result = execute_query(f"""
                 SELECT a.id, a.code, a.package, a.is_used, a.created_at, a.used_at, 
                        c.username as creator, u.username as user
                 FROM activation_codes a
                 LEFT JOIN users c ON a.created_by = c.id
                 LEFT JOIN users u ON a.used_by = u.id
+                {where_clause}
                 ORDER BY a.created_at DESC
                 LIMIT %s OFFSET %s
-            """, (limit, offset), fetch=True)
+            """, query_params, fetch=True)
         else:
-            result = execute_query("""
+            result = execute_query(f"""
                 SELECT a.id, a.code, a.package, a.is_used, a.created_at, a.used_at, 
                        c.username as creator, u.username as user
                 FROM activation_codes a
                 LEFT JOIN users c ON a.created_by = c.id
                 LEFT JOIN users u ON a.used_by = u.id
+                {where_clause}
                 ORDER BY a.created_at DESC
                 LIMIT ? OFFSET ?
-            """, (limit, offset), fetch=True)
+            """, query_params, fetch=True)
         
         codes = []
         for r in result:
