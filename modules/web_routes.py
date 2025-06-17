@@ -1245,9 +1245,9 @@ def register_routes(app, notification_queue):
             
             # 获取余额明细记录
             records = get_balance_records(view_user_id, limit, offset)
-            
+                
             return jsonify({
-                "success": True,
+                "success": True, 
                 "records": records
             })
         except Exception as e:
@@ -1255,9 +1255,36 @@ def register_routes(app, notification_queue):
             return jsonify({
                 "success": False,
                 "error": "获取余额明细记录失败，请刷新重试"
-            }), 500 
+            }), 500
+            
+    @app.route('/api/user-prices')
+    @login_required
+    def api_get_user_prices():
+        """获取用户的定制价格"""
+        try:
+            user_id = session.get('user_id')
+            
+            if not user_id:
+                return jsonify({"success": False, "error": "未登录"})
+                
+            # 导入get_user_package_price函数
+            from modules.constants import WEB_PRICES, get_user_package_price
+            
+            # 获取用户所有套餐的价格
+            custom_prices = {}
+            for package in WEB_PRICES.keys():
+                custom_prices[package] = get_user_package_price(user_id, package)
+                
+            return jsonify({
+                "success": True, 
+                "user_id": user_id, 
+                "prices": custom_prices,
+                "default_prices": WEB_PRICES
+            })
+        except Exception as e:
+            logger.error(f"获取用户价格失败: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": f"获取用户价格失败: {str(e)}"})
 
-    # 激活码兑换相关路由
     @app.route('/redeem', methods=['GET'])
     def redeem_page():
         """激活码兑换页面"""

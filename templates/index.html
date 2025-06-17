@@ -1036,6 +1036,8 @@
   let isAdmin = {{ 'true' if session.is_admin else 'false' }}; // 是否是管理员
   let lastOrdersHash = ''; // 用于检测订单变化的哈希
   let viewMode = 'grid'; // 默认视图模式：grid 或 table
+  
+  // 默认价格，会被用户定制价格覆盖
   const WEB_PRICES = {
     '1': 12,
     '2': 18,
@@ -1044,8 +1046,51 @@
     '12': 84
   };
   
-  // 搜索处理
+  // 用户实际价格（会被API获取的价格覆盖）
+  let USER_PRICES = {...WEB_PRICES};
+  
+  // 加载用户定制价格
+  async function loadUserPrices() {
+    try {
+      // 获取用户定制价格
+      const response = await fetch('/api/user-prices');
+      
+      if (!response.ok) {
+        console.error('获取用户价格失败', response.status);
+        return;
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // 更新用户价格
+        USER_PRICES = data.prices;
+        
+        // 更新价格显示
+        updatePriceDisplay();
+      }
+    } catch (error) {
+      console.error('获取用户定制价格失败:', error);
+    }
+  }
+  
+  // 更新价格显示
+  function updatePriceDisplay() {
+    const packageSelect = document.getElementById('packageSelect');
+    const selectedPrice = document.getElementById('selectedPrice');
+    
+    if (packageSelect && selectedPrice) {
+      // 显示当前选中套餐的价格
+      selectedPrice.textContent = USER_PRICES[packageSelect.value];
+    }
+  }
+  
+  // 页面加载处理
   document.addEventListener('DOMContentLoaded', function() {
+    // 首先加载用户定制价格
+    loadUserPrices();
+    
+    // 搜索功能初始化
     const searchInput = document.getElementById('searchInput');
     const searchBtn = document.getElementById('searchBtn');
     const clearSearchBtn = document.getElementById('clearSearchBtn');
@@ -1080,19 +1125,65 @@
       displayedOrders = 5;
       renderOrders(allOrders);
     });
-  });
-  
-  // 套餐选择处理
-  document.addEventListener('DOMContentLoaded', function() {
+
+    // 套餐选择处理
     const packageSelect = document.getElementById('packageSelect');
     const selectedPrice = document.getElementById('selectedPrice');
     
     // 初始价格设置
-    selectedPrice.textContent = WEB_PRICES[packageSelect.value];
+    selectedPrice.textContent = USER_PRICES[packageSelect.value];
     
     // 监听套餐选择变化
     packageSelect.addEventListener('change', function() {
-      selectedPrice.textContent = WEB_PRICES[this.value];
+      selectedPrice.textContent = USER_PRICES[this.value];
+    });
+    
+    // 加载订单
+    loadOrders();
+    
+    // 启动自动刷新
+    startAutoRefresh();
+    
+    // 添加动画效果
+    const cards = document.querySelectorAll('.card');
+    cards.forEach((card, index) => {
+      card.style.opacity = '0';
+      card.style.transform = 'translateY(20px)';
+      setTimeout(() => {
+        card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+        card.style.opacity = '1';
+        card.style.transform = 'translateY(0)';
+      }, 100 * index);
+    });
+    
+    // 绑定视图切换按钮事件
+    document.getElementById('gridViewBtn').addEventListener('click', () => toggleViewMode('grid'));
+    document.getElementById('tableViewBtn').addEventListener('click', () => toggleViewMode('table'));
+    
+    // 给订单添加类名，用于添加图标
+    setTimeout(() => {
+      const orderItems = document.querySelectorAll('.order-list-item');
+      orderItems.forEach(item => {
+        const accountElem = item.querySelector('p:nth-child(2)');
+        if (accountElem) accountElem.classList.add('account');
+        
+        const packageElem = item.querySelector('p:nth-child(3)');
+        if (packageElem) packageElem.classList.add('package');
+        
+        const statusElem = item.querySelector('p:nth-child(4)');
+        if (statusElem) statusElem.classList.add('status');
+        
+        const timeElems = item.querySelectorAll('p.time');
+        if (timeElems.length > 0) {
+          timeElems.forEach(el => el.classList.add('time'));
+        }
+      });
+    }, 1000);
+
+    // 点击余额badge 显示/隐藏信息栏
+    document.getElementById('balanceBadge').addEventListener('click', () => {
+      const bar = document.getElementById('balanceInfoBar');
+      bar.style.display = bar.style.display === 'none' ? 'block' : 'none';
     });
   });
   
@@ -1163,7 +1254,7 @@
     todayOrders.forEach(order => {
       totalCount++;
       // 计算订单价格（不管状态）
-      const price = WEB_PRICES[order.package] || 0;
+      const price = USER_PRICES[order.package] || 0;
       
       // 只有已完成订单才计入用户消费
       if (order.status === 'completed') {
@@ -1415,7 +1506,7 @@
           ${isAdmin && o.accepted_by ? `<p class="creator">接单者：${escapeHtml(o.accepted_by)}</p>` : ''}
           <p class="account"><strong>账号：</strong>${escapeHtml(o.account)}</p>
           <p class="package"><strong>套餐：</strong>${escapeHtml(o.package)}个月</p>
-          <p class="price"><strong>价格：</strong>¥${WEB_PRICES[o.package] || 'N/A'}</p>
+          <p class="price"><strong>价格：</strong>¥${USER_PRICES[o.package] || 'N/A'}</p>
           ${o.status === 'failed' ? 
             `<p class="failed-reason"><span class="failed-icon">❌</span> <strong>失败原因：</strong>${escapeHtml(o.remark || '未提供')}</p>` : 
             (o.remark ? `<p class="remark"><strong>备注：</strong>${escapeHtml(o.remark)}</p>` : '')
@@ -1459,7 +1550,7 @@
           <td>${o.id}</td>
           <td>${escapeHtml(o.account)}</td>
           <td>${escapeHtml(o.package)}个月</td>
-          <td><span class="table-price">¥${WEB_PRICES[o.package] || 'N/A'}</span></td>
+          <td><span class="table-price">¥${USER_PRICES[o.package] || 'N/A'}</span></td>
           <td><span class="status-badge ${cls}">${o.status_text}</span></td>
           <td>${o.created_at}</td>
           <td>${o.accepted_at || '-'}</td>
@@ -1502,7 +1593,7 @@
     let detailMessage = `订单 #${orderId} 详情\n\n`;
     detailMessage += `账号: ${order.account}\n`;
     detailMessage += `套餐: ${order.package}个月\n`;
-    detailMessage += `价格: ¥${WEB_PRICES[order.package] || 'N/A'}\n`;
+    detailMessage += `价格: ¥${USER_PRICES[order.package] || 'N/A'}\n`;
     detailMessage += `状态: ${order.status_text}\n`;
     detailMessage += `提交时间: ${order.created_at}\n`;
     
@@ -1656,57 +1747,6 @@
     // 重新渲染订单
     renderOrders(allOrders);
   }
-
-  // 页面加载完成后的初始化
-  document.addEventListener('DOMContentLoaded', function() {
-    // 加载订单
-    loadOrders();
-    
-    // 启动自动刷新
-    startAutoRefresh();
-    
-    // 添加动画效果
-    const cards = document.querySelectorAll('.card');
-    cards.forEach((card, index) => {
-      card.style.opacity = '0';
-      card.style.transform = 'translateY(20px)';
-      setTimeout(() => {
-        card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-        card.style.opacity = '1';
-        card.style.transform = 'translateY(0)';
-      }, 100 * index);
-    });
-    
-    // 绑定视图切换按钮事件
-    document.getElementById('gridViewBtn').addEventListener('click', () => toggleViewMode('grid'));
-    document.getElementById('tableViewBtn').addEventListener('click', () => toggleViewMode('table'));
-    
-    // 给订单添加类名，用于添加图标
-    setTimeout(() => {
-      const orderItems = document.querySelectorAll('.order-list-item');
-      orderItems.forEach(item => {
-        const accountElem = item.querySelector('p:nth-child(2)');
-        if (accountElem) accountElem.classList.add('account');
-        
-        const packageElem = item.querySelector('p:nth-child(3)');
-        if (packageElem) packageElem.classList.add('package');
-        
-        const statusElem = item.querySelector('p:nth-child(4)');
-        if (statusElem) statusElem.classList.add('status');
-        
-        const timeElems = item.querySelectorAll('p.time');
-        if (timeElems.length > 0) {
-          timeElems.forEach(el => el.classList.add('time'));
-        }
-      });
-    }, 1000);
-
-    // 点击余额badge 显示/隐藏信息栏
-    document.getElementById('balanceBadge').addEventListener('click', () => {
-      const bar = document.getElementById('balanceInfoBar');
-      bar.style.display = bar.style.display === 'none' ? 'block' : 'none';
-    });
-  });
 
   // 当用户离开页面时停止自动刷新
   window.addEventListener('beforeunload', function() {
