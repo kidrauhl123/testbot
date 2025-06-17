@@ -149,6 +149,21 @@ def init_sqlite_db():
         )
     """)
     
+    # 用户定制价格表
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS user_custom_prices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            package TEXT NOT NULL,
+            price REAL NOT NULL,
+            created_at TEXT NOT NULL,
+            created_by INTEGER NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            FOREIGN KEY (created_by) REFERENCES users (id),
+            UNIQUE(user_id, package)
+        )
+    """)
+    
     # 检查orders表中是否需要添加新列
     c.execute("PRAGMA table_info(orders)")
     orders_columns = [column[1] for column in c.fetchall()]
@@ -1149,104 +1164,82 @@ def refund_order(order_id):
 
 def create_order_with_deduction_atomic(account, password, package, remark, username, user_id):
     """
-    在一个事务中创建订单并扣除用户余额。
-    这是保证数据一致性的关键操作。
-    返回 (bool: success, str: message, float: new_balance, float: credit_limit)
+    使用事务原子性地创建订单并扣除用户余额
+    
+    参数:
+    - account: 账号
+    - password: 密码
+    - package: 套餐
+    - remark: 备注
+    - username: 用户名（用于显示）
+    - user_id: 用户ID（用于扣款和关联）
+    
+    返回:
+    - (success, message, new_balance, credit_limit): 是否成功，消息，新余额，透支额度
     """
-    from .constants import WEB_PRICES, STATUS, DATABASE_URL
-
-    price = WEB_PRICES.get(str(package))
-    if price is None:
-        return False, "无效的套餐", None, None
-
-    if DATABASE_URL.startswith('postgres'):
-        # PostgreSQL 的事务逻辑
-        conn = None
-        try:
-            url = urlparse(DATABASE_URL)
-            conn = psycopg2.connect(
-                dbname=url.path[1:],
-                user=url.username,
-                password=url.password,
-                host=url.hostname,
-                port=url.port
-            )
-            with conn:
-                c = conn.cursor()
-                c.execute("SELECT balance, credit_limit FROM users WHERE id = %s FOR UPDATE", (user_id,))
-                user_data = c.fetchone()
-                if not user_data:
-                    return False, "用户不存在", None, None
-                
-                balance, credit_limit = user_data
-                if (balance + credit_limit) < price:
-                    return False, f'余额和透支额度不足，当前余额: {balance}，透支额度: {credit_limit}，套餐价格: {price}', balance, credit_limit
-
-                timestamp = datetime.now(CN_TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
-                c.execute("""
-                    INSERT INTO orders (account, password, package, remark, status, created_at, web_user_id, user_id, notified, refunded)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (account, password, package, remark, STATUS['SUBMITTED'], timestamp, username, user_id, 0, 0))
-                
-                new_balance = balance - price
-                c.execute("UPDATE users SET balance = %s WHERE id = %s", (new_balance, user_id))
-                
-                # 记录余额变动
-                c.execute("""
-                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, (user_id, -price, 'consume', f'创建订单: 套餐{package}个月', None, new_balance, timestamp))
-
-            return True, "订单创建成功", new_balance, credit_limit
-        except (Exception, psycopg2.Error) as e:
-            logger.error(f"创建PostgreSQL订单事务失败: {e}", exc_info=True)
-            return False, "数据库操作失败，订单未创建", None, None
-        finally:
-            if conn:
-                conn.close()
-    else:
-        # SQLite 的事务逻辑
-        conn = None
-        try:
-            # 使用绝对路径访问数据库
-            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            db_path = os.path.join(current_dir, "orders.db")
-            conn = sqlite3.connect(db_path, timeout=10)
+    from modules.constants import WEB_PRICES, get_user_package_price
+    
+    # 连接数据库
+    conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    try:
+        # 开始事务
+        cursor.execute("BEGIN TRANSACTION")
+        
+        # 获取用户余额和透支额度
+        cursor.execute("SELECT balance, credit_limit FROM users WHERE id = ?", (user_id,))
+        user_data = cursor.fetchone()
+        
+        if not user_data:
+            conn.rollback()
+            return False, "用户不存在", None, None
             
-            with conn:
-                conn.isolation_level = 'EXCLUSIVE'
-                c = conn.cursor()
-                c.execute("SELECT balance, credit_limit FROM users WHERE id = ?", (user_id,))
-                user_data = c.fetchone()
-                if not user_data:
-                    return False, "用户不存在", None, None
-                
-                balance, credit_limit = user_data
-                if (balance + credit_limit) < price:
-                    return False, f'余额和透支额度不足，当前余额: {balance}，透支额度: {credit_limit}，套餐价格: {price}', balance, credit_limit
-
-                timestamp = datetime.now(CN_TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
-                c.execute("""
-                    INSERT INTO orders (account, password, package, remark, status, created_at, web_user_id, user_id, notified, refunded)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (account, password, package, remark, STATUS['SUBMITTED'], timestamp, username, user_id, 0, 0))
-
-                new_balance = balance - price
-                c.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
-                
-                # 记录余额变动直接在事务中执行
-                c.execute("""
-                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (user_id, -price, 'consume', f'创建订单: 套餐{package}个月', None, new_balance, timestamp))
-
-            return True, "订单创建成功", new_balance, credit_limit
-        except sqlite3.Error as e:
-            logger.error(f"创建SQLite订单事务失败: {e}", exc_info=True)
-            return False, f"数据库操作失败，订单未创建: {e}", None, None
-        finally:
-            if conn:
-                conn.close()
+        current_balance = user_data['balance']
+        credit_limit = user_data['credit_limit']
+        available_funds = current_balance + credit_limit
+        
+        # 计算订单价格
+        # 使用get_user_package_price获取用户特定的价格
+        price = get_user_package_price(user_id, package)
+        
+        # 检查余额是否足够
+        if price > available_funds:
+            conn.rollback()
+            return False, f"余额不足，需要 {price} 元，可用 {available_funds} 元", current_balance, credit_limit
+            
+        # 扣除余额
+        new_balance = current_balance - price
+        cursor.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
+        
+        # 记录余额变动
+        now = get_china_time()
+        cursor.execute("""
+            INSERT INTO balance_records (user_id, amount, type, reason, balance_after, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (user_id, -price, 'consume', f'购买{package}个月套餐', new_balance, now))
+        
+        # 创建订单
+        status = "submitted"
+        now = get_china_time()
+        
+        cursor.execute("""
+            INSERT INTO orders (account, password, package, status, created_at, remark, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (account, password, package, status, now, remark, user_id))
+        
+        # 提交事务
+        conn.commit()
+        
+        return True, "订单创建成功", new_balance, credit_limit
+    except Exception as e:
+        # 出错时回滚事务
+        conn.rollback()
+        logger.error(f"创建订单失败: {str(e)}", exc_info=True)
+        return False, f"创建订单失败: {str(e)}", None, None
+    finally:
+        conn.close()
 
 # ===== 充值相关函数 =====
 def create_recharge_tables():
@@ -1819,4 +1812,96 @@ def get_admin_activation_codes(limit=100, offset=0, conditions=None, params=None
         return codes
     except Exception as e:
         logger.error(f"获取激活码列表失败: {str(e)}", exc_info=True)
-        return [] 
+        return []
+
+# 用户定制价格函数
+def get_user_custom_prices(user_id):
+    """
+    获取用户的定制价格
+    
+    参数:
+    - user_id: 用户ID
+    
+    返回:
+    - 用户定制价格的字典，键为套餐（如'1'），值为价格
+    """
+    try:
+        results = execute_query("""
+            SELECT package, price FROM user_custom_prices
+            WHERE user_id = ?
+        """, (user_id,), fetch=True)
+        
+        if not results:
+            return {}
+            
+        custom_prices = {}
+        for package, price in results:
+            custom_prices[package] = price
+            
+        return custom_prices
+    except Exception as e:
+        logger.error(f"获取用户定制价格失败: {str(e)}", exc_info=True)
+        return {}
+
+def set_user_custom_price(user_id, package, price, admin_id):
+    """
+    设置用户的定制价格
+    
+    参数:
+    - user_id: 用户ID
+    - package: 套餐（如'1'，'2'等）
+    - price: 价格
+    - admin_id: 设置价格的管理员ID
+    
+    返回:
+    - 成功返回True，失败返回False
+    """
+    try:
+        now = get_china_time()
+        
+        # 检查是否已存在该用户的该套餐定制价格
+        existing = execute_query("""
+            SELECT id FROM user_custom_prices
+            WHERE user_id = ? AND package = ?
+        """, (user_id, package), fetch=True)
+        
+        if existing:
+            # 更新已有价格
+            execute_query("""
+                UPDATE user_custom_prices
+                SET price = ?, created_at = ?, created_by = ?
+                WHERE user_id = ? AND package = ?
+            """, (price, now, admin_id, user_id, package))
+        else:
+            # 添加新价格
+            execute_query("""
+                INSERT INTO user_custom_prices
+                (user_id, package, price, created_at, created_by)
+                VALUES (?, ?, ?, ?, ?)
+            """, (user_id, package, price, now, admin_id))
+            
+        return True
+    except Exception as e:
+        logger.error(f"设置用户定制价格失败: {str(e)}", exc_info=True)
+        return False
+
+def delete_user_custom_price(user_id, package):
+    """
+    删除用户的定制价格
+    
+    参数:
+    - user_id: 用户ID
+    - package: 套餐（如'1'，'2'等）
+    
+    返回:
+    - 成功返回True，失败返回False
+    """
+    try:
+        execute_query("""
+            DELETE FROM user_custom_prices
+            WHERE user_id = ? AND package = ?
+        """, (user_id, package))
+        return True
+    except Exception as e:
+        logger.error(f"删除用户定制价格失败: {str(e)}", exc_info=True)
+        return False 

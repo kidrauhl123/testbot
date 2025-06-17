@@ -63,6 +63,31 @@ WEB_PRICES = {'1': 12, '2': 18, '3': 30, '6': 50, '12': 84}
 # Telegram端卖家薪资（美元）
 TG_PRICES = {'1': 1.35, '2': 1.3, '3': 3.2, '6': 5.7, '12': 9.2}
 
+# 获取用户套餐价格
+def get_user_package_price(user_id, package):
+    """
+    获取特定用户的套餐价格
+    
+    参数:
+    - user_id: 用户ID
+    - package: 套餐（如'1'，'2'等）
+    
+    返回:
+    - 用户的套餐价格，如果没有定制价格则返回默认价格
+    """
+    # 如果没有用户ID，返回默认价格
+    if not user_id:
+        return WEB_PRICES.get(package, 0)
+        
+    # 避免循环导入
+    from modules.database import get_user_custom_prices
+    
+    # 获取用户定制价格
+    custom_prices = get_user_custom_prices(user_id)
+    
+    # 如果该套餐有定制价格，返回定制价格，否则返回默认价格
+    return custom_prices.get(package, WEB_PRICES.get(package, 0))
+
 # ===== 状态常量 =====
 STATUS = {
     'SUBMITTED': 'submitted',

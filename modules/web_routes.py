@@ -16,7 +16,7 @@ from modules.database import (
     create_order_with_deduction_atomic, get_user_recharge_requests, create_recharge_request,
     get_pending_recharge_requests, approve_recharge_request, reject_recharge_request, toggle_seller_admin,
     get_balance_records, get_activation_code, mark_activation_code_used, create_activation_code,
-    get_admin_activation_codes
+    get_admin_activation_codes, get_user_custom_prices, set_user_custom_price, delete_user_custom_price
 )
 import modules.constants as constants
 
@@ -711,13 +711,103 @@ def register_routes(app, notification_queue):
         if credit_limit < 0:
             credit_limit = 0
         
-        success, new_credit_limit = set_user_credit_limit(user_id, credit_limit)
+        success = set_user_credit_limit(user_id, credit_limit)
         
         if success:
-            logger.info(f"管理员设置用户ID={user_id}的透支额度为{new_credit_limit}")
-            return jsonify({"success": True, "credit_limit": new_credit_limit})
+            logger.info(f"管理员设置用户ID={user_id}的透支额度为{credit_limit}")
+            return jsonify({"success": True, "credit_limit": credit_limit})
         else:
             return jsonify({"error": "更新透支额度失败"}), 500
+            
+    @app.route('/admin/api/users/<int:user_id>/custom-prices', methods=['GET'])
+    @login_required
+    @admin_required
+    def admin_get_user_custom_prices(user_id):
+        """获取用户定制价格（仅限管理员）"""
+        try:
+            # 获取用户信息
+            user = execute_query("SELECT username FROM users WHERE id=?", (user_id,), fetch=True)
+            if not user:
+                return jsonify({"error": "用户不存在"}), 404
+                
+            username = user[0][0]
+            
+            # 获取用户定制价格
+            custom_prices = get_user_custom_prices(user_id)
+            
+            # 准备返回数据
+            return jsonify({
+                "success": True,
+                "user_id": user_id,
+                "username": username,
+                "custom_prices": custom_prices,
+                "default_prices": WEB_PRICES
+            })
+        except Exception as e:
+            logger.error(f"获取用户定制价格失败: {str(e)}", exc_info=True)
+            return jsonify({"error": f"获取失败: {str(e)}"}), 500
+            
+    @app.route('/admin/api/users/<int:user_id>/custom-prices', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_set_user_custom_price(user_id):
+        """设置用户定制价格（仅限管理员）"""
+        if not request.is_json:
+            return jsonify({"error": "请求必须为JSON格式"}), 400
+            
+        data = request.get_json()
+        package = data.get('package')
+        price = data.get('price')
+        
+        if not package:
+            return jsonify({"error": "缺少package字段"}), 400
+            
+        if price is None:
+            return jsonify({"error": "缺少price字段"}), 400
+            
+        try:
+            price = float(price)
+        except ValueError:
+            return jsonify({"error": "price必须为数字"}), 400
+            
+        # 价格验证
+        if price <= 0:
+            return jsonify({"error": "价格必须大于0"}), 400
+            
+        # 检查套餐是否有效
+        if package not in WEB_PRICES:
+            return jsonify({"error": f"无效的套餐: {package}"}), 400
+            
+        # 检查用户是否存在
+        user = execute_query("SELECT username FROM users WHERE id=?", (user_id,), fetch=True)
+        if not user:
+            return jsonify({"error": "用户不存在"}), 404
+            
+        admin_id = session.get('user_id')
+        
+        try:
+            # 如果价格为0，则删除定制价格，使用默认价格
+            if price == 0:
+                success = delete_user_custom_price(user_id, package)
+                message = "已删除定制价格，将使用默认价格"
+            else:
+                success = set_user_custom_price(user_id, package, price, admin_id)
+                message = "定制价格设置成功"
+                
+            if not success:
+                return jsonify({"error": "设置定制价格失败"}), 500
+                
+            # 获取更新后的用户定制价格
+            custom_prices = get_user_custom_prices(user_id)
+            
+            return jsonify({
+                "success": True,
+                "message": message,
+                "custom_prices": custom_prices
+            })
+        except Exception as e:
+            logger.error(f"设置用户定制价格失败: {str(e)}", exc_info=True)
+            return jsonify({"error": f"设置失败: {str(e)}"}), 500
 
     @app.route('/admin/api/orders')
     @login_required

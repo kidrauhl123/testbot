@@ -646,6 +646,57 @@
   </div>
 </div>
 
+<!-- 用户定制价格模态框 -->
+<div class="modal-backdrop" id="editCustomPriceModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>设置用户定制价格</h3>
+      <button class="modal-close" data-dismiss="modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="editCustomPriceForm">
+        <input type="hidden" id="edit-custom-price-user-id">
+        <div class="form-group">
+          <label for="edit-custom-price-username">用户名</label>
+          <input type="text" id="edit-custom-price-username" class="form-control" disabled>
+        </div>
+        
+        <div class="form-group">
+          <label>选择套餐</label>
+          <select id="edit-custom-price-package" class="form-control">
+            <option value="1">1个月</option>
+            <option value="2">2个月</option>
+            <option value="3">3个月</option>
+            <option value="6">6个月</option>
+            <option value="12">12个月</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="edit-custom-price-default">默认价格</label>
+          <input type="text" id="edit-custom-price-default" class="form-control" disabled>
+        </div>
+        
+        <div class="form-group">
+          <label for="edit-custom-price-current">当前定制价格</label>
+          <input type="text" id="edit-custom-price-current" class="form-control" disabled>
+          <small class="text-muted">无定制价格时显示"默认"</small>
+        </div>
+        
+        <div class="form-group">
+          <label for="edit-custom-price-new">新定制价格</label>
+          <input type="number" id="edit-custom-price-new" class="form-control" step="0.01" min="0" required>
+          <small class="text-muted">设置为0可删除定制价格，恢复默认价格</small>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
+      <button class="btn btn-primary" id="saveCustomPriceBtn">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- 修改订单编辑模态框 -->
 <div class="modal-backdrop" id="edit-order-modal">
   <div class="modal">
@@ -839,6 +890,9 @@
             <button class="btn btn-sm btn-warning" onclick="editUserCredit(${user.id}, '${user.username}', ${user.credit_limit || 0})">
               修改额度
             </button>
+            <button class="btn btn-sm btn-info" onclick="editUserCustomPrice(${user.id}, '${user.username}')">
+              定制价格
+            </button>
           </td>
         `;
         
@@ -878,6 +932,64 @@
     document.getElementById('edit-credit-new').value = credit;
     
     openModal('editCreditModal');
+  }
+
+  // 编辑用户定制价格函数
+  async function editUserCustomPrice(userId, username) {
+    console.log("修改用户定制价格:", userId, username);
+    
+    // 设置基本信息
+    document.getElementById('edit-custom-price-user-id').value = userId;
+    document.getElementById('edit-custom-price-username').value = username;
+    
+    try {
+      // 获取用户的定制价格
+      const response = await fetch(`/admin/api/users/${userId}/custom-prices`);
+      
+      if (!response.ok) {
+        throw new Error(`获取定制价格失败: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || '获取定制价格失败');
+      }
+      
+      // 获取默认价格和定制价格
+      const defaultPrices = data.default_prices;
+      const customPrices = data.custom_prices;
+      
+      // 获取套餐选择器
+      const packageSelect = document.getElementById('edit-custom-price-package');
+      
+      // 设置默认选中的套餐为1个月
+      packageSelect.value = '1';
+      
+      // 更新价格显示
+      updateCustomPriceDisplay(packageSelect.value, defaultPrices, customPrices);
+      
+      // 为套餐选择器添加事件监听器
+      packageSelect.onchange = function() {
+        updateCustomPriceDisplay(this.value, defaultPrices, customPrices);
+      };
+      
+      // 打开模态框
+      openModal('editCustomPriceModal');
+    } catch (error) {
+      console.error('获取用户定制价格失败:', error);
+      alert(`获取用户定制价格失败: ${error.message}`);
+    }
+  }
+  
+  // 更新定制价格显示
+  function updateCustomPriceDisplay(package, defaultPrices, customPrices) {
+    const defaultPrice = defaultPrices[package] || '未知';
+    const customPrice = customPrices[package] || '默认';
+    
+    document.getElementById('edit-custom-price-default').value = defaultPrice;
+    document.getElementById('edit-custom-price-current').value = customPrice === '默认' ? '默认' : customPrice;
+    document.getElementById('edit-custom-price-new').value = customPrice === '默认' ? '' : customPrice;
   }
 
   async function loadOrders() {
@@ -1254,27 +1366,36 @@
     const userId = document.getElementById('edit-balance-user-id').value;
     const newBalance = document.getElementById('edit-balance-new').value;
     
+    console.log("保存余额:", userId, newBalance);
+    
+    if (!userId || !newBalance) {
+      alert('请填写完整信息');
+      return;
+    }
+    
     try {
-      const resp = await fetch(`/admin/api/users/${userId}/balance`, {
+      const response = await fetch(`/admin/api/users/${userId}/balance`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ balance: newBalance })
+        body: JSON.stringify({
+          balance: parseFloat(newBalance)
+        })
       });
       
-      const result = await resp.json();
+      const result = await response.json();
       
       if (result.success) {
-        alert('余额修改成功');
         closeModal('editBalanceModal');
-        loadUsers(); // 重新加载用户列表
+        alert('余额已更新');
+        loadUsers();
       } else {
-        alert(result.error || '修改失败');
+        alert('更新余额失败: ' + (result.error || '未知错误'));
       }
     } catch (e) {
-      console.error('修改余额失败', e);
-      alert('修改余额失败，请重试');
+      console.error('更新余额失败', e);
+      alert('更新余额失败: ' + e.message);
     }
   });
 
@@ -1283,27 +1404,90 @@
     const userId = document.getElementById('edit-credit-user-id').value;
     const newCredit = document.getElementById('edit-credit-new').value;
     
+    console.log("保存透支额度:", userId, newCredit);
+    
+    if (!userId || newCredit === '') {
+      alert('请填写完整信息');
+      return;
+    }
+    
     try {
-      const resp = await fetch(`/admin/api/users/${userId}/credit`, {
+      const response = await fetch(`/admin/api/users/${userId}/credit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ credit_limit: newCredit })
+        body: JSON.stringify({
+          credit_limit: parseFloat(newCredit)
+        })
       });
       
-      const result = await resp.json();
+      const result = await response.json();
       
       if (result.success) {
-        alert('透支额度修改成功');
         closeModal('editCreditModal');
-        loadUsers(); // 重新加载用户列表
+        alert('透支额度已更新');
+        loadUsers();
       } else {
-        alert(result.error || '修改失败');
+        alert('更新透支额度失败: ' + (result.error || '未知错误'));
       }
     } catch (e) {
-      console.error('修改透支额度失败', e);
-      alert('修改透支额度失败，请重试');
+      console.error('更新透支额度失败', e);
+      alert('更新透支额度失败: ' + e.message);
+    }
+  });
+
+  // 为"保存定制价格"按钮添加点击事件
+  document.getElementById('saveCustomPriceBtn').addEventListener('click', async function() {
+    const userId = document.getElementById('edit-custom-price-user-id').value;
+    const package = document.getElementById('edit-custom-price-package').value;
+    const newPrice = document.getElementById('edit-custom-price-new').value;
+    
+    console.log("保存定制价格:", userId, package, newPrice);
+    
+    if (!userId || !package || newPrice === '') {
+      alert('请填写完整信息');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/admin/api/users/${userId}/custom-prices`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          package: package,
+          price: parseFloat(newPrice)
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        closeModal('editCustomPriceModal');
+        alert(result.message || '定制价格已更新');
+        
+        // 如果当前还在查看该用户的定制价格，更新显示
+        const currentUserId = document.getElementById('edit-custom-price-user-id').value;
+        if (currentUserId === userId) {
+          // 更新当前选中套餐的价格显示
+          const currentPackage = document.getElementById('edit-custom-price-package').value;
+          const customPrices = result.custom_prices || {};
+          
+          // 获取默认价格
+          const defaultPriceField = document.getElementById('edit-custom-price-default');
+          const defaultPrice = defaultPriceField.value;
+          
+          // 更新显示
+          updateCustomPriceDisplay(currentPackage, { [currentPackage]: defaultPrice }, customPrices);
+        }
+      } else {
+        alert('设置定制价格失败: ' + (result.error || '未知错误'));
+      }
+    } catch (e) {
+      console.error('设置定制价格失败', e);
+      alert('设置定制价格失败: ' + e.message);
     }
   });
 
