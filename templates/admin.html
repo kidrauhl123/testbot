@@ -21,7 +21,6 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      flex-wrap: wrap;
     }
     .navbar-brand {
       font-size: 24px;
@@ -35,7 +34,6 @@
       align-items: center;
       gap: 20px;
       position: relative;
-      margin-top: 5px;
     }
     .admin-badge {
       background: linear-gradient(135deg, #ffb347 0%, #ffcc33 100%);
@@ -65,45 +63,40 @@
     .main-container {
       max-width: 1400px;
       margin: 20px auto;
-      padding: 10px;
+      padding: 20px;
     }
     
     .admin-container {
       display: flex;
       gap: 20px;
-      flex-direction: column;
     }
     
     .sidebar {
-      width: 100%;
+      width: 240px;
+      flex-shrink: 0;
       background: rgba(255,255,255,0.95);
       border-radius: 15px;
-      padding: 15px;
+      padding: 20px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.1);
       backdrop-filter: blur(10px);
+      align-self: flex-start;
     }
     
     .sidebar-menu {
       list-style: none;
       padding: 0;
       margin: 0;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 5px;
     }
     
     .sidebar-menu a {
       display: flex;
       align-items: center;
-      padding: 10px 12px;
+      padding: 12px 15px;
       color: #333;
       text-decoration: none;
       border-radius: 8px;
       transition: all 0.3s ease;
       font-weight: 500;
-      flex: 1 0 auto;
-      min-width: 120px;
-      justify-content: center;
     }
     
     .sidebar-menu a:hover, .sidebar-menu a.active {
@@ -112,8 +105,8 @@
     }
     
     .sidebar-menu i {
-      margin-right: 8px;
-      width: 16px;
+      margin-right: 12px;
+      width: 20px;
       text-align: center;
     }
     
@@ -267,31 +260,6 @@
     
     /* 添加移动端适配的媒体查询 */
     @media (min-width: 768px) {
-      .admin-container {
-        flex-direction: row;
-      }
-      
-      .sidebar {
-        width: 240px;
-        flex-shrink: 0;
-      }
-      
-      .sidebar-menu {
-        flex-direction: column;
-      }
-      
-      .sidebar-menu a {
-        justify-content: flex-start;
-      }
-      
-      .navbar-user {
-        margin-top: 0;
-      }
-      
-      .content-header h2 {
-        font-size: 1.8rem;
-      }
-      
       .data-table {
         display: table;
       }
@@ -304,10 +272,50 @@
       #orders-cards-container {
         display: none !important;
       }
+      
+      /* 隐藏移动端菜单按钮 */
+      .menu-toggle {
+        display: none !important;
+      }
     }
     
     /* 添加表格响应式处理 */
     @media (max-width: 767px) {
+      .navbar {
+        flex-wrap: wrap;
+      }
+      
+      .navbar-user {
+        margin-top: 5px;
+      }
+      
+      .dashboard-container, .admin-container {
+        flex-direction: column;
+      }
+      
+      .sidebar {
+        width: 100%;
+        padding: 15px;
+      }
+      
+      .sidebar-menu {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+      }
+      
+      .sidebar-menu a {
+        padding: 10px 12px;
+        flex: 1 0 auto;
+        min-width: 120px;
+        justify-content: center;
+      }
+      
+      .sidebar-menu i {
+        margin-right: 8px;
+        width: 16px;
+      }
+      
       .data-table, .data-table tbody, .data-table tr {
         display: block;
         width: 100%;
