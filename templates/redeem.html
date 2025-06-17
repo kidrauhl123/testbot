@@ -598,6 +598,14 @@
           packageDisplay.value = '此激活码已被使用';
           packageInput.value = '';
           submitBtn.disabled = true;
+          
+          // 如果激活码已被使用，禁用所有输入字段
+          if (hasOrderInfo) {
+            document.querySelectorAll('#redeemForm input').forEach(input => {
+              input.disabled = true;
+            });
+            submitBtn.innerHTML = '已兑换';
+          }
         } else {
           verifyActivationCode(codeInput.value);
         }
@@ -662,9 +670,20 @@
           remark: document.getElementById('remark').value
         };
         
-        // 禁用提交按钮
+        // 再次验证激活码
+        if (!formData.code || !formData.package) {
+          showAlert('error', '请输入有效的激活码');
+          return;
+        }
+        
+        // 禁用提交按钮和整个表单
         submitBtn.disabled = true;
         submitBtn.innerHTML = '提交中...';
+        
+        // 禁用所有输入字段
+        document.querySelectorAll('#redeemForm input').forEach(input => {
+          input.disabled = true;
+        });
         
         // 发送请求
         fetch('/redeem', {
@@ -676,10 +695,6 @@
         })
         .then(response => response.json())
         .then(data => {
-          // 重新启用提交按钮
-          submitBtn.disabled = false;
-          submitBtn.innerHTML = '立即兑换';
-          
           if (data.success) {
             // 成功
             showAlert('success', data.message || '兑换成功！');
@@ -694,6 +709,9 @@
               updateBalanceDisplay(data.balance);
             }
             
+            // 保持表单禁用状态，防止重复提交
+            submitBtn.innerHTML = '已兑换';
+            
             // 如果有重定向，延迟后跳转
             if (data.redirect) {
               setTimeout(function() {
@@ -703,12 +721,27 @@
           } else {
             // 失败
             showAlert('error', data.error || '兑换失败');
+            
+            // 重新启用提交按钮和表单
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '立即兑换';
+            
+            // 重新启用所有输入字段
+            document.querySelectorAll('#redeemForm input').forEach(input => {
+              input.disabled = false;
+            });
           }
         })
         .catch(error => {
           console.error('Error:', error);
           submitBtn.disabled = false;
           submitBtn.innerHTML = '立即兑换';
+          
+          // 重新启用所有输入字段
+          document.querySelectorAll('#redeemForm input').forEach(input => {
+            input.disabled = false;
+          });
+          
           showAlert('error', '请求失败，请稍后再试');
         });
       });

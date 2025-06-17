@@ -1180,10 +1180,12 @@ def register_routes(app, notification_queue):
             # 如果有激活码参数，检查是否已被使用，并获取相关订单信息
             order_info = None
             code_info = None
+            
+            # 1. 检查URL中的激活码
             if code:
                 code_info = get_activation_code(code)
-                if code_info and code_info['is_used']:
-                    # 如果激活码已使用，查找使用此激活码创建的订单
+                if code_info:
+                    # 查找使用此激活码创建的订单
                     order_query = execute_query(
                         "SELECT id, account, package, status, created_at, completed_at, remark FROM orders WHERE remark LIKE ? ORDER BY id DESC LIMIT 1", 
                         (f"%通过激活码兑换: {code}%",), 
@@ -1201,6 +1203,36 @@ def register_routes(app, notification_queue):
                             "completed_at": order[5] or "",
                             "remark": order[6]
                         }
+            
+            # 2. 如果URL中没有激活码或没找到订单，检查session中的上次兑换记录
+            if not order_info and 'last_redeemed_code' in session and 'last_order_id' in session:
+                last_code = session.get('last_redeemed_code')
+                last_order_id = session.get('last_order_id')
+                
+                # 查询订单详情
+                order_query = execute_query(
+                    "SELECT id, account, package, status, created_at, completed_at, remark FROM orders WHERE id = ?", 
+                    (last_order_id,), 
+                    fetch=True
+                )
+                
+                if order_query and len(order_query) > 0:
+                    order = order_query[0]
+                    order_info = {
+                        "id": order[0],
+                        "account": order[1],
+                        "package": order[2],
+                        "status": order[3],
+                        "status_text": STATUS_TEXT_ZH.get(order[3], order[3]),
+                        "created_at": order[4],
+                        "completed_at": order[5] or "",
+                        "remark": order[6]
+                    }
+                    
+                    # 如果URL没有激活码，但session有，使用session中的激活码
+                    if not code:
+                        code = last_code
+                        code_info = get_activation_code(code)
             
             return render_template('redeem.html', 
                                    code=code,
@@ -1299,7 +1331,7 @@ def register_routes(app, notification_queue):
                 logger.warning(f"无效的激活码: {code}")
                 return jsonify({"success": False, "error": "无效的激活码"}), 400
             
-            # 检查激活码是否已使用
+            # 检查激活码是否已使用 - 使用数据库事务确保原子性
             if code_info['is_used']:
                 # 查找使用此激活码创建的订单
                 order_query = execute_query(
@@ -1327,47 +1359,125 @@ def register_routes(app, notification_queue):
             
             # 创建订单记录（状态为已提交，而非已完成）
             now = get_china_time()
+            order_id = None
             
-            if DATABASE_URL.startswith('postgres'):
-                order_result = execute_query("""
-                    INSERT INTO orders (account, password, package, remark, status, created_at, user_id)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    RETURNING id
-                """, (
-                    account,
-                    password,
-                    code_info['package'],
-                    f"通过激活码兑换: {code}",
-                    STATUS['SUBMITTED'],  # 改为已提交状态，需要卖家处理
-                    now,
-                    user_id
-                ), fetch=True)
-                order_id = order_result[0][0]
-            else:
-                conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO orders (account, password, package, remark, status, created_at, user_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    account,
-                    password,
-                    code_info['package'],
-                    f"通过激活码兑换: {code}",
-                    STATUS['SUBMITTED'],  # 改为已提交状态，需要卖家处理
-                    now,
-                    user_id
-                ))
-                order_id = cursor.lastrowid
-                conn.commit()
-                conn.close()
-            
-            # 标记激活码为已使用 - 移动到创建订单后，避免订单创建失败但激活码被标记
-            if not mark_activation_code_used(code_info['id'], user_id):
-                logger.warning(f"激活码 {code} 标记失败，但订单已创建: {order_id}")
-                # 继续处理，不中断流程，因为订单已经创建成功
-            
-            logger.info(f"用户 {username} 成功兑换激活码 {code}, 套餐: {code_info['package']}, 订单ID: {order_id}")
+            # 使用数据库事务确保原子性操作
+            try:
+                if DATABASE_URL.startswith('postgres'):
+                    # PostgreSQL事务
+                    import psycopg2
+                    from urllib.parse import urlparse
+                    url = urlparse(DATABASE_URL)
+                    conn = psycopg2.connect(
+                        dbname=url.path[1:],
+                        user=url.username,
+                        password=url.password,
+                        host=url.hostname,
+                        port=url.port
+                    )
+                    cursor = conn.cursor()
+                    
+                    # 开始事务
+                    conn.autocommit = False
+                    
+                    # 1. 先检查激活码是否仍然可用
+                    cursor.execute(
+                        "SELECT id, is_used FROM activation_codes WHERE code = %s FOR UPDATE",
+                        (code,)
+                    )
+                    code_check = cursor.fetchone()
+                    if not code_check or code_check[1] == 1:
+                        conn.rollback()
+                        return jsonify({"success": False, "error": "此激活码已被使用或不存在"}), 400
+                    
+                    # 2. 创建订单
+                    cursor.execute("""
+                        INSERT INTO orders (account, password, package, remark, status, created_at, user_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                    """, (
+                        account,
+                        password,
+                        code_info['package'],
+                        f"通过激活码兑换: {code}",
+                        STATUS['SUBMITTED'],
+                        now,
+                        user_id
+                    ))
+                    order_id = cursor.fetchone()[0]
+                    
+                    # 3. 标记激活码为已使用
+                    cursor.execute("""
+                        UPDATE activation_codes
+                        SET is_used = 1, used_at = %s, used_by = %s
+                        WHERE id = %s
+                    """, (now, user_id, code_info['id']))
+                    
+                    # 提交事务
+                    conn.commit()
+                    
+                else:
+                    # SQLite事务
+                    conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
+                    cursor = conn.cursor()
+                    
+                    # 开始事务
+                    conn.execute("BEGIN TRANSACTION")
+                    
+                    # 1. 先检查激活码是否仍然可用
+                    cursor.execute(
+                        "SELECT id, is_used FROM activation_codes WHERE code = ?",
+                        (code,)
+                    )
+                    code_check = cursor.fetchone()
+                    if not code_check or code_check[1] == 1:
+                        conn.rollback()
+                        conn.close()
+                        return jsonify({"success": False, "error": "此激活码已被使用或不存在"}), 400
+                    
+                    # 2. 创建订单
+                    cursor.execute("""
+                        INSERT INTO orders (account, password, package, remark, status, created_at, user_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        account,
+                        password,
+                        code_info['package'],
+                        f"通过激活码兑换: {code}",
+                        STATUS['SUBMITTED'],
+                        now,
+                        user_id
+                    ))
+                    order_id = cursor.lastrowid
+                    
+                    # 3. 标记激活码为已使用
+                    cursor.execute("""
+                        UPDATE activation_codes
+                        SET is_used = 1, used_at = ?, used_by = ?
+                        WHERE id = ?
+                    """, (now, user_id, code_info['id']))
+                    
+                    # 提交事务
+                    conn.commit()
+                    conn.close()
+                
+                # 记录成功日志
+                logger.info(f"用户 {username} 成功兑换激活码 {code}, 套餐: {code_info['package']}, 订单ID: {order_id}")
+                
+                # 将激活码和订单ID保存到session，以便刷新页面后仍能显示
+                session['last_redeemed_code'] = code
+                session['last_order_id'] = order_id
+                
+            except Exception as e:
+                # 回滚事务
+                if 'conn' in locals():
+                    if DATABASE_URL.startswith('postgres'):
+                        conn.rollback()
+                    else:
+                        conn.rollback()
+                        conn.close()
+                logger.error(f"激活码兑换事务失败: {str(e)}", exc_info=True)
+                return jsonify({"success": False, "error": f"处理激活码兑换失败: {str(e)}"}), 500
             
             # 获取完整的订单信息
             order = {
@@ -1375,7 +1485,7 @@ def register_routes(app, notification_queue):
                 "account": account,
                 "password": password,
                 "package": code_info['package'],
-                "status": STATUS['SUBMITTED'],  # 改为已提交状态
+                "status": STATUS['SUBMITTED'],
                 "status_text": STATUS_TEXT_ZH.get(STATUS['SUBMITTED'], STATUS['SUBMITTED']),
                 "created_at": now,
                 "completed_at": None,  # 未完成

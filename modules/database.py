@@ -1709,31 +1709,55 @@ def mark_activation_code_used(code_id, user_id):
     now = get_china_time()
     try:
         if DATABASE_URL.startswith('postgres'):
-            execute_query("""
+            # PostgreSQL使用事务
+            conn = psycopg2.connect(DATABASE_URL)
+            cursor = conn.cursor()
+            cursor.execute("""
                 UPDATE activation_codes
                 SET is_used = 1, used_at = %s, used_by = %s
-                WHERE id = %s
+                WHERE id = %s AND is_used = 0
             """, (now, user_id, code_id))
-        else:
-            execute_query("""
-                UPDATE activation_codes
-                SET is_used = 1, used_at = ?, used_by = ?
-                WHERE id = ?
-            """, (now, user_id, code_id))
-        
-        # 检查是否真的更新了记录
-        if DATABASE_URL.startswith('postgres'):
-            result = execute_query("""
+            
+            # 检查是否真的更新了记录
+            cursor.execute("""
                 SELECT count(*) FROM activation_codes 
                 WHERE id = %s AND is_used = 1
-            """, (code_id,), fetch=True)
+            """, (code_id,))
+            result = cursor.fetchone()
+            rows_updated = cursor.rowcount
+            
+            conn.commit()
+            conn.close()
+            
+            return rows_updated > 0
         else:
-            result = execute_query("""
-                SELECT count(*) FROM activation_codes 
-                WHERE id = ? AND is_used = 1
-            """, (code_id,), fetch=True)
-        
-        return result[0][0] > 0
+            # SQLite使用事务
+            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
+            cursor = conn.cursor()
+            
+            # 开始事务
+            conn.execute("BEGIN TRANSACTION")
+            
+            # 只更新未使用的激活码
+            cursor.execute("""
+                UPDATE activation_codes
+                SET is_used = 1, used_at = ?, used_by = ?
+                WHERE id = ? AND is_used = 0
+            """, (now, user_id, code_id))
+            
+            # 检查是否真的更新了记录
+            rows_updated = cursor.rowcount
+            
+            if rows_updated > 0:
+                # 提交事务
+                conn.commit()
+                conn.close()
+                return True
+            else:
+                # 回滚事务
+                conn.rollback()
+                conn.close()
+                return False
     except Exception as e:
         logger.error(f"标记激活码已使用失败: {str(e)}", exc_info=True)
         return False
