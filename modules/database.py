@@ -1100,80 +1100,105 @@ def check_balance_for_package(user_id, package):
         return False, balance, price, credit_limit
 
 def refund_order(order_id):
-    """退款订单金额到用户余额"""
-    # 获取订单信息
-    order = execute_query("""
-        SELECT id, user_id, package, status 
-        FROM orders 
-        WHERE id=?
-    """, (order_id,), fetch=True)
-    
-    if not order or not order[0]:
+    """退款订单金额到用户余额 (兼容SQLite/PostgreSQL)"""
+    # 先读取订单信息（使用 execute_query，自动选择数据库）
+    order = execute_query(
+        "SELECT id, user_id, package, status, refunded FROM orders WHERE id = ?" if not DATABASE_URL.startswith('postgres') else
+        "SELECT id, user_id, package, status, refunded FROM orders WHERE id = %s",
+        (order_id,), fetch=True)
+
+    if not order:
         logger.warning(f"退款失败: 找不到订单ID={order_id}")
         return False, "找不到订单"
-    
-    order_id, user_id, package, status = order[0]
-    
+
+    order_id, user_id, package, status, refunded_flag = order[0]
+
     # 只有已撤销或充值失败的订单才能退款
     if status not in ['cancelled', 'failed']:
         logger.warning(f"退款失败: 订单状态不是已撤销或充值失败 (ID={order_id}, 状态={status})")
         return False, f"订单状态不允许退款: {status}"
-    
-    # 检查订单是否已退款
-    refunded = execute_query("SELECT refunded FROM orders WHERE id=?", (order_id,), fetch=True)
-    if refunded and refunded[0][0]:
+
+    if refunded_flag:
         logger.warning(f"退款失败: 订单已退款 (ID={order_id})")
         return False, "订单已退款"
-    
-    # 获取套餐价格
+
     from modules.constants import WEB_PRICES
     price = WEB_PRICES.get(package, 0)
-    
     if price <= 0:
         logger.warning(f"退款失败: 套餐价格无效 (ID={order_id}, 套餐={package}, 价格={price})")
         return False, "套餐价格无效"
-    
-    # 使用事务处理退款
-    conn = None
+
     try:
-        # 使用绝对路径访问数据库
-        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        db_path = os.path.join(current_dir, "orders.db")
-        conn = sqlite3.connect(db_path, timeout=10)
-        
-        with conn:
-            c = conn.cursor()
-            
-            # 获取当前余额
-            c.execute("SELECT balance FROM users WHERE id = ?", (user_id,))
-            current_balance = c.fetchone()[0]
-            
-            # 计算新余额
-            new_balance = current_balance + price
-            
-            # 更新用户余额
-            c.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
-            
-            # 标记订单为已退款
-            c.execute("UPDATE orders SET refunded = 1 WHERE id = ?", (order_id,))
-            
-            # 记录余额变动
-            now = get_china_time()
-            c.execute("""
-                INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (user_id, price, 'refund', f'订单退款: #{order_id}', order_id, new_balance, now))
-        
-        logger.info(f"订单退款成功: ID={order_id}, 用户ID={user_id}, 金额={price}, 新余额={new_balance}")
-        return True, new_balance
-    
+        if DATABASE_URL.startswith('postgres'):
+            # ---------- PostgreSQL 版本 ----------
+            url = urlparse(DATABASE_URL)
+            conn = psycopg2.connect(
+                dbname=url.path[1:],
+                user=url.username,
+                password=url.password,
+                host=url.hostname,
+                port=url.port
+            )
+            cursor = conn.cursor()
+            try:
+                cursor.execute("BEGIN")
+                # 获取当前余额（FOR UPDATE 锁行）
+                cursor.execute("SELECT balance FROM users WHERE id = %s FOR UPDATE", (user_id,))
+                current_balance = cursor.fetchone()[0]
+                new_balance = current_balance + price
+                # 更新余额
+                cursor.execute("UPDATE users SET balance = %s WHERE id = %s", (new_balance, user_id))
+                # 标记订单已退款
+                cursor.execute("UPDATE orders SET refunded = 1 WHERE id = %s", (order_id,))
+                # 插入余额记录
+                now = get_china_time()
+                cursor.execute(
+                    """
+                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (user_id, price, 'refund', f'订单退款: #{order_id}', order_id, new_balance, now)
+                )
+                conn.commit()
+                logger.info(f"订单退款成功(PostgreSQL): ID={order_id}, 用户ID={user_id}, 金额={price}, 新余额={new_balance}")
+                return True, new_balance
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"退款到用户余额失败(PostgreSQL): {str(e)}", exc_info=True)
+                return False, str(e)
+            finally:
+                conn.close()
+        else:
+            # ---------- SQLite 版本 ---------- (原逻辑保持)
+            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(current_dir, "orders.db")
+            conn = sqlite3.connect(db_path, timeout=10)
+            try:
+                with conn:
+                    c = conn.cursor()
+                    c.execute("SELECT balance FROM users WHERE id = ?", (user_id,))
+                    current_balance = c.fetchone()[0]
+                    new_balance = current_balance + price
+                    c.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
+                    c.execute("UPDATE orders SET refunded = 1 WHERE id = ?", (order_id,))
+                    now = get_china_time()
+                    c.execute(
+                        """
+                        INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (user_id, price, 'refund', f'订单退款: #{order_id}', order_id, new_balance, now)
+                    )
+                logger.info(f"订单退款成功(SQLite): ID={order_id}, 用户ID={user_id}, 金额={price}, 新余额={new_balance}")
+                return True, new_balance
+            except Exception as e:
+                logger.error(f"退款到用户余额失败(SQLite): {str(e)}", exc_info=True)
+                return False, str(e)
+            finally:
+                conn.close()
     except Exception as e:
         logger.error(f"退款到用户余额失败: {str(e)}", exc_info=True)
-        return False, f"退款到用户余额失败: {str(e)}"
-    
-    finally:
-        if conn:
-            conn.close()
+        return False, str(e)
 
 def create_order_with_deduction_atomic(account, password, package, remark, username, user_id):
     """
