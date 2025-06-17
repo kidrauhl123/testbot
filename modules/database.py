@@ -1708,6 +1708,10 @@ def mark_activation_code_used(code_id, user_id):
     """标记激活码为已使用"""
     now = get_china_time()
     try:
+        # 如果user_id为0或无效值，设置为NULL以避免外键约束错误
+        if user_id <= 0:
+            user_id = None
+            
         if DATABASE_URL.startswith('postgres'):
             # PostgreSQL使用事务
             conn = psycopg2.connect(DATABASE_URL)

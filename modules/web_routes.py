@@ -1411,7 +1411,7 @@ def register_routes(app, notification_queue):
                         UPDATE activation_codes
                         SET is_used = 1, used_at = %s, used_by = %s
                         WHERE id = %s
-                    """, (now, user_id, code_info['id']))
+                    """, (now, user_id if user_id > 0 else None, code_info['id']))
                     
                     # 提交事务
                     conn.commit()
@@ -1455,7 +1455,7 @@ def register_routes(app, notification_queue):
                         UPDATE activation_codes
                         SET is_used = 1, used_at = ?, used_by = ?
                         WHERE id = ?
-                    """, (now, user_id, code_info['id']))
+                    """, (now, user_id if user_id > 0 else None, code_info['id']))
                     
                     # 提交事务
                     conn.commit()
