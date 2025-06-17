@@ -329,6 +329,114 @@
       padding: 5px;
     }
     
+    /* 卡片式订单样式 */
+    .order-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    
+    .order-card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      overflow: hidden;
+      border-left: 4px solid #667eea;
+    }
+    
+    .order-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 15px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #eee;
+    }
+    
+    .order-id {
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .order-status {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .status-completed {
+      background: #e6f8f1;
+      color: #2ecc71;
+    }
+    
+    .status-submitted {
+      background: #e9f5fe;
+      color: #3498db;
+    }
+    
+    .status-accepted {
+      background: #fef2e5;
+      color: #f39c12;
+    }
+    
+    .status-failed {
+      background: #feeaea;
+      color: #e74c3c;
+    }
+    
+    .status-cancelled {
+      background: #f4f4f4;
+      color: #7f8c8d;
+    }
+    
+    .order-card-body {
+      padding: 15px;
+    }
+    
+    .order-info-item {
+      display: flex;
+      margin-bottom: 10px;
+      align-items: center;
+    }
+    
+    .order-info-label {
+      width: 24px;
+      color: #666;
+      font-size: 14px;
+      text-align: center;
+      margin-right: 10px;
+    }
+    
+    .order-info-value {
+      flex: 1;
+      font-size: 14px;
+    }
+    
+    .order-times {
+      background: #f8f9fa;
+      padding: 10px 15px;
+      font-size: 12px;
+      color: #666;
+      border-top: 1px solid #eee;
+    }
+    
+    .order-time-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 5px;
+    }
+    
+    .order-actions {
+      display: flex;
+      gap: 10px;
+      padding: 10px 15px;
+      background: #fff;
+      border-top: 1px solid #eee;
+    }
+    
     /* 添加移动端适配的媒体查询 */
     @media (min-width: 768px) {
       .dashboard-container {
@@ -357,6 +465,15 @@
       }
       
       .data-table {
+        display: table;
+      }
+      
+      /* 桌面端可以使用表格视图 */
+      .order-cards {
+        display: none;
+      }
+      
+      .orders-table {
         display: table;
       }
     }
@@ -410,6 +527,15 @@
       
       .sidebar-menu.collapsed {
         display: none;
+      }
+      
+      /* 移动端使用卡片视图 */
+      .orders-table {
+        display: none;
+      }
+      
+      .order-cards {
+        display: flex;
       }
     }
   </style>
@@ -673,6 +799,7 @@
   function renderOrdersTable(orders) {
     const container = document.getElementById('orders-container');
     
+    // 表格视图 (用于桌面端)
     let tableHtml = `
       <table class="orders-table">
         <thead>
@@ -723,7 +850,79 @@
       </table>
     `;
     
-    container.innerHTML = tableHtml;
+    // 卡片视图 (用于移动端)
+    let cardsHtml = `<div class="order-cards">`;
+    
+    for (const order of orders) {
+      const statusClass = 'status-' + order.status;
+      const price = WEB_PRICES[order.package] || 'N/A';
+      
+      cardsHtml += `
+        <div class="order-card">
+          <div class="order-card-header">
+            <div class="order-id">
+              <i class="fas fa-receipt"></i> 订单 #${order.id}
+            </div>
+            <div class="order-status ${statusClass}">${order.status_text}</div>
+          </div>
+          <div class="order-card-body">
+            <div class="order-info-item">
+              <div class="order-info-label"><i class="fas fa-user"></i></div>
+              <div class="order-info-value">接单者: ${order.accepted_by || '-'}</div>
+            </div>
+            <div class="order-info-item">
+              <div class="order-info-label"><i class="fas fa-user-circle"></i></div>
+              <div class="order-info-value">账号: ${escapeHtml(order.account)}</div>
+            </div>
+            ${order.password ? `
+            <div class="order-info-item">
+              <div class="order-info-label"><i class="fas fa-key"></i></div>
+              <div class="order-info-value">密码: ${escapeHtml(order.password)}</div>
+            </div>` : ''}
+            <div class="order-info-item">
+              <div class="order-info-label"><i class="fas fa-box"></i></div>
+              <div class="order-info-value">套餐: ${order.package}个月</div>
+            </div>
+            <div class="order-info-item">
+              <div class="order-info-label"><i class="fas fa-tag"></i></div>
+              <div class="order-info-value">价格: ¥${price}</div>
+            </div>
+            ${order.remark ? `
+            <div class="order-info-item">
+              <div class="order-info-label"><i class="fas fa-comment"></i></div>
+              <div class="order-info-value" style="${order.status === 'failed' ? 'color: #e74c3c;' : ''}">
+                备注: ${escapeHtml(order.remark)}
+              </div>
+            </div>` : ''}
+          </div>
+          <div class="order-times">
+            <div class="order-time-item">
+              <span>提交时间:</span>
+              <span>${order.created_at}</span>
+            </div>
+            ${order.accepted_at ? `
+            <div class="order-time-item">
+              <span>接单时间:</span>
+              <span>${order.accepted_at}</span>
+            </div>` : ''}
+            ${order.completed_at ? `
+            <div class="order-time-item">
+              <span>完成时间:</span>
+              <span>${order.completed_at}</span>
+            </div>` : ''}
+          </div>
+          <div class="order-actions">
+            <button class="btn btn-sm btn-info" onclick="showOrderDetail(${order.id})">详情</button>
+            ${order.status === 'completed' ? `<button class="btn btn-sm btn-danger" onclick="disputeOrder(${order.id})">质疑</button>` : ''}
+          </div>
+        </div>
+      `;
+    }
+    
+    cardsHtml += `</div>`;
+    
+    // 合并两种视图
+    container.innerHTML = tableHtml + cardsHtml;
   }
   
   // 显示订单详情
