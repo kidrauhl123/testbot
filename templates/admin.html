@@ -258,7 +258,99 @@
       font-weight: 500;
     }
     
-    /* 添加移动端适配的媒体查询 */
+    /* 用户信息下拉菜单样式 */
+    .user-dropdown {
+      position: relative;
+      cursor: pointer;
+    }
+    
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .user-avatar {
+      width: 30px;
+      height: 30px;
+      background: #667eea;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-weight: bold;
+    }
+    
+    .user-name {
+      font-weight: 500;
+    }
+    
+    .dropdown-menu {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: 100%;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+      min-width: 200px;
+      z-index: 10;
+      margin-top: 10px;
+      overflow: hidden;
+    }
+    
+    .dropdown-menu-header {
+      padding: 10px 15px;
+      background: #f8f9fa;
+      font-weight: 500;
+      border-bottom: 1px solid #eee;
+    }
+    
+    .dropdown-menu-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 15px;
+      color: #333;
+      text-decoration: none;
+      gap: 10px;
+      transition: background 0.2s;
+    }
+    
+    .dropdown-menu-item:hover {
+      background: #f5f5f5;
+    }
+    
+    .dropdown-menu-item.danger {
+      color: #dc3545;
+    }
+    
+    .dropdown-divider {
+      height: 1px;
+      background: #eee;
+      margin: 5px 0;
+    }
+    
+    .user-dropdown:hover .dropdown-menu {
+      display: block;
+    }
+    
+    .text-danger { color: #dc3545; }
+    .text-success { color: #28a745; }
+    
+    .balance-badge {
+      background: #f8f9fa;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 14px;
+      color: #28a745;
+    }
+    
+    .balance-badge.negative {
+      color: #dc3545;
+    }
+
+    /* 电脑端样式 - 保持原始布局 */
     @media (min-width: 768px) {
       .data-table {
         display: table;
@@ -277,9 +369,39 @@
       .menu-toggle {
         display: none !important;
       }
+      
+      /* 确保桌面端导航栏正常显示 */
+      .navbar {
+        flex-wrap: nowrap;
+      }
+      
+      .navbar-user {
+        margin-top: 0;
+        flex-wrap: nowrap;
+        justify-content: flex-end;
+        width: auto;
+      }
+      
+      /* 确保侧边栏正常显示 */
+      .sidebar {
+        width: 240px;
+      }
+      
+      .sidebar-menu {
+        display: block;
+      }
+      
+      .sidebar-menu a {
+        justify-content: flex-start;
+      }
+      
+      /* 确保内容区正常显示 */
+      .admin-container {
+        flex-direction: row;
+      }
     }
     
-    /* 添加表格响应式处理 */
+    /* 移动端响应式处理 */
     @media (max-width: 767px) {
       .navbar {
         flex-wrap: wrap;
@@ -287,6 +409,9 @@
       
       .navbar-user {
         margin-top: 5px;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        width: 100%;
       }
       
       .dashboard-container, .admin-container {
@@ -1228,21 +1353,12 @@
               <div class="order-info-label"><i class="fas fa-user"></i></div>
               <div class="order-info-value">创建者: ${order.created_by || '-'}</div>
             </div>
-            <div class="order-info-item">
-              <div class="order-info-label"><i class="fas fa-user-tie"></i></div>
-              <div class="order-info-value">接单人: ${order.accepted_by || '-'}</div>
-            </div>
           </div>
           <div class="order-times">
             <div class="order-time-item">
               <span>创建时间:</span>
               <span>${order.created_at}</span>
             </div>
-            ${order.accepted_at ? `
-            <div class="order-time-item">
-              <span>接单时间:</span>
-              <span>${order.accepted_at}</span>
-            </div>` : ''}
             ${order.completed_at ? `
             <div class="order-time-item">
               <span>完成时间:</span>
