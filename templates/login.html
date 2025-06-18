@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>登录 - 破天充值系统</title>
+  <title>{{ lang('login') }} - {{ lang('site_title') }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     * { box-sizing: border-box; }
@@ -126,6 +126,39 @@
       color: #999;
       font-size: 14px;
     }
+    
+    /* 语言切换样式 */
+    .language-switch {
+      text-align: center;
+      margin-top: 20px;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+    
+    .language-btn {
+      background: transparent;
+      border: 1px solid rgba(102,126,234,0.5);
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin: 0 2px;
+      color: #667eea;
+      text-decoration: none;
+    }
+    
+    .language-btn:hover {
+      background: rgba(102,126,234,0.1);
+    }
+    
+    .language-btn.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-color: transparent;
+    }
+    
     @media (max-width: 480px) {
       .login-container {
         margin: 20px;
@@ -137,9 +170,9 @@
 <body>
 <div class="login-container">
   <div class="logo">
-    <span>破天</span>
+    <span>{{ lang('site_title') }}</span>
   </div>
-  <h2>用户登录</h2>
+  <h2>{{ lang('login') }}</h2>
   
   {% if error %}
   <div class="error-message">{{ error }}</div>
@@ -147,22 +180,28 @@
   
   <form method="POST" id="loginForm">
     <div class="form-group">
-      <label>用户名</label>
-      <input type="text" name="username" required autofocus placeholder="请输入用户名">
+      <label>{{ lang('username') }}</label>
+      <input type="text" name="username" required autofocus placeholder="{{ lang('enter_username') }}">
     </div>
     
     <div class="form-group">
-      <label>密码</label>
-      <input type="password" name="password" required placeholder="请输入密码">
+      <label>{{ lang('password') }}</label>
+      <input type="password" name="password" required placeholder="{{ lang('enter_password') }}">
     </div>
     
-    <button type="submit" class="form-button" id="submitBtn">登录</button>
+    <button type="submit" class="form-button" id="submitBtn">{{ lang('login') }}</button>
   </form>
   
-  <div class="divider">——— 或 ———</div>
+  <div class="divider">——— {{ lang('or') }} ———</div>
   
   <div class="links">
-    <a href="/register">还没有账号？立即注册</a>
+    <a href="/register">{{ lang('no_account') }}</a>
+  </div>
+  
+  <!-- 语言切换按钮 -->
+  <div class="language-switch">
+    <a href="{{ url_for('set_language', lang='zh') }}" class="language-btn {% if session.get('language', 'zh') == 'zh' %}active{% endif %}">中文</a>
+    <a href="{{ url_for('set_language', lang='en') }}" class="language-btn {% if session.get('language') == 'en' %}active{% endif %}">English</a>
   </div>
 </div>
 
@@ -171,7 +210,7 @@
   document.getElementById('loginForm').addEventListener('submit', function(e) {
     const btn = document.getElementById('submitBtn');
     btn.disabled = true;
-    btn.textContent = '登录中...';
+    btn.textContent = '{{ lang("logging_in") }}';
   });
   
   // 自动聚焦
