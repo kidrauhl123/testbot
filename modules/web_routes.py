@@ -197,7 +197,7 @@ def register_routes(app, notification_queue):
             logger.info(f"订单提交成功: 用户={username}, 套餐={package}, 新余额={new_balance}")
             
             # 获取最新订单列表并格式化
-            orders_raw = execute_query("SELECT id, account, password, package, status, created_at, user_id FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
+            orders_raw = execute_query("SELECT id, account, password, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             orders = []
             
             # 获取新创建的订单ID
@@ -836,19 +836,37 @@ def register_routes(app, notification_queue):
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
         
         # 查询订单
-        orders = execute_query(f"""
-            SELECT id, account, password, package, status, remark, created_at, accepted_at, completed_at, 
-                   web_user_id as creator, accepted_by, accepted_by_username, accepted_by_first_name, refunded
-            FROM orders
-            {where_clause}
-            ORDER BY id DESC
-            LIMIT ? OFFSET ?
-        """, params + [limit, offset], fetch=True)
-        
-        # 查询订单总数
-        count = execute_query(f"""
-            SELECT COUNT(*) FROM orders {where_clause}
-        """, params, fetch=True)[0][0]
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL查询，使用COALESCE获取web_user_id或从users表联查username
+            orders = execute_query(f"""
+                SELECT o.id, o.account, o.password, o.package, o.status, o.remark, o.created_at, o.accepted_at, o.completed_at, 
+                       COALESCE(o.web_user_id, u.username) as creator, o.accepted_by, o.accepted_by_username, o.accepted_by_first_name, o.refunded
+                FROM orders o
+                LEFT JOIN users u ON o.user_id = u.id
+                {where_clause}
+                ORDER BY o.id DESC
+                LIMIT %s OFFSET %s
+            """, params + [limit, offset], fetch=True)
+            
+            # 查询订单总数
+            count = execute_query(f"""
+                SELECT COUNT(*) FROM orders {where_clause}
+            """, params, fetch=True)[0][0]
+        else:
+            # SQLite查询
+            orders = execute_query(f"""
+                SELECT id, account, password, package, status, remark, created_at, accepted_at, completed_at, 
+                       web_user_id as creator, accepted_by, accepted_by_username, accepted_by_first_name, refunded
+                FROM orders
+                {where_clause}
+                ORDER BY id DESC
+                LIMIT ? OFFSET ?
+            """, params + [limit, offset], fetch=True)
+            
+            # 查询订单总数
+            count = execute_query(f"""
+                SELECT COUNT(*) FROM orders {where_clause}
+            """, params, fetch=True)[0][0]
         
         # 格式化订单数据
         formatted_orders = []
@@ -875,7 +893,7 @@ def register_routes(app, notification_queue):
                 "created_at": created_at,
                 "accepted_at": accepted_at,
                 "completed_at": completed_at,
-                "creator": creator,
+                "creator": creator or "N/A",
                 "seller": seller_info,
                 "refunded": bool(refunded)
             })
@@ -952,32 +970,64 @@ def register_routes(app, notification_queue):
     @admin_required
     def admin_api_order_detail(order_id):
         """获取单个订单的详细信息"""
-        order = execute_query("""
-            SELECT id, account, password, package, status, remark, created_at, 
-                   accepted_at, completed_at, accepted_by, web_user_id, user_id,
-                   accepted_by_username, accepted_by_first_name
-            FROM orders 
-            WHERE id = ?
-        """, (order_id,), fetch=True)
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL查询，使用联合查询获取用户名
+            order = execute_query("""
+                SELECT o.id, o.account, o.password, o.package, o.status, o.remark, o.created_at, 
+                       o.accepted_at, o.completed_at, o.accepted_by, o.web_user_id, o.user_id,
+                       o.accepted_by_username, o.accepted_by_first_name, u.username as creator_name
+                FROM orders o
+                LEFT JOIN users u ON o.user_id = u.id
+                WHERE o.id = %s
+            """, (order_id,), fetch=True)
+        else:
+            # SQLite查询
+            order = execute_query("""
+                SELECT id, account, password, package, status, remark, created_at, 
+                       accepted_at, completed_at, accepted_by, web_user_id, user_id,
+                       accepted_by_username, accepted_by_first_name
+                FROM orders 
+                WHERE id = ?
+            """, (order_id,), fetch=True)
         
         if not order:
             return jsonify({"error": "订单不存在"}), 404
             
         o = order[0]
-        return jsonify({
-            "id": o[0],
-            "account": o[1],
-            "password": o[2],
-            "package": o[3],
-            "status": o[4],
-            "status_text": STATUS_TEXT_ZH.get(o[4], o[4]),
-            "remark": o[5],
-            "created_at": o[6],
-            "accepted_at": o[7],
-            "completed_at": o[8],
-            "accepted_by": o[12] or o[13] or "",  # 优先使用昵称，其次是用户名
-            "user_id": o[11]
-        })
+        
+        # 根据不同数据库处理返回格式
+        if DATABASE_URL.startswith('postgres'):
+            return jsonify({
+                "id": o[0],
+                "account": o[1],
+                "password": o[2],
+                "package": o[3],
+                "status": o[4],
+                "status_text": STATUS_TEXT_ZH.get(o[4], o[4]),
+                "remark": o[5],
+                "created_at": o[6],
+                "accepted_at": o[7],
+                "completed_at": o[8],
+                "accepted_by": o[12] or o[13] or "",  # 优先使用昵称，其次是用户名
+                "creator": o[10] or o[14] or "N/A",   # web_user_id或creator_name
+                "user_id": o[11]
+            })
+        else:
+            return jsonify({
+                "id": o[0],
+                "account": o[1],
+                "password": o[2],
+                "package": o[3],
+                "status": o[4],
+                "status_text": STATUS_TEXT_ZH.get(o[4], o[4]),
+                "remark": o[5],
+                "created_at": o[6],
+                "accepted_at": o[7],
+                "completed_at": o[8],
+                "accepted_by": o[12] or o[13] or "",  # 优先使用昵称，其次是用户名
+                "creator": o[10] or "N/A",           # web_user_id
+                "user_id": o[11]
+            })
     
     # 编辑订单的API
     @app.route('/admin/api/orders/<int:order_id>', methods=['PUT'])

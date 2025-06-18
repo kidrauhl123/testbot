@@ -1257,10 +1257,10 @@ def create_order_with_deduction_atomic(account, password, package, remark, usern
                 # 创建订单记录
                 cursor.execute(
                     """
-                    INSERT INTO orders (account, password, package, status, created_at, remark, user_id)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO orders (account, password, package, status, created_at, remark, user_id, web_user_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     """,
-                    (account, password, package, 'submitted', now, remark, user_id)
+                    (account, password, package, 'submitted', now, remark, user_id, username)
                 )
 
                 conn.commit()
@@ -1308,10 +1308,10 @@ def create_order_with_deduction_atomic(account, password, package, remark, usern
 
                 cursor.execute(
                     """
-                    INSERT INTO orders (account, password, package, status, created_at, remark, user_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO orders (account, password, package, status, created_at, remark, user_id, web_user_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (account, password, package, 'submitted', now, remark, user_id)
+                    (account, password, package, 'submitted', now, remark, user_id, username)
                 )
 
                 conn.commit()
