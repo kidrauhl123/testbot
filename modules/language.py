@@ -56,7 +56,6 @@ STRINGS = {
         # 首页
         'recharge_order': '充值下单',
         'potian_account': '破天账号',
-        'password': '密码',
         'package_type': '套餐类型',
         'price': '价格',
         'remark': '备注 (可选)',
@@ -80,7 +79,16 @@ STRINGS = {
         'completed': '已完成',
         'failed': '失败',
         'cancelled': '已取消',
-        'disputed': '有争议'
+        'disputed': '有争议',
+        
+        # 订单提交
+        'submit_success': '订单提交成功！',
+        'submit_failed': '提交失败，请重试',
+        'network_error': '网络错误或服务器无响应，请重试',
+        'refreshing': '正在刷新...',
+        'submitting': '提交中...',
+        'today_total': '今日总额',
+        'no_orders': '暂无订单'
     },
     'en': {
         # General
@@ -109,7 +117,6 @@ STRINGS = {
         # Home Page
         'recharge_order': 'Create Order',
         'potian_account': 'Potian Account',
-        'password': 'Password',
         'package_type': 'Package Type',
         'price': 'Price',
         'remark': 'Remark (Optional)',
@@ -117,7 +124,7 @@ STRINGS = {
         'my_orders': 'My Orders',
         'system_order_status': 'System Order Status',
         'search_placeholder': 'Search order ID or account...',
-        'refresh_hint': '(Showing all latest orders, auto-refresh every 5 seconds)',
+        'refresh_hint': '(All recent orders, auto-refresh every 5s)',
         'show_more': 'Show More',
         'month': ' Month',
         
@@ -133,6 +140,15 @@ STRINGS = {
         'completed': 'Completed',
         'failed': 'Failed',
         'cancelled': 'Cancelled',
-        'disputed': 'Disputed'
+        'disputed': 'Disputed',
+        
+        # Order Submission
+        'submit_success': 'Order submitted successfully!',
+        'submit_failed': 'Submission failed, please try again',
+        'network_error': 'Network error or server not responding, please try again',
+        'refreshing': 'Refreshing...',
+        'submitting': 'Submitting...',
+        'today_total': 'Today\'s Total',
+        'no_orders': 'No orders'
     }
 } 

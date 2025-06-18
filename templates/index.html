@@ -110,33 +110,27 @@
       position: relative;
     }
     
-    /* 语言切换样式 */
-    .language-switch {
-      margin-right: 15px;
+    /* 语言切换按钮样式 */
+    .language-links {
+      position: absolute;
+      top: 15px;
+      right: 20px;
       display: flex;
-      align-items: center;
+      gap: 8px;
+      z-index: 101;
     }
-    
-    .language-btn {
-      background: transparent;
-      border: 1px solid rgba(102,126,234,0.5);
-      padding: 4px 10px;
-      border-radius: 12px;
+
+    .language-link {
       font-size: 12px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      margin: 0 2px;
       color: #667eea;
+      text-decoration: none;
+      opacity: 0.7;
+      font-weight: 500;
     }
-    
-    .language-btn:hover {
-      background: rgba(102,126,234,0.1);
-    }
-    
-    .language-btn.active {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border-color: transparent;
+
+    .language-link:hover, .language-link.active {
+      opacity: 1;
+      text-decoration: underline;
     }
     
     .admin-badge {
@@ -604,15 +598,16 @@
 <!-- Jinja宏定义语言本地化 - 这段不会被渲染 -->
 {% macro lang(key) %}{{ get_string(key) }}{% endmacro %}
 
+<!-- 语言切换链接，位于页面顶部右侧 -->
+<div class="language-links">
+  <a href="{{ url_for('set_language', lang='zh') }}" class="language-link {% if session.get('language', 'zh') == 'zh' %}active{% endif %}">中文</a>
+  <span style="color:#ddd;">|</span>
+  <a href="{{ url_for('set_language', lang='en') }}" class="language-link {% if session.get('language') == 'en' %}active{% endif %}">English</a>
+</div>
+
 <div class="navbar">
   <div class="navbar-brand">{{ lang('site_title') }}</div>
   <div class="navbar-user">
-    <!-- 语言切换按钮 -->
-    <div class="language-switch">
-      <a href="{{ url_for('set_language', lang='zh') }}" class="language-btn {% if session.get('language', 'zh') == 'zh' %}active{% endif %}">中文</a>
-      <a href="{{ url_for('set_language', lang='en') }}" class="language-btn {% if session.get('language') == 'en' %}active{% endif %}">English</a>
-    </div>
-    
     <div class="user-dropdown">
       <div class="user-info">
         <div class="user-avatar">{{ session.username[0]|upper }}</div>
@@ -657,43 +652,43 @@
 </div>
 
 <!-- 刷新指示器 -->
-<div id="refreshIndicator">{{ lang('loading') }}</div>
+<div id="refreshIndicator">正在刷新...</div>
 
 <div class="main-container">
     <div class="container">
         <div class="left">
             <div class="card">
                 <div class="card-header">
-                  <h2>{{ lang('recharge_order') }}</h2>
+                  <h2>充值下单</h2>
                 </div>
                 <form id="orderForm" autocomplete="off">
                   <div class="form-group">
-                    <label>{{ lang('potian_account') }}</label>
-                    <input name="account" class="form-control" required placeholder="{{ lang('potian_account') }}">
+                    <label>破天账号</label>
+                    <input name="account" class="form-control" required placeholder="请输入您的破天账号">
                   </div>
                   <div class="form-group">
-                    <label>{{ lang('password') }}</label>
-                    <input name="password" type="text" class="form-control" required placeholder="{{ lang('password') }}">
+                    <label>密码</label>
+                    <input name="password" type="text" class="form-control" required placeholder="请输入密码">
                   </div>
                   <div class="form-group">
-                    <label>{{ lang('package_type') }}</label>
+                    <label>套餐类型</label>
                     <select name="package" class="form-control" id="packageSelect" required>
-                      <option value="1">1 {{ lang('month') }}</option>
-                      <option value="2">2 {{ lang('month') }}</option>
-                      <option value="3">3 {{ lang('month') }}</option>
-                      <option value="6">6 {{ lang('month') }}</option>
-                      <option value="12">12 {{ lang('month') }}</option>
+                      <option value="1">1个月</option>
+                      <option value="2">2个月</option>
+                      <option value="3">3个月</option>
+                      <option value="6">6个月</option>
+                      <option value="12">12个月</option>
                     </select>
                   </div>
                   <div class="form-group">
-                    <label>{{ lang('price') }}</label>
+                    <label>价格</label>
                     <div class="price-display">¥<span id="selectedPrice">12</span><small style="margin-left:2px;font-size:12px;font-weight:normal;opacity:0.8;">元</small></div>
                   </div>
                   <div class="form-group">
-                    <label>{{ lang('remark') }}</label>
-                    <input name="remark" class="form-control" placeholder="{{ lang('remark') }}">
+                    <label>备注 (可选)</label>
+                    <input name="remark" class="form-control" placeholder="如有特殊要求请备注">
                   </div>
-                  <button type="submit" class="submit-btn">{{ lang('submit_order') }}</button>
+                  <button type="submit" class="submit-btn">提交订单</button>
                 </form>
             </div>
         </div>
@@ -701,7 +696,7 @@
         <div class="right">
             <div class="card">
                 <div class="card-header">
-                  <h2>{% if session.is_admin %}{{ lang('system_order_status') }}{% else %}{{ lang('my_orders') }}{% endif %}</h2>
+                  <h2>{% if session.is_admin %}系统订单状态{% else %}我的订单{% endif %}</h2>
                   <div class="header-actions">
                     <div class="view-toggle">
                       <button id="gridViewBtn" class="view-btn" title="网格视图"><i class="fas fa-th"></i></button>
@@ -712,15 +707,15 @@
                 </div>
                 <div class="search-container">
                   <div class="search-box">
-                    <input type="text" id="searchInput" placeholder="{{ lang('search_placeholder') }}" class="search-input">
+                    <input type="text" id="searchInput" placeholder="搜索订单号或账号..." class="search-input">
                     <button id="searchBtn" class="search-btn"><i class="fas fa-search"></i></button>
                     <button id="clearSearchBtn" class="clear-search-btn"><i class="fas fa-times"></i></button>
                   </div>
-                  <div class="refresh-hint">{{ lang('refresh_hint') }}</div>
+                  <div class="refresh-hint">(显示全部最新订单，每5秒自动更新)</div>
                 </div>
-                <div id="orders-container">{{ lang('loading') }}</div>
+                <div id="orders-container">加载中...</div>
                 <div id="load-more-container" style="text-align:center; margin-top: 20px; display:none;">
-                    <button onclick="loadMoreOrders()" class="btn btn-primary">{{ lang('show_more') }}</button>
+                    <button onclick="loadMoreOrders()" class="btn btn-primary">显示更多</button>
                 </div>
             </div>
         </div>
