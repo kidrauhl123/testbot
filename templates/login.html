@@ -126,29 +126,6 @@
       color: #999;
       font-size: 14px;
     }
-    
-    /* 语言切换链接样式 */
-    .language-links {
-      position: absolute;
-      top: 15px;
-      right: 20px;
-      display: flex;
-      gap: 8px;
-    }
-
-    .language-link {
-      font-size: 12px;
-      color: #fff;
-      text-decoration: none;
-      opacity: 0.7;
-      font-weight: 500;
-    }
-
-    .language-link:hover, .language-link.active {
-      opacity: 1;
-      text-decoration: underline;
-    }
-    
     @media (max-width: 480px) {
       .login-container {
         margin: 20px;
@@ -158,13 +135,6 @@
   </style>
 </head>
 <body>
-<!-- 简洁的语言切换链接 -->
-<div class="language-links">
-  <a href="{{ url_for('set_language', lang='zh') }}" class="language-link {% if session.get('language', 'zh') == 'zh' %}active{% endif %}">中文</a>
-  <span style="color:#fff;opacity:0.3;">|</span>
-  <a href="{{ url_for('set_language', lang='en') }}" class="language-link {% if session.get('language') == 'en' %}active{% endif %}">English</a>
-</div>
-
 <div class="login-container">
   <div class="logo">
     <span>破天</span>

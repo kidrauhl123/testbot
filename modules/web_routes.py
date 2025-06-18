@@ -10,7 +10,6 @@ import sqlite3
 from flask import Flask, request, render_template, jsonify, session, redirect, url_for, flash
 
 from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH, DATABASE_URL
-from modules.language import DEFAULT_LANGUAGE, LANGUAGES, STRINGS
 from modules.database import (
     execute_query, hash_password, get_all_sellers, add_seller, remove_seller, toggle_seller_status,
     get_user_balance, get_user_credit_limit, set_user_balance, set_user_credit_limit, refund_order, 
@@ -34,11 +33,6 @@ def get_china_time():
     china_now = utc_now.astimezone(CN_TIMEZONE)
     return china_now.strftime("%Y-%m-%d %H:%M:%S")
 
-# 语言处理函数
-def get_current_language():
-    """获取当前语言设置"""
-    return session.get('language', DEFAULT_LANGUAGE)
-
 # ===== 登录装饰器 =====
 def login_required(f):
     @wraps(f)
@@ -50,12 +44,6 @@ def login_required(f):
 
 # ===== Web路由 =====
 def register_routes(app, notification_queue):
-    @app.route('/set-language/<lang>')
-    def set_language(lang):
-        """设置用户界面语言"""
-        if lang in LANGUAGES:
-            session['language'] = lang
-        return redirect(request.referrer or url_for('index'))
     @app.route('/login', methods=['GET', 'POST'])
     def login():
         if request.method == 'POST':

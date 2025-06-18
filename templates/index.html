@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>{% if lang('site_title') %}{{ lang('site_title') }}{% else %}破天充值系统{% endif %}</title>
+  <title>破天充值系统</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- 添加Font Awesome图标库 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -109,30 +109,6 @@
       gap: 15px;
       position: relative;
     }
-    
-    /* 语言切换按钮样式 */
-    .language-links {
-      position: absolute;
-      top: 15px;
-      right: 20px;
-      display: flex;
-      gap: 8px;
-      z-index: 101;
-    }
-
-    .language-link {
-      font-size: 12px;
-      color: #667eea;
-      text-decoration: none;
-      opacity: 0.7;
-      font-weight: 500;
-    }
-
-    .language-link:hover, .language-link.active {
-      opacity: 1;
-      text-decoration: underline;
-    }
-    
     .admin-badge {
       background: linear-gradient(135deg, #ffb347 0%, #ffcc33 100%);
       color: #333;
@@ -421,137 +397,474 @@
     
     /* 失败原因样式 */
     .order-list-item p.reason {
-      margin: 8px 0;
+      color: #e74c3c;
+      font-weight: 500;
+      background-color: #feeaea;
       padding: 8px 12px;
-      background-color: #fef9e7;
-      border-left: 3px solid #f39c12;
-      border-radius: 6px;
-      font-size: 13px;
-      color: #333;
+      border-radius: 8px;
+      margin: 10px 0;
+      display: flex;
+      align-items: center;
     }
     
-    /* Status 样式 */
+    .order-list-item p.reason::before {
+      content: '❌';
+      margin-right: 8px;
+    }
+    
+    /* 状态标签 */
     .status-badge {
       display: inline-block;
-      padding: 4px 10px;
-      border-radius: 12px;
+      padding: 5px 12px;
+      border-radius: 20px;
       font-size: 12px;
       font-weight: 600;
-      text-align: center;
-      margin-left: 3px;
+      margin-left: 10px;
     }
     
     .status-submitted {
-      background-color: #f1f5fd;
+      background-color: #e9f5fe;
       color: #3498db;
     }
     
     .status-accepted {
-      background-color: #e8f8f5;
-      color: #27ae60;
+      background-color: #fef2e5;
+      color: #f39c12;
     }
     
     .status-completed {
-      background-color: #e8f8f5;
-      color: #16a085;
+      background-color: #e6f8f1;
+      color: #2ecc71;
     }
     
     .status-failed {
-      background-color: #fde9e9;
+      background-color: #feeaea;
       color: #e74c3c;
     }
     
-    .status-cancelled {
-      background-color: #f4f6f6;
-      color: #7f8c8d;
-    }
-    
-    .status-disputed {
-      background-color: #fef5ea;
-      color: #e67e22;
-    }
-    
-    /* Order Actions */
-    .order-actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 10px;
-    }
-    
-    .order-action-btn {
-      padding: 4px 10px;
-      font-size: 12px;
-      border-radius: 6px;
-      border: none;
-      background: #f7f9fb;
-      color: #667eea;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-    }
-    
-    .order-action-btn:hover {
-      background: #e4e9fe;
-    }
-    
-    .order-action-btn i {
-      margin-right: 5px;
-      font-size: 12px;
-    }
-    
-    .view-toggle {
-      display: flex;
-      gap: 5px;
-    }
-    
-    .view-btn {
-      background: #f7f9fb;
-      border: none;
-      border-radius: 4px;
-      width: 30px;
-      height: 30px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      color: #667eea;
-    }
-    
-    .view-btn:hover {
-      background: #e4e9fe;
-    }
-    
-    .view-btn.active {
-      background: #667eea;
+    /* 刷新指示器样式 */
+    #refreshIndicator {
+      position: fixed;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.7);
       color: white;
+      padding: 8px 15px;
+      border-radius: 20px;
+      font-size: 13px;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
     }
     
-    .search-container {
-      margin: 15px 0;
-      position: relative;
+    #refreshIndicator.show {
+      opacity: 1;
+    }
+    
+    @media (max-width: 992px) {
+      .container {
+        flex-direction: column;
+      }
+      .left, .right {
+        width: 100%;
+      }
+      .order-list-container {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    @media (max-width: 768px) {
+      .navbar {
+        flex-direction: column;
+        padding: 10px;
+      }
+      .navbar-brand {
+        margin-bottom: 10px;
+      }
+      .navbar-user {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
+      }
+    }
+
+    .failed-reason {
+      background-color: rgba(255, 0, 0, 0.1);
+      border-left: 3px solid #ff3b30;
+      padding: 5px 8px;
+      margin: 5px 0;
+      border-radius: 4px;
+      color: #d32f2f;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+    }
+    
+    .failed-icon {
+      margin-right: 5px;
+      font-size: 14px;
+    }
+
+    .balance-info {
+      display: flex;
+      align-items: center;
+      color: #667eea;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    .balance-info .highlight {
+      color: #11998e;
+      margin: 0 4px;
+    }
+    
+    .balance-info .highlight-credit {
+      color: #f39c12;
+      margin: 0 4px;
+    }
+    
+    .balance-content {
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
     
-    .search-box {
+    .balance-display {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    .balance-amount {
+      font-size: 32px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 5px;
+    }
+    
+    .balance-label {
+      font-size: 14px;
+      color: #666;
+    }
+    
+    .credit-amount {
+      font-size: 24px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-top: 10px;
+      margin-bottom: 5px;
+    }
+    
+    .credit-label {
+      font-size: 14px;
+      color: #666;
+    }
+    
+    .credit-badge {
+      background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 2px 5px rgba(243,156,18,0.3);
       display: flex;
       align-items: center;
-      flex: 1;
-      max-width: 300px;
+    }
+    
+    .credit-badge::before {
+      content: '💳';
+      margin-right: 5px;
+    }
+    
+    .balance-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    /* 用户下拉菜单样式 */
+    .user-dropdown {
       position: relative;
+      display: inline-block;
+      cursor: pointer;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background-color: rgba(0,0,0,0.05);
+      transition: all 0.3s ease;
+    }
+
+    .user-info:hover {
+      background-color: rgba(0,0,0,0.1);
+    }
+
+    .user-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background-color: #764ba2;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .user-name {
+      font-weight: 600;
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      width: 200px;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+      padding: 10px 0;
+      margin-top: 10px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+
+    .user-dropdown:hover .dropdown-menu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .dropdown-menu::before {
+      content: '';
+      position: absolute;
+      top: -6px;
+      right: 20px;
+      width: 12px;
+      height: 12px;
+      background-color: white;
+      transform: rotate(45deg);
+      border-radius: 2px;
+    }
+
+    .dropdown-menu-item {
+      padding: 8px 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #333;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    .dropdown-menu-item:hover {
+      background-color: rgba(0,0,0,0.05);
+    }
+
+    .dropdown-menu-item.danger {
+      color: #e74c3c;
+    }
+
+    .dropdown-menu-item.danger:hover {
+      background-color: rgba(231,76,60,0.1);
+    }
+
+    .dropdown-divider {
+      height: 1px;
+      background-color: rgba(0,0,0,0.1);
+      margin: 5px 0;
+    }
+
+    .dropdown-menu-header {
+      padding: 8px 15px;
+      font-size: 12px;
+      color: #666;
+      font-weight: 600;
+    }
+
+    /* 视图切换按钮样式 */
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    
+    .view-toggle {
+      display: flex;
+      background: rgba(0,0,0,0.05);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    
+    .view-btn {
+      border: none;
+      background: transparent;
+      padding: 6px 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .view-btn.active {
+      background: rgba(102,126,234,0.8);
+      color: white;
+    }
+    
+    /* 表格视图样式 */
+    .orders-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    
+    .orders-table th {
+      background: rgba(102,126,234,0.1);
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #555;
+      border-bottom: 2px solid rgba(102,126,234,0.2);
+    }
+    
+    .orders-table td {
+      padding: 12px;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+      vertical-align: middle;
+    }
+    
+    .orders-table tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .orders-table tr:hover {
+      background: rgba(102,126,234,0.05);
+    }
+    
+    .detail-btn {
+      background: rgba(102,126,234,0.1);
+      color: #667eea;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: 5px;
+    }
+    
+    .detail-btn:hover {
+      background: rgba(102,126,234,0.2);
+    }
+    
+    .cancel-btn {
+      background: rgba(231,76,60,0.1);
+      color: #e74c3c;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    
+    .cancel-btn:hover {
+      background: rgba(231,76,60,0.2);
+    }
+    
+    .dispute-btn {
+      background: rgba(241,196,15,0.1);
+      color: #f39c12;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: 5px;
+    }
+    
+    .dispute-btn:hover {
+      background: rgba(241,196,15,0.2);
+    }
+    
+    .urge-btn {
+      background: rgba(52,152,219,0.1);
+      color: #3498db;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: 5px;
+    }
+    
+    .urge-btn:hover {
+      background: rgba(52,152,219,0.2);
+    }
+    
+    /* 价格显示样式 */
+    .price-display {
+      font-size: 16px;
+      font-weight: 600;
+      color: #e74c3c;
+      background: rgba(231, 76, 60, 0.05);
+      padding: 8px 12px;
+      border-radius: 6px;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px dashed rgba(231, 76, 60, 0.3);
+    }
+    
+    #selectedPrice {
+      margin-left: 3px;
+      font-size: 15px;
+    }
+    
+    .table-price {
+      font-weight: 600;
+      color: #e74c3c;
+    }
+    
+    /* 搜索框样式 */
+    .search-container {
+      margin: 15px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .search-box {
+      display: flex;
+      position: relative;
+      width: 100%;
     }
     
     .search-input {
-      width: 100%;
-      padding: 8px 15px;
-      padding-right: 70px;
+      flex: 1;
+      padding: 10px 15px;
+      padding-right: 80px;
+      border: 1px solid #e1e5e9;
       border-radius: 8px;
-      border: 2px solid #e1e5e9;
-      font-size: 13px;
-      transition: all 0.3s ease;
+      font-size: 14px;
+      transition: all 0.3s;
+      background-color: rgba(255,255,255,0.9);
     }
     
     .search-input:focus {
@@ -565,26 +878,24 @@
       right: 0;
       top: 0;
       height: 100%;
-      width: 35px;
-      background: transparent;
       border: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      background: transparent;
+      padding: 0 12px;
       cursor: pointer;
-      color: #667eea;
       font-size: 14px;
-    }
-    
-    .search-btn {
-      right: 0;
+      color: #667eea;
+      transition: all 0.2s;
     }
     
     .clear-search-btn {
-      right: 35px;
+      right: 36px;
+      color: #aaa;
     }
     
-    /* 刷新提示 */
+    .search-btn:hover, .clear-search-btn:hover {
+      color: #764ba2;
+    }
+    
     .refresh-hint {
       font-size: 12px;
       color: #888;
@@ -594,58 +905,47 @@
   </style>
 </head>
 <body>
-
-<!-- Jinja宏定义语言本地化 - 这段不会被渲染 -->
-{% macro lang(key) %}{{ get_string(key) }}{% endmacro %}
-
-<!-- 语言切换链接，位于页面顶部右侧 -->
-<div class="language-links">
-  <a href="{{ url_for('set_language', lang='zh') }}" class="language-link {% if session.get('language', 'zh') == 'zh' %}active{% endif %}">中文</a>
-  <span style="color:#ddd;">|</span>
-  <a href="{{ url_for('set_language', lang='en') }}" class="language-link {% if session.get('language') == 'en' %}active{% endif %}">English</a>
-</div>
-
 <div class="navbar">
-  <div class="navbar-brand">{{ lang('site_title') }}</div>
+  <div class="navbar-brand">破天充值系统</div>
   <div class="navbar-user">
     <div class="user-dropdown">
       <div class="user-info">
         <div class="user-avatar">{{ session.username[0]|upper }}</div>
         <span class="user-name">{{ session.username }}</span>
         {% if session.is_admin %}
-          <span class="admin-badge">{{ lang('admin') }}</span>
+          <span class="admin-badge">管理员</span>
         {% endif %}
       </div>
       <div class="dropdown-menu">
-        <div class="dropdown-menu-header">{{ lang('account_info') }}</div>
+        <div class="dropdown-menu-header">账户信息</div>
         {% if balance is defined %}
         <div class="dropdown-menu-item">
-          <span>{{ lang('account_balance') }}：</span>
+          <span>账户余额：</span>
           <span class="{% if balance < 0 %}text-danger{% else %}text-success{% endif %}">
-            {{ balance }}{% if credit_limit is defined and credit_limit > 0 %} ({{ lang('credit_limit') }}：{{ credit_limit }}){% endif %}
+            {{ balance }}{% if credit_limit is defined and credit_limit > 0 %} (额度：{{ credit_limit }}){% endif %}
           </span>
         </div>
         {% endif %}
         <div class="dropdown-divider"></div>
         {% if session.is_admin %}
           <a href="/admin" class="dropdown-menu-item">
-            <i class="fas fa-cog"></i>{{ lang('admin_panel') }}
+            <i class="fas fa-cog"></i>管理后台
           </a>
         {% else %}
           <a href="/dashboard" class="dropdown-menu-item">
-            <i class="fas fa-user"></i>{{ lang('my_dashboard') }}
+            <i class="fas fa-user"></i>我的后台
           </a>
         {% endif %}
         <a href="/logout" class="dropdown-menu-item danger">
-          <i class="fas fa-sign-out-alt"></i>{{ lang('logout') }}
+          <i class="fas fa-sign-out-alt"></i>退出登录
         </a>
       </div>
     </div>
     
     {% if balance is defined %}
     <div id="balanceBadge" class="balance-badge {% if balance < 0 %}negative{% endif %}" style="cursor:pointer;">
-      {{ lang('balance') }}: {{ balance }} 元
-      <a href="/recharge" class="recharge-btn">{{ lang('recharge') }}</a>
+      余额: {{ balance }} 元
+      <a href="/recharge" class="recharge-btn">充值</a>
     </div>
     {% endif %}
   </div>
@@ -1160,30 +1460,39 @@
     const container = document.getElementById('orders-container');
     const loadMoreBtn = document.getElementById('load-more-container');
     
-    if (orders.length === 0) {
-      container.innerHTML = '<div style="text-align:center;padding:20px;color:#999;">暂无订单</div>';
+    if (!orders.length) {
+      container.innerHTML = '<div class="no-results">暂无订单</div>';
       loadMoreBtn.style.display = 'none';
       return;
     }
-
-    const displayOrders = orders.slice(0, displayedOrders);
     
-    // 显示/隐藏加载更多按钮
-    if (displayedOrders < orders.length) {
-      loadMoreBtn.style.display = 'block';
-    } else {
-      loadMoreBtn.style.display = 'none';
+    // 确保 displayedOrders 至少为 5
+    if (displayedOrders < 5) {
+      displayedOrders = Math.min(5, orders.length);
     }
     
+    // 只显示指定数量的订单
+    const ordersToShow = orders.slice(0, displayedOrders);
+    
+    // 根据视图模式渲染
     if (viewMode === 'grid') {
-      renderGridView(displayOrders, container);
+      renderGridView(container, ordersToShow);
     } else {
-      renderTableView(displayOrders, container);
+      renderTableView(container, ordersToShow);
+    }
+    
+    // 显示或隐藏"加载更多"按钮
+    if (orders.length > displayedOrders) {
+      loadMoreBtn.style.display = 'block';
+      loadMoreBtn.querySelector('button').textContent = 
+        `显示更多订单 (${ordersToShow.length}/${orders.length})`;
+    } else {
+      loadMoreBtn.style.display = 'none';
     }
   }
   
   // 渲染网格视图
-  function renderGridView(orders, container) {
+  function renderGridView(container, orders) {
     // 创建网格容器
     container.innerHTML = '<div class="order-list-container"></div>';
     const gridContainer = container.querySelector('.order-list-container');
@@ -1214,7 +1523,7 @@
   }
   
   // 渲染表格视图
-  function renderTableView(orders, container) {
+  function renderTableView(container, orders) {
     let html = `
       <table class="orders-table">
         <thead>
@@ -1266,21 +1575,13 @@
 
   // 加载更多订单
   function loadMoreOrders() {
-    displayedOrders += 5;
-    
-    if (searchKeyword) {
-      const filteredOrders = allOrders.filter(order => 
+    displayedOrders += 10; // 每次多显示10个
+    const filteredOrders = searchKeyword ? 
+      allOrders.filter(order => 
         order.id.toString().includes(searchKeyword) || 
         order.account.toLowerCase().includes(searchKeyword.toLowerCase())
-      );
-      renderOrders(filteredOrders);
-    } else {
-      renderOrders(allOrders);
-    }
-    
-    if (displayedOrders >= allOrders.length) {
-      document.getElementById('load-more-container').style.display = 'none';
-    }
+      ) : allOrders;
+    renderOrders(filteredOrders);
   }
 
   // 显示订单详情
@@ -1439,14 +1740,11 @@
   function toggleViewMode(mode) {
     viewMode = mode;
     
-    if (mode === 'grid') {
-      document.getElementById('gridViewBtn').classList.add('active');
-      document.getElementById('tableViewBtn').classList.remove('active');
-    } else {
-      document.getElementById('gridViewBtn').classList.remove('active');
-      document.getElementById('tableViewBtn').classList.add('active');
-    }
+    // 更新按钮状态
+    document.getElementById('gridViewBtn').classList.toggle('active', mode === 'grid');
+    document.getElementById('tableViewBtn').classList.toggle('active', mode === 'table');
     
+    // 重新渲染订单
     renderOrders(allOrders);
   }
 

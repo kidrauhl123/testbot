@@ -30,7 +30,6 @@ from modules.database import init_db, execute_query
 from modules.telegram_bot import run_bot, process_telegram_update
 from modules.web_routes import register_routes
 from modules.constants import sync_env_sellers_to_db
-from modules.language import STRINGS, DEFAULT_LANGUAGE, get_string
 
 # 创建一个线程安全的队列用于在Flask和Telegram机器人之间通信
 notification_queue = queue.Queue()
@@ -78,21 +77,6 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET', 'secret_' + str(time.time()))
 app.config['DEBUG'] = False
 app.config['TEMPLATES_AUTO_RELOAD'] = True
-
-# 添加语言本地化的模板全局函数
-@app.context_processor
-def inject_language_functions():
-    """将语言相关函数注入所有模板"""
-    def get_lang(key):
-        current_lang = session.get('language', DEFAULT_LANGUAGE)
-        return STRINGS.get(current_lang, {}).get(key, STRINGS.get(DEFAULT_LANGUAGE, {}).get(key, key))
-    
-    return {
-        'get_string': get_string,
-        'lang': get_lang,
-        'current_language': session.get('language', DEFAULT_LANGUAGE),
-        'available_languages': {'zh': '中文', 'en': 'English'}
-    }
 
 # 确保静态文件目录存在
 static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
