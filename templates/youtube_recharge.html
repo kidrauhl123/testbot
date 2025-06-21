@@ -435,8 +435,8 @@
                 <td>{{ record[0] }}</td>
                 <td>油管会员一年</td>
                 <td>
-                  {% if record[4] %}
-                    <img src="{{ record[4] }}" class="preview-image" onclick="openModal('{{ record[4] }}')" onerror="this.onerror=null;this.src='/static/placeholder.png';">
+                  {% if record[3] %}
+                    <img src="{{ record[3] }}" class="preview-image" onclick="openModal('{{ record[3] }}')" onerror="this.onerror=null;this.src='/static/placeholder.png';">
                   {% else %}
                     无
                   {% endif %}

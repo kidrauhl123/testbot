@@ -12,6 +12,7 @@ import functools
 import sqlite3
 import traceback
 import psycopg2
+import queue
 from urllib.parse import urlparse
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
