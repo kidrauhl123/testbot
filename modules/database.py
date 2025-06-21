@@ -2189,9 +2189,8 @@ def approve_youtube_recharge_request(request_id, admin_id):
             
         user_id = request[0][0]
         
-        # 从常量导入油管会员价格
-        from modules.constants import YOUTUBE_PRICE
-        amount = YOUTUBE_PRICE
+        # 不需要导入价格，因为这里只是更改状态，不涉及余额更新
+        # 如果将来需要更新用户余额，可以在这里添加相关逻辑
         
         # 开始事务
         conn = None

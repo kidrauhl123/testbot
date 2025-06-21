@@ -15,6 +15,9 @@ import psycopg2
 import queue
 from urllib.parse import urlparse
 
+# Telegram相关导入
+from telegram.ext import Updater
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -1702,13 +1705,38 @@ def run_bot(notification_queue):
         # 启动轮询，但不阻塞主线程
         def start_polling():
             try:
-                asyncio.run_coroutine_threadsafe(
-                    bot_application.updater.start_polling(drop_pending_updates=True),
+                # 先检查是否有updater
+                if not hasattr(bot_application, 'updater') or bot_application.updater is None:
+                    # 如果没有updater，创建一个
+                    logger.info("创建Telegram机器人Updater")
+                    print("DEBUG: Creating Telegram bot Updater")
+                    bot_application.updater = Updater(bot=bot_application.bot)
+                
+                # 确保注册了所有处理器
+                logger.info("确保处理器已注册")
+                print("DEBUG: Ensuring handlers are registered")
+                
+                # 启动轮询，不丢弃未处理的更新
+                polling_future = asyncio.run_coroutine_threadsafe(
+                    bot_application.updater.start_polling(drop_pending_updates=False, allowed_updates=Update.ALL_TYPES),
                     loop
                 )
                 logger.info("Telegram机器人已开始轮询更新")
+                print("DEBUG: Telegram bot started polling for updates")
+                
+                # 等待轮询启动完成
+                try:
+                    polling_future.result(timeout=5)
+                    logger.info("轮询启动完成")
+                    print("DEBUG: Polling startup completed")
+                except asyncio.TimeoutError:
+                    # 这是正常的，因为轮询是一个长时间运行的任务
+                    logger.info("轮询启动进行中（正常行为）")
+                    print("DEBUG: Polling startup in progress (normal behavior)")
             except Exception as e:
                 logger.error(f"启动轮询失败: {str(e)}", exc_info=True)
+                print(f"ERROR: Failed to start polling: {str(e)}")
+                traceback.print_exc()
         
         threading.Thread(target=start_polling, daemon=True).start()
         
@@ -1726,22 +1754,55 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # 解析回调数据
         callback_data = query.data
+        user_id = update.effective_user.id
+        message_id = query.message.message_id if query.message else "unknown"
+        chat_id = query.message.chat.id if query.message else "unknown"
         
-        logger.info(f"收到回调查询: {callback_data}")
+        logger.info(f"Received callback query: '{callback_data}' from user {user_id} in chat {chat_id}, message {message_id}")
+        print(f"DEBUG: Received callback query: '{callback_data}' from user {user_id} in chat {chat_id}, message {message_id}")
         
+        # 记录按钮数据（仅调试用）
+        if hasattr(query.message, 'reply_markup') and query.message.reply_markup:
+            try:
+                buttons = query.message.reply_markup.inline_keyboard
+                button_data = []
+                for row in buttons:
+                    row_data = []
+                    for btn in row:
+                        row_data.append(f"{btn.text}:{btn.callback_data}")
+                    button_data.append(row_data)
+                print(f"DEBUG: Message buttons: {button_data}")
+                logger.info(f"Message buttons: {button_data}")
+            except Exception as e:
+                print(f"DEBUG: Failed to extract button data: {e}")
+                logger.error(f"Failed to extract button data: {e}")
+        
+        # 详细日志记录以帮助调试
         if callback_data.startswith("approve_recharge:"):
+            logger.info("Processing approve_recharge callback")
+            print("DEBUG: Processing approve_recharge callback")
             await on_approve_recharge(update, context)
         elif callback_data.startswith("reject_recharge:"):
+            logger.info("Processing reject_recharge callback")
+            print("DEBUG: Processing reject_recharge callback")
             await on_reject_recharge(update, context)
         elif callback_data.startswith("approve_youtube:"):
+            logger.info("Processing approve_youtube callback")
+            print("DEBUG: Processing approve_youtube callback")
             await on_approve_youtube(update, context)
         elif callback_data.startswith("reject_youtube:"):
+            logger.info("Processing reject_youtube callback")
+            print("DEBUG: Processing reject_youtube callback")
             await on_reject_youtube(update, context)
         else:
+            logger.warning(f"Unknown callback data: {callback_data}")
+            print(f"WARNING: Unknown callback data: {callback_data}")
             await query.answer("Unknown callback operation")
             
     except Exception as e:
-        logger.error(f"处理回调查询时出错: {str(e)}", exc_info=True)
+        logger.error(f"Error processing callback query: {str(e)}", exc_info=True)
+        print(f"ERROR: Error processing callback query: {str(e)}")
+        traceback.print_exc()
         await query.answer("Error processing request, please try again later", show_alert=True)
 
 @callback_error_handler
@@ -1812,30 +1873,63 @@ async def on_approve_youtube(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     user_id = update.effective_user.id
     
+    logger.info(f"YouTube approval callback: User ID={user_id}")
+    print(f"DEBUG: YouTube approval callback: User ID={user_id}")
+    
     # Only allow super admin to process recharge requests
     if user_id != 1878943383:
+        logger.warning(f"Permission denied for user {user_id} to approve YouTube membership")
+        print(f"WARNING: Permission denied for user {user_id} to approve YouTube membership")
         await query.answer("You don't have permission to perform this action", show_alert=True)
         return
     
     # Get recharge request ID
-    request_id = int(query.data.split(":")[1])
+    try:
+        callback_data = query.data
+        logger.info(f"Parsing callback data: {callback_data}")
+        print(f"DEBUG: Parsing callback data: {callback_data}")
+        
+        request_id = int(callback_data.split(":")[1])
+        logger.info(f"Extracted request ID: {request_id}")
+        print(f"DEBUG: Extracted request ID: {request_id}")
+    except Exception as e:
+        logger.error(f"Failed to parse request ID: {str(e)}")
+        print(f"ERROR: Failed to parse request ID: {str(e)}")
+        await query.answer("Invalid request format", show_alert=True)
+        return
     
     # Approve recharge request
-    success, message = approve_youtube_recharge_request(request_id, str(user_id))
+    logger.info(f"Approving YouTube membership request ID={request_id}")
+    print(f"DEBUG: Approving YouTube membership request ID={request_id}")
     
-    if success:
-        # Update message
-        keyboard = [[InlineKeyboardButton("✅ Approved", callback_data="dummy_action")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+    try:
+        success, message = approve_youtube_recharge_request(request_id, str(user_id))
+        logger.info(f"Approval result: success={success}, message={message}")
+        print(f"DEBUG: Approval result: success={success}, message={message}")
         
-        try:
-            await query.edit_message_reply_markup(reply_markup=reply_markup)
-            await query.answer("YouTube membership request approved", show_alert=True)
-        except Exception as e:
-            logger.error(f"Failed to update message: {str(e)}")
-            await query.answer("Operation successful, but failed to update message", show_alert=True)
-    else:
-        await query.answer(f"Operation failed: {message}", show_alert=True)
+        if success:
+            # Update message
+            keyboard = [[InlineKeyboardButton("✅ Approved", callback_data="dummy_action")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            try:
+                await query.edit_message_reply_markup(reply_markup=reply_markup)
+                await query.answer("YouTube membership request approved", show_alert=True)
+                logger.info("Successfully updated message with approved status")
+                print("DEBUG: Successfully updated message with approved status")
+            except Exception as e:
+                logger.error(f"Failed to update message: {str(e)}")
+                print(f"ERROR: Failed to update message: {str(e)}")
+                await query.answer("Operation successful, but failed to update message", show_alert=True)
+        else:
+            logger.warning(f"YouTube membership approval failed: {message}")
+            print(f"WARNING: YouTube membership approval failed: {message}")
+            await query.answer(f"Operation failed: {message}", show_alert=True)
+    except Exception as e:
+        logger.error(f"Exception in YouTube approval process: {str(e)}", exc_info=True)
+        print(f"ERROR: Exception in YouTube approval process: {str(e)}")
+        traceback.print_exc()
+        await query.answer("An error occurred during the approval process", show_alert=True)
 
 @callback_error_handler
 async def on_reject_youtube(update: Update, context: ContextTypes.DEFAULT_TYPE):
