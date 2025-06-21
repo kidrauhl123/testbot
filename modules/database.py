@@ -1125,10 +1125,13 @@ def set_user_balance(user_id, balance):
 
 def check_balance_for_package(user_id, package):
     """检查用户余额是否足够购买指定套餐"""
-    from modules.constants import WEB_PRICES
-    
-    # 获取套餐价格
-    price = WEB_PRICES.get(package, 0)
+    # 如果传入的是价格而非套餐ID
+    if isinstance(package, (int, float)):
+        price = package
+    else:
+        # 获取套餐价格
+        from modules.constants import WEB_PRICES
+        price = WEB_PRICES.get(package, 0)
     
     # 获取用户余额
     balance = get_user_balance(user_id)
@@ -1138,9 +1141,11 @@ def check_balance_for_package(user_id, package):
     
     # 判断余额+透支额度是否足够
     if balance + credit_limit >= price:
-        return True, balance, price, credit_limit
+        # 计算新余额
+        new_balance = balance - price
+        return balance, credit_limit, new_balance
     else:
-        return False, balance, price, credit_limit
+        return balance, credit_limit, None
 
 def refund_order(order_id):
     """退款订单金额到用户余额 (兼容SQLite/PostgreSQL)"""
