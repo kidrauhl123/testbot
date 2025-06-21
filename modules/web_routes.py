@@ -6,6 +6,7 @@ from functools import wraps
 from datetime import datetime, timedelta
 import pytz
 import sqlite3
+import uuid
 
 from flask import Flask, request, render_template, jsonify, session, redirect, url_for, flash
 
@@ -43,22 +44,94 @@ def login_required(f):
     return decorated_function
 
 # ===== Web路由 =====
-def register_routes(app, notification_queue=None):
-    """注册所有Flask路由
-    
-    Args:
-        app: Flask应用实例
-        notification_queue: 用于向Telegram机器人发送通知的队列
-    """
-    global flask_app
-    flask_app = app
-    
-    @app.route('/favicon.ico')
-    def favicon():
-        """提供网站图标"""
-        return app.send_static_file('favicon.ico')
+def register_routes(app, notification_queue):
+    @app.route('/login', methods=['GET', 'POST'])
+    def login():
+        if request.method == 'POST':
+            username = request.form.get('username')
+            password = request.form.get('password')
+            
+            if not username or not password:
+                return render_template('login.html', error='请填写用户名和密码')
+                
+            # 验证用户
+            hashed_password = hash_password(password)
+            user = execute_query("SELECT id, username, is_admin FROM users WHERE username=? AND password_hash=?",
+                            (username, hashed_password), fetch=True)
+            
+            if user:
+                user_id, username, is_admin = user[0]
+                session['user_id'] = user_id
+                session['username'] = username
+                session['is_admin'] = is_admin
+                
+                # 更新最后登录时间
+                execute_query("UPDATE users SET last_login=? WHERE id=?",
+                            (get_china_time(), user_id))
+                
+                logger.info(f"用户 {username} 登录成功")
+                
+                # 检查是否有待处理的激活码
+                if 'pending_activation_code' in session:
+                    code = session.pop('pending_activation_code')
+                    
+                    # 如果同时有账号密码，直接跳转到激活码页面
+                    if 'pending_account' in session and 'pending_password' in session:
+                        account = session.pop('pending_account')
+                        password = session.pop('pending_password')
+                        return redirect(url_for('redeem_page', code=code))
+                    
+                    return redirect(url_for('redeem_page', code=code))
+                
+                return redirect(url_for('index'))
+            else:
+                logger.warning(f"用户 {username} 登录失败 - 密码错误")
+                return render_template('login.html', error='用户名或密码错误')
         
+        # 检查是否有激活码参数
+        code = request.args.get('code')
+        if code:
+            session['pending_activation_code'] = code
+        
+        return render_template('login.html')
+
+    @app.route('/register', methods=['GET', 'POST'])
+    def register():
+        if request.method == 'POST':
+            username = request.form.get('username')
+            password = request.form.get('password')
+            confirm_password = request.form.get('password_confirm')  # 修正字段名称
+            
+            # 验证输入
+            if not username or not password or not confirm_password:
+                return render_template('register.html', error='请填写所有字段')
+                
+            if password != confirm_password:
+                return render_template('register.html', error='两次密码输入不一致')
+            
+            # 检查用户名是否已存在
+            existing_user = execute_query("SELECT id FROM users WHERE username=?", (username,), fetch=True)
+            if existing_user:
+                return render_template('register.html', error='用户名已存在')
+            
+            # 创建用户
+            hashed_password = hash_password(password)
+            execute_query("""
+                INSERT INTO users (username, password_hash, is_admin, created_at) 
+                VALUES (?, ?, 0, ?)
+            """, (username, hashed_password, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+            
+            return redirect(url_for('login'))
+        
+        return render_template('register.html')
+
+    @app.route('/logout')
+    def logout():
+        session.clear()
+        return redirect(url_for('login'))
+
     @app.route('/', methods=['GET'])
+    @login_required
     def index():
         # 显示订单创建表单和最近订单
         logger.info("访问首页")
@@ -1091,79 +1164,185 @@ def register_routes(app, notification_queue=None):
                 if amount <= 0:
                     return jsonify({"success": False, "error": "充值金额必须大于0"}), 400
             except ValueError:
-                return jsonify({"success": False, "error": "请输入有效的金额"}), 400
+                return jsonify({"success": False, "error": "充值金额格式不正确"}), 400
             
-            if not payment_method:
-                payment_method = "未指定"
-            
-            # 处理上传的支付凭证
+            # 上传凭证图片
             proof_image = None
             if 'proof_image' in request.files:
                 file = request.files['proof_image']
                 if file and file.filename:
                     try:
                         # 确保上传目录存在
-                        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                        upload_dir = os.path.join(current_dir, 'static', 'uploads')
-                        logger.info(f"上传目录路径: {upload_dir}")
+                        upload_dir = os.path.join('static', 'uploads')
+                        os.makedirs(upload_dir, exist_ok=True)
                         
-                        if not os.path.exists(upload_dir):
-                            try:
-                                os.makedirs(upload_dir)
-                                logger.info(f"创建上传目录: {upload_dir}")
-                            except Exception as mkdir_error:
-                                logger.error(f"创建上传目录失败: {str(mkdir_error)}", exc_info=True)
-                                return jsonify({"success": False, "error": f"创建上传目录失败: {str(mkdir_error)}"}), 500
-                        
-                        # 生成唯一文件名
-                        filename = f"{int(time.time())}_{file.filename}"
+                        # 生成安全的文件名
+                        import uuid
+                        filename = str(uuid.uuid4()) + os.path.splitext(file.filename)[1]
                         file_path = os.path.join(upload_dir, filename)
                         
                         # 保存文件
                         file.save(file_path)
-                        logger.info(f"已保存文件到: {file_path}")
-                        
-                        # 确保URL路径正确
-                        proof_image = f"/static/uploads/{filename}"
-                        logger.info(f"设置凭证URL: {proof_image}")
-                        
-                        # 验证文件是否成功保存
-                        if not os.path.exists(file_path):
-                            logger.error(f"文件保存失败，路径不存在: {file_path}")
-                            return jsonify({"success": False, "error": "文件保存失败，请重试"}), 500
+                        proof_image = os.path.join('uploads', filename)
+                        logger.info(f"充值凭证已保存: {file_path}")
                     except Exception as e:
                         logger.error(f"保存充值凭证失败: {str(e)}", exc_info=True)
-                        return jsonify({"success": False, "error": f"保存充值凭证失败: {str(e)}"}), 500
+                        return jsonify({"success": False, "error": f"上传凭证失败: {str(e)}"}), 500
             
             # 创建充值请求
-            logger.info(f"正在创建充值请求: 用户ID={user_id}, 金额={amount}, 支付方式={payment_method}")
             request_id, success, message = create_recharge_request(user_id, amount, payment_method, proof_image, details)
             
             if success:
-                # 发送通知到TG管理员
-                username = session.get('username')
-                notification_queue.put({
-                    'type': 'recharge_request',
-                    'request_id': request_id,
-                    'username': username,
-                    'amount': amount,
-                    'payment_method': payment_method,
-                    'proof_image': proof_image,
-                    'details': details
-                })
-                logger.info(f"充值请求 #{request_id} 已提交成功，已加入通知队列")
+                logger.info(f"充值请求创建成功: ID={request_id}")
                 
-                return jsonify({
-                    "success": True,
-                    "message": "充值请求已提交，请等待管理员审核"
+                # 如果有管理员在线，通知有新充值请求
+                notification_queue.put({
+                    'type': 'new_recharge',
+                    'request_id': request_id,
+                    'user_id': user_id,
+                    'username': session.get('username'),
+                    'amount': amount,
+                    'payment_method': payment_method
                 })
+                
+                return jsonify({"success": True, "message": "充值请求已提交，等待管理员审核"})
             else:
-                logger.error(f"创建充值请求失败: {message}")
+                logger.error(f"充值请求创建失败: {message}")
                 return jsonify({"success": False, "error": message}), 500
+                
         except Exception as e:
             logger.error(f"处理充值请求时出错: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "error": f"处理充值请求时出错: {str(e)}"}), 500
+            return jsonify({"success": False, "error": f"处理请求时出错: {str(e)}"}), 500
+            
+    @app.route('/youtube', methods=['GET'])
+    @login_required
+    def youtube_page():
+        """油管会员充值页面"""
+        # 显示油管会员充值表单和最近订单
+        logger.info("访问油管会员充值页面")
+        
+        try:
+            # 获取用户最近的油管会员订单
+            user_id = session.get('user_id')
+            orders = execute_query("""
+                SELECT id, account, package, status, created_at 
+                FROM orders 
+                WHERE web_user_id = ? AND product_type = 'youtube' 
+                ORDER BY id DESC LIMIT 5
+            """, (user_id,), fetch=True)
+            
+            # 获取用户余额和透支额度
+            balance = get_user_balance(user_id)
+            credit_limit = get_user_credit_limit(user_id)
+            
+            return render_template('youtube.html', 
+                                orders=orders, 
+                                prices=constants.YOUTUBE_PRICES, 
+                                username=session.get('username'),
+                                is_admin=session.get('is_admin'),
+                                balance=balance,
+                                credit_limit=credit_limit)
+        except Exception as e:
+            logger.error(f"获取油管会员订单失败: {str(e)}", exc_info=True)
+            return render_template('youtube.html', 
+                                error='获取订单失败', 
+                                prices=constants.YOUTUBE_PRICES, 
+                                username=session.get('username'),
+                                is_admin=session.get('is_admin'))
     
+    @app.route('/youtube', methods=['POST'])
+    @login_required
+    def create_youtube_order():
+        """创建油管会员充值订单"""
+        account = request.form.get('account')
+        password = request.form.get('password')
+        package = request.form.get('package', '12')  # 油管会员默认是12个月
+        remark = request.form.get('remark', '')
+        
+        logger.info(f"收到油管会员订单提交请求: 账号={account}, 套餐={package}")
+        
+        if not account or not password:
+            logger.warning("油管会员订单提交失败: 账号或密码为空")
+            return jsonify({"success": False, "error": "账号和密码不能为空"}), 400
+        
+        try:
+            user_id = session.get('user_id')
+            username = session.get('username')
+            
+            # 使用原子操作创建订单和扣款 (注意添加product_type='youtube')
+            success, message, new_balance, credit_limit = create_order_with_deduction_atomic(
+                account, password, package, remark, username, user_id, product_type='youtube'
+            )
+            
+            if not success:
+                logger.warning(f"油管会员订单创建失败: {message} (用户={username})")
+                return jsonify({
+                    "success": False,
+                    "error": message,
+                    "balance": new_balance,
+                    "credit_limit": credit_limit
+                }), 400
+
+            logger.info(f"油管会员订单提交成功: 用户={username}, 套餐={package}, 新余额={new_balance}")
+            
+            # 获取最新订单列表并格式化
+            orders_raw = execute_query("""
+                SELECT id, account, password, package, status, created_at 
+                FROM orders 
+                WHERE product_type = 'youtube'
+                ORDER BY id DESC LIMIT 5
+            """, fetch=True)
+            orders = []
+            
+            # 获取新创建的订单ID
+            new_order_id = None
+            if orders_raw and len(orders_raw) > 0:
+                new_order_id = orders_raw[0][0]
+                logger.info(f"新创建的油管会员订单ID: {new_order_id}")
+            
+            for o in orders_raw:
+                orders.append({
+                    "id": o[0],
+                    "account": o[1],
+                    "password": o[2],
+                    "package": o[3],
+                    "status": o[4],
+                    "status_text": STATUS_TEXT_ZH.get(o[4], o[4]),
+                    "created_at": o[5],
+                    "accepted_at": "",
+                    "completed_at": "",
+                    "remark": "",
+                    "creator": username,
+                    "accepted_by": "",
+                    "can_cancel": o[4] == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == user_id)
+                })
+            
+            # 触发立即通知卖家 - 获取新创建的订单ID并加入通知队列
+            if new_order_id:
+                notification_queue.put({
+                    'type': 'new_order',
+                    'order_id': new_order_id,
+                    'account': account,
+                    'password': password,
+                    'package': package,
+                    'product_type': 'youtube'
+                })
+                logger.info(f"已将油管会员订单 #{new_order_id} 加入通知队列")
+            else:
+                logger.warning("无法获取新创建的油管会员订单ID，无法发送通知")
+            
+            return jsonify({
+                "success": True,
+                "message": '油管会员订单已提交成功！',
+                "balance": new_balance,
+                "credit_limit": credit_limit,
+                "orders": orders
+            })
+
+        except Exception as e:
+            logger.error(f"创建油管会员订单时发生意外错误: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": "服务器内部错误，请联系管理员。"}), 500
+
     @app.route('/admin/recharge-requests', methods=['GET'])
     @login_required
     @admin_required
@@ -1755,104 +1934,101 @@ def register_routes(app, notification_queue=None):
             logger.error(f"导出激活码失败: {str(e)}", exc_info=True)
             return jsonify({"success": False, "message": f"导出失败: {str(e)}"}), 500 
 
-    @app.route('/youtube', methods=['GET'])
+    @app.route('/api/orders')
     @login_required
-    def youtube_page():
-        """油管会员充值页面"""
-        logger.info("访问油管会员充值页面")
-        logger.info(f"当前会话: {session}")
-        
+    def api_get_orders():
+        """获取订单列表，支持product_type参数过滤产品类型"""
         try:
-            # 获取用户余额和透支额度
             user_id = session.get('user_id')
-            balance = get_user_balance(user_id)
-            credit_limit = get_user_credit_limit(user_id)
+            is_admin = session.get('is_admin')
+            # 检查是否指定了产品类型
+            product_type = request.args.get('product_type')
             
-            # 获取最近的油管会员充值订单
-            from modules.database import get_youtube_orders
-            youtube_orders = get_youtube_orders(limit=5, user_id=user_id)
-            
-            # 获取所有订单（包括破天和油管）通过一个合并查询或分别查询
-            # 这里简化处理，前端只展示油管订单
-            all_orders = []  # 可以扩展为包含所有类型订单
-            
-            # 从constants导入价格和套餐选项
-            from modules.constants import YOUTUBE_PRICES, YOUTUBE_PLAN_OPTIONS, STATUS_TEXT_ZH
-            
-            return render_template('youtube.html',
-                                username=session.get('username'),
-                                is_admin=session.get('is_admin'),
-                                balance=balance,
-                                credit_limit=credit_limit,
-                                prices=YOUTUBE_PRICES,
-                                plan_options=YOUTUBE_PLAN_OPTIONS,
-                                youtube_orders=youtube_orders,
-                                all_orders=all_orders,
-                                status_texts=STATUS_TEXT_ZH)
-        except Exception as e:
-            logger.error(f"获取油管会员充值数据失败: {str(e)}", exc_info=True)
-            return render_template('youtube.html',
-                                error='获取数据失败',
-                                username=session.get('username'),
-                                is_admin=session.get('is_admin'),
-                                prices=YOUTUBE_PRICES,
-                                plan_options=YOUTUBE_PLAN_OPTIONS)
+            logger.info(f"获取订单列表API: 用户ID={user_id}, 是管理员={is_admin}, 产品类型={product_type}")
 
-    @app.route('/youtube', methods=['POST'])
-    @login_required
-    def create_youtube_order():
-        """创建油管会员充值订单"""
-        user_id = session.get('user_id')
-        username = session.get('username')
-        
-        # 获取表单数据
-        package = request.form.get('package')
-        remark = request.form.get('remark', '')
-        
-        # 获取上传的二维码图片
-        qrcode_file = request.files.get('qrcode')
-        
-        # 如果没有上传二维码或套餐选择不正确，返回错误
-        from modules.constants import YOUTUBE_PRICES, get_user_package_price
-        
-        if not qrcode_file or not package or (package not in YOUTUBE_PRICES and not get_user_package_price(user_id, package)):
-            flash("请上传二维码图片并选择正确的套餐类型", "error")
-            return redirect(url_for("youtube_page"))
-        
-        # 检查二维码图片类型
-        if not allowed_file(qrcode_file.filename, {'png', 'jpg', 'jpeg', 'gif'}):
-            flash("不支持的文件类型，请上传图片格式的二维码 (JPG, PNG, JPEG, GIF)", "error")
-            return redirect(url_for("youtube_page"))
-        
-        # 保存二维码图片
-        filename = secure_filename(f"{username}_{int(time.time())}_{qrcode_file.filename}")
-        qrcode_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        qrcode_file.save(qrcode_path)
-        
-        # 相对路径用于存储在数据库中
-        relative_qrcode_path = os.path.join('static', 'uploads', filename)
-        
-        # 创建订单并扣款
-        from modules.database import create_youtube_order_with_deduction_atomic
-        success, message, new_balance, credit_limit = create_youtube_order_with_deduction_atomic(
-            relative_qrcode_path, package, remark, username, user_id
-        )
-        
-        if success:
-            flash(f"油管会员充值订单创建成功，{message}", "success")
-        else:
-            # 创建订单失败，删除上传的二维码图片
-            try:
-                os.remove(qrcode_path)
-            except:
-                pass
-            flash(f"油管会员充值订单创建失败：{message}", "error")
-        
-        return redirect(url_for("youtube_page"))
+            # 构建基本查询
+            if is_admin:
+                # 管理员可以查看所有订单
+                if product_type:
+                    orders = execute_query("""
+                        SELECT id, account, password, package, status, created_at, accepted_at, completed_at, 
+                               failed_at, cancelled_at, remark, fail_reason, accepted_by, creator, web_user_id,
+                               package_price, product_type
+                        FROM orders 
+                        WHERE product_type = ?
+                        ORDER BY id DESC
+                    """, (product_type,), fetch=True)
+                else:
+                    orders = execute_query("""
+                        SELECT id, account, password, package, status, created_at, accepted_at, completed_at, 
+                               failed_at, cancelled_at, remark, fail_reason, accepted_by, creator, web_user_id,
+                               package_price, product_type
+                        FROM orders 
+                        ORDER BY id DESC
+                    """, fetch=True)
+            else:
+                # 普通用户只能查看自己的订单
+                if product_type:
+                    orders = execute_query("""
+                        SELECT id, account, password, package, status, created_at, accepted_at, completed_at, 
+                               failed_at, cancelled_at, remark, fail_reason, accepted_by, creator, web_user_id,
+                               package_price, product_type
+                        FROM orders 
+                        WHERE web_user_id = ? AND product_type = ?
+                        ORDER BY id DESC
+                    """, (user_id, product_type), fetch=True)
+                else:
+                    orders = execute_query("""
+                        SELECT id, account, password, package, status, created_at, accepted_at, completed_at, 
+                               failed_at, cancelled_at, remark, fail_reason, accepted_by, creator, web_user_id,
+                               package_price, product_type
+                        FROM orders 
+                        WHERE web_user_id = ?
+                        ORDER BY id DESC
+                    """, (user_id,), fetch=True)
 
-# 检查上传文件类型的辅助函数
-def allowed_file(filename, allowed_extensions):
-    """检查文件是否有有效的扩展名"""
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
-
-from werkzeug.utils import secure_filename
+            # 格式化订单数据
+            formatted_orders = []
+            for o in orders:
+                formatted_orders.append({
+                    "id": o[0],
+                    "account": o[1],
+                    "password": o[2],
+                    "package": o[3],
+                    "status": o[4],
+                    "status_text": STATUS_TEXT_ZH.get(o[4], o[4]),
+                    "created_at": o[5] or "",
+                    "accepted_at": o[6] or "",
+                    "completed_at": o[7] or "",
+                    "failed_at": o[8] or "",
+                    "cancelled_at": o[9] or "",
+                    "remark": o[10] or "",
+                    "fail_reason": o[11] or "",
+                    "accepted_by": o[12] or "",
+                    "creator": o[13] or "",
+                    "web_user_id": o[14],
+                    "package_price": o[15] or 0,
+                    "product_type": o[16] or "potian",
+                    "can_cancel": o[4] == STATUS['SUBMITTED'] and (is_admin or user_id == o[14])
+                })
+            
+            # 获取今日订单数
+            today_start = datetime.now(CN_TIMEZONE).strftime("%Y-%m-%d 00:00:00")
+            today_end = datetime.now(CN_TIMEZONE).strftime("%Y-%m-%d 23:59:59")
+            
+            if is_admin:
+                if product_type:
+                    today_count = execute_query("""
+                        SELECT COUNT(*) FROM orders 
+                        WHERE created_at BETWEEN ? AND ?
+                        AND product_type = ?
+                    """, (today_start, today_end, product_type), fetch=True)[0][0]
+                else:
+                    today_count = execute_query("""
+                        SELECT COUNT(*) FROM orders 
+                        WHERE created_at BETWEEN ? AND ?
+                    """, (today_start, today_end), fetch=True)[0][0]
+            else:
+                if product_type:
+                    today_count = execute_query("""
+                        SELECT COUNT(*) FROM orders 

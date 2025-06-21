@@ -449,8 +449,8 @@
   <div class="navbar-user">
     <div class="user-dropdown">
       <div class="user-info">
-        <div class="user-avatar">{{ session.get('username')[0]|upper if session.get('username') else 'U' }}</div>
-        <span class="user-name">{{ session.get('username') }}</span>
+        <div class="user-avatar">{{ session.username[0]|upper }}</div>
+        <span class="user-name">{{ session.username }}</span>
         <span class="admin-badge">管理员</span>
       </div>
       <div class="dropdown-menu">

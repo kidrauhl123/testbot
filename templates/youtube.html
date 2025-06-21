@@ -99,7 +99,7 @@
       align-items: center;
     }
     .navbar-brand::before {
-      content: '📺';
+      content: '🎬';
       margin-right: 6px;
       font-size: 20px;
     }
@@ -159,32 +159,6 @@
       margin-right: 3px;
     }
     
-    /* 菜单 */
-    .menu-link {
-      color: #667eea;
-      font-weight: 600;
-      text-decoration: none;
-      transition: all 0.3s;
-      margin: 0 10px;
-      position: relative;
-    }
-    .menu-link:hover {
-      color: #764ba2;
-    }
-    .menu-link.active {
-      color: #764ba2;
-    }
-    .menu-link.active::after {
-      content: '';
-      position: absolute;
-      bottom: -5px;
-      left: 0;
-      width: 100%;
-      height: 2px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border-radius: 2px;
-    }
-    
     .btn {
       border: none;
       padding: 10px 18px;
@@ -224,6 +198,7 @@
 
     .left {
       width: 35%;
+      flex-shrink: 0;
     }
 
     .right {
@@ -231,597 +206,724 @@
     }
     
     .card {
-      background: white;
+      background: rgba(255,255,255,0.97);
       border-radius: 15px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.05);
       padding: 25px;
-      position: relative;
-      overflow: hidden;
-      margin-bottom: 25px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,255,255,0.18);
-      height: 100%;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      border: 1px solid rgba(255,255,255,0.5);
     }
-
-    .card-title {
-      font-size: 18px;
-      font-weight: 600;
-      margin: 0 0 20px 0;
-      color: #555;
+    
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+    }
+    
+    .card-header {
       display: flex;
+      justify-content: space-between;
       align-items: center;
     }
-
-    .card-title::before {
-      content: '';
-      display: inline-block;
-      width: 5px;
-      height: 18px;
+    
+    .card-header h2 {
+      margin: 0;
+      font-weight: 600;
+      font-size: 18px;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      margin-right: 10px;
-      border-radius: 3px;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    .card-header h2::before {
+      content: '📝';
+      margin-right: 8px;
+      font-size: 18px;
+    }
+
+    .today-total {
+      font-size: 14px;
+      color: #667eea;
+      font-weight: 600;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+    
+    .form-group label {
+      display: block; 
+      margin-bottom: 5px; 
+      font-weight: 600; 
+      color: #555;
+      font-size: 13px;
     }
     
     .form-control {
-      margin-bottom: 20px;
-    }
-    
-    .form-label {
-      display: block;
-      margin-bottom: 8px;
-      font-weight: 600;
-      color: #555;
-      font-size: 14px;
-    }
-    
-    .form-input {
-      width: 100%;
-      padding: 12px 15px;
-      border: 1px solid #e1e5ee;
+      width: 100%; 
+      padding: 10px 12px; 
       border-radius: 8px;
-      font-size: 14px;
-      transition: all 0.3s;
-      background: #f9faff;
-    }
-    
-    .form-input:focus {
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
-      outline: none;
-    }
-    
-    .form-select {
-      width: 100%;
-      padding: 12px 15px;
-      border: 1px solid #e1e5ee;
-      border-radius: 8px;
-      font-size: 14px;
-      transition: all 0.3s;
-      background: #f9faff;
-      appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 15px center;
-    }
-    
-    .form-select:focus {
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
-      outline: none;
-    }
-    
-    .price-tag {
-      padding: 6px 12px;
-      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-      color: white;
-      border-radius: 50px;
-      font-size: 12px;
-      font-weight: 600;
-      display: inline-flex;
-      align-items: center;
-      margin-left: 10px;
-      box-shadow: 0 2px 5px rgba(56,239,125,0.2);
-    }
-    
-    .price-tag::before {
-      content: '💰';
-      margin-right: 5px;
-    }
-    
-    table {
-      width: 100%;
-      border-collapse: separate;
-      border-spacing: 0;
-      margin-top: 20px;
-    }
-    
-    table th, table td {
-      border: 1px solid #e1e5ee;
-      padding: 12px;
-      text-align: left;
-    }
-    
-    table th {
-      background: #f9faff;
-      font-weight: 600;
-      color: #555;
-    }
-    
-    table tr:nth-child(even) {
-      background-color: #f9faff;
-    }
-    
-    table tr:hover {
-      background-color: #f5f7ff;
-    }
-    
-    table th:first-child {
-      border-top-left-radius: 8px;
-    }
-    
-    table th:last-child {
-      border-top-right-radius: 8px;
-    }
-    
-    table tr:last-child td:first-child {
-      border-bottom-left-radius: 8px;
-    }
-    
-    table tr:last-child td:last-child {
-      border-bottom-right-radius: 8px;
-    }
-    
-    .badge {
-      padding: 4px 8px;
-      border-radius: 50px;
-      font-size: 11px;
-      font-weight: 600;
-      display: inline-block;
-    }
-    
-    .badge-submitted {
-      background-color: #e9f3ff;
-      color: #2d8cff;
-    }
-    
-    .badge-accepted {
-      background-color: #fff8e6;
-      color: #ffab2b;
-    }
-    
-    .badge-completed {
-      background-color: #e9fff3;
-      color: #28c76f;
-    }
-    
-    .badge-failed {
-      background-color: #ffe9ef;
-      color: #ea5455;
-    }
-    
-    .badge-cancelled {
-      background-color: #f2f2f2;
-      color: #888888;
-    }
-    
-    .badge-disputing {
-      background-color: #fff1f0;
-      color: #ff5c75;
-    }
-    
-    .form-actions {
-      text-align: center;
-      margin-top: 20px;
-    }
-    
-    .btn-wide {
-      width: 100%;
-      margin-top: 10px;
-    }
-    
-    /* 标签页 */
-    .tab-container {
-      margin-bottom: 20px;
-    }
-    
-    .tab-buttons {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
-      border-bottom: 1px solid #e1e5ee;
-      padding-bottom: 10px;
-    }
-    
-    .tab-button {
-      padding: 8px 15px;
-      border: none;
-      background-color: transparent;
-      font-size: 14px;
-      font-weight: 600;
-      color: #555;
-      cursor: pointer;
-      border-radius: 8px 8px 0 0;
+      border: 2px solid #e1e5e9; 
+      font-size: 14px; 
       transition: all 0.3s ease;
+      background-color: rgba(255,255,255,0.8);
     }
     
-    .tab-button.active {
-      color: #667eea;
-      border-bottom: 2px solid #667eea;
-    }
-    
-    .tab-button:hover:not(.active) {
-      color: #764ba2;
-    }
-    
-    .tab-content {
-      display: none;
-    }
-    
-    .tab-content.active {
-      display: block;
-    }
-    
-    /* 文件上传样式 */
-    .file-upload {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 25px;
-      border: 2px dashed #e1e5ee;
-      border-radius: 10px;
-      background-color: #f9faff;
-      transition: all 0.3s ease;
-      cursor: pointer;
-    }
-    
-    .file-upload:hover {
+    .form-control:focus {
+      outline: none; 
       border-color: #667eea;
-      background-color: #f5f7ff;
+      box-shadow: 0 0 0 3px rgba(102,126,234,0.2);
+      background-color: #fff;
     }
     
-    .file-upload-icon {
-      font-size: 30px;
-      margin-bottom: 10px;
-      color: #667eea;
-    }
-    
-    .file-upload-text {
-      font-size: 14px;
-      text-align: center;
-      color: #555;
-    }
-    
-    .file-upload-input {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0;
-      cursor: pointer;
-    }
-    
-    .file-preview {
-      margin-top: 15px;
-      text-align: center;
-    }
-    
-    .file-preview img {
-      max-width: 100%;
-      max-height: 200px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-    
-    .form-info-text {
-      font-size: 12px;
-      color: #888;
+    .price-display {
+      font-size: 28px;
+      font-weight: 700;
+      color: #e74c3c;
       margin-top: 5px;
     }
     
-    @media (max-width: 768px) {
-      .container {
-        flex-direction: column;
-      }
-      .left, .right {
-        width: 100%;
-      }
-      .navbar {
-        flex-direction: column;
-        padding: 10px;
-      }
-      .navbar-brand {
-        margin-bottom: 10px;
-      }
+    .submit-btn {
+      width: 100%; 
+      padding: 16px; 
+      font-size: 16px; 
+      font-weight: 600;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white; 
+      border: none; 
+      border-radius: 10px; 
+      cursor: pointer;
+      transition: all 0.3s ease; 
+      margin-top: 15px;
+      box-shadow: 0 5px 15px rgba(102,126,234,0.4);
+    }
+    
+    .submit-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(102,126,234,0.5);
+    }
+    
+    .order-list-container {
+      display: grid;
+      grid-template-columns: repeat(1, 1fr);
+      gap: 15px;
+    }
+
+    .order-list-item {
+      background: #fff; 
+      padding: 16px; 
+      margin-bottom: 0;
+      border-radius: 10px; 
+      border-left: 4px solid #667eea;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      transition: all 0.3s ease;
+      font-size: 13px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .order-list-item::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+      width: 5px;
+      background: linear-gradient(to bottom, transparent, rgba(102,126,234,0.1), transparent);
+    }
+    
+    .order-list-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    
+    .order-list-item h4 { 
+      margin: 0 0 10px; 
+      font-size: 15px; 
+      color: #333;
+      display: flex;
+      align-items: center;
+    }
+    
+    .order-list-item h4::before {
+      content: '🎬';
+      margin-right: 8px;
+    }
+    
+    .order-list-item p { 
+      margin: 8px 0; 
+      font-size: 15px; 
+      color: #666; 
+      display: flex;
+      align-items: center;
+    }
+    
+    .order-list-item p.account::before {
+      content: '👤';
+      margin-right: 8px;
+    }
+    
+    .order-list-item p.package::before {
+      content: '📦';
+      margin-right: 8px;
+    }
+    
+    /* 价格样式 */
+    .order-list-item p.price {
+      margin: 8px 0;
+      font-size: 14px;
+      color: #e74c3c;
+      font-weight: 500;
+    }
+    
+    .order-list-item p.price::before {
+      content: '💰';
+      margin-right: 8px;
+    }
+    
+    .order-list-item p.status::before {
+      content: '🔄';
+      margin-right: 8px;
     }
   </style>
 </head>
 <body>
-  <!-- 导航栏 -->
-  <nav class="navbar">
-    <div class="navbar-brand">油管会员充值系统</div>
-    <div style="display: flex; align-items: center;">
-      <a href="/" class="menu-link">破天充值</a>
-      <a href="/youtube" class="menu-link active">油管会员</a>
-      {% if session.get('is_admin') %}
-      <a href="/admin" class="menu-link">管理面板</a>
-      {% endif %}
-    </div>
-    <div class="navbar-user">
-      {% if session.get('is_admin') %}
-      <div class="admin-badge">管理员</div>
-      {% endif %}
-      <div class="balance-badge {% if balance < 0 %}negative{% endif %}">
-        余额: {{ balance }}元
-        <a href="/recharge" class="recharge-btn">充值</a>
+<!-- 自定义提示框 -->
+<div id="customAlert" class="custom-alert" style="display:none">
+  <div class="custom-alert-icon">✅</div>
+  <div class="custom-alert-message">操作成功</div>
+  <div class="custom-alert-close" onclick="document.getElementById('customAlert').style.display='none'">×</div>
+</div>
+
+<div class="navbar">
+  <a href="/" class="navbar-brand">油管会员充值</a>
+  <div class="navbar-user">
+    <a href="/" style="color:#333;text-decoration:none;">回到破天充值</a>
+    {% if is_admin %}
+    <div class="admin-badge">管理员</div>
+    {% endif %}
+    
+    <div class="dropdown" style="position: relative;">
+      <div style="cursor:pointer;" onclick="document.getElementById('userDropdown').classList.toggle('show')">
+        <i class="fas fa-user-circle" style="font-size:18px;margin-right:5px;"></i>
+        {{ username }}
+        <i class="fas fa-caret-down" style="margin-left:5px;"></i>
       </div>
-      <a href="/logout" class="btn btn-danger" style="padding: 6px 12px; font-size: 12px;">退出</a>
+      
+      <div id="userDropdown" class="dropdown-menu" style="display:none;position:absolute;right:0;top:100%;background:white;box-shadow:0 8px 16px rgba(0,0,0,0.1);border-radius:8px;min-width:180px;z-index:1000;">
+        {% if is_admin %}
+        <a href="/admin" class="dropdown-menu-item">
+          <i class="fas fa-cog"></i>管理员后台
+        </a>
+        {% else %}
+        <a href="/dashboard" class="dropdown-menu-item">
+          <i class="fas fa-user"></i>我的后台
+        </a>
+        {% endif %}
+        <a href="/" class="dropdown-menu-item">
+          <i class="fas fa-home"></i>返回首页
+        </a>
+        <a href="/logout" class="dropdown-menu-item danger">
+          <i class="fas fa-sign-out-alt"></i>退出登录
+        </a>
+      </div>
     </div>
-  </nav>
-  
-  <!-- 主要内容 -->
-  <div class="main-container">
+    
+    {% if balance is defined %}
+    <div id="balanceBadge" class="balance-badge {% if balance < 0 %}negative{% endif %}" style="cursor:pointer;">
+      余额: {{ balance }} 元
+      <a href="/recharge" class="recharge-btn">充值</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- 刷新指示器 -->
+<div id="refreshIndicator">正在刷新...</div>
+
+<div class="main-container">
     <div class="container">
-      <!-- 左侧表单卡片 -->
-      <div class="left">
-        <div class="card">
-          <h3 class="card-title">上传油管会员充值二维码</h3>
-          
-          <form id="orderForm" action="/youtube" method="POST" enctype="multipart/form-data">
-            <!-- 二维码上传 -->
-            <div class="form-control">
-              <label class="form-label">支付二维码</label>
-              <div class="file-upload" id="fileUploadArea">
-                <div class="file-upload-icon">
-                  <i class="fas fa-cloud-upload-alt"></i>
+        <div class="left">
+            <div class="card">
+                <div class="card-header">
+                  <h2>油管会员充值</h2>
                 </div>
-                <div class="file-upload-text">
-                  点击或拖拽二维码图片到此处<br>
-                  <span style="font-size: 12px; color: #888;">支持 JPG, PNG 格式</span>
+                <form id="orderForm" autocomplete="off">
+                  <div class="form-group">
+                    <label>油管账号</label>
+                    <input name="account" class="form-control" required placeholder="请输入您的油管账号">
+                  </div>
+                  <div class="form-group">
+                    <label>密码</label>
+                    <input name="password" type="text" class="form-control" required placeholder="请输入密码">
+                  </div>
+                  <div class="form-group">
+                    <label>套餐类型</label>
+                    <select name="package" class="form-control" id="packageSelect" required>
+                      <option value="12">个人会员一年</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>价格</label>
+                    <div class="price-display">¥<span id="selectedPrice">150</span><small style="margin-left:2px;font-size:12px;font-weight:normal;opacity:0.8;">元</small></div>
+                  </div>
+                  <div class="form-group">
+                    <label>备注 (可选)</label>
+                    <input name="remark" class="form-control" placeholder="如有特殊要求请备注">
+                  </div>
+                  <button type="submit" class="submit-btn">提交订单</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="right">
+            <div class="card">
+                <div class="card-header">
+                  <h2>{% if session.is_admin %}油管订单状态{% else %}我的油管订单{% endif %}</h2>
+                  <div class="header-actions">
+                    <div class="view-toggle">
+                      <button id="gridViewBtn" class="view-btn" title="网格视图"><i class="fas fa-th"></i></button>
+                      <button id="tableViewBtn" class="view-btn active" title="表格视图"><i class="fas fa-list"></i></button>
+                    </div>
+                    <div id="today-total" class="today-total"></div>
+                  </div>
                 </div>
-                <input type="file" name="qrcode" id="qrcodeInput" accept="image/jpeg,image/png" class="file-upload-input" required>
-              </div>
-              <div class="file-preview" id="filePreview" style="display:none;"></div>
-              <div class="form-info-text">请上传从油管获取的付款二维码图片</div>
+                <div class="search-container">
+                  <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="搜索订单号或账号..." class="search-input">
+                    <button id="searchBtn" class="search-btn"><i class="fas fa-search"></i></button>
+                    <button id="clearSearchBtn" class="clear-search-btn"><i class="fas fa-times"></i></button>
+                  </div>
+                  <div class="refresh-hint">(显示全部最新订单，每5秒自动更新)</div>
+                </div>
+                <div id="orders-container">加载中...</div>
+                <div id="load-more-container" style="text-align:center; margin-top: 20px; display:none;">
+                    <button onclick="loadMoreOrders()" class="btn btn-primary">显示更多</button>
+                </div>
             </div>
-            
-            <!-- 套餐选择 -->
-            <div class="form-control">
-              <label class="form-label">套餐选择 <span class="price-tag">¥{{ prices.12 }}</span></label>
-              <select name="package" class="form-select" id="packageSelect">
-                {% for value, label in plan_options %}
-                <option value="{{ value }}">{{ label }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            
-            <!-- 备注 -->
-            <div class="form-control">
-              <label class="form-label">备注信息 (可选)</label>
-              <input type="text" name="remark" class="form-input" placeholder="可选填，如有特殊要求请在此说明">
-            </div>
-            
-            <!-- 提交按钮 -->
-            <div class="form-actions">
-              <button type="submit" class="btn btn-primary btn-wide">提交订单</button>
-            </div>
-          </form>
         </div>
-      </div>
-      
-      <!-- 右侧最近订单卡片 -->
-      <div class="right">
-        <div class="card">
-          <h3 class="card-title">最近订单</h3>
-          
-          <!-- 标签页 -->
-          <div class="tab-container">
-            <div class="tab-buttons">
-              <button class="tab-button active" data-tab="youtube">油管会员订单</button>
-              <button class="tab-button" data-tab="all">全部订单</button>
-            </div>
-            
-            <!-- 油管会员订单 -->
-            <div class="tab-content active" id="tab-youtube">
-              {% if youtube_orders %}
-              <table>
-                <thead>
-                  <tr>
-                    <th>订单号</th>
-                    <th>套餐</th>
-                    <th>状态</th>
-                    <th>创建时间</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for order in youtube_orders %}
-                  <tr>
-                    <td>#{{ order.0 }}</td>
-                    <td>个人会员一年</td>
-                    <td><span class="badge badge-{{ order.4 }}">{{ status_texts.get(order.4, order.4) }}</span></td>
-                    <td>{{ order.5 }}</td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-              {% else %}
-              <div style="text-align: center; padding: 20px; color: #888;">
-                暂无油管会员充值订单
-              </div>
-              {% endif %}
-            </div>
-            
-            <!-- 全部订单 -->
-            <div class="tab-content" id="tab-all">
-              {% if all_orders %}
-              <table>
-                <thead>
-                  <tr>
-                    <th>订单号</th>
-                    <th>类型</th>
-                    <th>套餐</th>
-                    <th>状态</th>
-                    <th>创建时间</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for order in all_orders %}
-                  <tr>
-                    <td>#{{ order.id }}</td>
-                    <td>{{ order.type }}</td>
-                    <td>{{ order.package }}</td>
-                    <td><span class="badge badge-{{ order.status }}">{{ status_texts.get(order.status, order.status) }}</span></td>
-                    <td>{{ order.created_at }}</td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-              {% else %}
-              <div style="text-align: center; padding: 20px; color: #888;">
-                暂无订单
-              </div>
-              {% endif %}
-            </div>
-          </div>
-          
-          <div style="text-align: center; margin-top: 20px;">
-            <a href="/dashboard" class="btn btn-primary">查看全部订单</a>
-          </div>
-        </div>
-      </div>
     </div>
-  </div>
+</div>
+
+<div id="balanceInfoBar" style="display:none;padding:8px 15px;background:#fff8e1;border-bottom:1px solid #ffcc33;font-size:13px;text-align:center;">
+  当前余额：{{ balance }} 元  {% if credit_limit is defined and credit_limit > 0 %}&nbsp;&nbsp;可透支额度：{{ credit_limit }} 元{% endif %}
+</div>
+
+<script>
+  // 全局变量
+  let displayedOrders = 5; // 初始显示5个订单
+  let allOrders = []; // 存储所有订单
+  let searchKeyword = ''; // 搜索关键词
+  let autoRefreshInterval = null;
+  let userId = '{{ session.user_id }}'; // 当前用户ID
+  let isAdmin = {{ 'true' if session.is_admin else 'false' }}; // 是否是管理员
+  let lastOrdersHash = ''; // 用于检测订单变化的哈希
+  let viewMode = 'grid'; // 默认视图模式：grid 或 table
   
-  <!-- 自定义提示框 -->
-  <div id="customAlert" class="custom-alert" style="display: none;">
-    <div class="custom-alert-icon">
-      <i class="fas fa-info-circle"></i>
-    </div>
-    <span id="alertMessage"></span>
-    <div class="custom-alert-close" onclick="hideAlert()">
-      <i class="fas fa-times"></i>
-    </div>
-  </div>
+  // 油管会员价格
+  const YOUTUBE_PRICES = {'12': 150};
   
-  <script>
-    // 显示提示框
-    function showAlert(message, type = 'success') {
-      const alertEl = document.getElementById('customAlert');
-      const messageEl = document.getElementById('alertMessage');
-      const iconEl = alertEl.querySelector('.custom-alert-icon i');
+  // 用户实际价格
+  let USER_PRICES = {...YOUTUBE_PRICES};
+  
+  // 更新价格显示
+  function updatePriceDisplay() {
+    const packageSelect = document.getElementById('packageSelect');
+    const selectedPrice = document.getElementById('selectedPrice');
+    
+    if (packageSelect && selectedPrice) {
+      // 显示当前选中套餐的价格
+      selectedPrice.textContent = USER_PRICES[packageSelect.value];
+    }
+  }
+  
+  // 页面加载处理
+  document.addEventListener('DOMContentLoaded', function() {
+    // 搜索功能初始化
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    
+    // 搜索按钮点击事件
+    searchBtn.addEventListener('click', function() {
+      searchKeyword = searchInput.value.trim();
+      displayedOrders = 5; // 重置显示数量
       
-      messageEl.textContent = message;
-      
-      // 设置提示框类型
-      alertEl.className = 'custom-alert ' + type;
-      
-      // 设置图标
-      if (type === 'success') {
-        iconEl.className = 'fas fa-check-circle';
-      } else if (type === 'warning') {
-        iconEl.className = 'fas fa-exclamation-circle';
-      } else if (type === 'error') {
-        iconEl.className = 'fas fa-times-circle';
+      if (searchKeyword) {
+        const filteredOrders = allOrders.filter(order => 
+          order.id.toString().includes(searchKeyword) || 
+          order.account.toLowerCase().includes(searchKeyword.toLowerCase())
+        );
+        renderOrders(filteredOrders);
       } else {
-        iconEl.className = 'fas fa-info-circle';
+        renderOrders(allOrders);
       }
-      
-      alertEl.style.display = 'flex';
-      
-      // 3秒后自动隐藏
-      setTimeout(() => {
-        hideAlert();
-      }, 3000);
-    }
-    
-    // 隐藏提示框
-    function hideAlert() {
-      const alertEl = document.getElementById('customAlert');
-      alertEl.style.display = 'none';
-    }
-    
-    // 处理文件上传预览
-    document.addEventListener('DOMContentLoaded', function() {
-      const fileInput = document.getElementById('qrcodeInput');
-      const filePreview = document.getElementById('filePreview');
-      
-      fileInput.addEventListener('change', function() {
-        if (this.files && this.files[0]) {
-          const file = this.files[0];
-          const reader = new FileReader();
-          
-          reader.onload = function(e) {
-            filePreview.innerHTML = `<img src="${e.target.result}" alt="二维码预览">`;
-            filePreview.style.display = 'block';
-          }
-          
-          reader.readAsDataURL(file);
-        }
-      });
-      
-      // 标签页切换
-      const tabButtons = document.querySelectorAll('.tab-button');
-      const tabContents = document.querySelectorAll('.tab-content');
-      
-      tabButtons.forEach(button => {
-        button.addEventListener('click', function() {
-          const tabId = this.getAttribute('data-tab');
-          
-          // 移除所有标签页的active类
-          tabButtons.forEach(btn => btn.classList.remove('active'));
-          tabContents.forEach(content => content.classList.remove('active'));
-          
-          // 给当前点击的标签页添加active类
-          this.classList.add('active');
-          document.getElementById('tab-' + tabId).classList.add('active');
-        });
-      });
     });
     
-    // 表单提交处理
-    document.getElementById('orderForm').addEventListener('submit', function(e) {
+    // 回车键搜索
+    searchInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        searchBtn.click();
+      }
+    });
+    
+    // 清除搜索
+    clearSearchBtn.addEventListener('click', function() {
+      searchInput.value = '';
+      searchKeyword = '';
+      displayedOrders = 5;
+      renderOrders(allOrders);
+    });
+
+    // 加载订单
+    loadOrders();
+    
+    // 启动自动刷新
+    startAutoRefresh();
+    
+    // 切换视图模式
+    const gridViewBtn = document.getElementById('gridViewBtn');
+    const tableViewBtn = document.getElementById('tableViewBtn');
+    
+    gridViewBtn.addEventListener('click', function() {
+      viewMode = 'grid';
+      gridViewBtn.classList.add('active');
+      tableViewBtn.classList.remove('active');
+      renderOrders(allOrders);
+    });
+    
+    tableViewBtn.addEventListener('click', function() {
+      viewMode = 'table';
+      tableViewBtn.classList.add('active');
+      gridViewBtn.classList.remove('active');
+      renderOrders(allOrders);
+    });
+    
+    // 提交订单
+    const orderForm = document.getElementById('orderForm');
+    
+    orderForm.addEventListener('submit', function(e) {
       e.preventDefault();
+      const formData = new FormData(orderForm);
       
-      const formData = new FormData(this);
+      // 禁用表单元素
+      const submitBtn = this.querySelector('button[type="submit"]');
+      const formElements = this.querySelectorAll('input, select, button');
+      formElements.forEach(el => el.disabled = true);
+      submitBtn.textContent = '提交中...';
       
+      // 提交请求
       fetch('/youtube', {
         method: 'POST',
         body: formData
       })
       .then(response => response.json())
       .then(data => {
+        // 重新启用表单元素
+        formElements.forEach(el => el.disabled = false);
+        submitBtn.textContent = '提交订单';
+        
         if (data.success) {
-          showAlert(data.message, 'success');
-          // 重置表单
-          document.getElementById('orderForm').reset();
-          document.getElementById('filePreview').innerHTML = '';
-          document.getElementById('filePreview').style.display = 'none';
+          // 订单提交成功
+          showCustomAlert(data.message, 'success');
+          orderForm.reset();
+          
+          // 刷新订单列表
+          loadOrders(false);
           
           // 更新余额显示
-          const balanceBadge = document.querySelector('.balance-badge');
-          balanceBadge.innerHTML = `余额: ${data.balance}元 <a href="/recharge" class="recharge-btn">充值</a>`;
-          
-          if (data.balance < 0) {
-            balanceBadge.classList.add('negative');
-          } else {
-            balanceBadge.classList.remove('negative');
+          if (data.balance !== undefined) {
+            updateBalanceDisplay(data.balance, data.credit_limit);
           }
-          
-          // 刷新页面以显示最新订单
-          setTimeout(() => {
-            window.location.reload();
-          }, 1500);
         } else {
-          showAlert(data.error, 'error');
+          // 订单提交失败
+          showCustomAlert(data.error, 'error');
+          
+          // 更新余额显示（如果API返回了余额信息）
+          if (data.balance !== undefined) {
+            updateBalanceDisplay(data.balance, data.credit_limit);
+          }
         }
       })
       .catch(error => {
-        console.error('Error:', error);
-        showAlert('提交订单时发生错误，请重试', 'error');
+        console.error('提交订单时出错:', error);
+        showCustomAlert('网络错误，请重试', 'error');
+        
+        // 重新启用表单元素
+        formElements.forEach(el => el.disabled = false);
+        submitBtn.textContent = '提交订单';
       });
     });
-  </script>
+    
+    // 在Safari中也显示下拉菜单
+    document.addEventListener('click', function(e) {
+      const dropdown = document.getElementById('userDropdown');
+      if (!e.target.closest('.dropdown') && dropdown.classList.contains('show')) {
+        dropdown.classList.remove('show');
+      }
+    });
+  });
+  
+  // 加载订单
+  async function loadOrders(silent = true) {
+    try {
+      // 显示刷新指示器
+      const refreshIndicator = document.getElementById('refreshIndicator');
+      if (!silent) {
+        refreshIndicator.classList.add('show');
+      }
+      
+      // 获取油管会员订单
+      const response = await fetch('/api/orders?product_type=youtube');
+      
+      if (!response.ok) {
+        console.error('获取订单失败', response.status);
+        if (!silent) refreshIndicator.classList.remove('show');
+        return;
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // 检查订单是否有变化
+        const newOrdersHash = JSON.stringify(data.orders);
+        if (newOrdersHash === lastOrdersHash) {
+          if (!silent) refreshIndicator.classList.remove('show');
+          return;
+        }
+        
+        lastOrdersHash = newOrdersHash;
+        allOrders = data.orders;
+        
+        renderOrders(allOrders);
+        
+        // 更新今日订单总量
+        if (data.today_total) {
+          document.getElementById('today-total').textContent = `今日订单: ${data.today_total}`;
+        }
+      }
+      
+      if (!silent) {
+        setTimeout(() => {
+          refreshIndicator.classList.remove('show');
+        }, 500);
+      }
+    } catch (error) {
+      console.error('获取订单列表失败:', error);
+      if (!silent) {
+        document.getElementById('refreshIndicator').classList.remove('show');
+      }
+    }
+  }
+  
+  // 渲染订单列表
+  function renderOrders(orders) {
+    const ordersContainer = document.getElementById('orders-container');
+    const loadMoreContainer = document.getElementById('load-more-container');
+    
+    if (!orders || orders.length === 0) {
+      ordersContainer.innerHTML = '<div class="no-orders">暂无油管会员充值订单</div>';
+      loadMoreContainer.style.display = 'none';
+      return;
+    }
+    
+    // 显示限定数量的订单
+    const ordersToDisplay = orders.slice(0, displayedOrders);
+    
+    if (viewMode === 'grid') {
+      // 网格视图
+      ordersContainer.innerHTML = '<div class="order-list-container">' +
+        ordersToDisplay.map(order => createOrderGridItem(order)).join('') +
+        '</div>';
+    } else {
+      // 表格视图
+      ordersContainer.innerHTML = createOrderTable(ordersToDisplay);
+    }
+    
+    // 是否显示"显示更多"按钮
+    loadMoreContainer.style.display = orders.length > displayedOrders ? 'block' : 'none';
+  }
+  
+  // 创建订单网格项
+  function createOrderGridItem(order) {
+    const canCancel = order.status === 'submitted' && (isAdmin || order.creator === userId);
+    
+    let orderItem = `
+      <div class="order-list-item">
+        <h4>订单 #${order.id}</h4>
+        <p class="account">账号：${order.account}</p>
+        <p class="package">套餐：个人会员一年</p>
+        <p class="status">状态：<span class="status-badge status-${order.status}">${order.status_text || order.status}</span></p>
+        <div class="time-info">
+          <p class="time">创建时间：${order.created_at}</p>
+          ${order.accepted_at ? `<p class="time">接单时间：${order.accepted_at}</p>` : ''}
+          ${order.completed_at ? `<p class="time">完成时间：${order.completed_at}</p>` : ''}
+          ${order.accepted_at && !order.completed_at && order.status === 'accepted' ? 
+            `<div style="margin:10px 0"><button onclick="urgeOrder(${order.id})" class="btn btn-primary btn-sm">催单</button></div>` : ''}
+        </div>
+        ${order.fail_reason ? `<p class="reason">${order.fail_reason}</p>` : ''}
+        ${canCancel ? 
+          `<div style="margin:10px 0"><button onclick="cancelOrder(${order.id}, this)" class="btn btn-danger btn-sm">撤销订单</button></div>` : ''}
+      </div>
+    `;
+    
+    return orderItem;
+  }
+  
+  // 创建订单表格
+  function createOrderTable(orders) {
+    return `
+      <table class="orders-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>账号</th>
+            <th>套餐</th>
+            <th>状态</th>
+            <th>创建时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${orders.map(order => {
+            const canCancel = order.status === 'submitted' && (isAdmin || order.creator === userId);
+            return `
+              <tr>
+                <td>#${order.id}</td>
+                <td>${order.account}</td>
+                <td>个人会员一年</td>
+                <td><span class="status-badge status-${order.status}">${order.status_text || order.status}</span></td>
+                <td>${order.created_at}</td>
+                <td>
+                  ${order.accepted_at && !order.completed_at && order.status === 'accepted' ? 
+                    `<button onclick="urgeOrder(${order.id})" class="btn btn-primary btn-sm">催单</button>` : ''}
+                  ${canCancel ? 
+                    `<button onclick="cancelOrder(${order.id}, this)" class="btn btn-danger btn-sm">撤销</button>` : ''}
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+  
+  // 加载更多订单
+  function loadMoreOrders() {
+    displayedOrders += 5;
+    renderOrders(allOrders);
+  }
+  
+  // 更新余额显示
+  function updateBalanceDisplay(balance, creditLimit) {
+    const balanceBadge = document.getElementById('balanceBadge');
+    
+    if (balanceBadge) {
+      // 更新顶部余额徽章
+      balanceBadge.className = 'balance-badge' + (balance < 0 ? ' negative' : '');
+      balanceBadge.innerHTML = `余额: ${balance} 元<a href="/recharge" class="recharge-btn">充值</a>`;
+      
+      // 更新底部信息栏
+      const balanceInfoBar = document.getElementById('balanceInfoBar');
+      if (balanceInfoBar) {
+        balanceInfoBar.style.display = 'block';
+        balanceInfoBar.innerHTML = `当前余额：${balance} 元` + (creditLimit > 0 ? ` &nbsp;&nbsp;可透支额度：${creditLimit} 元` : '');
+      }
+    }
+  }
+  
+  // 催单（当订单接单超过20分钟未完成时）
+  async function urgeOrder(orderId) {
+    if (!confirm('您确定要催促此订单吗？这将向卖家发送催单通知。')) return;
+    
+    try {
+      const resp = await fetch(`/orders/urge/${orderId}`, { method: 'POST' });
+      const result = await resp.json();
+      
+      if (result.success) {
+        showCustomAlert('催单通知已发送给卖家', 'success');
+      } else {
+        alert(result.error || '催单失败，请重试');
+      }
+    } catch (e) {
+      console.error('催单失败', e);
+      alert('催单失败，请重试');
+    }
+  }
+  
+  // 撤销订单
+  async function cancelOrder(id, buttonElement) {
+    if (!confirm('确定要撤销此订单吗？')) return;
+    
+    // 禁用按钮
+    buttonElement.disabled = true;
+    buttonElement.textContent = '撤销中...';
+    
+    try {
+      const resp = await fetch('/orders/cancel/' + id, { method: 'POST' });
+      if (resp.ok) {
+        // 立即更新显示
+        await loadOrders(false);
+        showCustomAlert('订单已撤销', 'success');
+      } else {
+        showCustomAlert('撤销失败', 'error');
+        buttonElement.disabled = false;
+        buttonElement.textContent = '撤销订单';
+      }
+    } catch (e) {
+      showCustomAlert('撤销失败，请重试', 'error');
+      buttonElement.disabled = false;
+      buttonElement.textContent = '撤销订单';
+    }
+  }
+  
+  // 自动刷新管理
+  function startAutoRefresh() {
+    stopAutoRefresh(); // 先停止现有的
+    autoRefreshInterval = setInterval(() => {
+      // 如果没有搜索关键词，则自动刷新
+      if (!searchKeyword) {
+        loadOrders(true);
+      }
+    }, 5000);
+  }
+  
+  function stopAutoRefresh() {
+    if (autoRefreshInterval) {
+      clearInterval(autoRefreshInterval);
+      autoRefreshInterval = null;
+    }
+  }
+  
+  // 自定义提示框
+  function showCustomAlert(message, type = 'success') {
+    const alert = document.getElementById('customAlert');
+    const icon = alert.querySelector('.custom-alert-icon');
+    const messageEl = alert.querySelector('.custom-alert-message');
+    
+    alert.className = 'custom-alert';
+    alert.classList.add(type);
+    
+    if (type === 'success') {
+      icon.innerHTML = '✅';
+    } else if (type === 'error') {
+      icon.innerHTML = '❌';
+    } else if (type === 'warning') {
+      icon.innerHTML = '⚠️';
+    }
+    
+    messageEl.textContent = message;
+    alert.style.display = 'flex';
+    
+    // 5秒后自动隐藏
+    setTimeout(hideCustomAlert, 5000);
+  }
+  
+  function hideCustomAlert() {
+    document.getElementById('customAlert').style.display = 'none';
+  }
+</script>
 </body>
 </html> 
