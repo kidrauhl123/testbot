@@ -25,7 +25,8 @@ from telegram.ext import (
     ContextTypes,
     MessageHandler,
     CommandHandler,
-    filters
+    filters,
+    CallbackContext
 )
 
 from modules.constants import (
@@ -47,6 +48,10 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# 设置Python-telegram-bot库的日志级别
+logging.getLogger('telegram').setLevel(logging.INFO)
+logging.getLogger('httpx').setLevel(logging.WARNING)
 
 # 中国时区
 CN_TIMEZONE = pytz.timezone('Asia/Shanghai')
@@ -171,8 +176,33 @@ async def process_telegram_update_async(update_data, notification_queue):
         logger.info(f"正在处理webhook更新: {update.update_id}")
         print(f"DEBUG: 正在处理webhook更新: {update.update_id}")
         
-        # 将更新分派给应用程序处理
-        await bot_application.process_update(update)
+        # 手动处理回调查询
+        if update.callback_query:
+            logger.info(f"检测到回调查询: {update.callback_query.data}")
+            print(f"DEBUG: 检测到回调查询: {update.callback_query.data}")
+            
+            # 直接调用回调处理函数而不是通过application处理
+            # 创建一个简单的上下文对象，只包含我们需要的内容
+            class SimpleContext:
+                def __init__(self):
+                    self.bot = bot_application.bot
+                    
+            context = SimpleContext()
+            await on_callback_query(update, context)
+        else:
+            # 对于非回调查询的更新，将其放入队列等待处理
+            logger.info(f"非回调查询更新，放入队列: {update.update_id}")
+            print(f"DEBUG: 非回调查询更新，放入队列: {update.update_id}")
+            
+            # 模拟处理其他类型的更新
+            if update.message:
+                if update.message.text:
+                    if update.message.text.startswith('/'):
+                        logger.info(f"收到命令: {update.message.text}")
+                        print(f"DEBUG: 收到命令: {update.message.text}")
+                    else:
+                        logger.info(f"收到消息: {update.message.text}")
+                        print(f"DEBUG: 收到消息: {update.message.text}")
         
         logger.info(f"webhook更新 {update.update_id} 处理完成")
         print(f"DEBUG: webhook更新 {update.update_id} 处理完成")
@@ -180,6 +210,7 @@ async def process_telegram_update_async(update_data, notification_queue):
     except Exception as e:
         logger.error(f"处理webhook更新时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 处理webhook更新时出错: {str(e)}")
+        traceback.print_exc()
 
 def process_telegram_update(update_data, notification_queue):
     """处理来自Telegram webhook的更新（同步包装器）"""
@@ -1632,6 +1663,38 @@ async def send_test_notification(data):
         logger.error(f"发送测试通知时出错: {str(e)}", exc_info=True)
 
 # ===== 主函数 =====
+async def initialize_application():
+    """异步初始化Application对象"""
+    global bot_application
+    
+    try:
+        # 初始化机器人 - 使用初始化方法
+        builder = ApplicationBuilder().token(BOT_TOKEN)
+        bot_application = builder.build()
+        
+        # 手动调用初始化方法，确保应用程序可以处理更新
+        await bot_application.initialize()
+        logger.info("Application成功初始化")
+        print("DEBUG: Application成功初始化")
+        
+        # 注册处理器
+        bot_application.add_handler(CommandHandler("test", on_test))
+        bot_application.add_handler(CommandHandler("start", on_start))
+        bot_application.add_handler(CommandHandler("admin", on_admin_command))
+        bot_application.add_handler(CommandHandler("stats", on_stats))
+        bot_application.add_handler(CallbackQueryHandler(on_callback_query))
+        bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+        
+        logger.info("处理器已注册")
+        print("DEBUG: 处理器已注册")
+        
+        return True
+    except Exception as e:
+        logger.error(f"初始化应用失败: {str(e)}", exc_info=True)
+        print(f"ERROR: 初始化应用失败: {str(e)}")
+        traceback.print_exc()
+        return False
+
 def run_bot(notification_queue):
     """在一个新事件循环中运行Telegram机器人"""
     global BOT_LOOP, bot_application
@@ -1643,16 +1706,19 @@ def run_bot(notification_queue):
         asyncio.set_event_loop(loop)
         BOT_LOOP = loop
         
-        # 初始化机器人
-        bot_application = ApplicationBuilder().token(BOT_TOKEN).build()
-        
-        # 注册处理器
-        bot_application.add_handler(CommandHandler("test", on_test))
-        bot_application.add_handler(CommandHandler("start", on_start))
-        bot_application.add_handler(CommandHandler("admin", on_admin_command))
-        bot_application.add_handler(CommandHandler("stats", on_stats))
-        bot_application.add_handler(CallbackQueryHandler(on_callback_query))
-        bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+        # 在事件循环中异步初始化应用
+        init_task = asyncio.run_coroutine_threadsafe(initialize_application(), loop)
+        try:
+            init_success = init_task.result(timeout=10)  # 等待初始化完成，最多10秒
+            if not init_success:
+                logger.error("初始化应用失败")
+                print("ERROR: 初始化应用失败")
+                return False
+        except Exception as e:
+            logger.error(f"等待应用初始化时发生错误: {str(e)}", exc_info=True)
+            print(f"ERROR: 等待应用初始化时发生错误: {str(e)}")
+            traceback.print_exc()
+            return False
         
         logger.info("Telegram机器人应用已初始化")
         
