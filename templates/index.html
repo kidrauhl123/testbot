@@ -936,16 +936,16 @@
   <div style="display: flex; align-items: center;">
     <a href="/" class="menu-link active">破天充值</a>
     <a href="/youtube" class="menu-link">油管会员</a>
-    {% if is_admin %}
+    {% if session.get('is_admin') %}
     <a href="/admin" class="menu-link">管理面板</a>
     {% endif %}
   </div>
   <div class="navbar-user">
     <div class="user-dropdown">
       <div class="user-info">
-        <div class="user-avatar">{{ session.username[0]|upper }}</div>
-        <span class="user-name">{{ session.username }}</span>
-        {% if session.is_admin %}
+        <div class="user-avatar">{{ session.get('username')[0]|upper if session.get('username') else 'U' }}</div>
+        <span class="user-name">{{ session.get('username') }}</span>
+        {% if session.get('is_admin') %}
           <span class="admin-badge">管理员</span>
         {% endif %}
       </div>
@@ -960,7 +960,7 @@
         </div>
         {% endif %}
         <div class="dropdown-divider"></div>
-        {% if session.is_admin %}
+        {% if session.get('is_admin') %}
           <a href="/admin" class="dropdown-menu-item">
             <i class="fas fa-cog"></i>管理后台
           </a>
@@ -1029,7 +1029,7 @@
         <div class="right">
             <div class="card">
                 <div class="card-header">
-                  <h2>{% if session.is_admin %}系统订单状态{% else %}我的订单{% endif %}</h2>
+                  <h2>{% if session.get('is_admin') %}系统订单状态{% else %}我的订单{% endif %}</h2>
                   <div class="header-actions">
                     <div class="view-toggle">
                       <button id="gridViewBtn" class="view-btn" title="网格视图"><i class="fas fa-th"></i></button>
@@ -1065,8 +1065,8 @@
   let allOrders = []; // 存储所有订单
   let searchKeyword = ''; // 搜索关键词
   let autoRefreshInterval = null;
-  let userId = '{{ session.user_id }}'; // 当前用户ID
-  let isAdmin = {{ 'true' if session.is_admin else 'false' }}; // 是否是管理员
+  let userId = '{{ session.get('user_id') }}'; // 当前用户ID
+  let isAdmin = {{ 'true' if session.get('is_admin') else 'false' }}; // 是否是管理员
   let lastOrdersHash = ''; // 用于检测订单变化的哈希
   let viewMode = 'grid'; // 默认视图模式：grid 或 table
   

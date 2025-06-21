@@ -524,12 +524,12 @@
   <div style="display: flex; align-items: center;">
     <a href="/" class="menu-link">破天充值</a>
     <a href="/youtube" class="menu-link">油管会员</a>
-    {% if is_admin or session.is_admin %}
+    {% if is_admin or session.get('is_admin') %}
     <a href="/admin" class="menu-link">管理面板</a>
     {% endif %}
   </div>
   <div class="navbar-user">
-    {% if is_admin or session.is_admin %}
+    {% if is_admin or session.get('is_admin') %}
     <div class="admin-badge">管理员</div>
     {% endif %}
     <div class="balance-badge {% if balance < 0 %}negative{% endif %}">
