@@ -567,56 +567,25 @@
           </div>
         </div>
         <div class="sellers-container">
-          <div class="table-responsive">
-            <table class="table table-hover table-striped table-bordered">
-              <thead class="bg-primary text-white">
-                <tr>
-                  <th scope="col">TG ID</th>
-                  <th scope="col">用户名</th>
-                  <th scope="col">名称</th>
-                  <th scope="col">状态</th>
-                  <th scope="col">卖家类型</th>
-                  <th scope="col">添加时间</th>
-                  <th scope="col">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="seller in sellers" :key="seller.telegram_id">
-                  <td>{{ seller.telegram_id }}</td>
-                  <td>@{{ seller.username }}</td>
-                  <td>{{ seller.first_name }}</td>
-                  <td>
-                    <span v-if="seller.is_active" class="badge bg-success">启用</span>
-                    <span v-else class="badge bg-secondary">禁用</span>
-                  </td>
-                  <td>
-                    <span v-if="seller.seller_type === 'potian'" class="badge bg-info">破天</span>
-                    <span v-else-if="seller.seller_type === 'youtube'" class="badge bg-danger">油管</span>
-                    <span v-else class="badge bg-primary">全部</span>
-                  </td>
-                  <td>{{ seller.added_at }}</td>
-                  <td>
-                    <button class="btn btn-sm btn-warning me-1" @click="toggleSeller(seller.telegram_id)">
-                      {{ seller.is_active ? '禁用' : '启用' }}
-                    </button>
-                    <button class="btn btn-sm btn-danger" @click="removeSeller(seller.telegram_id)">
-                      删除
-                    </button>
-                    <div class="dropdown d-inline-block ms-1">
-                      <button class="btn btn-sm btn-info dropdown-toggle" type="button" id="dropdownMenuButton1" data-bs-toggle="dropdown" aria-expanded="false">
-                        设置类型
-                      </button>
-                      <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
-                        <li><a class="dropdown-item" href="#" @click.prevent="updateSellerType(seller.telegram_id, 'potian')">仅破天</a></li>
-                        <li><a class="dropdown-item" href="#" @click.prevent="updateSellerType(seller.telegram_id, 'youtube')">仅油管</a></li>
-                        <li><a class="dropdown-item" href="#" @click.prevent="updateSellerType(seller.telegram_id, 'both')">全部订单</a></li>
-                      </ul>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Telegram ID</th>
+                <th>用户名</th>
+                <th>昵称</th>
+                <th>状态</th>
+                <th>身份</th>
+                <th>添加时间</th>
+                <th>添加人</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="sellers-table-body">
+              <tr>
+                <td colspan="8" class="loading">加载中...</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
       
@@ -1881,9 +1850,10 @@
       fetch('/admin/api/users')
         .then(response => response.json())
         .then(data => {
-          // 修复：API直接返回用户数组，不是带success字段的对象
-          allUsers = Array.isArray(data) ? data : [];
-          populateUserFilterOptions(userFilter);
+          if (data.success) {
+            allUsers = data.users;
+            populateUserFilterOptions(userFilter);
+          }
         })
         .catch(error => console.error('加载用户数据失败:', error));
     } else {
@@ -1909,120 +1879,6 @@
       option.textContent = `${user.username} (ID: ${user.id})`;
       selectElement.appendChild(option);
     });
-  }
-
-  // 卖家管理
-  function loadSellers() {
-    fetch('/admin/api/sellers')
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          app.sellers = data.sellers;
-        } else {
-          app.showError('加载卖家失败：' + data.message);
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        app.showError('加载卖家失败：' + error);
-      });
-  }
-
-  function addSeller(tgId) {
-    if (!tgId) {
-      app.showError('请输入Telegram ID');
-      return;
-    }
-    
-    fetch('/admin/api/sellers', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ telegram_id: tgId })
-    })
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          app.showSuccess('卖家添加成功');
-          loadSellers();
-          app.newSellerId = '';
-        } else {
-          app.showError('添加卖家失败：' + data.message);
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        app.showError('添加卖家失败：' + error);
-      });
-  }
-
-  function removeSeller(tgId) {
-    if (!confirm('确认要删除这个卖家吗？')) {
-      return;
-    }
-    
-    fetch(`/admin/api/sellers/${tgId}`, {
-      method: 'DELETE',
-    })
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          app.showSuccess('卖家删除成功');
-          loadSellers();
-        } else {
-          app.showError('删除卖家失败：' + data.message);
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        app.showError('删除卖家失败：' + error);
-      });
-  }
-
-  function toggleSeller(tgId) {
-    fetch(`/admin/api/sellers/${tgId}/toggle`, {
-      method: 'POST',
-    })
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          app.showSuccess('卖家状态已更新');
-          loadSellers();
-        } else {
-          app.showError('更新卖家状态失败：' + data.message);
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        app.showError('更新卖家状态失败：' + error);
-      });
-  }
-
-  function updateSellerType(tgId, sellerType) {
-    fetch('/admin/api/sellers/update_type', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ 
-        telegram_id: tgId,
-        seller_type: sellerType 
-      })
-    })
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          app.showSuccess('卖家类型已更新');
-          loadSellers();
-        } else {
-          app.showError('更新卖家类型失败：' + data.message);
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        app.showError('更新卖家类型失败：' + error);
-      });
   }
 </script>
 </body>

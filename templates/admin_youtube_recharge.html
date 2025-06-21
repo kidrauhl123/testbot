@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>油管会员充值 - 充值系统</title>
+  <title>油管会员充值管理 - 管理后台</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- 添加Font Awesome图标库 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -14,7 +14,6 @@
       margin: 0; padding: 0; min-height: 100vh;
       color: #333;
       font-size: 14px;
-      overflow-y: auto;
     }
     
     /* 自定义提示框样式 */
@@ -119,24 +118,6 @@
       font-weight: 600;
       box-shadow: 0 2px 5px rgba(255,195,51,0.3);
     }
-    .balance-badge {
-      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-      color: white;
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 600;
-      box-shadow: 0 2px 5px rgba(56,239,125,0.3);
-      display: flex;
-      align-items: center;
-    }
-    .balance-badge.negative {
-      background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
-    }
-    .balance-badge::before {
-      content: '💰';
-      margin-right: 5px;
-    }
     .btn {
       border: none;
       padding: 10px 18px;
@@ -165,9 +146,13 @@
       background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); 
       color: white; 
     }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
     
     .main-container {
-      max-width: 1000px;
+      max-width: 1200px;
       margin: 15px auto;
       padding: 0 15px;
     }
@@ -204,116 +189,30 @@
       -webkit-text-fill-color: transparent;
     }
     
-    .form-group {
-      margin-bottom: 15px;
-    }
-    
-    .form-group label {
-      display: block; 
-      margin-bottom: 5px; 
-      font-weight: 600; 
-      color: #555;
-      font-size: 13px;
-    }
-    
-    .form-control {
-      width: 100%; 
-      padding: 10px 12px; 
-      border-radius: 8px;
-      border: 2px solid #e1e5e9; 
-      font-size: 14px; 
-      transition: all 0.3s ease;
-      background-color: rgba(255,255,255,0.8);
-    }
-    
-    .form-control:focus {
-      outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102,126,234,0.2);
-    }
-    
-    .package-info {
-      background: rgba(255, 248, 225, 0.9);
-      border-left: 4px solid #ffcc33;
-      padding: 15px;
-      margin-bottom: 20px;
-      border-radius: 0 8px 8px 0;
-    }
-    
-    .package-info h3 {
-      margin-top: 0;
-      margin-bottom: 10px;
-      font-size: 16px;
-      color: #333;
-    }
-    
-    .package-info p {
-      margin: 5px 0;
-      font-size: 14px;
-    }
-    
-    .payment-qrcode {
-      text-align: center;
-      margin: 15px 0;
-    }
-    
-    .payment-qrcode img {
-      max-width: 200px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-    
-    .qr-upload-preview {
-      max-width: 250px;
-      max-height: 250px;
-      margin: 10px auto;
-      display: block;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-    
-    .recharge-history {
-      margin-top: 30px;
-    }
-    
-    .recharge-history table {
+    .request-list {
       width: 100%;
       border-collapse: collapse;
     }
     
-    .recharge-history th, .recharge-history td {
-      padding: 10px;
+    .request-list th, .request-list td {
+      padding: 12px 10px;
       text-align: left;
       border-bottom: 1px solid #eee;
     }
     
-    .recharge-history th {
+    .request-list th {
       font-weight: 600;
       color: #555;
       background-color: rgba(240,240,240,0.5);
     }
     
-    .status-badge {
-      display: inline-block;
-      padding: 3px 8px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 600;
+    .request-list tr:hover {
+      background-color: rgba(240,240,240,0.3);
     }
     
-    .status-pending {
-      background-color: #f39c12;
-      color: white;
-    }
-    
-    .status-approved {
-      background-color: #2ecc71;
-      color: white;
-    }
-    
-    .status-rejected {
-      background-color: #e74c3c;
-      color: white;
+    .action-buttons {
+      display: flex;
+      gap: 8px;
     }
     
     .preview-image {
@@ -369,15 +268,11 @@
 <body>
   <!-- 导航栏 -->
   <div class="navbar">
-    <div class="navbar-brand">充值系统</div>
+    <div class="navbar-brand">管理后台</div>
     <div class="navbar-user">
-      {% if is_admin %}
       <div class="admin-badge">管理员</div>
-      {% endif %}
-      <div class="balance-badge {% if balance < 0 %}negative{% endif %}">
-        余额: {{ balance }} 元
-      </div>
-      <a href="/" class="btn btn-primary">返回首页</a>
+      <a href="/admin" class="btn btn-primary">返回管理首页</a>
+      <a href="/" class="btn btn-primary">返回前台</a>
       <a href="/logout" class="btn btn-danger">退出</a>
     </div>
   </div>
@@ -385,78 +280,44 @@
   <div class="main-container">
     <div class="card">
       <div class="card-header">
-        <h2>油管会员充值</h2>
+        <h2>油管会员充值请求管理</h2>
       </div>
       
-      <div class="package-info">
-        <h3>油管个人会员一年</h3>
-        <p>价格: <strong>{{ price }} 元</strong></p>
-        <p>说明: 请上传您的油管会员二维码，我们将由专业客服为您扫码支付。</p>
-        <p>注意: 请确保二维码清晰可见，支付成功后会自动为您充值。</p>
-      </div>
-      
-      <form id="youtubeRechargeForm" enctype="multipart/form-data">
-        <div class="form-group">
-          <label for="qrcode_image">上传油管会员二维码</label>
-          <input type="file" class="form-control" id="qrcode_image" name="qrcode_image" accept="image/*" required>
-          <img id="qrcodePreview" class="qr-upload-preview" style="display: none;">
-        </div>
-        
-        <div class="form-group">
-          <label for="remark">备注信息 (选填)</label>
-          <textarea class="form-control" id="remark" name="remark" rows="3" placeholder="如有特殊要求，请在此处说明"></textarea>
-        </div>
-        
-        <button type="submit" class="btn btn-success" id="submitBtn">提交充值申请</button>
-      </form>
-    </div>
-    
-    <!-- 充值记录 -->
-    <div class="card recharge-history">
-      <div class="card-header">
-        <h2>充值记录</h2>
-      </div>
-      
-      <table>
+      <table class="request-list">
         <thead>
           <tr>
             <th>ID</th>
-            <th>类型</th>
+            <th>用户</th>
             <th>二维码</th>
+            <th>备注</th>
             <th>申请时间</th>
-            <th>处理时间</th>
-            <th>状态</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody>
-          {% if youtube_history %}
-            {% for record in youtube_history %}
+          {% if pending_requests %}
+            {% for request in pending_requests %}
               <tr>
-                <td>{{ record[0] }}</td>
-                <td>油管会员一年</td>
+                <td>{{ request[0] }}</td>
+                <td>{{ request[6] }}</td>
                 <td>
-                  {% if record[4] %}
-                    <img src="{{ record[4] }}" class="preview-image" onclick="openModal('{{ record[4] }}')" onerror="this.src='/static/placeholder.png'">
+                  {% if request[3] %}
+                    <img src="{{ request[3] }}" class="preview-image" onclick="openModal('{{ request[3] }}')" onerror="this.src='/static/placeholder.png'">
                   {% else %}
                     无
                   {% endif %}
                 </td>
-                <td>{{ record[5] }}</td>
-                <td>{{ record[6] or '未处理' }}</td>
-                <td>
-                  {% if record[2] == 'pending' %}
-                    <span class="status-badge status-pending">待处理</span>
-                  {% elif record[2] == 'approved' %}
-                    <span class="status-badge status-approved">已完成</span>
-                  {% elif record[2] == 'rejected' %}
-                    <span class="status-badge status-rejected">已拒绝</span>
-                  {% endif %}
+                <td>{{ request[4] or '无' }}</td>
+                <td>{{ request[5] }}</td>
+                <td class="action-buttons">
+                  <button class="btn btn-success btn-sm" onclick="approveRequest({{ request[0] }})">批准</button>
+                  <button class="btn btn-danger btn-sm" onclick="rejectRequest({{ request[0] }})">拒绝</button>
                 </td>
               </tr>
             {% endfor %}
           {% else %}
             <tr>
-              <td colspan="6" style="text-align: center;">暂无充值记录</td>
+              <td colspan="6" style="text-align: center;">暂无待处理的油管会员充值请求</td>
             </tr>
           {% endif %}
         </tbody>
@@ -511,59 +372,56 @@
     function hideAlert() {
       document.getElementById('customAlert').style.display = 'none';
     }
-
-    // 二维码图片预览
-    document.getElementById('qrcode_image').addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = function(event) {
-          const preview = document.getElementById('qrcodePreview');
-          preview.src = event.target.result;
-          preview.style.display = 'block';
-        }
-        reader.readAsDataURL(file);
-      }
-    });
     
-    // 表单提交
-    document.getElementById('youtubeRechargeForm').addEventListener('submit', function(e) {
-      e.preventDefault();
-      
-      const qrcodeInput = document.getElementById('qrcode_image');
-      if (!qrcodeInput.files.length) {
-        showAlert('请上传油管会员二维码。', 'error');
-        return;
+    // 批准请求
+    function approveRequest(requestId) {
+      if (confirm('确定要批准此油管会员充值请求吗？')) {
+        fetch(`/admin/api/youtube/${requestId}/approve`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            showAlert(data.message, 'success');
+            setTimeout(() => { location.reload(); }, 2000);
+          } else {
+            showAlert(data.error, 'error');
+          }
+        })
+        .catch(error => {
+          showAlert('操作失败，请稍后再试。', 'error');
+          console.error('Error:', error);
+        });
       }
-
-      const submitBtn = document.getElementById('submitBtn');
-      submitBtn.disabled = true;
-      submitBtn.textContent = '提交中...';
-      
-      const formData = new FormData(this);
-      
-      fetch('/youtube_recharge', {
-        method: 'POST',
-        body: formData
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          showAlert(data.message, 'success');
-          setTimeout(() => { location.reload(); }, 2000);
-        } else {
-          showAlert(data.error, 'error');
-        }
-      })
-      .catch(error => {
-        showAlert('提交请求失败，请稍后再试。', 'error');
-        console.error('Error:', error);
-      })
-      .finally(() => {
-        submitBtn.disabled = false;
-        submitBtn.textContent = '提交充值申请';
-      });
-    });
+    }
+    
+    // 拒绝请求
+    function rejectRequest(requestId) {
+      if (confirm('确定要拒绝此油管会员充值请求吗？')) {
+        fetch(`/admin/api/youtube/${requestId}/reject`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            showAlert(data.message, 'success');
+            setTimeout(() => { location.reload(); }, 2000);
+          } else {
+            showAlert(data.error, 'error');
+          }
+        })
+        .catch(error => {
+          showAlert('操作失败，请稍后再试。', 'error');
+          console.error('Error:', error);
+        });
+      }
+    }
   </script>
 </body>
-</html>
+</html> 

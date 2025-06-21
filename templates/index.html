@@ -902,17 +902,51 @@
       text-align: right;
       font-style: italic;
     }
+
+    /* 功能按钮样式 */
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+    }
+
+    .action-button {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 8px 15px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      background-color: rgba(0,0,0,0.05);
+      transition: all 0.2s;
+    }
+
+    .action-button:hover {
+      background-color: rgba(0,0,0,0.1);
+    }
+
+    .action-icon {
+      font-size: 18px;
+    }
+
+    .action-text {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .admin-button {
+      background-color: rgba(102,126,234,0.8);
+      color: white;
+    }
+
+    .admin-button:hover {
+      background-color: rgba(102,126,234,1);
+    }
   </style>
 </head>
 <body>
 <div class="navbar">
-  <div class="navbar-brand">会员充值系统</div>
-  <div style="display: flex; gap: 20px; margin-right: auto; margin-left: 30px;">
-    <a href="/" style="text-decoration: none; color: #667eea; font-weight: 500;">破天充值</a>
-    <a href="/youtube" style="text-decoration: none; color: #333; font-weight: 500;">油管会员</a>
-    <a href="/dashboard" style="text-decoration: none; color: #333; font-weight: 500;">个人中心</a>
-    <a href="/redeem" style="text-decoration: none; color: #333; font-weight: 500;">激活码</a>
-  </div>
+  <div class="navbar-brand">破天充值系统</div>
   <div class="navbar-user">
     <div class="user-dropdown">
       <div class="user-info">
@@ -952,6 +986,7 @@
     <div id="balanceBadge" class="balance-badge {% if balance < 0 %}negative{% endif %}" style="cursor:pointer;">
       余额: {{ balance }} 元
       <a href="/recharge" class="recharge-btn">充值</a>
+      <a href="/youtube_recharge" class="recharge-btn" style="background: linear-gradient(135deg, #FF0000 0%, #CC0000 100%);">油管会员</a>
     </div>
     {% endif %}
   </div>

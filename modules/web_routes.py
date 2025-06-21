@@ -6,12 +6,10 @@ from functools import wraps
 from datetime import datetime, timedelta
 import pytz
 import sqlite3
-import uuid
-from werkzeug.utils import secure_filename
 
 from flask import Flask, request, render_template, jsonify, session, redirect, url_for, flash
 
-from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH, DATABASE_URL, YOUTUBE_PRICES, YOUTUBE_PLAN_OPTIONS
+from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH, DATABASE_URL, YOUTUBE_PRICE
 from modules.database import (
     execute_query, hash_password, get_all_sellers, add_seller, remove_seller, toggle_seller_status,
     get_user_balance, get_user_credit_limit, set_user_balance, set_user_credit_limit, refund_order, 
@@ -19,7 +17,8 @@ from modules.database import (
     get_pending_recharge_requests, approve_recharge_request, reject_recharge_request, toggle_seller_admin,
     get_balance_records, get_activation_code, mark_activation_code_used, create_activation_code,
     get_admin_activation_codes, get_user_custom_prices, set_user_custom_price, delete_user_custom_price,
-    update_seller_type, get_seller_details, create_youtube_order_with_deduction_atomic, get_user_youtube_custom_prices
+    create_youtube_recharge_request, get_user_youtube_recharge_requests, get_pending_youtube_recharge_requests,
+    approve_youtube_recharge_request, reject_youtube_recharge_request
 )
 import modules.constants as constants
 
@@ -1238,6 +1237,103 @@ def register_routes(app, notification_queue):
         except Exception as e:
             logger.error(f"处理充值请求时出错: {str(e)}", exc_info=True)
             return jsonify({"success": False, "error": f"处理充值请求时出错: {str(e)}"}), 500
+            
+    @app.route('/youtube_recharge', methods=['GET'])
+    @login_required
+    def youtube_recharge_page():
+        """显示油管会员充值页面"""
+        user_id = session.get('user_id')
+        balance = get_user_balance(user_id)
+        
+        # 获取用户的油管会员充值记录
+        youtube_history = get_user_youtube_recharge_requests(user_id)
+        
+        return render_template('youtube_recharge.html',
+                              username=session.get('username'),
+                              is_admin=session.get('is_admin'),
+                              balance=balance,
+                              youtube_history=youtube_history,
+                              price=YOUTUBE_PRICE)
+    
+    @app.route('/youtube_recharge', methods=['POST'])
+    @login_required
+    def submit_youtube_recharge():
+        """提交油管会员充值请求"""
+        try:
+            user_id = session.get('user_id')
+            remark = request.form.get('remark', '')
+            
+            logger.info(f"收到油管会员充值请求: 用户ID={user_id}")
+            
+            # 处理上传的二维码图片
+            qrcode_image = None
+            if 'qrcode_image' in request.files:
+                file = request.files['qrcode_image']
+                if file and file.filename:
+                    try:
+                        # 确保上传目录存在
+                        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                        upload_dir = os.path.join(current_dir, 'static', 'uploads')
+                        logger.info(f"上传目录路径: {upload_dir}")
+                        
+                        if not os.path.exists(upload_dir):
+                            try:
+                                os.makedirs(upload_dir)
+                                logger.info(f"创建上传目录: {upload_dir}")
+                            except Exception as mkdir_error:
+                                logger.error(f"创建上传目录失败: {str(mkdir_error)}", exc_info=True)
+                                return jsonify({"success": False, "error": f"创建上传目录失败: {str(mkdir_error)}"}), 500
+                        
+                        # 生成唯一文件名
+                        filename = f"youtube_{int(time.time())}_{file.filename}"
+                        file_path = os.path.join(upload_dir, filename)
+                        
+                        # 保存文件
+                        file.save(file_path)
+                        logger.info(f"已保存文件到: {file_path}")
+                        
+                        # 确保URL路径正确
+                        qrcode_image = f"/static/uploads/{filename}"
+                        logger.info(f"设置二维码URL: {qrcode_image}")
+                        
+                        # 验证文件是否成功保存
+                        if not os.path.exists(file_path):
+                            logger.error(f"文件保存失败，路径不存在: {file_path}")
+                            return jsonify({"success": False, "error": "文件保存失败，请重试"}), 500
+                    except Exception as e:
+                        logger.error(f"保存二维码失败: {str(e)}", exc_info=True)
+                        return jsonify({"success": False, "error": f"保存二维码失败: {str(e)}"}), 500
+                else:
+                    return jsonify({"success": False, "error": "请上传油管会员二维码"}), 400
+            else:
+                return jsonify({"success": False, "error": "请上传油管会员二维码"}), 400
+            
+            # 创建充值请求
+            logger.info(f"正在创建油管会员充值请求: 用户ID={user_id}")
+            request_id, success, message = create_youtube_recharge_request(user_id, qrcode_image, remark)
+            
+            if success:
+                # 发送通知到TG管理员
+                username = session.get('username')
+                notification_queue.put({
+                    'type': 'youtube_recharge_request',
+                    'request_id': request_id,
+                    'username': username,
+                    'qrcode_image': qrcode_image,
+                    'remark': remark
+                })
+                logger.info(f"油管会员充值请求 #{request_id} 已提交成功，已加入通知队列")
+                
+                return jsonify({
+                    "success": True,
+                    "message": "油管会员充值请求已提交，请等待客服扫码支付"
+                })
+            else:
+                logger.error(f"创建油管会员充值请求失败: {message}")
+                return jsonify({"success": False, "error": message}), 500
+        except Exception as e:
+            logger.error(f"处理油管会员充值请求时出错: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": f"处理油管会员充值请求时出错: {str(e)}"}), 500
     
     @app.route('/admin/recharge-requests', methods=['GET'])
     @login_required
@@ -1247,6 +1343,18 @@ def register_routes(app, notification_queue):
         pending_requests = get_pending_recharge_requests()
         
         return render_template('admin_recharge.html',
+                              username=session.get('username'),
+                              is_admin=session.get('is_admin'),
+                              pending_requests=pending_requests)
+    
+    @app.route('/admin/youtube-requests', methods=['GET'])
+    @login_required
+    @admin_required
+    def admin_youtube_requests():
+        """管理员查看油管会员充值请求列表"""
+        pending_requests = get_pending_youtube_recharge_requests()
+        
+        return render_template('admin_youtube_recharge.html',
                               username=session.get('username'),
                               is_admin=session.get('is_admin'),
                               pending_requests=pending_requests)
@@ -1265,6 +1373,20 @@ def register_routes(app, notification_queue):
         else:
             return jsonify({"success": False, "error": message}), 400
     
+    @app.route('/admin/api/youtube/<int:request_id>/approve', methods=['POST'])
+    @login_required
+    @admin_required
+    def approve_youtube(request_id):
+        """批准油管会员充值请求"""
+        admin_id = session.get('user_id')
+        
+        success, message = approve_youtube_recharge_request(request_id, admin_id)
+        
+        if success:
+            return jsonify({"success": True, "message": message})
+        else:
+            return jsonify({"success": False, "error": message}), 400
+    
     @app.route('/admin/api/recharge/<int:request_id>/reject', methods=['POST'])
     @login_required
     @admin_required
@@ -1273,6 +1395,20 @@ def register_routes(app, notification_queue):
         admin_id = session.get('user_id')
         
         success, message = reject_recharge_request(request_id, admin_id)
+        
+        if success:
+            return jsonify({"success": True, "message": message})
+        else:
+            return jsonify({"success": False, "error": message}), 400
+            
+    @app.route('/admin/api/youtube/<int:request_id>/reject', methods=['POST'])
+    @login_required
+    @admin_required
+    def reject_youtube(request_id):
+        """拒绝油管会员充值请求"""
+        admin_id = session.get('user_id')
+        
+        success, message = reject_youtube_recharge_request(request_id, admin_id)
         
         if success:
             return jsonify({"success": True, "message": message})
@@ -1829,205 +1965,3 @@ def register_routes(app, notification_queue):
         except Exception as e:
             logger.error(f"导出激活码失败: {str(e)}", exc_info=True)
             return jsonify({"success": False, "message": f"导出失败: {str(e)}"}), 500 
-
-    @app.route('/youtube', methods=['GET'])
-    @login_required
-    def youtube_page():
-        """油管会员充值页面"""
-        logger.info("访问油管会员充值页面")
-        
-        try:
-            # 获取最近的油管充值订单
-            youtube_orders = execute_query("""
-                SELECT id, qrcode_path, package, status, created_at 
-                FROM youtube_orders 
-                WHERE user_id = ? 
-                ORDER BY id DESC LIMIT 5
-            """, (session.get('user_id'),), fetch=True)
-            
-            # 获取用户余额和透支额度
-            user_id = session.get('user_id')
-            balance = get_user_balance(user_id)
-            credit_limit = get_user_credit_limit(user_id)
-            
-            # 获取用户的定制价格
-            custom_prices = get_user_youtube_custom_prices(user_id)
-            
-            # 合并定制价格和默认价格
-            prices = {**YOUTUBE_PRICES}
-            if custom_prices and '12' in custom_prices:
-                prices['12'] = custom_prices['12']
-            
-            # 只有一种套餐选项：印度个人会员一年
-            plan_options = [('12', '印度个人会员一年')]
-            
-            return render_template('youtube_recharge.html', 
-                                   youtube_orders=youtube_orders, 
-                                   youtube_prices=prices, 
-                                   youtube_plan_options=plan_options,
-                                   username=session.get('username'),
-                                   is_admin=session.get('is_admin'),
-                                   balance=balance,
-                                   credit_limit=credit_limit,
-                                   status_text_zh=STATUS_TEXT_ZH)
-                                   
-        except Exception as e:
-            logger.error(f"获取油管订单失败: {str(e)}", exc_info=True)
-            return render_template('youtube_recharge.html', 
-                                   error='获取订单数据失败', 
-                                   youtube_prices=YOUTUBE_PRICES, 
-                                   youtube_plan_options=[('12', '印度个人会员一年')],
-                                   username=session.get('username'),
-                                   is_admin=session.get('is_admin'))
-    
-    @app.route('/youtube', methods=['POST'])
-    @login_required
-    def create_youtube_order():
-        """创建油管会员充值订单"""
-        
-        # 获取表单数据 - 固定为一年套餐
-        package = '12'  # 印度个人会员一年
-        remark = request.form.get('remark', '')
-        
-        logger.info(f"收到油管订单提交请求: 套餐=印度个人会员一年")
-        
-        # 检查是否上传了文件
-        if 'qrcode' not in request.files:
-            logger.warning("油管订单提交失败: 未上传二维码")
-            return jsonify({"success": False, "error": "请上传二维码图片"}), 400
-            
-        qrcode_file = request.files['qrcode']
-        
-        if not qrcode_file or qrcode_file.filename == '':
-            logger.warning("油管订单提交失败: 二维码文件名为空")
-            return jsonify({"success": False, "error": "请选择一个有效的图片文件"}), 400
-            
-        # 检查文件类型
-        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
-        if '.' not in qrcode_file.filename or qrcode_file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
-            logger.warning(f"油管订单提交失败: 不支持的文件类型 {qrcode_file.filename}")
-            return jsonify({"success": False, "error": "只支持PNG、JPG、JPEG和GIF格式的图片"}), 400
-            
-        try:
-            user_id = session.get('user_id')
-            username = session.get('username')
-            
-            # 保存二维码图片
-            filename = secure_filename(qrcode_file.filename)
-            # 使用UUID生成唯一文件名
-            unique_filename = f"{uuid.uuid4()}_{filename}"
-            
-            # 确保上传目录存在
-            upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'uploads', 'qrcodes')
-            if not os.path.exists(upload_dir):
-                os.makedirs(upload_dir)
-                
-            file_path = os.path.join(upload_dir, unique_filename)
-            qrcode_file.save(file_path)
-            
-            # 相对路径用于数据库存储
-            relative_path = os.path.join('uploads', 'qrcodes', unique_filename)
-            
-            # 使用原子操作创建订单和扣款
-            success, message, new_balance, credit_limit = create_youtube_order_with_deduction_atomic(
-                relative_path, package, remark, username, user_id
-            )
-            
-            if not success:
-                # 删除已上传的文件
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                    
-                logger.warning(f"油管订单创建失败: {message} (用户={username})")
-                return jsonify({
-                    "success": False,
-                    "error": message,
-                    "balance": new_balance,
-                    "credit_limit": credit_limit
-                }), 400
-                
-            logger.info(f"油管订单提交成功: 用户={username}, 套餐=印度个人会员一年, 新余额={new_balance}")
-            
-            # 获取最新订单列表并格式化
-            orders_raw = execute_query("""
-                SELECT id, package, status, created_at 
-                FROM youtube_orders 
-                WHERE user_id = ? 
-                ORDER BY id DESC LIMIT 5
-            """, (user_id,), fetch=True)
-            
-            orders = []
-            for order in orders_raw:
-                package_label = '印度个人会员一年' if order[1] == '12' else order[1]
-                orders.append({
-                    'id': order[0],
-                    'package': order[1],
-                    'package_label': package_label,
-                    'status': order[2],
-                    'status_text': STATUS_TEXT_ZH.get(order[2], order[2]),
-                    'created_at': order[3]
-                })
-                
-            # 将订单添加到通知队列
-            try:
-                latest_order = execute_query("SELECT id FROM youtube_orders ORDER BY id DESC LIMIT 1", fetch=True)[0][0]
-                
-                notification_data = {
-                    'type': 'new_youtube_order',
-                    'id': latest_order,
-                    'time': get_china_time()
-                }
-                notification_queue.put(notification_data)
-                logger.info(f"已添加油管订单 {latest_order} 到通知队列")
-            except Exception as e:
-                logger.error(f"添加油管订单到通知队列失败: {str(e)}", exc_info=True)
-            
-            return jsonify({
-                "success": True,
-                "message": "订单提交成功",
-                "balance": new_balance,
-                "credit_limit": credit_limit,
-                "orders": orders
-            })
-            
-        except Exception as e:
-            logger.error(f"创建油管订单时出错: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "error": f"系统错误: {str(e)}"}), 500
-
-    @app.route('/admin/api/sellers/update_type', methods=['POST'])
-    @login_required
-    @admin_required
-    def admin_api_update_seller_type():
-        """更新卖家类型"""
-        try:
-            # 验证管理员权限
-            if not session.get('is_admin'):
-                return jsonify({"success": False, "message": "没有权限"}), 403
-                
-            # 获取请求数据
-            data = request.get_json()
-            if not data or 'telegram_id' not in data or 'seller_type' not in data:
-                return jsonify({"success": False, "message": "缺少必要参数"}), 400
-                
-            telegram_id = data['telegram_id']
-            seller_type = data['seller_type']
-            
-            # 验证卖家类型
-            if seller_type not in ['potian', 'youtube', 'both']:
-                return jsonify({"success": False, "message": "无效的卖家类型"}), 400
-                
-            # 更新卖家类型
-            if update_seller_type(telegram_id, seller_type):
-                # 获取更新后的卖家详情
-                seller_details = get_seller_details(telegram_id)
-                return jsonify({
-                    "success": True, 
-                    "message": "卖家类型已更新", 
-                    "seller": seller_details
-                })
-            else:
-                return jsonify({"success": False, "message": "更新卖家类型失败"}), 500
-                
-        except Exception as e:
-            logger.error(f"更新卖家类型时出错: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "message": f"更新失败: {str(e)}"}), 500
