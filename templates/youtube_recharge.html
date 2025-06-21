@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>油管会员充值 - 扫码支付</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+
+        .container {
+            max-width: 800px;
+            margin-top: 20px;
+        }
+
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-header {
+            border-top-left-radius: 15px !important;
+            border-top-right-radius: 15px !important;
+            background-color: #d9534f;
+            color: white;
+            font-weight: bold;
+        }
+
+        .btn-youtube {
+            background-color: #FF0000;
+            color: white;
+        }
+
+        .btn-youtube:hover {
+            background-color: #cc0000;
+            color: white;
+        }
+
+        .preview-image {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+
+        .upload-box {
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            background-color: #f8f9fa;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+        }
+
+        .upload-box:hover {
+            border-color: #FF0000;
+            background-color: #fff;
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            color: #aaa;
+            margin-bottom: 10px;
+        }
+
+        .price-tag {
+            font-size: 16px;
+            font-weight: bold;
+            color: #FF0000;
+        }
+
+        .navbar {
+            background-color: #343a40;
+        }
+
+        .navbar-brand {
+            font-weight: bold;
+        }
+
+        .loading-spinner {
+            display: none;
+            margin-right: 5px;
+        }
+
+        .recent-orders {
+            margin-top: 30px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/"><i class="fab fa-youtube me-2"></i>油管会员充值</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">破天</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/youtube">油管会员</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/dashboard">个人中心</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/recharge">充值</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav ms-auto">
+                    {% if is_admin %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="/admin">管理后台</a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user me-1"></i>{{ username }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="/logout">退出登录</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- 余额显示 -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="alert alert-info d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="fas fa-wallet me-2"></i> 当前余额: <strong>¥{{ balance }}</strong>
+                        {% if credit_limit > 0 %}
+                        <span class="ms-2 small">(透支额度: ¥{{ credit_limit }})</span>
+                        {% endif %}
+                    </div>
+                    <a href="/recharge" class="btn btn-sm btn-primary">充值</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- 左侧充值表单 -->
+            <div class="col-lg-7 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fab fa-youtube me-2"></i> 油管会员充值 - 扫码支付
+                    </div>
+                    <div class="card-body">
+                        <form id="youtube-recharge-form" enctype="multipart/form-data">
+                            <!-- 套餐选择 -->
+                            <div class="mb-3">
+                                <label class="form-label"><i class="fas fa-box me-2"></i>选择套餐</label>
+                                <select class="form-select" name="package" id="package" required>
+                                    {% for value, label in youtube_plan_options %}
+                                    <option value="{{ value }}">{{ label }} - <span class="price-tag">¥{{ youtube_prices[value] }}</span></option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- 上传二维码 -->
+                            <div class="mb-3">
+                                <label class="form-label"><i class="fas fa-qrcode me-2"></i>上传支付二维码</label>
+                                <div class="upload-box" id="upload-box" onclick="document.getElementById('qrcode').click()">
+                                    <input type="file" name="qrcode" id="qrcode" accept="image/*" style="display:none" required onchange="previewImage(this)">
+                                    <div id="upload-placeholder">
+                                        <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                                        <p>点击上传二维码图片</p>
+                                        <p class="small text-muted">支持 JPG, PNG, JPEG 格式</p>
+                                    </div>
+                                    <div id="image-preview" style="display:none">
+                                        <img id="preview" class="preview-image">
+                                        <div class="text-center">
+                                            <button type="button" class="btn btn-sm btn-danger" onclick="removeImage(event)">
+                                                <i class="fas fa-trash me-1"></i> 删除图片
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 备注 -->
+                            <div class="mb-3">
+                                <label class="form-label"><i class="fas fa-comment me-2"></i>备注 (选填)</label>
+                                <textarea class="form-control" name="remark" rows="2" placeholder="填写您的备注信息（如有特殊要求）"></textarea>
+                            </div>
+
+                            <!-- 提交按钮 -->
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-youtube" id="submit-btn">
+                                    <span class="spinner-border spinner-border-sm loading-spinner" id="loading-spinner"></span>
+                                    <i class="fas fa-paper-plane me-2"></i>提交订单
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧说明和最近订单 -->
+            <div class="col-lg-5">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <i class="fas fa-info-circle me-2"></i> 充值说明
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item">
+                                <i class="fas fa-check-circle text-success me-2"></i> 上传清晰的二维码图片
+                            </li>
+                            <li class="list-group-item">
+                                <i class="fas fa-check-circle text-success me-2"></i> 支持Youtube Premium会员充值
+                            </li>
+                            <li class="list-group-item">
+                                <i class="fas fa-check-circle text-success me-2"></i> 提交后卖家将扫码完成支付
+                            </li>
+                            <li class="list-group-item">
+                                <i class="fas fa-clock text-warning me-2"></i> 订单处理时间：通常30分钟内
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 最近订单 -->
+                <div class="card recent-orders">
+                    <div class="card-header">
+                        <i class="fas fa-history me-2"></i> 最近订单
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>订单号</th>
+                                        <th>套餐</th>
+                                        <th>状态</th>
+                                        <th>创建时间</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recent-orders">
+                                    {% if youtube_orders %}
+                                    {% for order in youtube_orders %}
+                                    <tr>
+                                        <td>{{ order[0] }}</td>
+                                        <td>{{ youtube_plan_labels_zh[order[2]] }}</td>
+                                        <td>
+                                            <span class="badge {{ 'bg-success' if order[3] == 'completed' else 'bg-warning' if order[3] == 'accepted' else 'bg-secondary' }}">
+                                                {{ status_text_zh[order[3]] }}
+                                            </span>
+                                        </td>
+                                        <td>{{ order[4] }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="4" class="text-center">暂无订单记录</td>
+                                    </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        function previewImage(input) {
+            if (input.files && input.files[0]) {
+                var reader = new FileReader();
+                reader.onload = function (e) {
+                    document.getElementById('preview').src = e.target.result;
+                    document.getElementById('upload-placeholder').style.display = 'none';
+                    document.getElementById('image-preview').style.display = 'block';
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function removeImage(event) {
+            event.stopPropagation();
+            document.getElementById('qrcode').value = '';
+            document.getElementById('upload-placeholder').style.display = 'block';
+            document.getElementById('image-preview').style.display = 'none';
+        }
+
+        document.getElementById('youtube-recharge-form').addEventListener('submit', function (e) {
+            e.preventDefault();
+            
+            // 显示加载spinner
+            document.getElementById('loading-spinner').style.display = 'inline-block';
+            document.getElementById('submit-btn').disabled = true;
+            
+            const formData = new FormData(this);
+            
+            fetch('/youtube', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // 隐藏加载spinner
+                document.getElementById('loading-spinner').style.display = 'none';
+                document.getElementById('submit-btn').disabled = false;
+                
+                if (data.success) {
+                    Swal.fire({
+                        title: '订单已提交!',
+                        text: '您的二维码已上传，卖家将尽快为您处理',
+                        icon: 'success',
+                        confirmButtonText: '确定'
+                    }).then(() => {
+                        // 更新余额显示
+                        if (data.balance !== undefined) {
+                            document.querySelector('.alert-info strong').textContent = '¥' + data.balance;
+                        }
+                        // 更新最近订单
+                        if (data.orders) {
+                            updateRecentOrders(data.orders);
+                        }
+                        // 清除表单
+                        document.getElementById('youtube-recharge-form').reset();
+                        document.getElementById('upload-placeholder').style.display = 'block';
+                        document.getElementById('image-preview').style.display = 'none';
+                    });
+                } else {
+                    Swal.fire({
+                        title: '提交失败',
+                        text: data.error || '提交订单时发生错误',
+                        icon: 'error',
+                        confirmButtonText: '确定'
+                    });
+                }
+            })
+            .catch(error => {
+                document.getElementById('loading-spinner').style.display = 'none';
+                document.getElementById('submit-btn').disabled = false;
+                
+                Swal.fire({
+                    title: '系统错误',
+                    text: '提交订单时发生错误，请稍后再试',
+                    icon: 'error',
+                    confirmButtonText: '确定'
+                });
+                console.error('Error:', error);
+            });
+        });
+
+        function updateRecentOrders(orders) {
+            const tbody = document.getElementById('recent-orders');
+            tbody.innerHTML = '';
+            
+            if (orders.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center">暂无订单记录</td></tr>';
+                return;
+            }
+            
+            orders.forEach(order => {
+                const statusClass = order.status === 'completed' ? 'bg-success' : 
+                                   (order.status === 'accepted' ? 'bg-warning' : 'bg-secondary');
+                                   
+                const row = `
+                    <tr>
+                        <td>${order.id}</td>
+                        <td>${order.package_label}</td>
+                        <td>
+                            <span class="badge ${statusClass}">
+                                ${order.status_text}
+                            </span>
+                        </td>
+                        <td>${order.created_at}</td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
+    </script>
+</body>
+</html> 

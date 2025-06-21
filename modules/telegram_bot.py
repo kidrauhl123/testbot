@@ -26,11 +26,14 @@ from telegram.ext import (
 
 from modules.constants import (
     BOT_TOKEN, STATUS, PLAN_LABELS_EN,
-    STATUS_TEXT_ZH, TG_PRICES, WEB_PRICES, SELLER_CHAT_IDS, DATABASE_URL
+    STATUS_TEXT_ZH, TG_PRICES, WEB_PRICES, SELLER_CHAT_IDS, DATABASE_URL,
+    YOUTUBE_PRICES, YOUTUBE_TG_PRICES
 )
 from modules.database import (
     get_order_details, accept_order_atomic, execute_query, 
-    get_unnotified_orders, get_active_seller_ids, approve_recharge_request, reject_recharge_request
+    get_unnotified_orders, get_active_seller_ids, approve_recharge_request, reject_recharge_request,
+    get_active_seller_ids_by_type, get_unnotified_youtube_orders, get_youtube_order_details,
+    accept_youtube_order_atomic, set_youtube_order_notified_atomic
 )
 
 # 设置日志
@@ -1061,132 +1064,310 @@ async def check_and_push_orders():
     """检查并推送新订单"""
     global bot_application
     
+    if not bot_application:
+        return
+    
     try:
-        if not bot_application:
-            logger.error("机器人未初始化，无法推送订单")
-            print("ERROR: 机器人未初始化，无法推送订单")
-            return
+        # 获取未通知的破天账号充值订单
+        unnotified_orders = get_unnotified_orders()
         
-        # 获取未通知的订单
-        try:
-            unnotified_orders = get_unnotified_orders()
-            logger.debug(f"检索到 {len(unnotified_orders) if unnotified_orders else 0} 个未通知的订单")
-        except Exception as db_error:
-            logger.error(f"获取未通知订单时出错: {str(db_error)}", exc_info=True)
-            print(f"ERROR: 获取未通知订单时出错: {str(db_error)}")
-            return
+        if unnotified_orders:
+            logger.info(f"找到 {len(unnotified_orders)} 个未通知的破天订单")
             
-        if not unnotified_orders:
-            # 没有未通知的订单，直接返回
-            return
-        
-        # 获取活跃卖家
-        try:
-            seller_ids = get_active_seller_ids()
-            logger.debug(f"检索到 {len(seller_ids) if seller_ids else 0} 个活跃卖家")
-        except Exception as seller_error:
-            logger.error(f"获取活跃卖家时出错: {str(seller_error)}", exc_info=True)
-            print(f"ERROR: 获取活跃卖家时出错: {str(seller_error)}")
-            return
+            # 获取所有活跃卖家的ID
+            seller_ids = get_active_seller_ids_by_type('potian')
             
-        if not seller_ids:
-            logger.warning("没有活跃的卖家，无法推送订单")
-            print("WARNING: 没有活跃的卖家，无法推送订单")
-            return
-        
-        logger.info(f"找到 {len(seller_ids)} 个活跃卖家")
-        print(f"DEBUG: 找到 {len(seller_ids)} 个活跃卖家: {seller_ids}")
-        
-        for order in unnotified_orders:
-            try:
-                if len(order) < 6:
-                    logger.error(f"订单数据格式错误: {order}")
-                    print(f"ERROR: 订单数据格式错误: {order}")
-                    continue
+            if not seller_ids:
+                logger.warning("没有活跃的破天卖家")
+                return
+                
+            # 对每个未通知的订单
+            for order in unnotified_orders:
+                oid, account, password, package, remark, status, created_at, user_id = order
+                
+                # 构建订单消息
+                message = f"💼 <b>新的破天账号充值订单 #{oid}</b>\n\n"
+                message += f"📦 套餐: <code>{PLAN_LABELS_EN.get(package, package)}</code>\n"
+                message += f"⏰ 提交时间: <code>{created_at}</code>\n"
+                
+                # 添加账号密码
+                message += f"\n🔐 账号: <code>{account}</code>\n"
+                message += f"🔑 密码: <code>{password}</code>\n"
+                
+                if remark:
+                    message += f"\n📝 备注: {remark}\n"
                     
-                oid, account, password, package, created_at, web_user_id = order
+                message += f"\n💰 佣金: <code>${TG_PRICES.get(package, '0')}</code>"
+                message += f"\n\n<i>接单前请确保您有足够的时间处理此订单</i>"
                 
-                logger.info(f"准备推送订单 #{oid} 给卖家")
-                print(f"DEBUG: 准备推送订单 #{oid} 给卖家")
-                
-                # 验证订单是否真实存在
-                if not check_order_exists(oid):
-                    logger.error(f"订单 #{oid} 不存在于数据库中，但出现在未通知列表中")
-                    print(f"ERROR: 订单 #{oid} 不存在于数据库中，但出现在未通知列表中")
-                    continue
-                
-                message = (
-                    f"📦 New Order #{oid}\n"
-                    f"Account: `{account}`\n"
-                    f"Package: {package} month(s)"
-                )
-                
-                # 创建接单按钮 - 确保callback_data格式正确
-                callback_data = f'accept_{oid}'
-                logger.info(f"创建接单按钮，callback_data: {callback_data}")
-                print(f"DEBUG: 创建接单按钮，callback_data: {callback_data}")
-                
-                keyboard = [[InlineKeyboardButton("Accept", callback_data=callback_data)]]
+                # 为每个卖家创建接单按钮
+                keyboard = [
+                    [
+                        InlineKeyboardButton(
+                            "接单",
+                            callback_data=f"accept:{oid}"
+                        )
+                    ]
+                ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
-                # 向所有卖家发送通知
-                success_count = 0
+                # 向所有卖家发送消息
                 for seller_id in seller_ids:
                     try:
-                        sent_message = await bot_application.bot.send_message(
-                            chat_id=seller_id, 
-                            text=message, 
+                        await bot_application.bot.send_message(
+                            chat_id=seller_id,
+                            text=message,
                             reply_markup=reply_markup,
-                            parse_mode='Markdown'
+                            parse_mode='HTML'
                         )
-                        success_count += 1
-                        logger.info(f"成功向卖家 {seller_id} 推送订单 #{oid}, 消息ID: {sent_message.message_id}")
-                        print(f"DEBUG: 成功向卖家 {seller_id} 推送订单 #{oid}, 消息ID: {sent_message.message_id}")
+                        logger.info(f"已向卖家 {seller_id} 发送破天订单 #{oid} 的通知")
                     except Exception as e:
-                        logger.error(f"向卖家 {seller_id} 发送订单 #{oid} 通知失败: {str(e)}", exc_info=True)
-                        print(f"ERROR: 向卖家 {seller_id} 发送订单 #{oid} 通知失败: {str(e)}")
+                        logger.error(f"向卖家 {seller_id} 发送破天订单通知失败: {str(e)}")
+                        continue
+                        
+                # 将订单标记为已通知
+                set_order_notified_atomic(oid)
                 
-                if success_count > 0:
-                    # 只有成功推送给至少一个卖家时才标记为已通知
+        # 获取未通知的油管会员充值订单
+        unnotified_youtube_orders = get_unnotified_youtube_orders()
+        
+        if unnotified_youtube_orders:
+            logger.info(f"找到 {len(unnotified_youtube_orders)} 个未通知的油管会员订单")
+            
+            # 获取所有活跃的油管卖家ID
+            youtube_seller_ids = get_active_seller_ids_by_type('youtube')
+            
+            if not youtube_seller_ids:
+                logger.warning("没有活跃的油管卖家")
+                return
+                
+            # 对每个未通知的油管订单
+            for order in unnotified_youtube_orders:
+                oid, package, remark, status, created_at, user_id = order
+                
+                # 获取订单详情（包括二维码路径）
+                order_details = get_youtube_order_details(oid)
+                if not order_details or not order_details[0]:
+                    logger.error(f"获取油管订单 #{oid} 详情失败")
+                    continue
+                    
+                qrcode_path = order_details[0][1]  # 获取二维码路径
+                
+                # 构建全路径
+                static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static')
+                qrcode_full_path = os.path.join(static_dir, qrcode_path)
+                
+                if not os.path.exists(qrcode_full_path):
+                    logger.error(f"油管订单 #{oid} 的二维码文件不存在: {qrcode_full_path}")
+                    continue
+                    
+                # 构建订单消息
+                message = f"🎬 <b>新的油管会员充值订单 #{oid}</b>\n\n"
+                message += f"📦 套餐: <code>{PLAN_LABELS_EN.get(package, package)}</code>\n"
+                message += f"⏰ 提交时间: <code>{created_at}</code>\n"
+                
+                if remark:
+                    message += f"\n📝 备注: {remark}\n"
+                    
+                message += f"\n💰 佣金: <code>${YOUTUBE_TG_PRICES.get(package, '0')}</code>"
+                message += f"\n\n<i>接单后请扫描二维码并完成支付</i>"
+                
+                # 为每个卖家创建接单按钮
+                keyboard = [
+                    [
+                        InlineKeyboardButton(
+                            "接单",
+                            callback_data=f"yt_accept:{oid}"
+                        )
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                # 向所有油管卖家发送消息和二维码
+                for seller_id in youtube_seller_ids:
                     try:
-                        execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
-                        logger.info(f"订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家")
-                        print(f"DEBUG: 订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家")
-                    except Exception as update_error:
-                        logger.error(f"更新订单 #{oid} 通知状态时出错: {str(update_error)}", exc_info=True)
-                        print(f"ERROR: 更新订单 #{oid} 通知状态时出错: {str(update_error)}")
-                else:
-                    logger.error(f"订单 #{oid} 未能成功推送给任何卖家")
-                    print(f"ERROR: 订单 #{oid} 未能成功推送给任何卖家")
-            except Exception as e:
-                logger.error(f"处理订单通知时出错: {str(e)}", exc_info=True)
-                print(f"ERROR: 处理订单通知时出错: {str(e)}")
+                        # 先发送二维码图片
+                        with open(qrcode_full_path, 'rb') as qrcode_file:
+                            await bot_application.bot.send_photo(
+                                chat_id=seller_id,
+                                photo=qrcode_file,
+                                caption="油管会员充值二维码"
+                            )
+                            
+                        # 然后发送订单详情和接单按钮
+                        await bot_application.bot.send_message(
+                            chat_id=seller_id,
+                            text=message,
+                            reply_markup=reply_markup,
+                            parse_mode='HTML'
+                        )
+                        logger.info(f"已向卖家 {seller_id} 发送油管订单 #{oid} 的通知")
+                    except Exception as e:
+                        logger.error(f"向卖家 {seller_id} 发送油管订单通知失败: {str(e)}")
+                        continue
+                        
+                # 将油管订单标记为已通知
+                set_youtube_order_notified_atomic(oid)
+                
     except Exception as e:
         logger.error(f"检查并推送订单时出错: {str(e)}", exc_info=True)
-        print(f"ERROR: 检查并推送订单时出错: {str(e)}")
 
 # ===== 通知发送函数 =====
 async def send_notification_from_queue(data):
-    """根据队列中的数据发送通知"""
+    """从队列发送通知"""
     global bot_application
     
     if not bot_application:
-        logger.error("机器人应用未初始化，无法发送通知")
+        logger.error("无法发送通知：机器人尚未初始化")
         return
+    
+    notification_type = data.get("type")
+    
+    if notification_type == "new_order":
+        await send_new_order_notification(data)
+    elif notification_type == "status_change":
+        await send_status_change_notification(data)
+    elif notification_type == "recharge_request":
+        await send_recharge_request_notification(data)
+    elif notification_type == "dispute":
+        await send_dispute_notification(data)
+    elif notification_type == "new_youtube_order":
+        await send_new_youtube_order_notification(data)
+    elif notification_type == "youtube_status_change":
+        await send_youtube_status_change_notification(data)
+    else:
+        logger.error(f"未知的通知类型: {notification_type}")
 
+
+async def send_new_youtube_order_notification(data):
+    """发送新的油管会员充值订单通知"""
+    global bot_application
+    
     try:
-        if data['type'] == 'new_order':
-            await send_new_order_notification(data)
-        elif data['type'] == 'order_status_change':
-            await send_status_change_notification(data)
-        elif data['type'] == 'recharge_request':
-            await send_recharge_request_notification(data)
-        elif data['type'] == 'dispute':
-            await send_dispute_notification(data)
-        else:
-            logger.warning(f"未知的通知类型: {data['type']}")
+        order_id = data.get("id")
+        
+        # 获取订单详情
+        order_details = get_youtube_order_details(order_id)
+        
+        if not order_details or not order_details[0]:
+            logger.error(f"获取油管订单 #{order_id} 详情失败")
+            return
+            
+        order = order_details[0]
+        
+        # 获取用户ID
+        user_id = order[13]  # youtube_orders表中的user_id字段
+        
+        if not user_id:
+            logger.error(f"油管订单 #{order_id} 没有关联用户")
+            return
+            
+        # 获取订单信息
+        package = order[2]  # package
+        status = order[4]   # status
+        created_at = order[5]  # created_at
+        
+        # 构建通知消息
+        message = (
+            f"🎬 <b>油管会员订单已提交</b>\n\n"
+            f"📋 订单号: <code>#{order_id}</code>\n"
+            f"📦 套餐: <code>{package}个月</code>\n"
+            f"⏰ 提交时间: <code>{created_at}</code>\n"
+            f"📊 状态: <code>{STATUS_TEXT_ZH.get(status, status)}</code>\n\n"
+            f"卖家将尽快处理您的订单，请耐心等待。"
+        )
+        
+        # 发送通知给用户
+        try:
+            # 查询用户的Telegram ID
+            user_details = execute_query(
+                "SELECT telegram_id FROM user_telegram_links WHERE user_id = ?",
+                (user_id,), fetch=True
+            )
+            
+            if user_details and user_details[0] and user_details[0][0]:
+                telegram_id = user_details[0][0]
+                
+                # 发送通知
+                await bot_application.bot.send_message(
+                    chat_id=telegram_id,
+                    text=message,
+                    parse_mode='HTML'
+                )
+                
+                logger.info(f"已向用户 {telegram_id} 发送油管订单 #{order_id} 的提交通知")
+        except Exception as e:
+            logger.error(f"向用户发送油管订单提交通知失败: {str(e)}", exc_info=True)
+    
     except Exception as e:
-        logger.error(f"发送通知时出错: {str(e)}", exc_info=True)
+        logger.error(f"发送油管订单通知失败: {str(e)}", exc_info=True)
+
+
+async def send_youtube_status_change_notification(data):
+    """发送油管会员充值订单状态变更通知"""
+    global bot_application
+    
+    try:
+        order_id = data.get("id")
+        status = data.get("status")
+        time = data.get("time")
+        
+        # 获取订单详情
+        order_details = get_youtube_order_details(order_id)
+        
+        if not order_details or not order_details[0]:
+            logger.error(f"获取油管订单 #{order_id} 详情失败")
+            return
+            
+        order = order_details[0]
+        
+        # 获取用户ID和订单信息
+        user_id = order[13]  # youtube_orders表中的user_id字段
+        package = order[2]  # package
+        
+        if not user_id:
+            logger.error(f"油管订单 #{order_id} 没有关联用户")
+            return
+            
+        # 构建状态变更消息
+        status_text = STATUS_TEXT_ZH.get(status, status)
+        message = (
+            f"🔔 <b>油管会员订单状态更新</b>\n\n"
+            f"📋 订单号: <code>#{order_id}</code>\n"
+            f"📦 套餐: <code>{package}个月</code>\n"
+            f"📊 状态: <code>{status_text}</code>\n"
+            f"⏰ 更新时间: <code>{time}</code>\n\n"
+        )
+        
+        if status == STATUS["COMPLETED"]:
+            message += "✅ 您的油管会员充值已完成，请检查会员状态。"
+        elif status == STATUS["FAILED"]:
+            message += "❌ 很抱歉，充值失败。如有问题，请联系客服。"
+        
+        # 发送通知给用户
+        try:
+            # 查询用户的Telegram ID
+            user_details = execute_query(
+                "SELECT telegram_id FROM user_telegram_links WHERE user_id = ?",
+                (user_id,), fetch=True
+            )
+            
+            if user_details and user_details[0] and user_details[0][0]:
+                telegram_id = user_details[0][0]
+                
+                # 发送通知
+                await bot_application.bot.send_message(
+                    chat_id=telegram_id,
+                    text=message,
+                    parse_mode='HTML'
+                )
+                
+                logger.info(f"已向用户 {telegram_id} 发送油管订单 #{order_id} 的状态更新通知")
+        except Exception as e:
+            logger.error(f"向用户发送油管订单状态更新通知失败: {str(e)}", exc_info=True)
+    
+    except Exception as e:
+        logger.error(f"发送油管订单状态更新通知失败: {str(e)}", exc_info=True)
 
 # ===== 推送通知函数 =====
 def set_order_notified_atomic(oid):
@@ -1776,24 +1957,254 @@ def update_order_status(order_id, status, handler_id=None):
 async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理回调查询"""
     query = update.callback_query
-    data = query.data
-    user_id = update.effective_user.id
+    user_id = query.from_user.id
     
-    logger.info(f"收到回调查询: {data} 来自用户 {user_id}")
+    # 尝试获取回调数据
+    callback_data = query.data if query.data else ""
     
-    # 处理不同类型的回调
-    if data.startswith("accept:"):
-        await on_accept(update, context)
-    elif data.startswith("feedback:"):
-        await on_feedback_button(update, context)
-    elif data.startswith("stats:"):
-        await on_stats_callback(update, context)
-    elif data.startswith("approve_recharge:"):
-        await on_approve_recharge(update, context)
-    elif data.startswith("reject_recharge:"):
-        await on_reject_recharge(update, context)
+    if not callback_data:
+        await query.answer("无效操作", show_alert=True)
+        return
+    
+    try:
+        # 处理订单接受回调
+        if callback_data.startswith("accept:"):
+            oid = int(callback_data.split(":")[1])
+            await on_accept(update, context)
+        
+        # 处理油管订单接受回调
+        elif callback_data.startswith("yt_accept:"):
+            oid = int(callback_data.split(":")[1])
+            await on_youtube_accept(update, context)
+            
+        # 处理充值请求审批回调
+        elif callback_data.startswith("approve_recharge:"):
+            await on_approve_recharge(update, context)
+            
+        # 处理充值请求拒绝回调    
+        elif callback_data.startswith("reject_recharge:"):
+            await on_reject_recharge(update, context)
+            
+        # 处理统计回调
+        elif callback_data.startswith("stats:"):
+            await on_stats_callback(update, context)
+        
+        # 处理反馈按钮回调
+        elif callback_data.startswith("feedback:"):
+            await on_feedback_button(update, context)
+    
+    except Exception as e:
+        logger.error(f"处理回调查询时出错: {str(e)}", exc_info=True)
+        await query.answer(f"处理请求时出错: {str(e)}", show_alert=True)
+
+
+@callback_error_handler
+async def on_youtube_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理接受油管订单的回调"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    try:
+        # 检查是否是卖家
+        if not is_seller(user_id):
+            await query.answer("您不是卖家，无法接单", show_alert=True)
+            return
+            
+        # 获取订单ID
+        callback_data = query.data
+        order_id = int(callback_data.split(":")[1])
+        
+        # 尝试接单
+        if not accept_youtube_order_atomic(order_id, user_id):
+            await query.answer("接单失败，可能订单已被接走", show_alert=True)
+            return
+            
+        # 获取订单详情
+        order_details = get_youtube_order_details(order_id)
+        
+        if not order_details or len(order_details) == 0:
+            await query.answer("获取订单详情失败", show_alert=True)
+            return
+            
+        # 更新按钮文本，显示已接单
+        keyboard = [[InlineKeyboardButton("已接单", callback_data="dummy")]]
+        await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(keyboard))
+        
+        # 通知卖家接单成功
+        await query.answer("接单成功！请尽快扫码支付", show_alert=True)
+        
+        # 获取订单信息
+        order = order_details[0]
+        package = order[2]  # 套餐
+        remark = order[3] if order[3] else "无"  # 备注
+        
+        # 发送确认消息
+        confirm_message = (
+            f"✅ <b>油管订单 #{order_id} 接单成功!</b>\n\n"
+            f"📦 套餐: <code>{package} 个月</code>\n"
+            f"📝 备注: <code>{remark}</code>\n\n"
+            f"请尽快扫描二维码完成支付。完成后，选择相应的状态按钮。"
+        )
+        
+        # 添加完成或失败按钮
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ 充值成功", callback_data=f"feedback:yt_completed:{order_id}"),
+                InlineKeyboardButton("❌ 充值失败", callback_data=f"feedback:yt_failed:{order_id}")
+            ]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        # 发送确认消息
+        await bot_application.bot.send_message(
+            chat_id=user_id,
+            text=confirm_message,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
+        
+        # 将订单ID添加到等待反馈的列表中
+        feedback_waiting[f"yt:{order_id}"] = {
+            "user_id": user_id,
+            "timestamp": int(time.time())
+        }
+        
+        logger.info(f"卖家 {user_id} 接受了油管订单 #{order_id}")
+        
+    except Exception as e:
+        logger.error(f"处理油管接单时出错: {str(e)}", exc_info=True)
+        await query.answer("处理请求时出错", show_alert=True)
+
+# 修改反馈按钮回调函数，使其支持油管订单
+async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理订单反馈按钮"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    # 解析回调数据：feedback:状态:订单ID
+    parts = query.data.split(":")
+    if len(parts) != 3:
+        await query.answer("无效的操作", show_alert=True)
+        return
+        
+    action = parts[1]
+    order_id = int(parts[2])
+    
+    # 油管订单处理
+    if action.startswith("yt_"):
+        status_code = action[3:]  # 提取状态码（completed 或 failed）
+        
+        # 检查是否是接单人
+        feedback_key = f"yt:{order_id}"
+        if feedback_key not in feedback_waiting or feedback_waiting[feedback_key]["user_id"] != user_id:
+            await query.answer("您不是此订单的接单人", show_alert=True)
+            return
+            
+        # 更新订单状态
+        try:
+            # 根据反馈设置状态
+            new_status = STATUS["COMPLETED"] if status_code == "completed" else STATUS["FAILED"]
+            
+            # 更新订单状态
+            now = get_china_time()
+            execute_query(
+                "UPDATE youtube_orders SET status = ?, completed_at = ? WHERE id = ?",
+                (new_status, now, order_id)
+            )
+            
+            # 从等待列表中移除
+            del feedback_waiting[feedback_key]
+            
+            # 更新按钮状态
+            status_text = "充值成功 ✓" if status_code == "completed" else "充值失败 ✗"
+            keyboard = [[InlineKeyboardButton(status_text, callback_data="dummy")]]
+            await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(keyboard))
+            
+            # 通知卖家
+            feedback_text = "反馈已提交，感谢您的处理！"
+            await query.answer(feedback_text, show_alert=True)
+            
+            logger.info(f"油管订单 #{order_id} 状态已更新为 {new_status}")
+            
+            # 构建通知消息
+            notification_data = {
+                "type": "youtube_status_change",
+                "id": order_id,
+                "status": new_status,
+                "time": now
+            }
+            # 将通知添加到队列
+            notification_queue.put(notification_data)
+            
+        except Exception as e:
+            logger.error(f"更新油管订单状态时出错: {str(e)}", exc_info=True)
+            await query.answer("更新订单状态失败", show_alert=True)
+    
+    # 原有的破天订单处理逻辑
     else:
-        await query.answer("Unknown command")
+        status_code = action
+        
+        # 检查是否是接单人
+        if order_id not in feedback_waiting or feedback_waiting[order_id]["user_id"] != user_id:
+            await query.answer("您不是此订单的接单人", show_alert=True)
+            return
+            
+        # 根据反馈设置状态
+        new_status = STATUS["COMPLETED"] if status_code == "completed" else STATUS["FAILED"]
+        
+        # 如果失败，需要获取失败原因
+        if status_code == "failed":
+            # 在feedback_waiting中标记为等待原因
+            feedback_waiting[order_id]["waiting_reason"] = True
+            
+            # 发送获取原因的消息
+            await query.edit_message_text(
+                text=f"请选择充值失败的原因（订单 #{order_id}）：",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("密码错误", callback_data=f"reason:wrong_password:{order_id}")],
+                    [InlineKeyboardButton("会员未到期", callback_data=f"reason:not_expired:{order_id}")],
+                    [InlineKeyboardButton("其他原因", callback_data=f"reason:other:{order_id}")],
+                ])
+            )
+            return
+        
+        # 完成订单处理
+        try:
+            # 更新订单状态
+            now = get_china_time()
+            execute_query(
+                "UPDATE orders SET status = ?, completed_at = ? WHERE id = ?",
+                (new_status, now, order_id)
+            )
+            
+            # 从等待列表中移除
+            del feedback_waiting[order_id]
+            
+            # 更新按钮状态
+            status_text = "充值成功 ✓" if status_code == "completed" else "充值失败 ✗"
+            keyboard = [[InlineKeyboardButton(status_text, callback_data="dummy")]]
+            await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(keyboard))
+            
+            # 通知卖家
+            feedback_text = "反馈已提交，感谢您的处理！"
+            await query.answer(feedback_text, show_alert=True)
+            
+            logger.info(f"订单 #{order_id} 状态已更新为 {new_status}")
+            
+            # 构建通知消息
+            notification_data = {
+                "type": "status_change",
+                "id": order_id,
+                "status": new_status,
+                "time": now
+            }
+            # 将通知添加到队列
+            notification_queue.put(notification_data)
+            
+        except Exception as e:
+            logger.error(f"更新订单状态时出错: {str(e)}", exc_info=True)
+            await query.answer("更新订单状态失败", show_alert=True)
 
 @callback_error_handler
 async def on_approve_recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
