@@ -906,12 +906,8 @@
 </head>
 <body>
 <div class="navbar">
-  <a href="/" class="navbar-brand">破天充值系统</a>
+  <div class="navbar-brand">破天充值系统</div>
   <div class="navbar-user">
-    <a href="/youtube" style="color:#333;text-decoration:none;margin-right:15px;">油管会员充值</a>
-    {% if is_admin %}
-    <div class="admin-badge">管理员</div>
-    {% endif %}
     <div class="user-dropdown">
       <div class="user-info">
         <div class="user-avatar">{{ session.username[0]|upper }}</div>

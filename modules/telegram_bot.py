@@ -1183,10 +1183,6 @@ async def send_notification_from_queue(data):
             await send_recharge_request_notification(data)
         elif data['type'] == 'dispute':
             await send_dispute_notification(data)
-        elif data['type'] == 'new_recharge':
-            await send_recharge_request_notification(data)
-        elif data['type'] == 'urge':
-            await send_urge_notification(data)
         else:
             logger.warning(f"未知的通知类型: {data['type']}")
     except Exception as e:
@@ -1219,23 +1215,17 @@ async def send_new_order_notification(data):
         account = data.get('account')
         password = data.get('password')
         package = data.get('package')
-        product_type = data.get('product_type', 'potian')  # 默认为破天
-        
-        # 设置产品名称和套餐文本
-        product_name = "YouTube Premium" if product_type == 'youtube' else "Potplayer"
-        package_text = "1 year subscription" if product_type == 'youtube' else f"{package} month(s)"
         
         # 构建消息文本
         message_text = (
             f"📦 New Order #{oid}\n"
-            f"Product: {product_name}\n"
             f"Account: `{account}`\n"
-            f"Package: {package_text}"
+            f"Package: {package} month(s)"
         )
         
         # 创建接单按钮
         callback_data = f'accept_{oid}'
-        keyboard = [[InlineKeyboardButton("Accept Order", callback_data=callback_data)]]
+        keyboard = [[InlineKeyboardButton("Accept", callback_data=callback_data)]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         # 向所有卖家发送通知
@@ -1452,47 +1442,6 @@ async def send_dispute_notification(data):
         logger.info(f"已向卖家 {seller_id} 发送订单质疑通知 #{oid}")
     except Exception as e:
         logger.error(f"发送订单质疑通知时出错: {str(e)}", exc_info=True)
-
-async def send_urge_notification(data):
-    """发送催单通知给卖家"""
-    global bot_application
-    
-    try:
-        # 获取催单详情
-        order_id = data.get('order_id')
-        seller_id = data.get('seller_id')
-        account = data.get('account')
-        password = data.get('password')
-        package = data.get('package')
-        product_type = data.get('product_type', 'potian')  # 默认为破天
-        accepted_at = data.get('accepted_at', '')
-        
-        # 设置产品名称和套餐文本
-        product_name = "YouTube Premium" if product_type == 'youtube' else "Potplayer"
-        package_text = "1 year subscription" if product_type == 'youtube' else f"{package} month(s)"
-        
-        # 构建消息文本
-        message_text = (
-            f"⚠️ *URGENT ORDER REMINDER* ⚠️\n"
-            f"Order ID: `#{order_id}`\n"
-            f"Product: *{product_name}*\n"
-            f"Account: `{account}`\n"
-            f"Package: *{package_text}*\n"
-            f"Accepted at: {accepted_at}\n\n"
-            f"This order is pending completion. The customer is asking about it. Please complete it as soon as possible."
-        )
-        
-        # 发送提醒消息
-        await bot_application.bot.send_message(
-            chat_id=seller_id,
-            text=message_text,
-            parse_mode="Markdown"
-        )
-        
-        logger.info(f"已发送催单通知给卖家 {seller_id} (订单 #{order_id})")
-        
-    except Exception as e:
-        logger.error(f"发送催单通知失败: {str(e)}", exc_info=True)
 
 # ===== 主函数 =====
 def run_bot(notification_queue):
@@ -1907,50 +1856,3 @@ async def on_reject_recharge(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await query.answer("操作成功，但更新消息失败", show_alert=True)
     else:
         await query.answer(f"操作失败: {message}", show_alert=True) 
-
-async def notify_sellers_for_order(bot, order_id, account, password, package, product_type='potian'):
-    """向所有活跃卖家通知有新订单"""
-    try:
-        # 获取所有活跃卖家
-        sellers = get_all_active_sellers()
-        logger.info(f"开始发送订单 #{order_id} 通知给 {len(sellers)} 个卖家")
-        if not sellers:
-            logger.warning("没有活跃卖家可通知")
-            return
-
-        # 设置产品名称
-        product_name = "油管会员" if product_type == 'youtube' else "破天账号"
-        package_text = "个人会员一年" if product_type == 'youtube' else f"{package}个月"
-
-        # 构造通知消息
-        message = f"🔔 *NEW ORDER* 🔔\n"
-        message += f"Order ID: `#{order_id}`\n"
-        message += f"Product: *{product_name}*\n"
-        message += f"Package: *{package_text}*\n"
-        message += f"Account: `{account}`\n"
-        message += f"Password: `{password}`\n\n"
-        message += "Reply with `/take {order_id}` to accept this order."
-
-        # 创建接单按钮
-        keyboard = [
-            [InlineKeyboardButton(f"Take Order #{order_id}", callback_data=f"take_{order_id}")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        # 向每个卖家发送消息
-        for seller in sellers:
-            try:
-                seller_id = seller[0]  # 从(id, username, first_name)中提取ID
-                logger.info(f"向卖家 {seller_id} 发送订单 #{order_id} 通知")
-                await bot.send_message(
-                    chat_id=seller_id, 
-                    text=message, 
-                    parse_mode="Markdown",
-                    reply_markup=reply_markup
-                )
-                logger.info(f"已发送订单 #{order_id} 通知给卖家 {seller_id}")
-            except Exception as e:
-                logger.error(f"向卖家 {seller_id} 发送通知失败: {str(e)}", exc_info=True)
-    except Exception as e:
-        logger.error(f"发送订单通知时出错: {str(e)}", exc_info=True)
-        print(f"ERROR: 发送订单通知时出错: {str(e)}")

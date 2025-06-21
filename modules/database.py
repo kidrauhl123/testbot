@@ -71,361 +71,22 @@ def add_balance_record(user_id, amount, type_name, reason, reference_id=None, ba
 
 # ===== 数据库 =====
 def init_db():
-    """初始化数据库，创建必要的表和索引"""
-    logger.info("初始化数据库...")
+    """根据环境配置初始化数据库"""
+    logger.info(f"初始化数据库，使用连接: {DATABASE_URL[:10]}...")
+    if DATABASE_URL.startswith('postgres'):
+        init_postgres_db()
+    else:
+        init_sqlite_db()
     
-    try:
-        # 连接数据库文件
-        logger.info(f"DATABASE_URL = {DATABASE_URL}")
-        
-        if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL连接
-            from urllib.parse import urlparse
-            import psycopg2
-            
-            url = urlparse(DATABASE_URL)
-            conn = psycopg2.connect(
-                dbname=url.path[1:],
-                user=url.username,
-                password=url.password,
-                host=url.hostname,
-                port=url.port
-            )
-            cursor = conn.cursor()
-            
-            # 检查users表是否存在
-            user_table_exists = execute_query("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
-                    AND table_name = 'users'
-                )
-            """, fetch=True)
-            
-            if not user_table_exists or not user_table_exists[0][0]:
-                execute_query("""
-                    CREATE TABLE users (
-                        id SERIAL PRIMARY KEY,
-                        username VARCHAR(50) UNIQUE NOT NULL,
-                        password_hash TEXT NOT NULL,
-                        is_admin BOOLEAN NOT NULL DEFAULT FALSE,
-                        balance REAL NOT NULL DEFAULT 0,
-                        credit_limit REAL NOT NULL DEFAULT 0,
-                        created_at TEXT,
-                        last_login TEXT
-                    )
-                """)
-                logger.info("已创建用户表(PostgreSQL)")
-                
-                # 创建管理员用户
-                from modules.constants import ADMIN_USERNAME, ADMIN_PASSWORD
-                admin_hash = hash_password(ADMIN_PASSWORD)
-                execute_query("""
-                    INSERT INTO users (username, password_hash, is_admin, created_at) 
-                    VALUES (%s, %s, %s, %s)
-                """, (ADMIN_USERNAME, admin_hash, True, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-                logger.info(f"已创建管理员用户: {ADMIN_USERNAME}")
-                
-            # 检查sellers表是否存在
-            sellers_table_exists = execute_query("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
-                    AND table_name = 'sellers'
-                )
-            """, fetch=True)
-            
-            if not sellers_table_exists or not sellers_table_exists[0][0]:
-                execute_query("""
-                    CREATE TABLE sellers (
-                        id SERIAL PRIMARY KEY,
-                        telegram_id BIGINT UNIQUE NOT NULL,
-                        username VARCHAR(255),
-                        first_name VARCHAR(255),
-                        last_name VARCHAR(255),
-                        is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                        balance REAL NOT NULL DEFAULT 0,
-                        is_admin BOOLEAN NOT NULL DEFAULT FALSE,
-                        added_at TEXT,
-                        added_by VARCHAR(255)
-                    )
-                """)
-                logger.info("已创建卖家表(PostgreSQL)")
-            
-            # 检查orders表是否存在
-            orders_table_exists = execute_query("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
-                    AND table_name = 'orders'
-                )
-            """, fetch=True)
-            
-            if not orders_table_exists or not orders_table_exists[0][0]:
-                execute_query("""
-                    CREATE TABLE orders (
-                        id SERIAL PRIMARY KEY,
-                        account VARCHAR(255) NOT NULL,
-                        password VARCHAR(255) NOT NULL,
-                        package VARCHAR(50) NOT NULL,
-                        status VARCHAR(50) NOT NULL,
-                        created_at TEXT NOT NULL,
-                        accepted_at TEXT,
-                        completed_at TEXT,
-                        failed_at TEXT,
-                        cancelled_at TEXT,
-                        remark TEXT,
-                        package_price REAL,
-                        fail_reason TEXT,
-                        accepted_by VARCHAR(255),
-                        creator VARCHAR(255),
-                        user_id INTEGER,
-                        web_user_id INTEGER,
-                        product_type VARCHAR(50) DEFAULT 'potian'
-                    )
-                """)
-                logger.info("已创建订单表(PostgreSQL)")
-            else:
-                # 检查是否需要添加product_type列
-                column_exists = execute_query("""
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.columns 
-                        WHERE table_schema = 'public' 
-                        AND table_name = 'orders' 
-                        AND column_name = 'product_type'
-                    )
-                """, fetch=True)
-                
-                if not column_exists or not column_exists[0][0]:
-                    logger.info("正在添加product_type列到orders表...")
-                    execute_query("""
-                        ALTER TABLE orders ADD COLUMN product_type VARCHAR(50) DEFAULT 'potian'
-                    """)
-                    logger.info("已添加product_type列到orders表")
-            
-            # 检查充值记录表是否存在
-            recharge_table_exists = execute_query("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
-                    AND table_name = 'recharge_requests'
-                )
-            """, fetch=True)
-            
-            if not recharge_table_exists or not recharge_table_exists[0][0]:
-                execute_query("""
-                    CREATE TABLE recharge_requests (
-                        id SERIAL PRIMARY KEY,
-                        user_id INTEGER NOT NULL,
-                        amount REAL NOT NULL,
-                        status TEXT NOT NULL,
-                        payment_method TEXT NOT NULL,
-                        proof_image TEXT,
-                        details TEXT,
-                        created_at TEXT NOT NULL,
-                        processed_at TEXT,
-                        processed_by TEXT,
-                        FOREIGN KEY (user_id) REFERENCES users (id)
-                    )
-                """)
-                logger.info("已创建充值记录表(PostgreSQL)")
-                
-            # 检查余额明细表是否存在
-            balance_table_exists = execute_query("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
-                    AND table_name = 'balance_records'
-                )
-            """, fetch=True)
-            
-            if not balance_table_exists or not balance_table_exists[0][0]:
-                execute_query("""
-                    CREATE TABLE balance_records (
-                        id SERIAL PRIMARY KEY,
-                        user_id INTEGER NOT NULL,
-                        amount REAL NOT NULL,
-                        type TEXT NOT NULL,
-                        reason TEXT NOT NULL,
-                        reference_id INTEGER,
-                        balance_after REAL NOT NULL,
-                        created_at TEXT NOT NULL,
-                        FOREIGN KEY (user_id) REFERENCES users (id)
-                    )
-                """)
-                logger.info("已创建余额明细表(PostgreSQL)")
-        else:
-            # SQLite连接
-            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            db_path = os.path.join(current_dir, "orders.db")
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            
-            # 检查users表是否存在
-            users_exists = cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").fetchone()
-            if not users_exists:
-                cursor.execute("""
-                    CREATE TABLE users (
-                        id INTEGER PRIMARY KEY,
-                        username TEXT UNIQUE NOT NULL,
-                        password_hash TEXT NOT NULL,
-                        is_admin INTEGER NOT NULL DEFAULT 0,
-                        balance REAL NOT NULL DEFAULT 0,
-                        credit_limit REAL NOT NULL DEFAULT 0,
-                        created_at TEXT,
-                        last_login TEXT
-                    )
-                """)
-                logger.info("已创建用户表(SQLite)")
-                
-                # 创建管理员用户
-                from modules.constants import ADMIN_USERNAME, ADMIN_PASSWORD
-                admin_hash = hash_password(ADMIN_PASSWORD)
-                cursor.execute("""
-                    INSERT INTO users (username, password_hash, is_admin, created_at) 
-                    VALUES (?, ?, ?, ?)
-                """, (ADMIN_USERNAME, admin_hash, 1, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-                logger.info(f"已创建管理员用户: {ADMIN_USERNAME}")
-            
-            # 检查sellers表是否存在
-            sellers_exists = cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sellers'").fetchone()
-            if not sellers_exists:
-                cursor.execute("""
-                    CREATE TABLE sellers (
-                        id INTEGER PRIMARY KEY,
-                        telegram_id INTEGER UNIQUE NOT NULL,
-                        username TEXT,
-                        first_name TEXT,
-                        last_name TEXT,
-                        is_active INTEGER NOT NULL DEFAULT 1,
-                        balance REAL NOT NULL DEFAULT 0,
-                        is_admin INTEGER NOT NULL DEFAULT 0,
-                        added_at TEXT,
-                        added_by TEXT
-                    )
-                """)
-                logger.info("已创建卖家表(SQLite)")
-            
-            # 检查orders表是否存在
-            orders_exists = cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='orders'").fetchone()
-            if not orders_exists:
-                cursor.execute("""
-                    CREATE TABLE orders (
-                        id INTEGER PRIMARY KEY,
-                        account TEXT NOT NULL,
-                        password TEXT NOT NULL,
-                        package TEXT NOT NULL,
-                        status TEXT NOT NULL,
-                        created_at TEXT NOT NULL,
-                        accepted_at TEXT,
-                        completed_at TEXT,
-                        failed_at TEXT,
-                        cancelled_at TEXT,
-                        remark TEXT,
-                        package_price REAL,
-                        fail_reason TEXT,
-                        accepted_by TEXT,
-                        creator TEXT,
-                        user_id INTEGER,
-                        web_user_id INTEGER,
-                        product_type TEXT DEFAULT 'potian'
-                    )
-                """)
-                logger.info("已创建订单表(SQLite)")
-            else:
-                # 检查是否需要添加product_type列
-                try:
-                    # 尝试查询product_type列，如果不存在会抛出异常
-                    cursor.execute("SELECT product_type FROM orders LIMIT 1")
-                except sqlite3.OperationalError:
-                    # 列不存在，添加它
-                    logger.info("正在添加product_type列到orders表...")
-                    cursor.execute("ALTER TABLE orders ADD COLUMN product_type TEXT DEFAULT 'potian'")
-                    logger.info("已添加product_type列到orders表")
-            
-            # 检查充值记录表是否存在
-            recharge_exists = cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='recharge_requests'").fetchone()
-            if not recharge_exists:
-                cursor.execute("""
-                    CREATE TABLE recharge_requests (
-                        id INTEGER PRIMARY KEY,
-                        user_id INTEGER NOT NULL,
-                        amount REAL NOT NULL,
-                        status TEXT NOT NULL,
-                        payment_method TEXT NOT NULL,
-                        proof_image TEXT,
-                        details TEXT,
-                        created_at TEXT NOT NULL,
-                        processed_at TEXT,
-                        processed_by TEXT,
-                        FOREIGN KEY (user_id) REFERENCES users (id)
-                    )
-                """)
-                logger.info("已创建充值记录表(SQLite)")
-            
-            # 检查余额明细表是否存在
-            balance_records_exists = cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='balance_records'").fetchone()
-            if not balance_records_exists:
-                cursor.execute("""
-                    CREATE TABLE balance_records (
-                        id INTEGER PRIMARY KEY,
-                        user_id INTEGER NOT NULL,
-                        amount REAL NOT NULL,
-                        type TEXT NOT NULL,
-                        reason TEXT NOT NULL,
-                        reference_id INTEGER,
-                        balance_after REAL NOT NULL,
-                        created_at TEXT NOT NULL,
-                        FOREIGN KEY (user_id) REFERENCES users (id)
-                    )
-                """)
-                logger.info("已创建余额明细表(SQLite)")
-            
-            # 创建激活码表
-            activation_codes_exists = cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='activation_codes'").fetchone()
-            if not activation_codes_exists:
-                cursor.execute("""
-                    CREATE TABLE activation_codes (
-                        id INTEGER PRIMARY KEY,
-                        code TEXT UNIQUE NOT NULL,
-                        status TEXT NOT NULL,
-                        package TEXT NOT NULL,
-                        created_at TEXT NOT NULL,
-                        created_by INTEGER,
-                        used_at TEXT,
-                        used_by INTEGER,
-                        account TEXT,
-                        remark TEXT,
-                        FOREIGN KEY (created_by) REFERENCES users (id),
-                        FOREIGN KEY (used_by) REFERENCES users (id)
-                    )
-                """)
-                logger.info("已创建激活码表(SQLite)")
-            
-            # 用户定制价格表
-            custom_prices_exists = cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='custom_prices'").fetchone()
-            if not custom_prices_exists:
-                cursor.execute("""
-                    CREATE TABLE custom_prices (
-                        id INTEGER PRIMARY KEY,
-                        user_id INTEGER NOT NULL,
-                        package TEXT NOT NULL,
-                        price REAL NOT NULL,
-                        created_at TEXT NOT NULL,
-                        created_by INTEGER,
-                        FOREIGN KEY (user_id) REFERENCES users (id),
-                        FOREIGN KEY (created_by) REFERENCES users (id),
-                        UNIQUE(user_id, package)
-                    )
-                """)
-                logger.info("已创建用户定制价格表(SQLite)")
-            
-            conn.commit()
-            conn.close()
-        logger.info("数据库初始化完成!")
-    except Exception as e:
-        logger.error(f"初始化数据库时出错: {str(e)}", exc_info=True)
-        raise e
+    # 创建充值记录表和余额记录表
+    logger.info("正在创建充值记录表和余额记录表...")
+    create_recharge_tables()
+    logger.info("充值记录表和余额记录表创建完成")
+    
+    # 创建激活码表
+    logger.info("正在创建激活码表...")
+    create_activation_code_table()
+    logger.info("激活码表创建完成")
 
 def init_sqlite_db():
     """初始化SQLite数据库"""
@@ -1539,70 +1200,18 @@ def refund_order(order_id):
         logger.error(f"退款到用户余额失败: {str(e)}", exc_info=True)
         return False, str(e)
 
-def create_order_with_deduction_atomic(account, password, package, remark, creator_username, web_user_id, product_type='potian'):
-    """创建订单并原子扣除余额
-    
-    参数:
-    - account: 账号
-    - password: 密码
-    - package: 套餐
-    - remark: 备注
-    - creator_username: 创建人用户名
-    - web_user_id: Web端用户ID
+def create_order_with_deduction_atomic(account, password, package, remark, username, user_id):
+    """
+    使用事务原子性地创建订单并扣除用户余额，兼容 SQLite 与 PostgreSQL
     
     返回:
-    - success: 成功与否
-    - message: 消息
-    - new_balance: 新余额
-    - credit_limit: 透支额度
+    - (success, message, new_balance, credit_limit)
     """
-    global DATABASE_URL
-    
-    logger = logging.getLogger(__name__)
-    logger.info(f"正在创建订单: 账号={account}, 套餐={package}, 创建人={creator_username}, 产品类型={product_type}")
-    
-    try:
-        # 获取当前时间
-        created_at = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d %H:%M:%S")
-        
-        # 计算价格
-        user_id = None
-        if web_user_id:
-            user = execute_query("SELECT id FROM users WHERE id = ?", (web_user_id,), fetch=True)
-            if user:
-                user_id = user[0][0]
-        
-        # 根据产品类型获取价格
-        if product_type == 'youtube':
-            from modules.constants import YOUTUBE_PRICES as PRICES
-        else:
-            from modules.constants import WEB_PRICES as PRICES
-            
-        # 获取用户定制价格
-        from modules.constants import get_user_package_price
-        price = get_user_package_price(user_id, package)
-        
-        # 验证价格
-        if price <= 0:
-            return False, "无效的套餐价格", None, None
-        
-        # 检查余额及额度
-        if web_user_id:
-            balance = get_user_balance(web_user_id)
-            credit_limit = get_user_credit_limit(web_user_id)
-            
-            logger.info(f"用户余额检查: 用户ID={web_user_id}, 当前余额={balance}, 透支额度={credit_limit}, 订单金额={price}")
-            
-            # 检查余额和透支额度是否足够
-            if balance + credit_limit < price:
-                return False, f"余额不足，当前余额: {balance}元，可透支额度: {credit_limit}元，订单金额: {price}元", balance, credit_limit
-        
-        # 创建订单
-        if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL
-            import psycopg2
-            from urllib.parse import urlparse
+    from modules.constants import WEB_PRICES, get_user_package_price
 
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            # ---------- PostgreSQL 版本 ----------
             url = urlparse(DATABASE_URL)
             conn = psycopg2.connect(
                 dbname=url.path[1:],
@@ -1612,126 +1221,110 @@ def create_order_with_deduction_atomic(account, password, package, remark, creat
                 port=url.port
             )
             cursor = conn.cursor()
-            
+
             try:
-                # 开始事务
                 cursor.execute("BEGIN")
-                
-                # 创建订单
-                cursor.execute("""
-                    INSERT INTO orders 
-                    (account, password, package, status, created_at, web_user_id, creator, package_price, remark, product_type) 
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) 
-                    RETURNING id
-                """, (account, password, package, 'submitted', created_at, web_user_id, creator_username, price, remark, product_type))
-                
-                order_id = cursor.fetchone()[0]
-                
-                # 如果有Web用户ID，扣减余额
-                if web_user_id:
-                    # 更新余额
-                    cursor.execute("""
-                        UPDATE users 
-                        SET balance = balance - %s
-                        WHERE id = %s
-                        RETURNING balance
-                    """, (price, web_user_id))
-                    
-                    new_balance = cursor.fetchone()[0]
-                    
-                    # 记录余额变动
-                    cursor.execute("""
-                        INSERT INTO balance_records 
-                        (user_id, amount, type, reason, reference_id, balance_after, created_at) 
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """, (
-                        web_user_id, 
-                        -price, 
-                        'order', 
-                        f'订单: #{order_id} ({product_type})',
-                        order_id,
-                        new_balance,
-                        created_at
-                    ))
-                else:
-                    new_balance = None
-                
-                # 提交事务
+
+                # 查询余额和额度
+                cursor.execute("SELECT balance, credit_limit FROM users WHERE id = %s FOR UPDATE", (user_id,))
+                row = cursor.fetchone()
+                if not row:
+                    conn.rollback()
+                    return False, "用户不存在", None, None
+
+                current_balance, credit_limit = row
+                available_funds = current_balance + credit_limit
+
+                price = get_user_package_price(user_id, package)
+                if price > available_funds:
+                    conn.rollback()
+                    return False, f"余额不足，需要 {price} 元，可用 {available_funds} 元", current_balance, credit_limit
+
+                # 扣款并更新余额
+                new_balance = current_balance - price
+                cursor.execute("UPDATE users SET balance = %s WHERE id = %s", (new_balance, user_id))
+
+                # 记录余额变动
+                now = get_china_time()
+                cursor.execute(
+                    """
+                    INSERT INTO balance_records (user_id, amount, type, reason, balance_after, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (user_id, -price, 'consume', f'购买{package}个月套餐', new_balance, now)
+                )
+
+                # 创建订单记录
+                cursor.execute(
+                    """
+                    INSERT INTO orders (account, password, package, status, created_at, remark, user_id, web_user_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (account, password, package, 'submitted', now, remark, user_id, username)
+                )
+
                 conn.commit()
-                
                 return True, "订单创建成功", new_balance, credit_limit
-                
             except Exception as e:
                 conn.rollback()
-                logger.error(f"创建订单事务失败: {str(e)}", exc_info=True)
+                logger.error(f"创建订单失败(PostgreSQL): {str(e)}", exc_info=True)
                 return False, f"创建订单失败: {str(e)}", None, None
             finally:
-                cursor.close()
                 conn.close()
         else:
-            # SQLite
-            conn = sqlite3.connect("orders.db")
+            # ---------- SQLite 版本 ----------
+            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(current_dir, "orders.db")
+            conn = sqlite3.connect(db_path)
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            
             try:
-                # 开始事务
-                conn.execute("BEGIN TRANSACTION")
-                
-                # 创建订单
-                cursor.execute("""
-                    INSERT INTO orders 
-                    (account, password, package, status, created_at, web_user_id, creator, package_price, remark, product_type) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (account, password, package, 'submitted', created_at, web_user_id, creator_username, price, remark, product_type))
-                
-                order_id = cursor.lastrowid
-                
-                # 如果有Web用户ID，扣减余额
-                if web_user_id:
-                    # 更新余额
-                    cursor.execute("""
-                        UPDATE users 
-                        SET balance = balance - ?
-                        WHERE id = ?
-                    """, (price, web_user_id))
-                    
-                    # 获取新余额
-                    cursor.execute("SELECT balance FROM users WHERE id = ?", (web_user_id,))
-                    new_balance = cursor.fetchone()[0]
-                    
-                    # 记录余额变动
-                    cursor.execute("""
-                        INSERT INTO balance_records 
-                        (user_id, amount, type, reason, reference_id, balance_after, created_at) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        web_user_id, 
-                        -price, 
-                        'order', 
-                        f'订单: #{order_id} ({product_type})', 
-                        order_id,
-                        new_balance,
-                        created_at
-                    ))
-                else:
-                    new_balance = None
-                
-                # 提交事务
+                cursor.execute("BEGIN TRANSACTION")
+                cursor.execute("SELECT balance, credit_limit FROM users WHERE id = ?", (user_id,))
+                user_data = cursor.fetchone()
+                if not user_data:
+                    conn.rollback()
+                    return False, "用户不存在", None, None
+
+                current_balance = user_data['balance']
+                credit_limit = user_data['credit_limit']
+                available_funds = current_balance + credit_limit
+
+                price = get_user_package_price(user_id, package)
+                if price > available_funds:
+                    conn.rollback()
+                    return False, f"余额不足，需要 {price} 元，可用 {available_funds} 元", current_balance, credit_limit
+
+                new_balance = current_balance - price
+                cursor.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
+                now = get_china_time()
+                cursor.execute(
+                    """
+                    INSERT INTO balance_records (user_id, amount, type, reason, balance_after, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (user_id, -price, 'consume', f'购买{package}个月套餐', new_balance, now)
+                )
+
+                cursor.execute(
+                    """
+                    INSERT INTO orders (account, password, package, status, created_at, remark, user_id, web_user_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (account, password, package, 'submitted', now, remark, user_id, username)
+                )
+
                 conn.commit()
-                
                 return True, "订单创建成功", new_balance, credit_limit
-                
             except Exception as e:
                 conn.rollback()
-                logger.error(f"创建订单事务失败: {str(e)}", exc_info=True)
+                logger.error(f"创建订单失败(SQLite): {str(e)}", exc_info=True)
                 return False, f"创建订单失败: {str(e)}", None, None
             finally:
-                cursor.close()
                 conn.close()
     except Exception as e:
-        logger.error(f"创建订单时发生未知错误: {str(e)}", exc_info=True)
-        return False, f"创建订单时发生错误: {str(e)}", None, None
+        logger.error(f"创建订单时数据库连接失败: {str(e)}", exc_info=True)
+        return False, f"数据库连接失败: {str(e)}", None, None
 
 # ===== 充值相关函数 =====
 def create_recharge_tables():
