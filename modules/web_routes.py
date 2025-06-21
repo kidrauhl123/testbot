@@ -1892,7 +1892,7 @@ def register_routes(app, notification_queue):
             return redirect(url_for("youtube_page"))
         
         # 检查二维码图片类型
-        if not allowed_file(qrcode_file.filename):
+        if not allowed_file(qrcode_file.filename, {'png', 'jpg', 'jpeg', 'gif'}):
             flash("不支持的文件类型，请上传图片格式的二维码 (JPG, PNG, JPEG, GIF)", "error")
             return redirect(url_for("youtube_page"))
         
