@@ -2064,7 +2064,7 @@ def create_youtube_order_with_deduction_atomic(qrcode_path, package, remark, use
       credit_limit: 透支额度
     """
     try:
-        from modules.constants import YOUTUBE_PRICES
+        from modules.constants import YOUTUBE_PRICES, get_user_package_price
         
         # 获取套餐价格
         package_price = get_user_package_price(user_id, package)
@@ -2457,7 +2457,7 @@ def refund_youtube_order(order_id):
             return False, f"订单 #{order_id} 已经退款", None
         
         # 计算退款金额
-        from modules.constants import YOUTUBE_PRICES
+        from modules.constants import YOUTUBE_PRICES, get_user_package_price
         package = order[2]  # package字段
         user_id = order[12]  # user_id字段
         
@@ -2525,29 +2525,64 @@ def refund_youtube_order(order_id):
         return False, f"退款失败: {str(e)}", None
 
 def get_unnotified_youtube_orders():
-    """获取所有未通知的油管会员充值订单"""
+    """获取未通知的油管会员充值订单列表
+    
+    返回:
+    - 未通知的订单列表，每个订单为一个元组，包含id, qrcode_path, package, remark等字段
+    """
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            result = execute_query("""
+                SELECT id, qrcode_path, package, remark, user_id, created_at, status, notified
+                FROM youtube_orders 
+                WHERE status = %s AND notified = 0
+                ORDER BY created_at ASC
+            """, (STATUS['SUBMITTED'],), fetch=True)
+        else:
+            result = execute_query("""
+                SELECT id, qrcode_path, package, remark, user_id, created_at, status, notified
+                FROM youtube_orders 
+                WHERE status = ? AND notified = 0
+                ORDER BY created_at ASC
+            """, (STATUS['SUBMITTED'],), fetch=True)
+            
+        return result
+    except Exception as e:
+        logger.error(f"获取未通知的油管会员充值订单失败: {str(e)}", exc_info=True)
+        return []
+
+def get_youtube_order_details(order_id):
+    """获取油管会员充值订单详情
+    
+    参数:
+    - order_id: 订单ID
+    
+    返回:
+    - 包含订单详情的元组，如果订单不存在则返回None
+    """
     try:
         if DATABASE_URL.startswith('postgres'):
             result = execute_query("""
                 SELECT yo.*, u.username
                 FROM youtube_orders yo
                 LEFT JOIN users u ON yo.user_id = u.id
-                WHERE yo.notified = 0 AND yo.status = %s
-                ORDER BY yo.id ASC
-            """, (STATUS['SUBMITTED'],), fetch=True)
+                WHERE yo.id = %s
+            """, (order_id,), fetch=True)
         else:
             result = execute_query("""
                 SELECT yo.*, u.username
                 FROM youtube_orders yo
                 LEFT JOIN users u ON yo.user_id = u.id
-                WHERE yo.notified = 0 AND yo.status = ?
-                ORDER BY yo.id ASC
-            """, (STATUS['SUBMITTED'],), fetch=True)
-        
-        return result
+                WHERE yo.id = ?
+            """, (order_id,), fetch=True)
+            
+        if result and len(result) > 0:
+            return result[0]
+        else:
+            return None
     except Exception as e:
-        logger.error(f"获取未通知的油管会员充值订单失败: {str(e)}", exc_info=True)
-        return []
+        logger.error(f"获取油管会员充值订单详情失败: {str(e)}", exc_info=True)
+        return None
 
 def set_youtube_order_notified_atomic(oid):
     """原子性地将油管会员充值订单标记为已通知"""
@@ -2591,4 +2626,48 @@ def set_youtube_order_notified_atomic(oid):
             
     except Exception as e:
         logger.error(f"标记油管会员充值订单为已通知失败: {str(e)}", exc_info=True)
+        return False
+
+def set_order_notified_atomic(oid):
+    """原子性地将订单标记为已通知"""
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            conn = psycopg2.connect(DATABASE_URL)
+            conn.autocommit = False  # 开启事务
+        else:
+            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
+        
+        cursor = conn.cursor()
+        
+        try:
+            # 检查订单状态
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("SELECT status FROM orders WHERE id = %s", (oid,))
+            else:
+                cursor.execute("SELECT status FROM orders WHERE id = ?", (oid,))
+            
+            result = cursor.fetchone()
+            if not result or result[0] != STATUS['SUBMITTED']:
+                # 订单不存在或状态不是已提交，不做更新
+                conn.close()
+                return False
+            
+            # 更新订单为已通知
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("UPDATE orders SET notified = 1 WHERE id = %s", (oid,))
+            else:
+                cursor.execute("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
+            
+            conn.commit()
+            return True
+            
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"标记订单为已通知失败: {str(e)}", exc_info=True)
+            return False
+        finally:
+            conn.close()
+            
+    except Exception as e:
+        logger.error(f"标记订单为已通知失败: {str(e)}", exc_info=True)
         return False

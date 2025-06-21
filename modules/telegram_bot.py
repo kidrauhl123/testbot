@@ -1062,7 +1062,7 @@ async def check_and_push_orders():
     """周期性检查未通知的订单并推送给卖家"""
     try:
         # 检查普通订单
-        from modules.database import get_unnotified_orders, set_order_notified_atomic
+        from modules.database import get_unnotified_orders, execute_query
         unnotified_orders = get_unnotified_orders()
         
         if unnotified_orders:
@@ -1087,11 +1087,18 @@ async def check_and_push_orders():
                 # 发送通知
                 await send_notification_from_queue(notification_data)
                 
+                # 标记订单为已通知
+                try:
+                    execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (order_id,))
+                    logger.info(f"已标记订单 #{order_id} 为已通知")
+                except Exception as e:
+                    logger.error(f"标记订单为已通知时出错: {str(e)}", exc_info=True)
+                
                 # 等待一小段时间，避免消息发送太快
                 await asyncio.sleep(0.5)
         
         # 检查油管会员充值订单
-        from modules.database import get_unnotified_youtube_orders, set_youtube_order_notified_atomic
+        from modules.database import get_unnotified_youtube_orders
         unnotified_youtube_orders = get_unnotified_youtube_orders()
         
         if unnotified_youtube_orders:
@@ -1109,6 +1116,13 @@ async def check_and_push_orders():
                 
                 # 发送通知
                 await send_notification_from_queue(notification_data)
+                
+                # 标记订单为已通知
+                try:
+                    execute_query("UPDATE youtube_orders SET notified = 1 WHERE id = ?", (order_id,))
+                    logger.info(f"已标记油管会员充值订单 #{order_id} 为已通知")
+                except Exception as e:
+                    logger.error(f"标记油管会员充值订单为已通知时出错: {str(e)}", exc_info=True)
                 
                 # 等待一小段时间，避免消息发送太快
                 await asyncio.sleep(0.5)
@@ -1407,6 +1421,7 @@ async def send_new_youtube_order_notification(data):
         order_id = data.get('order_id')
         
         # 从数据库中获取订单详情
+        from modules.database import get_youtube_order_details, execute_query
         order_details = get_youtube_order_details(order_id)
         
         if not order_details:
@@ -1479,12 +1494,13 @@ async def send_new_youtube_order_notification(data):
         
         if sent_count > 0:
             # 标记订单为已通知
-            if set_youtube_order_notified_atomic(order_id):
+            try:
+                execute_query("UPDATE youtube_orders SET notified = 1 WHERE id = ?", (order_id,))
                 logger.info(f"油管会员充值订单 #{order_id} 已标记为已通知")
                 print(f"DEBUG: 油管会员充值订单 #{order_id} 已标记为已通知")
-            else:
-                logger.warning(f"标记油管会员充值订单 #{order_id} 为已通知失败")
-                print(f"WARNING: 标记油管会员充值订单 #{order_id} 为已通知失败")
+            except Exception as e:
+                logger.warning(f"标记油管会员充值订单 #{order_id} 为已通知失败: {str(e)}")
+                print(f"WARNING: 标记油管会员充值订单 #{order_id} 为已通知失败: {str(e)}")
         else:
             logger.warning(f"未向任何卖家发送油管会员充值订单 #{order_id} 通知")
             print(f"WARNING: 未向任何卖家发送油管会员充值订单 #{order_id} 通知")

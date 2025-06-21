@@ -1848,6 +1848,7 @@ def register_routes(app, notification_queue):
             # 这里简化处理，前端只展示油管订单
             all_orders = []  # 可以扩展为包含所有类型订单
             
+            # 从constants导入价格和套餐选项
             from modules.constants import YOUTUBE_PRICES, YOUTUBE_PLAN_OPTIONS, STATUS_TEXT_ZH
             
             return render_template('youtube.html',
@@ -1873,91 +1874,53 @@ def register_routes(app, notification_queue):
     @login_required
     def create_youtube_order():
         """创建油管会员充值订单"""
-        try:
-            # 获取表单数据
-            package = request.form.get('package', '12')  # 默认一年
-            remark = request.form.get('remark', '')
-            
-            # 处理二维码上传
-            if 'qrcode' not in request.files:
-                logger.warning("订单提交失败: 没有上传二维码")
-                return jsonify({"success": False, "error": "请上传支付二维码"}), 400
-                
-            qrcode_file = request.files['qrcode']
-            if qrcode_file.filename == '':
-                logger.warning("订单提交失败: 二维码文件名为空")
-                return jsonify({"success": False, "error": "请选择二维码文件"}), 400
-                
-            # 检查文件类型
-            if not allowed_file(qrcode_file.filename, {'png', 'jpg', 'jpeg'}):
-                logger.warning(f"订单提交失败: 不支持的文件类型 {qrcode_file.filename}")
-                return jsonify({"success": False, "error": "只支持PNG, JPG, JPEG格式的图片"}), 400
-                
-            # 保存文件
-            filename = secure_filename(qrcode_file.filename)
-            # 添加时间戳避免文件名冲突
-            timestamp = int(time.time())
-            filename = f"{timestamp}_{filename}"
-            upload_path = os.path.join('static', 'uploads', filename)
-            full_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), upload_path)
-            
-            # 确保上传目录存在
-            os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            
-            qrcode_file.save(full_path)
-            logger.info(f"二维码文件已保存: {full_path}")
-            
-            user_id = session.get('user_id')
-            username = session.get('username')
-            
-            # 创建订单并扣款
-            from modules.database import create_youtube_order_with_deduction_atomic
-            success, message, new_balance, credit_limit = create_youtube_order_with_deduction_atomic(
-                upload_path, package, remark, username, user_id
-            )
-            
-            if not success:
-                logger.warning(f"油管会员充值订单创建失败: {message} (用户={username})")
-                return jsonify({
-                    "success": False,
-                    "error": message,
-                    "balance": new_balance,
-                    "credit_limit": credit_limit
-                }), 400
-            
-            logger.info(f"油管会员充值订单提交成功: 用户={username}, 套餐={package}, 新余额={new_balance}")
-            
-            # 获取新创建的订单ID
-            from modules.database import get_youtube_orders
-            latest_orders = get_youtube_orders(limit=1, user_id=user_id)
-            
-            new_order_id = None
-            if latest_orders and len(latest_orders) > 0:
-                new_order_id = latest_orders[0][0]
-                logger.info(f"新创建的油管会员充值订单ID: {new_order_id}")
-            
-            # 触发立即通知卖家
-            if new_order_id:
-                # 加入通知队列，通知类型为new_youtube_order
-                notification_queue.put({
-                    'type': 'new_youtube_order',
-                    'order_id': new_order_id
-                })
-                logger.info(f"已将油管会员充值订单 #{new_order_id} 加入通知队列")
-            
-            return jsonify({
-                "success": True,
-                "message": "订单已提交成功！",
-                "balance": new_balance,
-                "credit_limit": credit_limit
-            })
-            
-        except Exception as e:
-            logger.error(f"创建油管会员充值订单失败: {str(e)}", exc_info=True)
-            return jsonify({
-                "success": False,
-                "error": "创建订单失败，请重试"
-            }), 500
+        user_id = session.get('user_id')
+        username = session.get('username')
+        
+        # 获取表单数据
+        package = request.form.get('package')
+        remark = request.form.get('remark', '')
+        
+        # 获取上传的二维码图片
+        qrcode_file = request.files.get('qrcode')
+        
+        # 如果没有上传二维码或套餐选择不正确，返回错误
+        from modules.constants import YOUTUBE_PRICES, get_user_package_price
+        
+        if not qrcode_file or not package or (package not in YOUTUBE_PRICES and not get_user_package_price(user_id, package)):
+            flash("请上传二维码图片并选择正确的套餐类型", "error")
+            return redirect(url_for("youtube_page"))
+        
+        # 检查二维码图片类型
+        if not allowed_file(qrcode_file.filename):
+            flash("不支持的文件类型，请上传图片格式的二维码 (JPG, PNG, JPEG, GIF)", "error")
+            return redirect(url_for("youtube_page"))
+        
+        # 保存二维码图片
+        filename = secure_filename(f"{username}_{int(time.time())}_{qrcode_file.filename}")
+        qrcode_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        qrcode_file.save(qrcode_path)
+        
+        # 相对路径用于存储在数据库中
+        relative_qrcode_path = os.path.join('static', 'uploads', filename)
+        
+        # 创建订单并扣款
+        from modules.database import create_youtube_order_with_deduction_atomic
+        success, message, new_balance, credit_limit = create_youtube_order_with_deduction_atomic(
+            relative_qrcode_path, package, remark, username, user_id
+        )
+        
+        if success:
+            flash(f"油管会员充值订单创建成功，{message}", "success")
+        else:
+            # 创建订单失败，删除上传的二维码图片
+            try:
+                os.remove(qrcode_path)
+            except:
+                pass
+            flash(f"油管会员充值订单创建失败：{message}", "error")
+        
+        return redirect(url_for("youtube_page"))
 
 # 检查上传文件类型的辅助函数
 def allowed_file(filename, allowed_extensions):
