@@ -81,6 +81,7 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 # 确保静态文件目录存在
 static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 uploads_dir = os.path.join(static_dir, 'uploads')
+app.config['UPLOAD_FOLDER'] = uploads_dir
 if not os.path.exists(uploads_dir):
     try:
         os.makedirs(uploads_dir)

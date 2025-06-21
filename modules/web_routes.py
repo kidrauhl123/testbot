@@ -43,94 +43,22 @@ def login_required(f):
     return decorated_function
 
 # ===== Web路由 =====
-def register_routes(app, notification_queue):
-    @app.route('/login', methods=['GET', 'POST'])
-    def login():
-        if request.method == 'POST':
-            username = request.form.get('username')
-            password = request.form.get('password')
-            
-            if not username or not password:
-                return render_template('login.html', error='请填写用户名和密码')
-                
-            # 验证用户
-            hashed_password = hash_password(password)
-            user = execute_query("SELECT id, username, is_admin FROM users WHERE username=? AND password_hash=?",
-                            (username, hashed_password), fetch=True)
-            
-            if user:
-                user_id, username, is_admin = user[0]
-                session['user_id'] = user_id
-                session['username'] = username
-                session['is_admin'] = is_admin
-                
-                # 更新最后登录时间
-                execute_query("UPDATE users SET last_login=? WHERE id=?",
-                            (get_china_time(), user_id))
-                
-                logger.info(f"用户 {username} 登录成功")
-                
-                # 检查是否有待处理的激活码
-                if 'pending_activation_code' in session:
-                    code = session.pop('pending_activation_code')
-                    
-                    # 如果同时有账号密码，直接跳转到激活码页面
-                    if 'pending_account' in session and 'pending_password' in session:
-                        account = session.pop('pending_account')
-                        password = session.pop('pending_password')
-                        return redirect(url_for('redeem_page', code=code))
-                    
-                    return redirect(url_for('redeem_page', code=code))
-                
-                return redirect(url_for('index'))
-            else:
-                logger.warning(f"用户 {username} 登录失败 - 密码错误")
-                return render_template('login.html', error='用户名或密码错误')
+def register_routes(app, notification_queue=None):
+    """注册所有Flask路由
+    
+    Args:
+        app: Flask应用实例
+        notification_queue: 用于向Telegram机器人发送通知的队列
+    """
+    global flask_app
+    flask_app = app
+    
+    @app.route('/favicon.ico')
+    def favicon():
+        """提供网站图标"""
+        return app.send_static_file('favicon.ico')
         
-        # 检查是否有激活码参数
-        code = request.args.get('code')
-        if code:
-            session['pending_activation_code'] = code
-        
-        return render_template('login.html')
-
-    @app.route('/register', methods=['GET', 'POST'])
-    def register():
-        if request.method == 'POST':
-            username = request.form.get('username')
-            password = request.form.get('password')
-            confirm_password = request.form.get('password_confirm')  # 修正字段名称
-            
-            # 验证输入
-            if not username or not password or not confirm_password:
-                return render_template('register.html', error='请填写所有字段')
-                
-            if password != confirm_password:
-                return render_template('register.html', error='两次密码输入不一致')
-            
-            # 检查用户名是否已存在
-            existing_user = execute_query("SELECT id FROM users WHERE username=?", (username,), fetch=True)
-            if existing_user:
-                return render_template('register.html', error='用户名已存在')
-            
-            # 创建用户
-            hashed_password = hash_password(password)
-            execute_query("""
-                INSERT INTO users (username, password_hash, is_admin, created_at) 
-                VALUES (?, ?, 0, ?)
-            """, (username, hashed_password, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-            
-            return redirect(url_for('login'))
-        
-        return render_template('register.html')
-
-    @app.route('/logout')
-    def logout():
-        session.clear()
-        return redirect(url_for('login'))
-
     @app.route('/', methods=['GET'])
-    @login_required
     def index():
         # 显示订单创建表单和最近订单
         logger.info("访问首页")
