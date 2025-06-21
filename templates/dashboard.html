@@ -490,52 +490,55 @@
         font-size: 12px;
       }
     }
+
+    /* 菜单链接样式 */
+    .menu-link {
+      color: #667eea;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.3s;
+      margin: 0 10px;
+      position: relative;
+    }
+    .menu-link:hover {
+      color: #764ba2;
+    }
+    .menu-link.active {
+      color: #764ba2;
+    }
+    .menu-link.active::after {
+      content: '';
+      position: absolute;
+      bottom: -5px;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 2px;
+    }
   </style>
 </head>
 <body>
-<div class="navbar">
-  <a href="/" class="navbar-brand">Spotify充值系统</a>
-  <div class="navbar-user">
-    <div class="user-dropdown">
-      <div class="user-info">
-        <div class="user-avatar">{{ username[0]|upper }}</div>
-        <span class="user-name">{{ username }}</span>
-        {% if is_admin %}
-          <span class="admin-badge">管理员</span>
-        {% endif %}
-      </div>
-      <div class="dropdown-menu">
-        <div class="dropdown-menu-header">账户信息</div>
-        {% if balance is defined %}
-        <div class="dropdown-menu-item">
-          <span>账户余额：</span>
-          <span class="{% if balance < 0 %}text-danger{% else %}text-success{% endif %}">
-            {{ balance }}{% if credit_limit is defined and credit_limit > 0 %} (额度：{{ credit_limit }}){% endif %}
-          </span>
-        </div>
-        {% endif %}
-        <div class="dropdown-divider"></div>
-        {% if is_admin %}
-          <a href="/admin" class="dropdown-menu-item">
-            <i class="fas fa-cog"></i>管理后台
-          </a>
-        {% endif %}
-        <a href="/" class="dropdown-menu-item">
-          <i class="fas fa-home"></i>返回首页
-        </a>
-        <a href="/logout" class="dropdown-menu-item danger">
-          <i class="fas fa-sign-out-alt"></i>退出登录
-        </a>
-      </div>
-    </div>
-    
-    {% if balance is defined %}
-    <div class="balance-badge {% if balance < 0 %}negative{% endif %}">
-      余额: {{ balance }}元{% if credit_limit is defined and credit_limit > 0 %} (额度: {{ credit_limit }}元){% endif %}
-    </div>
+<nav class="navbar">
+  <div class="navbar-brand">破天充值系统</div>
+  <div style="display: flex; align-items: center;">
+    <a href="/" class="menu-link">破天充值</a>
+    <a href="/youtube" class="menu-link">油管会员</a>
+    {% if is_admin or session.is_admin %}
+    <a href="/admin" class="menu-link">管理面板</a>
     {% endif %}
   </div>
-</div>
+  <div class="navbar-user">
+    {% if is_admin or session.is_admin %}
+    <div class="admin-badge">管理员</div>
+    {% endif %}
+    <div class="balance-badge {% if balance < 0 %}negative{% endif %}">
+      余额: {{ balance }}元
+      <a href="/recharge" class="recharge-btn">充值</a>
+    </div>
+    <a href="/logout" class="btn btn-danger" style="padding: 6px 12px; font-size: 12px;">退出</a>
+  </div>
+</nav>
 
 <div class="main-container">
   <div class="dashboard-container">

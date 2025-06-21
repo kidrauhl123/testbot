@@ -159,6 +159,32 @@
       margin-right: 3px;
     }
     
+    /* 菜单链接样式 */
+    .menu-link {
+      color: #667eea;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.3s;
+      margin: 0 10px;
+      position: relative;
+    }
+    .menu-link:hover {
+      color: #764ba2;
+    }
+    .menu-link.active {
+      color: #764ba2;
+    }
+    .menu-link.active::after {
+      content: '';
+      position: absolute;
+      bottom: -5px;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 2px;
+    }
+    
     .btn {
       border: none;
       padding: 10px 18px;
@@ -902,51 +928,18 @@
       text-align: right;
       font-style: italic;
     }
-
-    /* 功能按钮样式 */
-    .action-buttons {
-      display: flex;
-      gap: 10px;
-    }
-
-    .action-button {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      padding: 8px 15px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      background-color: rgba(0,0,0,0.05);
-      transition: all 0.2s;
-    }
-
-    .action-button:hover {
-      background-color: rgba(0,0,0,0.1);
-    }
-
-    .action-icon {
-      font-size: 18px;
-    }
-
-    .action-text {
-      font-size: 14px;
-      font-weight: 600;
-    }
-
-    .admin-button {
-      background-color: rgba(102,126,234,0.8);
-      color: white;
-    }
-
-    .admin-button:hover {
-      background-color: rgba(102,126,234,1);
-    }
   </style>
 </head>
 <body>
 <div class="navbar">
   <div class="navbar-brand">破天充值系统</div>
+  <div style="display: flex; align-items: center;">
+    <a href="/" class="menu-link active">破天充值</a>
+    <a href="/youtube" class="menu-link">油管会员</a>
+    {% if is_admin %}
+    <a href="/admin" class="menu-link">管理面板</a>
+    {% endif %}
+  </div>
   <div class="navbar-user">
     <div class="user-dropdown">
       <div class="user-info">
@@ -986,7 +979,6 @@
     <div id="balanceBadge" class="balance-badge {% if balance < 0 %}negative{% endif %}" style="cursor:pointer;">
       余额: {{ balance }} 元
       <a href="/recharge" class="recharge-btn">充值</a>
-      <a href="/youtube_recharge" class="recharge-btn" style="background: linear-gradient(135deg, #FF0000 0%, #CC0000 100%);">油管会员</a>
     </div>
     {% endif %}
   </div>

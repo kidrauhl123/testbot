@@ -87,11 +87,6 @@ def init_db():
     logger.info("正在创建激活码表...")
     create_activation_code_table()
     logger.info("激活码表创建完成")
-    
-    # 创建油管会员充值表
-    logger.info("正在创建油管会员充值表...")
-    create_youtube_recharge_table()
-    logger.info("油管会员充值表创建完成")
 
 def init_sqlite_db():
     """初始化SQLite数据库"""
@@ -121,6 +116,27 @@ def init_sqlite_db():
             accepted_by_first_name TEXT,
             notified INTEGER DEFAULT 0,
             web_user_id TEXT,
+            user_id INTEGER,
+            refunded INTEGER DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    """)
+    
+    # 油管会员充值表
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS youtube_orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            qrcode_path TEXT NOT NULL,
+            package TEXT NOT NULL DEFAULT '12',
+            remark TEXT,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            accepted_at TEXT,
+            completed_at TEXT,
+            accepted_by TEXT,
+            accepted_by_username TEXT,
+            accepted_by_first_name TEXT,
+            notified INTEGER DEFAULT 0,
             user_id INTEGER,
             refunded INTEGER DEFAULT 0,
             FOREIGN KEY (user_id) REFERENCES users (id)
@@ -2029,278 +2045,550 @@ def delete_user_custom_price(user_id, package):
         logger.error(f"删除用户定制价格失败: {str(e)}", exc_info=True)
         return False 
 
-def create_youtube_recharge_table():
-    """创建油管会员充值表"""
+def create_youtube_order_with_deduction_atomic(qrcode_path, package, remark, username, user_id):
+    """
+    原子性创建油管会员充值订单并扣款
+    
+    参数:
+    - qrcode_path: 上传的二维码图片路径
+    - package: 套餐类型
+    - remark: 备注
+    - username: 用户名
+    - user_id: 用户ID
+    
+    返回:
+    - (success, message, new_balance, credit_limit) 元组
+      success: 布尔值，表示操作是否成功
+      message: 字符串，结果消息
+      new_balance: 新的余额
+      credit_limit: 透支额度
+    """
+    try:
+        from modules.constants import YOUTUBE_PRICES
+        
+        # 获取套餐价格
+        package_price = get_user_package_price(user_id, package)
+        if package not in YOUTUBE_PRICES and not package_price:
+            logger.warning(f"创建油管会员充值订单失败: 无效的套餐类型 {package}")
+            return False, "无效的套餐类型", None, None
+        
+        # 如果没有定制价格，使用默认价格
+        price = package_price or YOUTUBE_PRICES.get(package, 0)
+        
+        # 检查用户余额
+        balance = get_user_balance(user_id)
+        credit_limit = get_user_credit_limit(user_id)
+        available_funds = balance + credit_limit
+        
+        if available_funds < price:
+            logger.warning(f"创建油管会员充值订单失败: 用户 {username} 余额不足，需要 {price}，现有 {available_funds}")
+            return False, f"余额不足，此套餐需要 {price} 元，您的账户余额 {balance} 元，透支额度 {credit_limit} 元", balance, credit_limit
+        
+        # 获取当前时间
+        now = get_china_time()
+        
+        # 在一个事务中完成所有数据库操作
+        if DATABASE_URL.startswith('postgres'):
+            conn = psycopg2.connect(DATABASE_URL)
+            conn.autocommit = False  # 开启事务
+        else:
+            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
+        
+        cursor = conn.cursor()
+        
+        try:
+            # 1. 插入订单记录
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("""
+                    INSERT INTO youtube_orders (qrcode_path, package, remark, status, created_at, user_id)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (qrcode_path, package, remark, STATUS['SUBMITTED'], now, user_id))
+                order_id = cursor.fetchone()[0]
+            else:
+                cursor.execute("""
+                    INSERT INTO youtube_orders (qrcode_path, package, remark, status, created_at, user_id)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (qrcode_path, package, remark, STATUS['SUBMITTED'], now, user_id))
+                order_id = cursor.lastrowid
+            
+            # 2. 扣除用户余额
+            new_balance = balance - price
+            
+            # 更新用户余额
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("UPDATE users SET balance = %s WHERE id = %s", (new_balance, user_id))
+            else:
+                cursor.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
+            
+            # 3. 添加余额变动记录
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("""
+                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (user_id, -price, 'consume', f"油管会员充值：{package}个月", order_id, new_balance, now))
+            else:
+                cursor.execute("""
+                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (user_id, -price, 'consume', f"油管会员充值：{package}个月", order_id, new_balance, now))
+            
+            # 提交事务
+            conn.commit()
+            
+            logger.info(f"油管会员充值订单创建成功: ID={order_id}, 用户={username}, 套餐={package}, 价格={price}")
+            return True, "订单创建成功", new_balance, credit_limit
+            
+        except Exception as e:
+            # 发生错误，回滚事务
+            conn.rollback()
+            logger.error(f"创建油管会员充值订单事务失败: {str(e)}", exc_info=True)
+            return False, f"订单创建失败: {str(e)}", balance, credit_limit
+        finally:
+            conn.close()
+            
+    except Exception as e:
+        logger.error(f"创建油管会员充值订单失败: {str(e)}", exc_info=True)
+        return False, f"订单创建失败: {str(e)}", None, None
+
+def get_youtube_orders(limit=10, offset=0, user_id=None):
+    """
+    获取油管会员充值订单记录
+    
+    参数:
+    - limit: 限制返回记录数量
+    - offset: 起始偏移量
+    - user_id: 用户ID，如果提供则只返回该用户的订单
+    
+    返回:
+    - 订单列表
+    """
+    try:
+        if user_id:
+            if DATABASE_URL.startswith('postgres'):
+                query = """
+                    SELECT yo.*, u.username
+                    FROM youtube_orders yo
+                    LEFT JOIN users u ON yo.user_id = u.id
+                    WHERE yo.user_id = %s
+                    ORDER BY yo.id DESC
+                    LIMIT %s OFFSET %s
+                """
+                result = execute_query(query, (user_id, limit, offset), fetch=True)
+            else:
+                query = """
+                    SELECT yo.*, u.username
+                    FROM youtube_orders yo
+                    LEFT JOIN users u ON yo.user_id = u.id
+                    WHERE yo.user_id = ?
+                    ORDER BY yo.id DESC
+                    LIMIT ? OFFSET ?
+                """
+                result = execute_query(query, (user_id, limit, offset), fetch=True)
+        else:
+            if DATABASE_URL.startswith('postgres'):
+                query = """
+                    SELECT yo.*, u.username
+                    FROM youtube_orders yo
+                    LEFT JOIN users u ON yo.user_id = u.id
+                    ORDER BY yo.id DESC
+                    LIMIT %s OFFSET %s
+                """
+                result = execute_query(query, (limit, offset), fetch=True)
+            else:
+                query = """
+                    SELECT yo.*, u.username
+                    FROM youtube_orders yo
+                    LEFT JOIN users u ON yo.user_id = u.id
+                    ORDER BY yo.id DESC
+                    LIMIT ? OFFSET ?
+                """
+                result = execute_query(query, (limit, offset), fetch=True)
+        
+        return result
+    except Exception as e:
+        logger.error(f"获取油管会员充值订单失败: {str(e)}", exc_info=True)
+        return []
+
+def get_youtube_order_details(oid):
+    """
+    获取油管会员充值订单详情
+    
+    参数:
+    - oid: 订单ID
+    
+    返回:
+    - 订单详情
+    """
     try:
         if DATABASE_URL.startswith('postgres'):
-            # 检查表是否存在
-            table_exists = execute_query("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
-                    AND table_name = 'youtube_recharge'
-                )
-            """, fetch=True)
-            
-            if not table_exists or not table_exists[0][0]:
-                execute_query("""
-                    CREATE TABLE youtube_recharge (
-                        id SERIAL PRIMARY KEY,
-                        user_id INTEGER NOT NULL,
-                        status TEXT NOT NULL,
-                        qrcode_image TEXT NOT NULL,
-                        remark TEXT,
-                        created_at TEXT NOT NULL,
-                        processed_at TEXT,
-                        processed_by TEXT,
-                        FOREIGN KEY (user_id) REFERENCES users (id)
-                    )
-                """)
-                logger.info("已创建油管会员充值表(PostgreSQL)")
+            query = """
+                SELECT yo.*, u.username
+                FROM youtube_orders yo
+                LEFT JOIN users u ON yo.user_id = u.id
+                WHERE yo.id = %s
+            """
+            result = execute_query(query, (oid,), fetch=True)
         else:
-            # SQLite连接
-            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            db_path = os.path.join(current_dir, "orders.db")
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            
-            # 检查表是否存在
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='youtube_recharge'")
-            if not cursor.fetchone():
-                cursor.execute("""
-                    CREATE TABLE youtube_recharge (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER NOT NULL,
-                        status TEXT NOT NULL,
-                        qrcode_image TEXT NOT NULL,
-                        remark TEXT,
-                        created_at TEXT NOT NULL,
-                        processed_at TEXT,
-                        processed_by TEXT,
-                        FOREIGN KEY (user_id) REFERENCES users (id)
-                    )
-                """)
-                conn.commit()
-                logger.info("已创建油管会员充值表(SQLite)")
-            
-            conn.close()
+            query = """
+                SELECT yo.*, u.username
+                FROM youtube_orders yo
+                LEFT JOIN users u ON yo.user_id = u.id
+                WHERE yo.id = ?
+            """
+            result = execute_query(query, (oid,), fetch=True)
+        
+        if result and len(result) > 0:
+            return result[0]
+        return None
     except Exception as e:
-        logger.error(f"创建油管会员充值表失败: {str(e)}", exc_info=True)
+        logger.error(f"获取油管会员充值订单详情失败: {str(e)}", exc_info=True)
+        return None
 
-def create_youtube_recharge_request(user_id, qrcode_image, remark=None):
-    """创建油管会员充值请求"""
+def accept_youtube_order_atomic(oid, telegram_id):
+    """
+    卖家接单（原子操作）
+    
+    参数:
+    - oid: 订单ID
+    - telegram_id: 卖家Telegram ID
+    
+    返回:
+    - (success, message, order) 元组
+      success: 布尔值，表示操作是否成功
+      message: 字符串，结果消息
+      order: 订单数据（如果成功）
+    """
     try:
         # 获取当前时间
         now = get_china_time()
         
-        # 插入充值请求记录
+        # 在一个事务中完成所有数据库操作
         if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL需要使用RETURNING子句获取新ID
-            result = execute_query("""
-                INSERT INTO youtube_recharge (user_id, status, qrcode_image, remark, created_at)
-                VALUES (%s, %s, %s, %s, %s)
-                RETURNING id
-            """, (user_id, 'pending', qrcode_image, remark, now), fetch=True)
-            request_id = result[0][0]
+            conn = psycopg2.connect(DATABASE_URL)
+            conn.autocommit = False  # 开启事务
         else:
-            # SQLite可以直接获取lastrowid
             conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO youtube_recharge (user_id, status, qrcode_image, remark, created_at)
-                VALUES (?, ?, ?, ?, ?)
-            """, (user_id, 'pending', qrcode_image, remark, now))
-            request_id = cursor.lastrowid
+        
+        cursor = conn.cursor()
+        
+        try:
+            # 1. 检查订单是否存在且状态为已提交
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("SELECT status FROM youtube_orders WHERE id = %s", (oid,))
+            else:
+                cursor.execute("SELECT status FROM youtube_orders WHERE id = ?", (oid,))
+            
+            result = cursor.fetchone()
+            if not result:
+                conn.close()
+                return False, f"订单 #{oid} 不存在", None
+            
+            status = result[0]
+            if status != STATUS['SUBMITTED']:
+                conn.close()
+                return False, f"订单 #{oid} 状态为 {status}，无法接单", None
+            
+            # 2. 获取接单者的信息
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("SELECT username, first_name FROM sellers WHERE telegram_id = %s", (telegram_id,))
+            else:
+                cursor.execute("SELECT username, first_name FROM sellers WHERE telegram_id = ?", (telegram_id,))
+            
+            seller_result = cursor.fetchone()
+            if not seller_result:
+                username = None
+                first_name = None
+            else:
+                username, first_name = seller_result
+            
+            # 3. 更新订单状态
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("""
+                    UPDATE youtube_orders 
+                    SET status = %s, accepted_at = %s, accepted_by = %s, accepted_by_username = %s, accepted_by_first_name = %s
+                    WHERE id = %s
+                """, (STATUS['ACCEPTED'], now, telegram_id, username, first_name, oid))
+            else:
+                cursor.execute("""
+                    UPDATE youtube_orders 
+                    SET status = ?, accepted_at = ?, accepted_by = ?, accepted_by_username = ?, accepted_by_first_name = ?
+                    WHERE id = ?
+                """, (STATUS['ACCEPTED'], now, telegram_id, username, first_name, oid))
+            
+            # 4. 获取更新后的订单信息
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("""
+                    SELECT yo.*, u.username as web_username
+                    FROM youtube_orders yo
+                    LEFT JOIN users u ON yo.user_id = u.id
+                    WHERE yo.id = %s
+                """, (oid,))
+            else:
+                cursor.execute("""
+                    SELECT yo.*, u.username as web_username
+                    FROM youtube_orders yo
+                    LEFT JOIN users u ON yo.user_id = u.id
+                    WHERE yo.id = ?
+                """, (oid,))
+            
+            updated_order = cursor.fetchone()
+            
+            # 提交事务
             conn.commit()
+            
+            logger.info(f"油管会员充值订单接单成功: ID={oid}, 卖家={telegram_id}")
+            return True, "接单成功", updated_order
+            
+        except Exception as e:
+            # 发生错误，回滚事务
+            conn.rollback()
+            logger.error(f"油管会员充值订单接单事务失败: {str(e)}", exc_info=True)
+            return False, f"接单失败: {str(e)}", None
+        finally:
             conn.close()
             
-        return request_id, True, "油管会员充值请求已提交"
     except Exception as e:
-        logger.error(f"创建油管会员充值请求失败: {str(e)}", exc_info=True)
-        return None, False, f"创建油管会员充值请求失败: {str(e)}"
+        logger.error(f"油管会员充值订单接单失败: {str(e)}", exc_info=True)
+        return False, f"接单失败: {str(e)}", None
 
-def get_user_youtube_recharge_requests(user_id):
-    """获取用户的油管会员充值请求记录"""
+def complete_youtube_order(oid):
+    """
+    完成油管会员充值订单
+    
+    参数:
+    - oid: 订单ID
+    
+    返回:
+    - 是否成功
+    """
     try:
-        if DATABASE_URL.startswith('postgres'):
-            requests = execute_query("""
-                SELECT id, user_id, status, qrcode_image, remark, created_at, processed_at
-                FROM youtube_recharge
-                WHERE user_id = %s
-                ORDER BY created_at DESC
-            """, (user_id,), fetch=True)
-        else:
-            requests = execute_query("""
-                SELECT id, user_id, status, qrcode_image, remark, created_at, processed_at
-                FROM youtube_recharge
-                WHERE user_id = ?
-                ORDER BY created_at DESC
-            """, (user_id,), fetch=True)
+        now = get_china_time()
         
-        return requests
-    except Exception as e:
-        logger.error(f"获取用户油管会员充值请求失败: {str(e)}", exc_info=True)
-        return []
-
-def get_pending_youtube_recharge_requests():
-    """获取所有待处理的油管会员充值请求"""
-    try:
         if DATABASE_URL.startswith('postgres'):
-            requests = execute_query("""
-                SELECT y.id, y.user_id, y.status, y.qrcode_image, y.remark, y.created_at, u.username
-                FROM youtube_recharge y
-                JOIN users u ON y.user_id = u.id
-                WHERE y.status = %s
-                ORDER BY y.created_at ASC
-            """, ('pending',), fetch=True)
-        else:
-            requests = execute_query("""
-                SELECT y.id, y.user_id, y.status, y.qrcode_image, y.remark, y.created_at, u.username
-                FROM youtube_recharge y
-                JOIN users u ON y.user_id = u.id
-                WHERE y.status = ?
-                ORDER BY y.created_at ASC
-            """, ('pending',), fetch=True)
-        
-        return requests
-    except Exception as e:
-        logger.error(f"获取待处理油管会员充值请求失败: {str(e)}", exc_info=True)
-        return []
-
-def approve_youtube_recharge_request(request_id, admin_id):
-    """批准油管会员充值请求"""
-    try:
-        # 获取充值请求详情
-        if DATABASE_URL.startswith('postgres'):
-            request = execute_query("""
-                SELECT user_id
-                FROM youtube_recharge
+            execute_query("""
+                UPDATE youtube_orders 
+                SET status = %s, completed_at = %s
                 WHERE id = %s AND status = %s
-            """, (request_id, 'pending'), fetch=True)
+            """, (STATUS['COMPLETED'], now, oid, STATUS['ACCEPTED']))
         else:
-            request = execute_query("""
-                SELECT user_id
-                FROM youtube_recharge
+            execute_query("""
+                UPDATE youtube_orders 
+                SET status = ?, completed_at = ?
                 WHERE id = ? AND status = ?
-            """, (request_id, 'pending'), fetch=True)
+            """, (STATUS['COMPLETED'], now, oid, STATUS['ACCEPTED']))
         
-        if not request:
-            return False, "油管会员充值请求不存在或已处理"
-            
-        user_id = request[0][0]
+        logger.info(f"油管会员充值订单完成: ID={oid}")
+        return True
+    except Exception as e:
+        logger.error(f"完成油管会员充值订单失败: {str(e)}", exc_info=True)
+        return False
+
+def fail_youtube_order(oid, reason="Unknown reason"):
+    """
+    标记油管会员充值订单失败
+    
+    参数:
+    - oid: 订单ID
+    - reason: 失败原因
+    
+    返回:
+    - 是否成功
+    """
+    try:
+        now = get_china_time()
         
-        # 不需要导入价格，因为这里只是更改状态，不涉及余额更新
-        # 如果将来需要更新用户余额，可以在这里添加相关逻辑
+        if DATABASE_URL.startswith('postgres'):
+            execute_query("""
+                UPDATE youtube_orders 
+                SET status = %s, completed_at = %s, remark = CASE WHEN remark IS NULL OR remark = '' THEN %s ELSE remark || ' | ' || %s END
+                WHERE id = %s AND status = %s
+            """, (STATUS['FAILED'], now, reason, reason, oid, STATUS['ACCEPTED']))
+        else:
+            execute_query("""
+                UPDATE youtube_orders 
+                SET status = ?, completed_at = ?, remark = CASE WHEN remark IS NULL OR remark = '' THEN ? ELSE remark || ' | ' || ? END
+                WHERE id = ? AND status = ?
+            """, (STATUS['FAILED'], now, reason, reason, oid, STATUS['ACCEPTED']))
         
-        # 开始事务
-        conn = None
+        logger.info(f"油管会员充值订单失败: ID={oid}, 原因={reason}")
+        return True
+    except Exception as e:
+        logger.error(f"标记油管会员充值订单失败时出错: {str(e)}", exc_info=True)
+        return False
+
+def refund_youtube_order(order_id):
+    """
+    退款油管会员充值订单
+    
+    参数:
+    - order_id: 订单ID
+    
+    返回:
+    - (success, message, new_balance) 元组
+      success: 布尔值，表示操作是否成功
+      message: 字符串，结果消息
+      new_balance: 新的余额
+    """
+    try:
+        # 获取订单信息
+        if DATABASE_URL.startswith('postgres'):
+            order = execute_query("""
+                SELECT yo.*, u.username, u.id as user_id
+                FROM youtube_orders yo
+                LEFT JOIN users u ON yo.user_id = u.id
+                WHERE yo.id = %s
+            """, (order_id,), fetch=True)
+        else:
+            order = execute_query("""
+                SELECT yo.*, u.username, u.id as user_id
+                FROM youtube_orders yo
+                LEFT JOIN users u ON yo.user_id = u.id
+                WHERE yo.id = ?
+            """, (order_id,), fetch=True)
+        
+        if not order or len(order) == 0:
+            return False, f"订单 #{order_id} 不存在", None
+        
+        order = order[0]
+        
+        # 检查订单是否已退款
+        if order[13] == 1:  # refunded字段
+            return False, f"订单 #{order_id} 已经退款", None
+        
+        # 计算退款金额
+        from modules.constants import YOUTUBE_PRICES
+        package = order[2]  # package字段
+        user_id = order[12]  # user_id字段
+        
+        # 获取用户定制价格或默认价格
+        package_price = get_user_package_price(user_id, package)
+        refund_amount = package_price or YOUTUBE_PRICES.get(package, 0)
+        
+        # 获取当前余额
+        current_balance = get_user_balance(user_id)
+        
+        # 在一个事务中完成所有数据库操作
         if DATABASE_URL.startswith('postgres'):
             conn = psycopg2.connect(DATABASE_URL)
-            conn.autocommit = False
+            conn.autocommit = False  # 开启事务
         else:
-            # 使用绝对路径访问数据库
-            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            db_path = os.path.join(current_dir, "orders.db")
-            conn = sqlite3.connect(db_path)
+            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
+        
+        cursor = conn.cursor()
         
         try:
-            cursor = conn.cursor()
+            # 1. 更新用户余额
+            new_balance = current_balance + refund_amount
+            
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("UPDATE users SET balance = %s WHERE id = %s", (new_balance, user_id))
+            else:
+                cursor.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
+            
+            # 2. 标记订单为已退款
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("UPDATE youtube_orders SET refunded = 1 WHERE id = %s", (order_id,))
+            else:
+                cursor.execute("UPDATE youtube_orders SET refunded = 1 WHERE id = ?", (order_id,))
+            
+            # 3. 添加余额变动记录
             now = get_china_time()
             
-            # 更新充值请求状态
             if DATABASE_URL.startswith('postgres'):
                 cursor.execute("""
-                    UPDATE youtube_recharge
-                    SET status = %s, processed_at = %s, processed_by = %s
-                    WHERE id = %s
-                """, ('approved', now, admin_id, request_id))
-                
+                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (user_id, refund_amount, 'refund', f"油管会员充值退款：订单 #{order_id}", order_id, new_balance, now))
             else:
                 cursor.execute("""
-                    UPDATE youtube_recharge
-                    SET status = ?, processed_at = ?, processed_by = ?
-                    WHERE id = ?
-                """, ('approved', now, admin_id, request_id))
+                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (user_id, refund_amount, 'refund', f"油管会员充值退款：订单 #{order_id}", order_id, new_balance, now))
             
             # 提交事务
             conn.commit()
             
-            return True, "已成功批准油管会员充值"
+            logger.info(f"油管会员充值订单退款成功: ID={order_id}, 用户ID={user_id}, 金额={refund_amount}, 新余额={new_balance}")
+            return True, f"退款成功：¥{refund_amount}", new_balance
+            
         except Exception as e:
-            # 回滚事务
-            if conn:
-                conn.rollback()
-            logger.error(f"批准油管会员充值请求失败: {str(e)}", exc_info=True)
-            return False, f"批准油管会员充值请求失败: {str(e)}"
+            # 发生错误，回滚事务
+            conn.rollback()
+            logger.error(f"油管会员充值订单退款事务失败: {str(e)}", exc_info=True)
+            return False, f"退款失败: {str(e)}", current_balance
         finally:
-            if conn:
-                conn.close()
+            conn.close()
+            
     except Exception as e:
-        logger.error(f"批准油管会员充值请求失败: {str(e)}", exc_info=True)
-        return False, f"批准油管会员充值请求失败: {str(e)}"
+        logger.error(f"油管会员充值订单退款失败: {str(e)}", exc_info=True)
+        return False, f"退款失败: {str(e)}", None
 
-def reject_youtube_recharge_request(request_id, admin_id):
-    """拒绝油管会员充值请求"""
+def get_unnotified_youtube_orders():
+    """获取所有未通知的油管会员充值订单"""
     try:
-        # 获取充值请求详情
         if DATABASE_URL.startswith('postgres'):
-            request = execute_query("""
-                SELECT user_id
-                FROM youtube_recharge
-                WHERE id = %s AND status = %s
-            """, (request_id, 'pending'), fetch=True)
+            result = execute_query("""
+                SELECT yo.*, u.username
+                FROM youtube_orders yo
+                LEFT JOIN users u ON yo.user_id = u.id
+                WHERE yo.notified = 0 AND yo.status = %s
+                ORDER BY yo.id ASC
+            """, (STATUS['SUBMITTED'],), fetch=True)
         else:
-            request = execute_query("""
-                SELECT user_id
-                FROM youtube_recharge
-                WHERE id = ? AND status = ?
-            """, (request_id, 'pending'), fetch=True)
+            result = execute_query("""
+                SELECT yo.*, u.username
+                FROM youtube_orders yo
+                LEFT JOIN users u ON yo.user_id = u.id
+                WHERE yo.notified = 0 AND yo.status = ?
+                ORDER BY yo.id ASC
+            """, (STATUS['SUBMITTED'],), fetch=True)
         
-        if not request:
-            return False, "油管会员充值请求不存在或已处理"
-        
-        # 开始事务
-        conn = None
+        return result
+    except Exception as e:
+        logger.error(f"获取未通知的油管会员充值订单失败: {str(e)}", exc_info=True)
+        return []
+
+def set_youtube_order_notified_atomic(oid):
+    """原子性地将油管会员充值订单标记为已通知"""
+    try:
         if DATABASE_URL.startswith('postgres'):
             conn = psycopg2.connect(DATABASE_URL)
-            conn.autocommit = False
+            conn.autocommit = False  # 开启事务
         else:
-            # 使用绝对路径访问数据库
-            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            db_path = os.path.join(current_dir, "orders.db")
-            conn = sqlite3.connect(db_path)
+            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
+        
+        cursor = conn.cursor()
         
         try:
-            cursor = conn.cursor()
-            now = get_china_time()
-            
-            # 更新充值请求状态
+            # 检查订单状态
             if DATABASE_URL.startswith('postgres'):
-                cursor.execute("""
-                    UPDATE youtube_recharge
-                    SET status = %s, processed_at = %s, processed_by = %s
-                    WHERE id = %s
-                """, ('rejected', now, admin_id, request_id))
+                cursor.execute("SELECT status FROM youtube_orders WHERE id = %s", (oid,))
             else:
-                cursor.execute("""
-                    UPDATE youtube_recharge
-                    SET status = ?, processed_at = ?, processed_by = ?
-                    WHERE id = ?
-                """, ('rejected', now, admin_id, request_id))
+                cursor.execute("SELECT status FROM youtube_orders WHERE id = ?", (oid,))
             
-            # 提交事务
-            conn.commit()
-            
-            return True, "已拒绝油管会员充值请求"
-        except Exception as e:
-            # 回滚事务
-            if conn:
-                conn.rollback()
-            logger.error(f"拒绝油管会员充值请求失败: {str(e)}", exc_info=True)
-            return False, f"拒绝油管会员充值请求失败: {str(e)}"
-        finally:
-            if conn:
+            result = cursor.fetchone()
+            if not result or result[0] != STATUS['SUBMITTED']:
+                # 订单不存在或状态不是已提交，不做更新
                 conn.close()
+                return False
+            
+            # 更新订单为已通知
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("UPDATE youtube_orders SET notified = 1 WHERE id = %s", (oid,))
+            else:
+                cursor.execute("UPDATE youtube_orders SET notified = 1 WHERE id = ?", (oid,))
+            
+            conn.commit()
+            return True
+            
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"标记油管会员充值订单为已通知失败: {str(e)}", exc_info=True)
+            return False
+        finally:
+            conn.close()
+            
     except Exception as e:
-        logger.error(f"拒绝油管会员充值请求失败: {str(e)}", exc_info=True)
-        return False, f"拒绝油管会员充值请求失败: {str(e)}"
+        logger.error(f"标记油管会员充值订单为已通知失败: {str(e)}", exc_info=True)
+        return False

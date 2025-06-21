@@ -12,11 +12,7 @@ import functools
 import sqlite3
 import traceback
 import psycopg2
-import queue
 from urllib.parse import urlparse
-
-# Telegram相关导入
-from telegram.ext import Updater
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -25,18 +21,17 @@ from telegram.ext import (
     ContextTypes,
     MessageHandler,
     CommandHandler,
-    filters,
-    CallbackContext
+    filters
 )
 
 from modules.constants import (
     BOT_TOKEN, STATUS, PLAN_LABELS_EN,
-    STATUS_TEXT_ZH, TG_PRICES, WEB_PRICES, SELLER_CHAT_IDS, DATABASE_URL, YOUTUBE_PRICE
+    STATUS_TEXT_ZH, TG_PRICES, WEB_PRICES, SELLER_CHAT_IDS, DATABASE_URL
 )
 from modules.database import (
     get_order_details, accept_order_atomic, execute_query, 
     get_unnotified_orders, get_active_seller_ids, approve_recharge_request, reject_recharge_request,
-    approve_youtube_recharge_request, reject_youtube_recharge_request
+    get_youtube_order_details, set_youtube_order_notified_atomic
 )
 
 # 设置日志
@@ -48,10 +43,6 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
-
-# 设置Python-telegram-bot库的日志级别
-logging.getLogger('telegram').setLevel(logging.INFO)
-logging.getLogger('httpx').setLevel(logging.WARNING)
 
 # 中国时区
 CN_TIMEZONE = pytz.timezone('Asia/Shanghai')
@@ -176,33 +167,8 @@ async def process_telegram_update_async(update_data, notification_queue):
         logger.info(f"正在处理webhook更新: {update.update_id}")
         print(f"DEBUG: 正在处理webhook更新: {update.update_id}")
         
-        # 手动处理回调查询
-        if update.callback_query:
-            logger.info(f"检测到回调查询: {update.callback_query.data}")
-            print(f"DEBUG: 检测到回调查询: {update.callback_query.data}")
-            
-            # 直接调用回调处理函数而不是通过application处理
-            # 创建一个简单的上下文对象，只包含我们需要的内容
-            class SimpleContext:
-                def __init__(self):
-                    self.bot = bot_application.bot
-                    
-            context = SimpleContext()
-            await on_callback_query(update, context)
-        else:
-            # 对于非回调查询的更新，将其放入队列等待处理
-            logger.info(f"非回调查询更新，放入队列: {update.update_id}")
-            print(f"DEBUG: 非回调查询更新，放入队列: {update.update_id}")
-            
-            # 模拟处理其他类型的更新
-            if update.message:
-                if update.message.text:
-                    if update.message.text.startswith('/'):
-                        logger.info(f"收到命令: {update.message.text}")
-                        print(f"DEBUG: 收到命令: {update.message.text}")
-                    else:
-                        logger.info(f"收到消息: {update.message.text}")
-                        print(f"DEBUG: 收到消息: {update.message.text}")
+        # 将更新分派给应用程序处理
+        await bot_application.process_update(update)
         
         logger.info(f"webhook更新 {update.update_id} 处理完成")
         print(f"DEBUG: webhook更新 {update.update_id} 处理完成")
@@ -210,7 +176,6 @@ async def process_telegram_update_async(update_data, notification_queue):
     except Exception as e:
         logger.error(f"处理webhook更新时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 处理webhook更新时出错: {str(e)}")
-        traceback.print_exc()
 
 def process_telegram_update(update_data, notification_queue):
     """处理来自Telegram webhook的更新（同步包装器）"""
@@ -1094,142 +1059,85 @@ async def show_all_stats(query, date_str, period_text):
 
 # ===== 推送通知 =====
 async def check_and_push_orders():
-    """检查并推送新订单"""
-    global bot_application
-    
+    """周期性检查未通知的订单并推送给卖家"""
     try:
-        if not bot_application:
-            logger.error("机器人未初始化，无法推送订单")
-            print("ERROR: 机器人未初始化，无法推送订单")
-            return
+        # 检查普通订单
+        from modules.database import get_unnotified_orders, set_order_notified_atomic
+        unnotified_orders = get_unnotified_orders()
         
-        # 获取未通知的订单
-        try:
-            unnotified_orders = get_unnotified_orders()
-            logger.debug(f"检索到 {len(unnotified_orders) if unnotified_orders else 0} 个未通知的订单")
-        except Exception as db_error:
-            logger.error(f"获取未通知订单时出错: {str(db_error)}", exc_info=True)
-            print(f"ERROR: 获取未通知订单时出错: {str(db_error)}")
-            return
+        if unnotified_orders:
+            logger.info(f"发现 {len(unnotified_orders)} 个未通知的订单")
+            print(f"DEBUG: 发现 {len(unnotified_orders)} 个未通知的订单")
             
-        if not unnotified_orders:
-            # 没有未通知的订单，直接返回
-            return
+            for order in unnotified_orders:
+                order_id = order[0]
+                account = order[1]
+                password = order[2]
+                package = order[3]
+                
+                # 构建通知数据
+                notification_data = {
+                    'type': 'new_order',
+                    'order_id': order_id,
+                    'account': account,
+                    'password': password,
+                    'package': package
+                }
+                
+                # 发送通知
+                await send_notification_from_queue(notification_data)
+                
+                # 等待一小段时间，避免消息发送太快
+                await asyncio.sleep(0.5)
         
-        # 获取活跃卖家
-        try:
-            seller_ids = get_active_seller_ids()
-            logger.debug(f"检索到 {len(seller_ids) if seller_ids else 0} 个活跃卖家")
-        except Exception as seller_error:
-            logger.error(f"获取活跃卖家时出错: {str(seller_error)}", exc_info=True)
-            print(f"ERROR: 获取活跃卖家时出错: {str(seller_error)}")
-            return
+        # 检查油管会员充值订单
+        from modules.database import get_unnotified_youtube_orders, set_youtube_order_notified_atomic
+        unnotified_youtube_orders = get_unnotified_youtube_orders()
+        
+        if unnotified_youtube_orders:
+            logger.info(f"发现 {len(unnotified_youtube_orders)} 个未通知的油管会员充值订单")
+            print(f"DEBUG: 发现 {len(unnotified_youtube_orders)} 个未通知的油管会员充值订单")
             
-        if not seller_ids:
-            logger.warning("没有活跃的卖家，无法推送订单")
-            print("WARNING: 没有活跃的卖家，无法推送订单")
-            return
-        
-        logger.info(f"找到 {len(seller_ids)} 个活跃卖家")
-        print(f"DEBUG: 找到 {len(seller_ids)} 个活跃卖家: {seller_ids}")
-        
-        for order in unnotified_orders:
-            try:
-                if len(order) < 6:
-                    logger.error(f"订单数据格式错误: {order}")
-                    print(f"ERROR: 订单数据格式错误: {order}")
-                    continue
-                    
-                oid, account, password, package, created_at, web_user_id = order
+            for order in unnotified_youtube_orders:
+                order_id = order[0]
                 
-                logger.info(f"准备推送订单 #{oid} 给卖家")
-                print(f"DEBUG: 准备推送订单 #{oid} 给卖家")
+                # 构建通知数据
+                notification_data = {
+                    'type': 'new_youtube_order',
+                    'order_id': order_id
+                }
                 
-                # 验证订单是否真实存在
-                if not check_order_exists(oid):
-                    logger.error(f"订单 #{oid} 不存在于数据库中，但出现在未通知列表中")
-                    print(f"ERROR: 订单 #{oid} 不存在于数据库中，但出现在未通知列表中")
-                    continue
+                # 发送通知
+                await send_notification_from_queue(notification_data)
                 
-                message = (
-                    f"📦 New Order #{oid}\n"
-                    f"Account: `{account}`\n"
-                    f"Package: {package} month(s)"
-                )
+                # 等待一小段时间，避免消息发送太快
+                await asyncio.sleep(0.5)
                 
-                # 创建接单按钮 - 确保callback_data格式正确
-                callback_data = f'accept_{oid}'
-                logger.info(f"创建接单按钮，callback_data: {callback_data}")
-                print(f"DEBUG: 创建接单按钮，callback_data: {callback_data}")
-                
-                keyboard = [[InlineKeyboardButton("Accept", callback_data=callback_data)]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                # 向所有卖家发送通知
-                success_count = 0
-                for seller_id in seller_ids:
-                    try:
-                        sent_message = await bot_application.bot.send_message(
-                            chat_id=seller_id, 
-                            text=message, 
-                            reply_markup=reply_markup,
-                            parse_mode='Markdown'
-                        )
-                        success_count += 1
-                        logger.info(f"成功向卖家 {seller_id} 推送订单 #{oid}, 消息ID: {sent_message.message_id}")
-                        print(f"DEBUG: 成功向卖家 {seller_id} 推送订单 #{oid}, 消息ID: {sent_message.message_id}")
-                    except Exception as e:
-                        logger.error(f"向卖家 {seller_id} 发送订单 #{oid} 通知失败: {str(e)}", exc_info=True)
-                        print(f"ERROR: 向卖家 {seller_id} 发送订单 #{oid} 通知失败: {str(e)}")
-                
-                if success_count > 0:
-                    # 只有成功推送给至少一个卖家时才标记为已通知
-                    try:
-                        execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
-                        logger.info(f"订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家")
-                        print(f"DEBUG: 订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家")
-                    except Exception as update_error:
-                        logger.error(f"更新订单 #{oid} 通知状态时出错: {str(update_error)}", exc_info=True)
-                        print(f"ERROR: 更新订单 #{oid} 通知状态时出错: {str(update_error)}")
-                else:
-                    logger.error(f"订单 #{oid} 未能成功推送给任何卖家")
-                    print(f"ERROR: 订单 #{oid} 未能成功推送给任何卖家")
-            except Exception as e:
-                logger.error(f"处理订单通知时出错: {str(e)}", exc_info=True)
-                print(f"ERROR: 处理订单通知时出错: {str(e)}")
     except Exception as e:
-        logger.error(f"检查并推送订单时出错: {str(e)}", exc_info=True)
-        print(f"ERROR: 检查并推送订单时出错: {str(e)}")
+        logger.error(f"检查未通知订单失败: {str(e)}", exc_info=True)
+        print(f"ERROR: 检查未通知订单失败: {str(e)}")
 
 # ===== 通知发送函数 =====
 async def send_notification_from_queue(data):
-    """根据队列中的数据发送通知"""
-    global bot_application
+    """根据队列数据发送通知"""
+    logger.info(f"处理通知队列数据: {data}")
+    print(f"DEBUG: 处理通知队列数据: {data}")
     
-    if not bot_application:
-        logger.error("机器人应用未初始化，无法发送通知")
-        return
-
-    try:
-        logger.info(f"处理通知: {data['type']}")
-        
-        if data['type'] == 'new_order':
-            await send_new_order_notification(data)
-        elif data['type'] == 'order_status_change':
-            await send_status_change_notification(data)
-        elif data['type'] == 'recharge_request':
-            await send_recharge_request_notification(data)
-        elif data['type'] == 'youtube_recharge_request':
-            await send_youtube_recharge_notification(data)
-        elif data['type'] == 'dispute':
-            await send_dispute_notification(data)
-        elif data['type'] == 'test':
-            await send_test_notification(data)
-        else:
-            logger.warning(f"未知的通知类型: {data['type']}")
-    except Exception as e:
-        logger.error(f"发送通知时出错: {str(e)}", exc_info=True)
-        traceback.print_exc()
+    notification_type = data.get('type')
+    
+    if notification_type == 'new_order':
+        await send_new_order_notification(data)
+    elif notification_type == 'status_change':
+        await send_status_change_notification(data)
+    elif notification_type == 'recharge_request':
+        await send_recharge_request_notification(data)
+    elif notification_type == 'dispute':
+        await send_dispute_notification(data)
+    elif notification_type == 'new_youtube_order':
+        await send_new_youtube_order_notification(data)
+    else:
+        logger.warning(f"未知的通知类型: {notification_type}")
+        print(f"WARNING: 未知的通知类型: {notification_type}")
 
 # ===== 推送通知函数 =====
 def set_order_notified_atomic(oid):
@@ -1364,24 +1272,24 @@ async def send_recharge_request_notification(data):
         
         logger.info(f"准备发送充值请求通知: 请求ID={request_id}, 用户={username}, 金额={amount}, 管理员ID={admin_id}")
         
-        # 构建消息文本 (英文)
+        # 构建消息文本
         message_text = (
-            f"📥 <b>New Recharge Request</b> #{request_id}\n\n"
-            f"👤 User: <code>{username}</code>\n"
-            f"💰 Amount: <b>{amount} CNY</b>\n"
-            f"💳 Payment Method: {payment_method}\n"
+            f"📥 <b>新充值请求</b> #{request_id}\n\n"
+            f"👤 用户: <code>{username}</code>\n"
+            f"💰 金额: <b>{amount} 元</b>\n"
+            f"💳 支付方式: {payment_method}\n"
         )
 
         if details:
-            message_text += f"💬 Details: <code>{details}</code>\n"
+            message_text += f"💬 详情: <code>{details}</code>\n"
 
-        message_text += f"⏰ Time: {get_china_time()}\n\n Please review this recharge request."
+        message_text += f"⏰ 时间: {get_china_time()}\n\n请审核此充值请求。"
         
-        # 创建审核按钮 (英文)
+        # 创建审核按钮
         keyboard = [
             [
-                InlineKeyboardButton("✅ Approve", callback_data=f"approve_recharge:{request_id}"),
-                InlineKeyboardButton("❌ Reject", callback_data=f"reject_recharge:{request_id}")
+                InlineKeyboardButton("✅ 批准", callback_data=f"approve_recharge:{request_id}"),
+                InlineKeyboardButton("❌ 拒绝", callback_data=f"reject_recharge:{request_id}")
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1416,7 +1324,7 @@ async def send_recharge_request_notification(data):
                         logger.info(f"已成功发送充值请求图片通知到管理员 {admin_id}")
                     except Exception as img_send_error:
                         logger.error(f"发送本地图片失败: {img_send_error}, 回退到纯文本通知", exc_info=True)
-                        message_text += f"\n\n⚠️ <i>Failed to send image. Please check the proof in the web admin interface.</i>"
+                        message_text += f"\n\n⚠️ <i>图片发送失败，请在网页管理界面查看凭证。</i>"
                         await bot_application.bot.send_message(
                             chat_id=admin_id,
                             text=message_text,
@@ -1425,7 +1333,7 @@ async def send_recharge_request_notification(data):
                         )
                 else:
                     logger.error(f"图片文件未找到: {local_image_path}, 回退到纯文本通知")
-                    message_text += f"\n\n⚠️ <i>Image proof file not found. Please check in the web admin interface.</i>"
+                    message_text += f"\n\n⚠️ <i>图片凭证文件未找到，请在网页管理界面查看。</i>"
                     await bot_application.bot.send_message(
                         chat_id=admin_id,
                         text=message_text,
@@ -1449,581 +1357,717 @@ async def send_recharge_request_notification(data):
         print(f"ERROR: 发送充值请求通知时出错: {str(e)}")
         traceback.print_exc()
 
-async def send_youtube_recharge_notification(data):
-    """发送油管会员充值请求通知到超级管理员"""
-    global bot_application
-    
-    try:
-        # 超级管理员的Telegram ID
-        admin_id = 1878943383
-        
-        # 获取充值请求详情
-        request_id = data.get('request_id')
-        username = data.get('username')
-        qrcode_image = data.get('qrcode_image')
-        remark = data.get('remark')
-        
-        logger.info(f"准备发送油管会员充值请求通知: 请求ID={request_id}, 用户={username}, 管理员ID={admin_id}")
-        
-        # 构建消息文本 (英文)
-        message_text = (
-            f"📺 <b>New YouTube Membership Request</b> #{request_id}\n\n"
-            f"👤 User: <code>{username}</code>\n"
-            f"💰 Amount: <b>{YOUTUBE_PRICE} CNY</b>\n"
-        )
-
-        if remark:
-            message_text += f"💬 Remarks: <code>{remark}</code>\n"
-
-        message_text += f"⏰ Time: {get_china_time()}\n\n Please scan the QR code and make payment."
-        
-        # 创建审核按钮 (英文)
-        keyboard = [
-            [
-                InlineKeyboardButton("✅ Paid", callback_data=f"approve_youtube:{request_id}"),
-                InlineKeyboardButton("❌ Reject", callback_data=f"reject_youtube:{request_id}")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        # 检查bot是否已初始化
-        if not bot_application or not bot_application.bot:
-            logger.error(f"无法发送油管会员充值请求通知: bot未初始化")
-            print(f"ERROR: 无法发送油管会员充值请求通知: bot未初始化")
-            return
-        
-        # 发送通知
-        try:
-            if qrcode_image:
-                # 判断部署环境
-                is_production = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('PRODUCTION')
-                if is_production:
-                    # 生产环境，可能在容器中运行，直接使用网络URL
-                    try:
-                        # 构建完整的网址
-                        host = os.environ.get('HOST_URL', 'http://localhost:5000')
-                        full_url = f"{host}{qrcode_image}"
-                        logger.info(f"生产环境：尝试使用网络URL发送图片: {full_url}")
-                        
-                        # 直接使用网络URL发送
-                        await bot_application.bot.send_photo(
-                            chat_id=admin_id,
-                            photo=full_url,
-                            caption=message_text,
-                            reply_markup=reply_markup,
-                            parse_mode='HTML'
-                        )
-                        logger.info(f"已成功使用网络URL发送油管会员充值请求图片通知到管理员 {admin_id}")
-                    except Exception as url_send_error:
-                        logger.error(f"使用网络URL发送图片失败: {url_send_error}, 尝试使用本地路径", exc_info=True)
-                        try_local_path = True
-                    else:
-                        try_local_path = False
-                else:
-                    try_local_path = True
-                    
-                # 如果需要尝试本地路径
-                if try_local_path:
-                    # 将URL路径转换为本地文件系统路径
-                    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                    relative_path = qrcode_image.lstrip('/')
-                    local_image_path = os.path.join(project_root, relative_path)
-                    
-                    logger.info(f"尝试从本地路径发送图片: {local_image_path}")
-                    
-                    if os.path.exists(local_image_path):
-                        try:
-                            # 直接发送图片文件
-                            with open(local_image_path, 'rb') as photo_file:
-                                await bot_application.bot.send_photo(
-                                    chat_id=admin_id,
-                                    photo=photo_file,
-                                    caption=message_text,
-                                    reply_markup=reply_markup,
-                                    parse_mode='HTML'
-                                )
-                            logger.info(f"已成功使用本地文件发送油管会员充值请求图片通知到管理员 {admin_id}")
-                        except Exception as img_send_error:
-                            logger.error(f"发送本地图片失败: {img_send_error}, 回退到纯文本通知", exc_info=True)
-                            message_text += f"\n\n⚠️ <i>Failed to send image. Please check the QR code in the web admin interface.</i>"
-                            await bot_application.bot.send_message(
-                                chat_id=admin_id,
-                                text=message_text,
-                                reply_markup=reply_markup,
-                                parse_mode='HTML'
-                            )
-                    else:
-                        logger.error(f"图片文件未找到: {local_image_path}, 回退到纯文本通知")
-                        message_text += f"\n\n⚠️ <i>QR code image file not found. Please check in the web admin interface. Image URL: {qrcode_image}</i>"
-                        await bot_application.bot.send_message(
-                            chat_id=admin_id,
-                            text=message_text,
-                            reply_markup=reply_markup,
-                            parse_mode='HTML'
-                        )
-                else:
-                    logger.error(f"图片文件未找到: {local_image_path}, 回退到纯文本通知")
-                    message_text += f"\n\n⚠️ <i>QR code image file not found. Please check in the web admin interface.</i>"
-                    await bot_application.bot.send_message(
-                        chat_id=admin_id,
-                        text=message_text,
-                        reply_markup=reply_markup,
-                        parse_mode='HTML'
-                    )
-            else:
-                # 如果没有二维码，只发送文本
-                message_text += f"\n\n⚠️ <i>No QR code provided. Please check details in the web admin interface.</i>"
-                await bot_application.bot.send_message(
-                    chat_id=admin_id,
-                    text=message_text,
-                    reply_markup=reply_markup,
-                    parse_mode='HTML'
-                )
-                logger.info(f"已成功发送无图片油管会员充值请求通知到管理员 {admin_id}")
-        except Exception as send_error:
-            logger.error(f"发送通知到管理员 {admin_id} 失败: {str(send_error)}", exc_info=True)
-            print(f"ERROR: 发送通知到管理员 {admin_id} 失败: {str(send_error)}")
-    except Exception as e:
-        logger.error(f"发送油管会员充值请求通知时出错: {str(e)}", exc_info=True)
-        print(f"ERROR: 发送油管会员充值请求通知时出错: {str(e)}")
-        traceback.print_exc()
-
 async def send_dispute_notification(data):
-    """发送订单质疑通知到超级管理员"""
+    """发送质疑订单通知到卖家"""
     global bot_application
-    
     try:
-        # 超级管理员的Telegram ID
-        admin_id = 1878943383
-        
-        # 获取订单详情
-        order_id = data.get('order_id')
-        username = data.get('username')
-        reason = data.get('reason')
-        
-        logger.info(f"准备发送订单质疑通知: 订单ID={order_id}, 用户={username}, 管理员ID={admin_id}")
-        
-        # 构建消息文本 (英文)
+        seller_id = data.get('seller_id')
+        oid = data.get('order_id')
+        account = data.get('account')
+        password = data.get('password')
+        package = data.get('package')
         message_text = (
-            f"⚠️ <b>Order Dispute</b> #{order_id}\n\n"
-            f"👤 User: <code>{username}</code>\n"
-            f"❓ Reason: {reason}\n"
-            f"⏰ Time: {get_china_time()}\n\n Please handle this dispute."
+            f"⚠️ <b>Order Dispute</b> ⚠️\n\n"
+            f"Order #{oid} has been disputed by the user.\n"
+            f"Account: <code>{account}</code>\n"
+            f"Password: <code>{password}</code>\n"
+            f"Package: {package} month(s)\n\n"
+            f"Please check and handle this order as soon as possible."
         )
         
-        # 创建处理按钮 (英文)
+        # 添加反馈按钮
         keyboard = [
             [
-                InlineKeyboardButton("View Order Details", callback_data=f"view_order:{order_id}")
+                InlineKeyboardButton("✅ Complete", callback_data=f"done_{oid}"),
+                InlineKeyboardButton("❌ Failed", callback_data=f"fail_{oid}")
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        # 发送通知
-        try:
-            await bot_application.bot.send_message(
-                chat_id=admin_id,
-                text=message_text,
-                reply_markup=reply_markup,
-                parse_mode='HTML'
-            )
-            logger.info(f"已成功发送订单质疑通知到管理员 {admin_id}")
-        except Exception as send_error:
-            logger.error(f"发送通知到管理员 {admin_id} 失败: {str(send_error)}", exc_info=True)
+        await bot_application.bot.send_message(
+            chat_id=seller_id,
+            text=message_text,
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
+        logger.info(f"已向卖家 {seller_id} 发送订单质疑通知 #{oid}")
     except Exception as e:
         logger.error(f"发送订单质疑通知时出错: {str(e)}", exc_info=True)
-        
-async def send_test_notification(data):
-    """发送测试通知到超级管理员，用于验证机器人是否正常运行"""
+
+async def send_new_youtube_order_notification(data):
+    """发送新的油管会员充值订单通知到所有卖家"""
     global bot_application
     
+    if not bot_application:
+        logger.error("机器人应用未初始化，无法发送通知")
+        print("ERROR: 机器人应用未初始化，无法发送通知")
+        return
+    
     try:
-        # 超级管理员的Telegram ID
-        admin_id = 1878943383
+        order_id = data.get('order_id')
         
-        # 构建消息文本 (英文)
-        message_text = (
-            f"🔄 <b>System Test Notification</b>\n\n"
-            f"⏰ Time: {data.get('timestamp', get_china_time())}\n"
-            f"💬 Message: {data.get('message', 'System running normally')}\n\n"
-            f"<i>This message is to verify the Telegram bot is working properly</i>"
-        )
+        # 从数据库中获取订单详情
+        order_details = get_youtube_order_details(order_id)
         
-        # 发送通知
-        try:
-            await bot_application.bot.send_message(
-                chat_id=admin_id,
-                text=message_text,
-                parse_mode='HTML'
-            )
-            logger.info(f"已成功发送测试通知到管理员 {admin_id}")
-        except Exception as send_error:
-            logger.error(f"发送测试通知到管理员 {admin_id} 失败: {str(send_error)}", exc_info=True)
+        if not order_details:
+            logger.error(f"无法获取油管会员充值订单 {order_id} 的详情，无法发送通知")
+            print(f"ERROR: 无法获取油管会员充值订单 {order_id} 的详情，无法发送通知")
+            return
+        
+        # 获取活跃的卖家列表
+        seller_ids = get_active_seller_ids()
+        if not seller_ids:
+            logger.warning(f"没有活跃的卖家，无法发送油管会员充值订单通知")
+            print(f"WARNING: 没有活跃的卖家，无法发送油管会员充值订单通知")
+            return
+        
+        # 构建二维码链接(订单表中存储的是路径)
+        # 原始路径: /static/uploads/xxx.jpg
+        # 完整URL: ${HOST_URL}/static/uploads/xxx.jpg
+        # 由于不确定HOST_URL，这里只使用相对路径，让前端处理
+        qrcode_path = order_details[1]  # qrcode_path字段
+        # 移除掉可能的前导斜杠
+        qrcode_path = qrcode_path.lstrip('/')
+        
+        # 构建通知消息
+        message = f"💼 *NEW YOUTUBE PREMIUM ORDER #{order_id}*\n\n"
+        message += f"📦 *Package*: YouTube Premium 1 Year\n"
+        message += f"⏱ *Created at*: {order_details[5]}\n"  # created_at字段
+        if order_details[3]:  # remark字段
+            message += f"📝 *Remark*: {order_details[3]}\n"
+        message += "\n*Please check the QR Code below and scan it to process this order.*"
+        
+        # 创建操作按钮
+        keyboard = [
+            [
+                InlineKeyboardButton("Accept", callback_data=f"yt_accept:{order_id}"),
+                InlineKeyboardButton("Reject", callback_data=f"yt_reject:{order_id}")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        # 发送通知给所有卖家
+        sent_count = 0
+        for seller_id in seller_ids:
+            try:
+                # 检查是否是管理员卖家
+                is_admin = is_admin_seller(seller_id)
+                
+                # 先发送文本消息
+                await bot_application.bot.send_message(
+                    chat_id=seller_id,
+                    text=message,
+                    parse_mode="Markdown",
+                    reply_markup=reply_markup
+                )
+                
+                # 再单独发送二维码图片
+                with open(f"./{qrcode_path}", 'rb') as photo:
+                    await bot_application.bot.send_photo(
+                        chat_id=seller_id,
+                        photo=photo,
+                        caption=f"QR Code for Order #{order_id}"
+                    )
+                
+                sent_count += 1
+                
+                logger.info(f"已向卖家 {seller_id} 发送油管会员充值订单 #{order_id} 通知")
+                print(f"DEBUG: 已向卖家 {seller_id} 发送油管会员充值订单 #{order_id} 通知")
+            except Exception as e:
+                logger.error(f"向卖家 {seller_id} 发送油管会员充值订单通知失败: {str(e)}", exc_info=True)
+                print(f"ERROR: 向卖家 {seller_id} 发送油管会员充值订单通知失败: {str(e)}")
+        
+        if sent_count > 0:
+            # 标记订单为已通知
+            if set_youtube_order_notified_atomic(order_id):
+                logger.info(f"油管会员充值订单 #{order_id} 已标记为已通知")
+                print(f"DEBUG: 油管会员充值订单 #{order_id} 已标记为已通知")
+            else:
+                logger.warning(f"标记油管会员充值订单 #{order_id} 为已通知失败")
+                print(f"WARNING: 标记油管会员充值订单 #{order_id} 为已通知失败")
+        else:
+            logger.warning(f"未向任何卖家发送油管会员充值订单 #{order_id} 通知")
+            print(f"WARNING: 未向任何卖家发送油管会员充值订单 #{order_id} 通知")
     except Exception as e:
-        logger.error(f"发送测试通知时出错: {str(e)}", exc_info=True)
+        logger.error(f"发送油管会员充值订单通知失败: {str(e)}", exc_info=True)
+        print(f"ERROR: 发送油管会员充值订单通知失败: {str(e)}")
 
 # ===== 主函数 =====
-async def initialize_application():
-    """异步初始化Application对象"""
-    global bot_application
-    
-    try:
-        # 初始化机器人 - 使用初始化方法
-        builder = ApplicationBuilder().token(BOT_TOKEN)
-        bot_application = builder.build()
-        
-        # 手动调用初始化方法，确保应用程序可以处理更新
-        await bot_application.initialize()
-        logger.info("Application成功初始化")
-        print("DEBUG: Application成功初始化")
-        
-        # 注册处理器
-        bot_application.add_handler(CommandHandler("test", on_test))
-        bot_application.add_handler(CommandHandler("start", on_start))
-        bot_application.add_handler(CommandHandler("admin", on_admin_command))
-        bot_application.add_handler(CommandHandler("stats", on_stats))
-        bot_application.add_handler(CallbackQueryHandler(on_callback_query))
-        bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
-        
-        logger.info("处理器已注册")
-        print("DEBUG: 处理器已注册")
-        
-        return True
-    except Exception as e:
-        logger.error(f"初始化应用失败: {str(e)}", exc_info=True)
-        print(f"ERROR: 初始化应用失败: {str(e)}")
-        traceback.print_exc()
-        return False
-
 def run_bot(notification_queue):
     """在一个新事件循环中运行Telegram机器人"""
-    global BOT_LOOP, bot_application
+    global BOT_LOOP
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    BOT_LOOP = loop  # 保存主事件循环
+    loop.run_until_complete(bot_main(notification_queue))
+
+
+async def bot_main(notification_queue):
+    """机器人的主异步函数"""
+    global bot_application
     
-    # 初始化应用
+    logger.info("正在启动Telegram机器人...")
+    print("DEBUG: 正在启动Telegram机器人...")
+    
     try:
-        # 创建一个新的事件循环
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        BOT_LOOP = loop
+        # 初始化，增加连接池大小和超时设置
+        bot_application = (
+            ApplicationBuilder()
+            .token(BOT_TOKEN)
+            .connection_pool_size(16)
+            .connect_timeout(30.0)
+            .read_timeout(30.0)
+            .write_timeout(30.0)
+            .pool_timeout(30.0)
+            .build()
+        )
         
-        # 在事件循环中异步初始化应用
-        init_task = asyncio.run_coroutine_threadsafe(initialize_application(), loop)
+        logger.info("Telegram机器人应用已构建")
+        print("DEBUG: Telegram机器人应用已构建")
+        print(f"DEBUG: 使用的BOT_TOKEN: {BOT_TOKEN[:5]}...{BOT_TOKEN[-5:]}")
+        
+        # 添加处理程序
+        bot_application.add_handler(CommandHandler("start", on_start))
+        bot_application.add_handler(CommandHandler("seller", on_admin_command))
+        bot_application.add_handler(CommandHandler("stats", on_stats))
+        
+        # 添加测试命令处理程序
+        bot_application.add_handler(CommandHandler("test", on_test))
+        print("DEBUG: 已添加测试命令处理程序")
+        
+        # 添加回调处理程序，确保正确处理各种回调
+        accept_handler = CallbackQueryHandler(on_accept, pattern="^accept_")
+        bot_application.add_handler(accept_handler)
+        print(f"DEBUG: 已添加接单回调处理程序: {accept_handler}")
+        
+        feedback_handler = CallbackQueryHandler(on_feedback_button, pattern="^(done|fail|reason)_")
+        bot_application.add_handler(feedback_handler)
+        
+        stats_handler = CallbackQueryHandler(on_stats_callback, pattern="^stats_")
+        bot_application.add_handler(stats_handler)
+        
+        # 添加充值请求回调处理程序
+        recharge_handler = CallbackQueryHandler(on_callback_query)
+        bot_application.add_handler(recharge_handler)
+        print(f"DEBUG: 已添加通用回调处理程序: {recharge_handler}")
+        
+        # 添加文本消息处理程序
+        bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+        
+        logger.info("已添加所有处理程序")
+        print("DEBUG: 已添加所有处理程序")
+        
+        # 添加错误处理程序
+        bot_application.add_error_handler(error_handler)
+
+        # 初始化应用
+        logger.info("初始化Telegram应用...")
+        await bot_application.initialize()
+        
+        # 获取Railway应用URL
+        railway_url = os.environ.get('RAILWAY_STATIC_URL')
+        if not railway_url:
+            railway_url = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
+            if railway_url:
+                railway_url = f"https://{railway_url}"
+        
+        # 总是尝试设置 Webhook，因为我们是在 Web 应用中运行
+        if railway_url:
+            webhook_url = f"{railway_url}/telegram-webhook"
+            logger.info(f"设置 Telegram webhook: {webhook_url}")
+            print(f"DEBUG: 设置 Telegram webhook: {webhook_url}")
+            await bot_application.bot.set_webhook(
+                url=webhook_url,
+                allowed_updates=Update.ALL_TYPES
+            )
+        else:
+            logger.warning("无法获取公开URL，未设置webhook。机器人可能无法接收更新。")
+
+        # 启动后台任务
+        logger.info("启动后台任务...")
+        asyncio.create_task(periodic_order_check())
+        asyncio.create_task(process_notification_queue(notification_queue))
+        
+        logger.info("Telegram机器人主循环已启动，等待更新...")
+        print("DEBUG: Telegram机器人主循环已启动，等待更新...")
+        
+        # 保持此协程运行以使后台任务可以执行
+        while True:
+            await asyncio.sleep(3600) # 每小时唤醒一次，但主要目的是保持运行
+
+    except Exception as e:
+        logger.critical(f"Telegram机器人主函数 `bot_main` 发生严重错误: {str(e)}", exc_info=True)
+        print(f"CRITICAL: Telegram机器人主函数 `bot_main` 发生严重错误: {str(e)}")
+
+# 添加错误处理函数
+async def error_handler(update, context):
+    """处理Telegram机器人的错误"""
+    logger.error(f"Telegram机器人发生错误: {context.error}", exc_info=context.error)
+    print(f"ERROR: Telegram机器人发生错误: {context.error}")
+    
+    # 尝试获取错误来源
+    if update:
+        if update.effective_message:
+            logger.error(f"错误发生在消息: {update.effective_message.text}")
+            print(f"ERROR: 错误发生在消息: {update.effective_message.text}")
+        elif update.callback_query:
+            logger.error(f"错误发生在回调查询: {update.callback_query.data}")
+            print(f"ERROR: 错误发生在回调查询: {update.callback_query.data}")
+    
+    # 如果是回调查询错误，尝试回复用户
+    try:
+        if update and update.callback_query:
+            await update.callback_query.answer("An error occurred. Please try again later.", show_alert=True)
+    except Exception as e:
+        logger.error(f"尝试回复错误通知失败: {str(e)}")
+        print(f"ERROR: 尝试回复错误通知失败: {str(e)}")
+
+async def periodic_order_check():
+    """定期检查新订单的任务"""
+    check_count = 0
+    while True:
         try:
-            init_success = init_task.result(timeout=10)  # 等待初始化完成，最多10秒
-            if not init_success:
-                logger.error("初始化应用失败")
-                print("ERROR: 初始化应用失败")
-                return False
+            logger.debug(f"执行第 {check_count + 1} 次订单检查")
+            await check_and_push_orders()
+            await cleanup_processing_accepts()
+            check_count += 1
         except Exception as e:
-            logger.error(f"等待应用初始化时发生错误: {str(e)}", exc_info=True)
-            print(f"ERROR: 等待应用初始化时发生错误: {str(e)}")
-            traceback.print_exc()
+            logger.error(f"订单检查任务出错: {e}", exc_info=True)
+        
+        await asyncio.sleep(5) # 每5秒检查一次
+
+
+async def process_notification_queue(queue):
+    """处理来自Flask的通知队列"""
+    loop = asyncio.get_running_loop()
+    while True:
+        try:
+            # 在执行器中运行阻塞的 queue.get()，这样不会阻塞事件循环
+            data = await loop.run_in_executor(None, queue.get)
+            logger.info(f"从队列中获取到通知任务: {data.get('type')}")
+            await send_notification_from_queue(data)
+            queue.task_done()
+        except asyncio.CancelledError:
+            logger.info("通知队列处理器被取消。")
+            break
+        except Exception as e:
+            # 捕获并记录所有其他异常
+            logger.error(f"处理通知队列任务时发生未知错误: {repr(e)}", exc_info=True)
+            # 等待一会避免在持续出错时刷屏
+            await asyncio.sleep(5)
+    
+def run_bot_in_thread():
+    """在单独的线程中运行机器人"""
+    # 这个函数现在可以被废弃或重构，因为启动逻辑已移至app.py
+    logger.warning("run_bot_in_thread 已被调用，但可能已废弃。")
+    pass
+
+def restricted(func):
+    """限制只有卖家才能访问的装饰器"""
+    async def wrapped(update, context, *args, **kwargs):
+        user_id = update.effective_user.id
+        if not is_seller(user_id):
+            logger.warning(f"未经授权的访问: {user_id}")
+            await update.message.reply_text("Sorry, you are not authorized to use this bot.")
+    return wrapped 
+
+def get_order_by_id(order_id):
+    """根据ID获取订单信息"""
+    try:
+        conn = get_db_connection()
+        if not conn:
+            logger.error(f"获取订单 {order_id} 信息时无法获取数据库连接")
+            print(f"ERROR: 获取订单 {order_id} 信息时无法获取数据库连接")
+            return None
+            
+        cursor = conn.cursor()
+        
+        # 根据数据库类型执行不同的查询
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL使用%s作为占位符
+            cursor.execute("SELECT * FROM orders WHERE id = %s", (order_id,))
+            order = cursor.fetchone()
+            
+            if order:
+                # 将结果转换为字典
+                columns = [desc[0] for desc in cursor.description]
+                result = {columns[i]: order[i] for i in range(len(columns))}
+                conn.close()
+                return result
+        else:
+            # SQLite
+            cursor.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
+            order = cursor.fetchone()
+            
+            if order:
+                # 将结果转换为字典
+                columns = [column[0] for column in cursor.description]
+                result = {columns[i]: order[i] for i in range(len(columns))}
+                conn.close()
+                return result
+                
+        conn.close()
+        return None
+    except Exception as e:
+        logger.error(f"获取订单 {order_id} 信息时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 获取订单 {order_id} 信息时出错: {str(e)}")
+        return None
+
+def check_order_exists(order_id):
+    """检查数据库中是否存在指定ID的订单"""
+    try:
+        conn = get_db_connection()
+        if not conn:
+            logger.error(f"检查订单 {order_id} 存在性时无法获取数据库连接")
+            print(f"ERROR: 检查订单 {order_id} 存在性时无法获取数据库连接")
             return False
+            
+        cursor = conn.cursor()
+        logger.info(f"正在检查订单ID={order_id}是否存在...")
+        print(f"DEBUG: 正在检查订单ID={order_id}是否存在...")
         
-        logger.info("Telegram机器人应用已初始化")
+        # 根据数据库类型执行不同的查询
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL使用%s作为占位符
+            cursor.execute("SELECT COUNT(*) FROM orders WHERE id = %s", (order_id,))
+        else:
+            # SQLite
+            cursor.execute("SELECT COUNT(*) FROM orders WHERE id = ?", (order_id,))
+            
+        count = cursor.fetchone()[0]
         
-        # 启动通知处理线程
-        def run_notification_processor():
-            while True:
-                try:
-                    # 从队列获取通知
-                    try:
-                        # 非阻塞获取
-                        data = notification_queue.get(block=False)
-                        logger.info(f"收到通知: {data['type']}")
-                        
-                        # 提交到事件循环处理
-                        future = asyncio.run_coroutine_threadsafe(
-                            send_notification_from_queue(data),
-                            loop
-                        )
-                        # 等待处理完成
-                        future.result(timeout=30)
-                    except queue.Empty:
-                        # 队列为空，等待一下
-                        time.sleep(1)
-                    except asyncio.TimeoutError:
-                        logger.error("处理通知超时")
-                    except Exception as e:
-                        logger.error(f"处理通知时出错: {str(e)}", exc_info=True)
-                except Exception as e:
-                    logger.error(f"通知处理线程异常: {str(e)}", exc_info=True)
-                    time.sleep(2)  # 发生异常时等待一段时间再继续
-        
-        # 启动事件循环处理线程
-        def run_event_loop():
-            try:
-                # 启动事件循环
-                loop.run_forever()
-            except Exception as e:
-                logger.error(f"事件循环异常: {str(e)}", exc_info=True)
-            finally:
-                loop.close()
-                logger.info("事件循环已关闭")
-        
-        # 启动线程
-        event_loop_thread = threading.Thread(target=run_event_loop, daemon=True)
-        event_loop_thread.start()
-        
-        notification_thread = threading.Thread(target=run_notification_processor, daemon=True)
-        notification_thread.start()
-        
-        # 启动轮询，但不阻塞主线程
-        def start_polling():
-            try:
-                # 先检查是否有updater
-                if not hasattr(bot_application, 'updater') or bot_application.updater is None:
-                    # 如果没有updater，创建一个
-                    logger.info("创建Telegram机器人Updater")
-                    print("DEBUG: Creating Telegram bot Updater")
-                    bot_application.updater = Updater(bot=bot_application.bot)
+        # 增加更多查询记录debug问题
+        if count == 0:
+            logger.warning(f"订单 {order_id} 在数据库中不存在")
+            print(f"WARNING: 订单 {order_id} 在数据库中不存在")
+            
+            # 检查是否有任何订单
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("SELECT COUNT(*) FROM orders")
+            else:
+                cursor.execute("SELECT COUNT(*) FROM orders")
                 
-                # 确保注册了所有处理器
-                logger.info("确保处理器已注册")
-                print("DEBUG: Ensuring handlers are registered")
+            total_count = cursor.fetchone()[0]
+            logger.info(f"数据库中总共有 {total_count} 个订单")
+            print(f"INFO: 数据库中总共有 {total_count} 个订单")
+            
+            # 列出最近的几个订单ID
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("SELECT id FROM orders ORDER BY id DESC LIMIT 5")
+            else:
+                cursor.execute("SELECT id FROM orders ORDER BY id DESC LIMIT 5")
                 
-                # 启动轮询，不丢弃未处理的更新
-                polling_future = asyncio.run_coroutine_threadsafe(
-                    bot_application.updater.start_polling(drop_pending_updates=False, allowed_updates=Update.ALL_TYPES),
-                    loop
+            recent_orders = cursor.fetchall()
+            if recent_orders:
+                recent_ids = [str(order[0]) for order in recent_orders]
+                logger.info(f"最近的订单ID: {', '.join(recent_ids)}")
+                print(f"INFO: 最近的订单ID: {', '.join(recent_ids)}")
+        else:
+            logger.info(f"订单 {order_id} 存在于数据库中")
+            print(f"DEBUG: 订单 {order_id} 存在于数据库中")
+            
+        conn.close()
+        return count > 0
+    except Exception as e:
+        logger.error(f"检查订单 {order_id} 是否存在时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 检查订单 {order_id} 是否存在时出错: {str(e)}")
+        return False
+
+def update_order_status(order_id, status, handler_id=None):
+    """更新订单状态"""
+    try:
+        conn = get_db_connection()
+        if not conn:
+            logger.error(f"更新订单 {order_id} 状态时无法获取数据库连接")
+            print(f"ERROR: 更新订单 {order_id} 状态时无法获取数据库连接")
+            return False
+            
+        cursor = conn.cursor()
+        
+        # 根据数据库类型执行不同的查询
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL使用%s作为占位符，并且时间戳函数不同
+            if handler_id:
+                cursor.execute(
+                    "UPDATE orders SET status = %s, handler_id = %s, updated_at = NOW() WHERE id = %s",
+                    (status, handler_id, order_id)
                 )
-                logger.info("Telegram机器人已开始轮询更新")
-                print("DEBUG: Telegram bot started polling for updates")
-                
-                # 等待轮询启动完成
-                try:
-                    polling_future.result(timeout=5)
-                    logger.info("轮询启动完成")
-                    print("DEBUG: Polling startup completed")
-                except asyncio.TimeoutError:
-                    # 这是正常的，因为轮询是一个长时间运行的任务
-                    logger.info("轮询启动进行中（正常行为）")
-                    print("DEBUG: Polling startup in progress (normal behavior)")
-            except Exception as e:
-                logger.error(f"启动轮询失败: {str(e)}", exc_info=True)
-                print(f"ERROR: Failed to start polling: {str(e)}")
-                traceback.print_exc()
+            else:
+                cursor.execute(
+                    "UPDATE orders SET status = %s, updated_at = NOW() WHERE id = %s",
+                    (status, order_id)
+                )
+        else:
+            # SQLite
+            if handler_id:
+                cursor.execute(
+                    "UPDATE orders SET status = ?, handler_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (status, handler_id, order_id)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (status, order_id)
+                )
         
-        threading.Thread(target=start_polling, daemon=True).start()
+        conn.commit()
+        conn.close()
         
+        logger.info(f"已更新订单 {order_id} 状态为 {status}")
+        print(f"INFO: 已更新订单 {order_id} 状态为 {status}")
         return True
     except Exception as e:
-        logger.error(f"运行机器人时出错: {str(e)}", exc_info=True)
-        print(f"ERROR: 运行机器人时出错: {str(e)}")
-        return False
+        logger.error(f"更新订单 {order_id} 状态时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 更新订单 {order_id} 状态时出错: {str(e)}")
+        return False 
 
 @callback_error_handler
 async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理回调查询"""
     query = update.callback_query
+    user_id = update.effective_user.id
+    data = query.data
     
-    try:
-        # 解析回调数据
-        callback_data = query.data
-        user_id = update.effective_user.id
-        message_id = query.message.message_id if query.message else "unknown"
-        chat_id = query.message.chat.id if query.message else "unknown"
+    logger.info(f"收到回调查询: {data} 来自用户 {user_id}")
+    print(f"DEBUG: 收到回调查询: {data} 来自用户 {user_id}")
+    
+    if data.startswith('accept:'):
+        # 处理接单按钮回调
+        order_id = int(data.split(':')[1])
+        await on_accept(update, context)
+    elif data.startswith('yt_accept:'):
+        # 处理油管会员充值订单接单按钮回调
+        order_id = int(data.split(':')[1])
+        await on_youtube_accept(update, context)
+    elif data.startswith('yt_reject:'):
+        # 处理油管会员充值订单拒绝按钮回调
+        order_id = int(data.split(':')[1])
+        await on_youtube_reject(update, context)
+    elif data.startswith('feedback:'):
+        # 处理反馈按钮回调
+        await on_feedback_button(update, context)
+    elif data.startswith('yt_feedback:'):
+        # 处理油管会员充值订单反馈按钮回调
+        await on_youtube_feedback_button(update, context)
+    elif data.startswith('approve_recharge:'):
+        # 处理充值请求审批
+        await on_approve_recharge(update, context)
+    elif data.startswith('reject_recharge:'):
+        # 处理充值请求拒绝
+        await on_reject_recharge(update, context)
+    elif data.startswith('stats:'):
+        # 处理统计查询
+        await on_stats_callback(update, context)
+    else:
+        await query.answer(text="Unknown command")
+
+@callback_error_handler
+async def on_youtube_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理油管会员充值订单接单按钮回调"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    if not is_seller(user_id):
+        await query.answer("You are not authorized to perform this action", show_alert=True)
+        return
+    
+    # 获取订单ID
+    order_id = int(query.data.split(':')[1])
+    logger.info(f"卖家 {user_id} 尝试接油管会员充值订单 #{order_id}")
+    print(f"DEBUG: 卖家 {user_id} 尝试接油管会员充值订单 #{order_id}")
+    
+    # 接单
+    from modules.database import accept_youtube_order_atomic
+    success, message, order = accept_youtube_order_atomic(order_id, user_id)
+    
+    if not success:
+        await query.answer(message, show_alert=True)
+        return
+    
+    # 成功接单，更新原消息
+    new_message = f"🎯 *YOUTUBE ORDER #{order_id} ACCEPTED*\n\n"
+    new_message += f"📦 *Package*: YouTube Premium 1 Year\n"
+    new_message += f"⏱ *Created*: {order[5]}\n"  # created_at字段
+    new_message += f"👤 *Accepted by*: You\n"
+    new_message += f"⏱ *Accepted at*: {order[6]}\n"  # accepted_at字段
+    
+    if order[3]:  # remark字段
+        new_message += f"📝 *Remark*: {order[3]}\n"
+    
+    # 创建操作按钮（完成或失败）
+    keyboard = [
+        [
+            InlineKeyboardButton("Complete ✅", callback_data=f"yt_feedback:complete:{order_id}"),
+            InlineKeyboardButton("Failed ❌", callback_data=f"yt_feedback:failed:{order_id}")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # 更新消息
+    await query.edit_message_text(text=new_message, reply_markup=reply_markup, parse_mode="Markdown")
+    await query.answer("Order accepted successfully!")
+    
+    logger.info(f"卖家 {user_id} 成功接油管会员充值订单 #{order_id}")
+    print(f"DEBUG: 卖家 {user_id} 成功接油管会员充值订单 #{order_id}")
+
+@callback_error_handler
+async def on_youtube_reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理油管会员充值订单拒绝按钮回调"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    if not is_seller(user_id):
+        await query.answer("You are not authorized to perform this action", show_alert=True)
+        return
+    
+    # 获取订单ID
+    order_id = int(query.data.split(':')[1])
+    logger.info(f"卖家 {user_id} 拒绝油管会员充值订单 #{order_id}")
+    print(f"DEBUG: 卖家 {user_id} 拒绝油管会员充值订单 #{order_id}")
+    
+    # 简单地移除接单按钮
+    new_message = query.message.text + "\n\n❗ *You declined this order.*"
+    await query.edit_message_text(text=new_message, parse_mode="Markdown")
+    await query.answer("You've declined this order.")
+
+@callback_error_handler
+async def on_youtube_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理油管会员充值订单完成/失败按钮回调"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    if not is_seller(user_id):
+        await query.answer("You are not authorized to perform this action", show_alert=True)
+        return
+    
+    # 解析回调数据
+    parts = query.data.split(':')
+    feedback_type = parts[1]
+    order_id = int(parts[2])
+    
+    logger.info(f"卖家 {user_id} 提交油管会员充值订单 #{order_id} 反馈: {feedback_type}")
+    print(f"DEBUG: 卖家 {user_id} 提交油管会员充值订单 #{order_id} 反馈: {feedback_type}")
+    
+    # 根据反馈类型更新订单状态
+    from modules.database import complete_youtube_order, fail_youtube_order
+    
+    if feedback_type == 'complete':
+        # 标记订单为完成
+        success = complete_youtube_order(order_id)
         
-        logger.info(f"Received callback query: '{callback_data}' from user {user_id} in chat {chat_id}, message {message_id}")
-        print(f"DEBUG: Received callback query: '{callback_data}' from user {user_id} in chat {chat_id}, message {message_id}")
+        if not success:
+            await query.answer("Failed to update order status", show_alert=True)
+            return
         
-        # 记录按钮数据（仅调试用）
-        if hasattr(query.message, 'reply_markup') and query.message.reply_markup:
-            try:
-                buttons = query.message.reply_markup.inline_keyboard
-                button_data = []
-                for row in buttons:
-                    row_data = []
-                    for btn in row:
-                        row_data.append(f"{btn.text}:{btn.callback_data}")
-                    button_data.append(row_data)
-                print(f"DEBUG: Message buttons: {button_data}")
-                logger.info(f"Message buttons: {button_data}")
-            except Exception as e:
-                print(f"DEBUG: Failed to extract button data: {e}")
-                logger.error(f"Failed to extract button data: {e}")
+        # 更新消息
+        new_message = query.message.text.replace("ACCEPTED", "COMPLETED ✅")
+        new_message += f"\n\n✅ *Completed at*: {get_china_time()}"
+        await query.edit_message_text(text=new_message, parse_mode="Markdown")
+        await query.answer("Order marked as completed!")
         
-        # 详细日志记录以帮助调试
-        if callback_data.startswith("approve_recharge:"):
-            logger.info("Processing approve_recharge callback")
-            print("DEBUG: Processing approve_recharge callback")
-            await on_approve_recharge(update, context)
-        elif callback_data.startswith("reject_recharge:"):
-            logger.info("Processing reject_recharge callback")
-            print("DEBUG: Processing reject_recharge callback")
-            await on_reject_recharge(update, context)
-        elif callback_data.startswith("approve_youtube:"):
-            logger.info("Processing approve_youtube callback")
-            print("DEBUG: Processing approve_youtube callback")
-            await on_approve_youtube(update, context)
-        elif callback_data.startswith("reject_youtube:"):
-            logger.info("Processing reject_youtube callback")
-            print("DEBUG: Processing reject_youtube callback")
-            await on_reject_youtube(update, context)
-        else:
-            logger.warning(f"Unknown callback data: {callback_data}")
-            print(f"WARNING: Unknown callback data: {callback_data}")
-            await query.answer("Unknown callback operation")
-            
-    except Exception as e:
-        logger.error(f"Error processing callback query: {str(e)}", exc_info=True)
-        print(f"ERROR: Error processing callback query: {str(e)}")
-        traceback.print_exc()
-        await query.answer("Error processing request, please try again later", show_alert=True)
+        logger.info(f"卖家 {user_id} 完成油管会员充值订单 #{order_id}")
+        print(f"DEBUG: 卖家 {user_id} 完成油管会员充值订单 #{order_id}")
+        
+    elif feedback_type == 'failed':
+        # 当选择失败时，提示选择失败原因
+        keyboard = [
+            [
+                InlineKeyboardButton("QR Code invalid", callback_data=f"yt_fail_reason:QR Code invalid:{order_id}")
+            ],
+            [
+                InlineKeyboardButton("QR Code expired", callback_data=f"yt_fail_reason:QR Code expired:{order_id}")
+            ],
+            [
+                InlineKeyboardButton("Other reason", callback_data=f"yt_fail_reason:Other reason:{order_id}")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_reply_markup(reply_markup=reply_markup)
+        await query.answer("Please select the reason for failure")
+        
+    elif feedback_type.startswith('fail_reason:'):
+        # 处理失败原因
+        reason = feedback_type.split(':', 1)[1]
+        
+        # 标记订单为失败
+        success = fail_youtube_order(order_id, reason)
+        
+        if not success:
+            await query.answer("Failed to update order status", show_alert=True)
+            return
+        
+        # 更新消息
+        new_message = query.message.text.replace("ACCEPTED", "FAILED ❌")
+        new_message += f"\n\n❌ *Failed at*: {get_china_time()}"
+        new_message += f"\n❓ *Reason*: {reason}"
+        await query.edit_message_text(text=new_message, parse_mode="Markdown")
+        await query.answer("Order marked as failed!")
+        
+        logger.info(f"卖家 {user_id} 标记油管会员充值订单 #{order_id} 失败，原因: {reason}")
+        print(f"DEBUG: 卖家 {user_id} 标记油管会员充值订单 #{order_id} 失败，原因: {reason}")
+    
+    # 可以在这里添加通知用户订单状态变更的代码
+    # TODO: 通知用户
 
 @callback_error_handler
 async def on_approve_recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle recharge request approval callback"""
+    """处理批准充值请求的回调"""
     query = update.callback_query
     user_id = update.effective_user.id
     
-    # Only allow super admin to process recharge requests
+    # 只允许超级管理员处理充值请求
     if user_id != 1878943383:
-        await query.answer("You don't have permission to perform this action", show_alert=True)
+        await query.answer("您没有权限执行此操作", show_alert=True)
         return
     
-    # Get recharge request ID
+    # 获取充值请求ID
     request_id = int(query.data.split(":")[1])
     
-    # Approve recharge request
+    # 批准充值请求
     success, message = approve_recharge_request(request_id, str(user_id))
     
     if success:
-        # Update message
-        keyboard = [[InlineKeyboardButton("✅ Approved", callback_data="dummy_action")]]
+        # 更新消息
+        keyboard = [[InlineKeyboardButton("✅ 已批准", callback_data="dummy_action")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         try:
             await query.edit_message_reply_markup(reply_markup=reply_markup)
-            await query.answer("Recharge request approved", show_alert=True)
+            await query.answer("充值请求已批准", show_alert=True)
         except Exception as e:
-            logger.error(f"Failed to update message: {str(e)}")
-            await query.answer("Operation successful, but failed to update message", show_alert=True)
+            logger.error(f"更新消息失败: {str(e)}")
+            await query.answer("操作成功，但更新消息失败", show_alert=True)
     else:
-        await query.answer(f"Operation failed: {message}", show_alert=True)
+        await query.answer(f"操作失败: {message}", show_alert=True)
 
 @callback_error_handler
 async def on_reject_recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle recharge request rejection callback"""
+    """处理拒绝充值请求的回调"""
     query = update.callback_query
     user_id = update.effective_user.id
     
-    # Only allow super admin to process recharge requests
+    # 只允许超级管理员处理充值请求
     if user_id != 1878943383:
-        await query.answer("You don't have permission to perform this action", show_alert=True)
+        await query.answer("您没有权限执行此操作", show_alert=True)
         return
     
-    # Get recharge request ID
+    # 获取充值请求ID
     request_id = int(query.data.split(":")[1])
     
-    # Reject recharge request
+    # 拒绝充值请求
     success, message = reject_recharge_request(request_id, str(user_id))
     
     if success:
-        # Update message
-        keyboard = [[InlineKeyboardButton("❌ Rejected", callback_data="dummy_action")]]
+        # 更新消息
+        keyboard = [[InlineKeyboardButton("❌ 已拒绝", callback_data="dummy_action")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         try:
             await query.edit_message_reply_markup(reply_markup=reply_markup)
-            await query.answer("Recharge request rejected", show_alert=True)
+            await query.answer("充值请求已拒绝", show_alert=True)
         except Exception as e:
-            logger.error(f"Failed to update message: {str(e)}")
-            await query.answer("Operation successful, but failed to update message", show_alert=True)
+            logger.error(f"更新消息失败: {str(e)}")
+            await query.answer("操作成功，但更新消息失败", show_alert=True)
     else:
-        await query.answer(f"Operation failed: {message}", show_alert=True)
-
-@callback_error_handler
-async def on_approve_youtube(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle YouTube membership recharge request approval callback"""
-    query = update.callback_query
-    user_id = update.effective_user.id
-    
-    logger.info(f"YouTube approval callback: User ID={user_id}")
-    print(f"DEBUG: YouTube approval callback: User ID={user_id}")
-    
-    # Only allow super admin to process recharge requests
-    if user_id != 1878943383:
-        logger.warning(f"Permission denied for user {user_id} to approve YouTube membership")
-        print(f"WARNING: Permission denied for user {user_id} to approve YouTube membership")
-        await query.answer("You don't have permission to perform this action", show_alert=True)
-        return
-    
-    # Get recharge request ID
-    try:
-        callback_data = query.data
-        logger.info(f"Parsing callback data: {callback_data}")
-        print(f"DEBUG: Parsing callback data: {callback_data}")
-        
-        request_id = int(callback_data.split(":")[1])
-        logger.info(f"Extracted request ID: {request_id}")
-        print(f"DEBUG: Extracted request ID: {request_id}")
-    except Exception as e:
-        logger.error(f"Failed to parse request ID: {str(e)}")
-        print(f"ERROR: Failed to parse request ID: {str(e)}")
-        await query.answer("Invalid request format", show_alert=True)
-        return
-    
-    # Approve recharge request
-    logger.info(f"Approving YouTube membership request ID={request_id}")
-    print(f"DEBUG: Approving YouTube membership request ID={request_id}")
-    
-    try:
-        success, message = approve_youtube_recharge_request(request_id, str(user_id))
-        logger.info(f"Approval result: success={success}, message={message}")
-        print(f"DEBUG: Approval result: success={success}, message={message}")
-        
-        if success:
-            # Update message
-            keyboard = [[InlineKeyboardButton("✅ Approved", callback_data="dummy_action")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            try:
-                await query.edit_message_reply_markup(reply_markup=reply_markup)
-                await query.answer("YouTube membership request approved", show_alert=True)
-                logger.info("Successfully updated message with approved status")
-                print("DEBUG: Successfully updated message with approved status")
-            except Exception as e:
-                logger.error(f"Failed to update message: {str(e)}")
-                print(f"ERROR: Failed to update message: {str(e)}")
-                await query.answer("Operation successful, but failed to update message", show_alert=True)
-        else:
-            logger.warning(f"YouTube membership approval failed: {message}")
-            print(f"WARNING: YouTube membership approval failed: {message}")
-            await query.answer(f"Operation failed: {message}", show_alert=True)
-    except Exception as e:
-        logger.error(f"Exception in YouTube approval process: {str(e)}", exc_info=True)
-        print(f"ERROR: Exception in YouTube approval process: {str(e)}")
-        traceback.print_exc()
-        await query.answer("An error occurred during the approval process", show_alert=True)
-
-@callback_error_handler
-async def on_reject_youtube(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle YouTube membership recharge request rejection callback"""
-    query = update.callback_query
-    user_id = update.effective_user.id
-    
-    # Only allow super admin to process recharge requests
-    if user_id != 1878943383:
-        await query.answer("You don't have permission to perform this action", show_alert=True)
-        return
-    
-    # Get recharge request ID
-    request_id = int(query.data.split(":")[1])
-    
-    # Reject recharge request
-    success, message = reject_youtube_recharge_request(request_id, str(user_id))
-    
-    if success:
-        # Update message
-        keyboard = [[InlineKeyboardButton("❌ Rejected", callback_data="dummy_action")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        try:
-            await query.edit_message_reply_markup(reply_markup=reply_markup)
-            await query.answer("YouTube membership request rejected", show_alert=True)
-        except Exception as e:
-            logger.error(f"Failed to update message: {str(e)}")
-            await query.answer("Operation successful, but failed to update message", show_alert=True)
-    else:
-        await query.answer(f"Operation failed: {message}", show_alert=True) 
+        await query.answer(f"操作失败: {message}", show_alert=True) 

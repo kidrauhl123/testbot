@@ -60,10 +60,13 @@ def sync_env_sellers_to_db():
 # ===== 价格系统 =====
 # 网页端价格（人民币）
 WEB_PRICES = {'1': 12, '2': 18, '3': 30, '6': 50, '12': 84}
-# 油管会员价格（人民币）
-YOUTUBE_PRICE = 150
 # Telegram端卖家薪资（美元）
 TG_PRICES = {'1': 1.35, '2': 1.3, '3': 3.2, '6': 5.7, '12': 9.2}
+
+# 油管会员价格（人民币）
+YOUTUBE_PRICES = {'12': 150}
+# 油管会员套餐选项
+YOUTUBE_PLAN_OPTIONS = [('12', '个人会员一年')]
 
 # 获取用户套餐价格
 def get_user_package_price(user_id, package):
