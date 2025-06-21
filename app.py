@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 # 导入自定义模块
 from modules.database import init_db, execute_query
-from modules.telegram_bot import run_bot, process_telegram_update
+from modules.telegram_bot import run_bot, process_telegram_update, get_china_time
 from modules.web_routes import register_routes
 from modules.constants import sync_env_sellers_to_db
 
@@ -90,6 +90,15 @@ if not os.path.exists(uploads_dir):
 
 # 注册Web路由，并将队列传递给它
 register_routes(app, notification_queue)
+
+# 添加favicon路由
+@app.route('/favicon.ico')
+def favicon():
+    """处理favicon请求"""
+    favicon_path = os.path.join(app.root_path, 'static', 'favicon.ico')
+    if os.path.exists(favicon_path):
+        return app.send_static_file('favicon.ico')
+    return "", 204  # 没有favicon时返回无内容
 
 # 添加Telegram webhook路由
 @app.route('/telegram-webhook', methods=['POST'])
@@ -157,7 +166,18 @@ if __name__ == "__main__":
     logger.info("Telegram机器人线程已启动")
     
     # 确保机器人有时间初始化
-    time.sleep(2)
+    time.sleep(3)
+    
+    # 发送测试通知，以验证机器人是否正常运行
+    try:
+        notification_queue.put({
+            'type': 'test',
+            'message': '系统启动测试通知',
+            'timestamp': get_china_time()
+        })
+        logger.info("已发送测试通知")
+    except Exception as e:
+        logger.error(f"发送测试通知失败: {str(e)}", exc_info=True)
     
     # 启动 Flask
     port = int(os.environ.get("PORT", 5000))

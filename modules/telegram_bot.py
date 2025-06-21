@@ -1177,6 +1177,8 @@ async def send_notification_from_queue(data):
         return
 
     try:
+        logger.info(f"处理通知: {data['type']}")
+        
         if data['type'] == 'new_order':
             await send_new_order_notification(data)
         elif data['type'] == 'order_status_change':
@@ -1187,10 +1189,13 @@ async def send_notification_from_queue(data):
             await send_youtube_recharge_notification(data)
         elif data['type'] == 'dispute':
             await send_dispute_notification(data)
+        elif data['type'] == 'test':
+            await send_test_notification(data)
         else:
             logger.warning(f"未知的通知类型: {data['type']}")
     except Exception as e:
         logger.error(f"发送通知时出错: {str(e)}", exc_info=True)
+        traceback.print_exc()
 
 # ===== 推送通知函数 =====
 def set_order_notified_atomic(oid):
@@ -1593,6 +1598,35 @@ async def send_dispute_notification(data):
             logger.error(f"发送通知到管理员 {admin_id} 失败: {str(send_error)}", exc_info=True)
     except Exception as e:
         logger.error(f"发送订单质疑通知时出错: {str(e)}", exc_info=True)
+        
+async def send_test_notification(data):
+    """发送测试通知到超级管理员，用于验证机器人是否正常运行"""
+    global bot_application
+    
+    try:
+        # 超级管理员的Telegram ID
+        admin_id = 1878943383
+        
+        # 构建消息文本
+        message_text = (
+            f"🔄 <b>系统测试通知</b>\n\n"
+            f"⏰ 时间: {data.get('timestamp', get_china_time())}\n"
+            f"💬 消息: {data.get('message', '系统正常运行')}\n\n"
+            f"<i>此消息用于验证Telegram机器人是否正常运行</i>"
+        )
+        
+        # 发送通知
+        try:
+            await bot_application.bot.send_message(
+                chat_id=admin_id,
+                text=message_text,
+                parse_mode='HTML'
+            )
+            logger.info(f"已成功发送测试通知到管理员 {admin_id}")
+        except Exception as send_error:
+            logger.error(f"发送测试通知到管理员 {admin_id} 失败: {str(send_error)}", exc_info=True)
+    except Exception as e:
+        logger.error(f"发送测试通知时出错: {str(e)}", exc_info=True)
 
 # ===== 主函数 =====
 def run_bot(notification_queue):
@@ -1601,54 +1635,88 @@ def run_bot(notification_queue):
     
     # 初始化应用
     try:
-        if not bot_application:
-            bot_application = ApplicationBuilder().token(BOT_TOKEN).build()
-            
-            # 注册处理器
-            bot_application.add_handler(CommandHandler("test", on_test))
-            bot_application.add_handler(CommandHandler("start", on_start))
-            bot_application.add_handler(CommandHandler("admin", on_admin_command))
-            bot_application.add_handler(CommandHandler("stats", on_stats))
-            bot_application.add_handler(CallbackQueryHandler(on_callback_query))
-            bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
-            
-            logger.info("Telegram机器人应用已初始化")
-            
-            # 创建一个新的事件循环
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            BOT_LOOP = loop
-            
-            # 启动消息队列处理线程
-            def process_notification_queue():
-                while True:
+        # 创建一个新的事件循环
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        BOT_LOOP = loop
+        
+        # 初始化机器人
+        bot_application = ApplicationBuilder().token(BOT_TOKEN).build()
+        
+        # 注册处理器
+        bot_application.add_handler(CommandHandler("test", on_test))
+        bot_application.add_handler(CommandHandler("start", on_start))
+        bot_application.add_handler(CommandHandler("admin", on_admin_command))
+        bot_application.add_handler(CommandHandler("stats", on_stats))
+        bot_application.add_handler(CallbackQueryHandler(on_callback_query))
+        bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+        
+        logger.info("Telegram机器人应用已初始化")
+        
+        # 启动通知处理线程
+        def run_notification_processor():
+            while True:
+                try:
+                    # 从队列获取通知
                     try:
-                        # 非阻塞方式获取队列消息，避免阻塞整个线程
-                        try:
-                            data = notification_queue.get(block=False)
-                            # 提交到事件循环处理
-                            asyncio.run_coroutine_threadsafe(
-                                send_notification_from_queue(data),
-                                BOT_LOOP
-                            )
-                        except queue.Empty:
-                            # 队列为空，等待一会再尝试
-                            time.sleep(1)
-                    except Exception as e:
-                        logger.error(f"处理通知队列时出错: {str(e)}", exc_info=True)
+                        # 非阻塞获取
+                        data = notification_queue.get(block=False)
+                        logger.info(f"收到通知: {data['type']}")
+                        
+                        # 提交到事件循环处理
+                        future = asyncio.run_coroutine_threadsafe(
+                            send_notification_from_queue(data),
+                            loop
+                        )
+                        # 等待处理完成
+                        future.result(timeout=30)
+                    except queue.Empty:
+                        # 队列为空，等待一下
                         time.sleep(1)
-            
-            # 启动队列处理线程
-            queue_thread = threading.Thread(target=process_notification_queue, daemon=True)
-            queue_thread.start()
-            
-            # 启动机器人
-            bot_application.run_polling(close_loop=False)
-        else:
-            logger.info("Telegram机器人应用已经初始化，无需重复初始化")
+                    except asyncio.TimeoutError:
+                        logger.error("处理通知超时")
+                    except Exception as e:
+                        logger.error(f"处理通知时出错: {str(e)}", exc_info=True)
+                except Exception as e:
+                    logger.error(f"通知处理线程异常: {str(e)}", exc_info=True)
+                    time.sleep(2)  # 发生异常时等待一段时间再继续
+        
+        # 启动事件循环处理线程
+        def run_event_loop():
+            try:
+                # 启动事件循环
+                loop.run_forever()
+            except Exception as e:
+                logger.error(f"事件循环异常: {str(e)}", exc_info=True)
+            finally:
+                loop.close()
+                logger.info("事件循环已关闭")
+        
+        # 启动线程
+        event_loop_thread = threading.Thread(target=run_event_loop, daemon=True)
+        event_loop_thread.start()
+        
+        notification_thread = threading.Thread(target=run_notification_processor, daemon=True)
+        notification_thread.start()
+        
+        # 启动轮询，但不阻塞主线程
+        def start_polling():
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    bot_application.updater.start_polling(drop_pending_updates=True),
+                    loop
+                )
+                logger.info("Telegram机器人已开始轮询更新")
+            except Exception as e:
+                logger.error(f"启动轮询失败: {str(e)}", exc_info=True)
+        
+        threading.Thread(target=start_polling, daemon=True).start()
+        
+        return True
     except Exception as e:
         logger.error(f"运行机器人时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 运行机器人时出错: {str(e)}")
+        return False
 
 @callback_error_handler
 async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
