@@ -1330,24 +1330,24 @@ async def send_recharge_request_notification(data):
         
         logger.info(f"准备发送充值请求通知: 请求ID={request_id}, 用户={username}, 金额={amount}, 管理员ID={admin_id}")
         
-        # 构建消息文本
+        # 构建消息文本 (英文)
         message_text = (
-            f"📥 <b>新充值请求</b> #{request_id}\n\n"
-            f"👤 用户: <code>{username}</code>\n"
-            f"💰 金额: <b>{amount} 元</b>\n"
-            f"💳 支付方式: {payment_method}\n"
+            f"📥 <b>New Recharge Request</b> #{request_id}\n\n"
+            f"👤 User: <code>{username}</code>\n"
+            f"💰 Amount: <b>{amount} CNY</b>\n"
+            f"💳 Payment Method: {payment_method}\n"
         )
 
         if details:
-            message_text += f"💬 详情: <code>{details}</code>\n"
+            message_text += f"💬 Details: <code>{details}</code>\n"
 
-        message_text += f"⏰ 时间: {get_china_time()}\n\n请审核此充值请求。"
+        message_text += f"⏰ Time: {get_china_time()}\n\n Please review this recharge request."
         
-        # 创建审核按钮
+        # 创建审核按钮 (英文)
         keyboard = [
             [
-                InlineKeyboardButton("✅ 批准", callback_data=f"approve_recharge:{request_id}"),
-                InlineKeyboardButton("❌ 拒绝", callback_data=f"reject_recharge:{request_id}")
+                InlineKeyboardButton("✅ Approve", callback_data=f"approve_recharge:{request_id}"),
+                InlineKeyboardButton("❌ Reject", callback_data=f"reject_recharge:{request_id}")
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1382,7 +1382,7 @@ async def send_recharge_request_notification(data):
                         logger.info(f"已成功发送充值请求图片通知到管理员 {admin_id}")
                     except Exception as img_send_error:
                         logger.error(f"发送本地图片失败: {img_send_error}, 回退到纯文本通知", exc_info=True)
-                        message_text += f"\n\n⚠️ <i>图片发送失败，请在网页管理界面查看凭证。</i>"
+                        message_text += f"\n\n⚠️ <i>Failed to send image. Please check the proof in the web admin interface.</i>"
                         await bot_application.bot.send_message(
                             chat_id=admin_id,
                             text=message_text,
@@ -1391,7 +1391,7 @@ async def send_recharge_request_notification(data):
                         )
                 else:
                     logger.error(f"图片文件未找到: {local_image_path}, 回退到纯文本通知")
-                    message_text += f"\n\n⚠️ <i>图片凭证文件未找到，请在网页管理界面查看。</i>"
+                    message_text += f"\n\n⚠️ <i>Image proof file not found. Please check in the web admin interface.</i>"
                     await bot_application.bot.send_message(
                         chat_id=admin_id,
                         text=message_text,
@@ -1431,23 +1431,23 @@ async def send_youtube_recharge_notification(data):
         
         logger.info(f"准备发送油管会员充值请求通知: 请求ID={request_id}, 用户={username}, 管理员ID={admin_id}")
         
-        # 构建消息文本
+        # 构建消息文本 (英文)
         message_text = (
-            f"📺 <b>新油管会员充值请求</b> #{request_id}\n\n"
-            f"👤 用户: <code>{username}</code>\n"
-            f"💰 金额: <b>{YOUTUBE_PRICE} 元</b>\n"
+            f"📺 <b>New YouTube Membership Request</b> #{request_id}\n\n"
+            f"👤 User: <code>{username}</code>\n"
+            f"💰 Amount: <b>{YOUTUBE_PRICE} CNY</b>\n"
         )
 
         if remark:
-            message_text += f"💬 备注: <code>{remark}</code>\n"
+            message_text += f"💬 Remarks: <code>{remark}</code>\n"
 
-        message_text += f"⏰ 时间: {get_china_time()}\n\n请扫描二维码并支付。"
+        message_text += f"⏰ Time: {get_china_time()}\n\n Please scan the QR code and make payment."
         
-        # 创建审核按钮
+        # 创建审核按钮 (英文)
         keyboard = [
             [
-                InlineKeyboardButton("✅ 已支付", callback_data=f"approve_youtube:{request_id}"),
-                InlineKeyboardButton("❌ 拒绝", callback_data=f"reject_youtube:{request_id}")
+                InlineKeyboardButton("✅ Paid", callback_data=f"approve_youtube:{request_id}"),
+                InlineKeyboardButton("❌ Reject", callback_data=f"reject_youtube:{request_id}")
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1511,7 +1511,7 @@ async def send_youtube_recharge_notification(data):
                             logger.info(f"已成功使用本地文件发送油管会员充值请求图片通知到管理员 {admin_id}")
                         except Exception as img_send_error:
                             logger.error(f"发送本地图片失败: {img_send_error}, 回退到纯文本通知", exc_info=True)
-                            message_text += f"\n\n⚠️ <i>图片发送失败，请在网页管理界面查看二维码。</i>"
+                            message_text += f"\n\n⚠️ <i>Failed to send image. Please check the QR code in the web admin interface.</i>"
                             await bot_application.bot.send_message(
                                 chat_id=admin_id,
                                 text=message_text,
@@ -1520,7 +1520,7 @@ async def send_youtube_recharge_notification(data):
                             )
                     else:
                         logger.error(f"图片文件未找到: {local_image_path}, 回退到纯文本通知")
-                        message_text += f"\n\n⚠️ <i>二维码图片文件未找到，请在网页管理界面查看。图片URL: {qrcode_image}</i>"
+                        message_text += f"\n\n⚠️ <i>QR code image file not found. Please check in the web admin interface. Image URL: {qrcode_image}</i>"
                         await bot_application.bot.send_message(
                             chat_id=admin_id,
                             text=message_text,
@@ -1529,7 +1529,7 @@ async def send_youtube_recharge_notification(data):
                         )
                 else:
                     logger.error(f"图片文件未找到: {local_image_path}, 回退到纯文本通知")
-                    message_text += f"\n\n⚠️ <i>二维码图片文件未找到，请在网页管理界面查看。</i>"
+                    message_text += f"\n\n⚠️ <i>QR code image file not found. Please check in the web admin interface.</i>"
                     await bot_application.bot.send_message(
                         chat_id=admin_id,
                         text=message_text,
@@ -1538,7 +1538,7 @@ async def send_youtube_recharge_notification(data):
                     )
             else:
                 # 如果没有二维码，只发送文本
-                message_text += f"\n\n⚠️ <i>未提供二维码，请在网页管理界面查看详情。</i>"
+                message_text += f"\n\n⚠️ <i>No QR code provided. Please check details in the web admin interface.</i>"
                 await bot_application.bot.send_message(
                     chat_id=admin_id,
                     text=message_text,
@@ -1569,18 +1569,18 @@ async def send_dispute_notification(data):
         
         logger.info(f"准备发送订单质疑通知: 订单ID={order_id}, 用户={username}, 管理员ID={admin_id}")
         
-        # 构建消息文本
+        # 构建消息文本 (英文)
         message_text = (
-            f"⚠️ <b>订单质疑</b> #{order_id}\n\n"
-            f"👤 用户: <code>{username}</code>\n"
-            f"❓ 原因: {reason}\n"
-            f"⏰ 时间: {get_china_time()}\n\n请处理此质疑。"
+            f"⚠️ <b>Order Dispute</b> #{order_id}\n\n"
+            f"👤 User: <code>{username}</code>\n"
+            f"❓ Reason: {reason}\n"
+            f"⏰ Time: {get_china_time()}\n\n Please handle this dispute."
         )
         
-        # 创建处理按钮
+        # 创建处理按钮 (英文)
         keyboard = [
             [
-                InlineKeyboardButton("查看订单详情", callback_data=f"view_order:{order_id}")
+                InlineKeyboardButton("View Order Details", callback_data=f"view_order:{order_id}")
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1607,12 +1607,12 @@ async def send_test_notification(data):
         # 超级管理员的Telegram ID
         admin_id = 1878943383
         
-        # 构建消息文本
+        # 构建消息文本 (英文)
         message_text = (
-            f"🔄 <b>系统测试通知</b>\n\n"
-            f"⏰ 时间: {data.get('timestamp', get_china_time())}\n"
-            f"💬 消息: {data.get('message', '系统正常运行')}\n\n"
-            f"<i>此消息用于验证Telegram机器人是否正常运行</i>"
+            f"🔄 <b>System Test Notification</b>\n\n"
+            f"⏰ Time: {data.get('timestamp', get_china_time())}\n"
+            f"💬 Message: {data.get('message', 'System running normally')}\n\n"
+            f"<i>This message is to verify the Telegram bot is working properly</i>"
         )
         
         # 发送通知
@@ -1738,132 +1738,132 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif callback_data.startswith("reject_youtube:"):
             await on_reject_youtube(update, context)
         else:
-            await query.answer("未知的回调操作")
+            await query.answer("Unknown callback operation")
             
     except Exception as e:
         logger.error(f"处理回调查询时出错: {str(e)}", exc_info=True)
-        await query.answer("处理请求时出错，请稍后再试", show_alert=True)
+        await query.answer("Error processing request, please try again later", show_alert=True)
 
 @callback_error_handler
 async def on_approve_recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理批准充值请求的回调"""
+    """Handle recharge request approval callback"""
     query = update.callback_query
     user_id = update.effective_user.id
     
-    # 只允许超级管理员处理充值请求
+    # Only allow super admin to process recharge requests
     if user_id != 1878943383:
-        await query.answer("您没有权限执行此操作", show_alert=True)
+        await query.answer("You don't have permission to perform this action", show_alert=True)
         return
     
-    # 获取充值请求ID
+    # Get recharge request ID
     request_id = int(query.data.split(":")[1])
     
-    # 批准充值请求
+    # Approve recharge request
     success, message = approve_recharge_request(request_id, str(user_id))
     
     if success:
-        # 更新消息
-        keyboard = [[InlineKeyboardButton("✅ 已批准", callback_data="dummy_action")]]
+        # Update message
+        keyboard = [[InlineKeyboardButton("✅ Approved", callback_data="dummy_action")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         try:
             await query.edit_message_reply_markup(reply_markup=reply_markup)
-            await query.answer("充值请求已批准", show_alert=True)
+            await query.answer("Recharge request approved", show_alert=True)
         except Exception as e:
-            logger.error(f"更新消息失败: {str(e)}")
-            await query.answer("操作成功，但更新消息失败", show_alert=True)
+            logger.error(f"Failed to update message: {str(e)}")
+            await query.answer("Operation successful, but failed to update message", show_alert=True)
     else:
-        await query.answer(f"操作失败: {message}", show_alert=True)
+        await query.answer(f"Operation failed: {message}", show_alert=True)
 
 @callback_error_handler
 async def on_reject_recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理拒绝充值请求的回调"""
+    """Handle recharge request rejection callback"""
     query = update.callback_query
     user_id = update.effective_user.id
     
-    # 只允许超级管理员处理充值请求
+    # Only allow super admin to process recharge requests
     if user_id != 1878943383:
-        await query.answer("您没有权限执行此操作", show_alert=True)
+        await query.answer("You don't have permission to perform this action", show_alert=True)
         return
     
-    # 获取充值请求ID
+    # Get recharge request ID
     request_id = int(query.data.split(":")[1])
     
-    # 拒绝充值请求
+    # Reject recharge request
     success, message = reject_recharge_request(request_id, str(user_id))
     
     if success:
-        # 更新消息
-        keyboard = [[InlineKeyboardButton("❌ 已拒绝", callback_data="dummy_action")]]
+        # Update message
+        keyboard = [[InlineKeyboardButton("❌ Rejected", callback_data="dummy_action")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         try:
             await query.edit_message_reply_markup(reply_markup=reply_markup)
-            await query.answer("充值请求已拒绝", show_alert=True)
+            await query.answer("Recharge request rejected", show_alert=True)
         except Exception as e:
-            logger.error(f"更新消息失败: {str(e)}")
-            await query.answer("操作成功，但更新消息失败", show_alert=True)
+            logger.error(f"Failed to update message: {str(e)}")
+            await query.answer("Operation successful, but failed to update message", show_alert=True)
     else:
-        await query.answer(f"操作失败: {message}", show_alert=True)
+        await query.answer(f"Operation failed: {message}", show_alert=True)
 
 @callback_error_handler
 async def on_approve_youtube(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理批准油管会员充值请求的回调"""
+    """Handle YouTube membership recharge request approval callback"""
     query = update.callback_query
     user_id = update.effective_user.id
     
-    # 只允许超级管理员处理充值请求
+    # Only allow super admin to process recharge requests
     if user_id != 1878943383:
-        await query.answer("您没有权限执行此操作", show_alert=True)
+        await query.answer("You don't have permission to perform this action", show_alert=True)
         return
     
-    # 获取充值请求ID
+    # Get recharge request ID
     request_id = int(query.data.split(":")[1])
     
-    # 批准充值请求
+    # Approve recharge request
     success, message = approve_youtube_recharge_request(request_id, str(user_id))
     
     if success:
-        # 更新消息
-        keyboard = [[InlineKeyboardButton("✅ 已批准", callback_data="dummy_action")]]
+        # Update message
+        keyboard = [[InlineKeyboardButton("✅ Approved", callback_data="dummy_action")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         try:
             await query.edit_message_reply_markup(reply_markup=reply_markup)
-            await query.answer("油管会员充值请求已批准", show_alert=True)
+            await query.answer("YouTube membership request approved", show_alert=True)
         except Exception as e:
-            logger.error(f"更新消息失败: {str(e)}")
-            await query.answer("操作成功，但更新消息失败", show_alert=True)
+            logger.error(f"Failed to update message: {str(e)}")
+            await query.answer("Operation successful, but failed to update message", show_alert=True)
     else:
-        await query.answer(f"操作失败: {message}", show_alert=True)
+        await query.answer(f"Operation failed: {message}", show_alert=True)
 
 @callback_error_handler
 async def on_reject_youtube(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理拒绝油管会员充值请求的回调"""
+    """Handle YouTube membership recharge request rejection callback"""
     query = update.callback_query
     user_id = update.effective_user.id
     
-    # 只允许超级管理员处理充值请求
+    # Only allow super admin to process recharge requests
     if user_id != 1878943383:
-        await query.answer("您没有权限执行此操作", show_alert=True)
+        await query.answer("You don't have permission to perform this action", show_alert=True)
         return
     
-    # 获取充值请求ID
+    # Get recharge request ID
     request_id = int(query.data.split(":")[1])
     
-    # 拒绝充值请求
+    # Reject recharge request
     success, message = reject_youtube_recharge_request(request_id, str(user_id))
     
     if success:
-        # 更新消息
-        keyboard = [[InlineKeyboardButton("❌ 已拒绝", callback_data="dummy_action")]]
+        # Update message
+        keyboard = [[InlineKeyboardButton("❌ Rejected", callback_data="dummy_action")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         try:
             await query.edit_message_reply_markup(reply_markup=reply_markup)
-            await query.answer("油管会员充值请求已拒绝", show_alert=True)
+            await query.answer("YouTube membership request rejected", show_alert=True)
         except Exception as e:
-            logger.error(f"更新消息失败: {str(e)}")
-            await query.answer("操作成功，但更新消息失败", show_alert=True)
+            logger.error(f"Failed to update message: {str(e)}")
+            await query.answer("Operation successful, but failed to update message", show_alert=True)
     else:
-        await query.answer(f"操作失败: {message}", show_alert=True) 
+        await query.answer(f"Operation failed: {message}", show_alert=True) 
