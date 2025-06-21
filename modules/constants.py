@@ -64,9 +64,9 @@ WEB_PRICES = {'1': 12, '2': 18, '3': 30, '6': 50, '12': 84}
 TG_PRICES = {'1': 1.35, '2': 1.3, '3': 3.2, '6': 5.7, '12': 9.2}
 
 # 油管会员价格（人民币）
-YOUTUBE_PRICES = {'1': 15, '2': 28, '3': 42, '6': 72, '12': 120}
+YOUTUBE_PRICES = {'12': 120}
 # 油管会员卖家薪资（美元）
-YOUTUBE_TG_PRICES = {'1': 1.5, '2': 2.8, '3': 4.2, '6': 7.2, '12': 12.0}
+YOUTUBE_TG_PRICES = {'12': 12.0}
 
 # 获取用户套餐价格
 def get_user_package_price(user_id, package):
@@ -100,7 +100,7 @@ def get_youtube_package_price(user_id, package):
     
     参数:
     - user_id: 用户ID
-    - package: 套餐（如'1'，'2'等）
+    - package: 套餐（如'12'表示一年）
     
     返回:
     - 用户的油管套餐价格，如果没有定制价格则返回默认价格

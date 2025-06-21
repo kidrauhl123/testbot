@@ -1855,14 +1855,16 @@ def register_routes(app, notification_queue):
             
             # 合并定制价格和默认价格
             prices = {**YOUTUBE_PRICES}
-            if custom_prices:
-                prices.update(custom_prices)
+            if custom_prices and '12' in custom_prices:
+                prices['12'] = custom_prices['12']
+            
+            # 只有一种套餐选项：印度个人会员一年
+            plan_options = [('12', '印度个人会员一年')]
             
             return render_template('youtube_recharge.html', 
                                    youtube_orders=youtube_orders, 
                                    youtube_prices=prices, 
-                                   youtube_plan_options=YOUTUBE_PLAN_OPTIONS,
-                                   youtube_plan_labels_zh=constants.PLAN_LABELS_ZH,
+                                   youtube_plan_options=plan_options,
                                    username=session.get('username'),
                                    is_admin=session.get('is_admin'),
                                    balance=balance,
@@ -1874,7 +1876,7 @@ def register_routes(app, notification_queue):
             return render_template('youtube_recharge.html', 
                                    error='获取订单数据失败', 
                                    youtube_prices=YOUTUBE_PRICES, 
-                                   youtube_plan_options=YOUTUBE_PLAN_OPTIONS,
+                                   youtube_plan_options=[('12', '印度个人会员一年')],
                                    username=session.get('username'),
                                    is_admin=session.get('is_admin'))
     
@@ -1883,11 +1885,11 @@ def register_routes(app, notification_queue):
     def create_youtube_order():
         """创建油管会员充值订单"""
         
-        # 获取表单数据
-        package = request.form.get('package', '1')
+        # 获取表单数据 - 固定为一年套餐
+        package = '12'  # 印度个人会员一年
         remark = request.form.get('remark', '')
         
-        logger.info(f"收到油管订单提交请求: 套餐={package}")
+        logger.info(f"收到油管订单提交请求: 套餐=印度个人会员一年")
         
         # 检查是否上传了文件
         if 'qrcode' not in request.files:
@@ -1944,7 +1946,7 @@ def register_routes(app, notification_queue):
                     "credit_limit": credit_limit
                 }), 400
                 
-            logger.info(f"油管订单提交成功: 用户={username}, 套餐={package}, 新余额={new_balance}")
+            logger.info(f"油管订单提交成功: 用户={username}, 套餐=印度个人会员一年, 新余额={new_balance}")
             
             # 获取最新订单列表并格式化
             orders_raw = execute_query("""
@@ -1956,10 +1958,11 @@ def register_routes(app, notification_queue):
             
             orders = []
             for order in orders_raw:
+                package_label = '印度个人会员一年' if order[1] == '12' else order[1]
                 orders.append({
                     'id': order[0],
                     'package': order[1],
-                    'package_label': constants.PLAN_LABELS_ZH.get(order[1], order[1]),
+                    'package_label': package_label,
                     'status': order[2],
                     'status_text': STATUS_TEXT_ZH.get(order[2], order[2]),
                     'created_at': order[3]
