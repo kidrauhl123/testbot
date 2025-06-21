@@ -9,7 +9,7 @@ from datetime import datetime
 from urllib.parse import urlparse
 import pytz
 
-from modules.constants import DATABASE_URL, STATUS, ADMIN_USERNAME, ADMIN_PASSWORD
+from modules.constants import DATABASE_URL, STATUS, ADMIN_USERNAME, ADMIN_PASSWORD, YOUTUBE_PRICES, WEB_PRICES
 
 # 设置日志
 logger = logging.getLogger(__name__)
@@ -2285,6 +2285,10 @@ def create_youtube_order_with_deduction_atomic(qrcode_path, package, remark, use
         return False, "缺少必要参数", None, None
     
     try:
+        # 导入模块以避免循环导入
+        from modules.constants import get_youtube_package_price
+        import modules.constants as constants
+        
         # 获取套餐价格
         price = get_youtube_package_price(user_id, package)
         
@@ -2324,7 +2328,7 @@ def create_youtube_order_with_deduction_atomic(qrcode_path, package, remark, use
             cursor.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
             
             # 添加余额变动记录
-            reason = f"油管会员充值 - {constants.PLAN_LABELS_ZH.get(package, package)}套餐"
+            reason = f"油管会员充值 - 印度个人会员一年"
             if DATABASE_URL.startswith('postgres'):
                 cursor.execute("""
                     INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
@@ -2382,3 +2386,28 @@ def get_user_youtube_custom_prices(user_id):
     except Exception as e:
         logger.error(f"获取用户油管定制价格失败: {str(e)}", exc_info=True)
         return {}
+
+def get_db_connection():
+    """获取数据库连接"""
+    if DATABASE_URL.startswith('postgres'):
+        parse_result = urlparse(DATABASE_URL)
+        username = parse_result.username
+        password = parse_result.password
+        database = parse_result.path[1:]
+        hostname = parse_result.hostname
+        port = parse_result.port or 5432
+
+        conn = psycopg2.connect(
+            database=database,
+            user=username,
+            password=password,
+            host=hostname,
+            port=port
+        )
+    else:
+        # 使用绝对路径访问数据库
+        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        db_path = os.path.join(current_dir, "orders.db")
+        conn = sqlite3.connect(db_path)
+        
+    return conn
