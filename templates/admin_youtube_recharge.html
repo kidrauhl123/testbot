@@ -300,9 +300,9 @@
               <tr>
                 <td>{{ request[0] }}</td>
                 <td>{{ request[6] }}</td>
-                <td>
+                                  <td>
                   {% if request[3] %}
-                    <img src="{{ request[3] }}" class="preview-image" onclick="openModal('{{ request[3] }}')" onerror="this.src='/static/placeholder.png'">
+                    <img src="{{ request[3] }}" class="preview-image" onclick="openModal('{{ request[3] }}')" onerror="this.onerror=null;this.src='/static/placeholder.png';">
                   {% else %}
                     无
                   {% endif %}

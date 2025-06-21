@@ -156,6 +156,9 @@ if __name__ == "__main__":
     bot_thread.start()
     logger.info("Telegram机器人线程已启动")
     
+    # 确保机器人有时间初始化
+    time.sleep(2)
+    
     # 启动 Flask
     port = int(os.environ.get("PORT", 5000))
     logger.info(f"正在启动Flask服务器，端口：{port}...")

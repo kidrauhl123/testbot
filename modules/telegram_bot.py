@@ -1455,28 +1455,66 @@ async def send_youtube_recharge_notification(data):
         # 发送通知
         try:
             if qrcode_image:
-                # 将URL路径转换为本地文件系统路径
-                project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                relative_path = qrcode_image.lstrip('/')
-                local_image_path = os.path.join(project_root, relative_path)
-                
-                logger.info(f"尝试从本地路径发送图片: {local_image_path}")
-                
-                if os.path.exists(local_image_path):
+                # 判断部署环境
+                is_production = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('PRODUCTION')
+                if is_production:
+                    # 生产环境，可能在容器中运行，直接使用网络URL
                     try:
-                        # 直接发送图片文件
-                        with open(local_image_path, 'rb') as photo_file:
-                            await bot_application.bot.send_photo(
+                        # 构建完整的网址
+                        host = os.environ.get('HOST_URL', 'http://localhost:5000')
+                        full_url = f"{host}{qrcode_image}"
+                        logger.info(f"生产环境：尝试使用网络URL发送图片: {full_url}")
+                        
+                        # 直接使用网络URL发送
+                        await bot_application.bot.send_photo(
+                            chat_id=admin_id,
+                            photo=full_url,
+                            caption=message_text,
+                            reply_markup=reply_markup,
+                            parse_mode='HTML'
+                        )
+                        logger.info(f"已成功使用网络URL发送油管会员充值请求图片通知到管理员 {admin_id}")
+                    except Exception as url_send_error:
+                        logger.error(f"使用网络URL发送图片失败: {url_send_error}, 尝试使用本地路径", exc_info=True)
+                        try_local_path = True
+                    else:
+                        try_local_path = False
+                else:
+                    try_local_path = True
+                    
+                # 如果需要尝试本地路径
+                if try_local_path:
+                    # 将URL路径转换为本地文件系统路径
+                    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    relative_path = qrcode_image.lstrip('/')
+                    local_image_path = os.path.join(project_root, relative_path)
+                    
+                    logger.info(f"尝试从本地路径发送图片: {local_image_path}")
+                    
+                    if os.path.exists(local_image_path):
+                        try:
+                            # 直接发送图片文件
+                            with open(local_image_path, 'rb') as photo_file:
+                                await bot_application.bot.send_photo(
+                                    chat_id=admin_id,
+                                    photo=photo_file,
+                                    caption=message_text,
+                                    reply_markup=reply_markup,
+                                    parse_mode='HTML'
+                                )
+                            logger.info(f"已成功使用本地文件发送油管会员充值请求图片通知到管理员 {admin_id}")
+                        except Exception as img_send_error:
+                            logger.error(f"发送本地图片失败: {img_send_error}, 回退到纯文本通知", exc_info=True)
+                            message_text += f"\n\n⚠️ <i>图片发送失败，请在网页管理界面查看二维码。</i>"
+                            await bot_application.bot.send_message(
                                 chat_id=admin_id,
-                                photo=photo_file,
-                                caption=message_text,
+                                text=message_text,
                                 reply_markup=reply_markup,
                                 parse_mode='HTML'
                             )
-                        logger.info(f"已成功发送油管会员充值请求图片通知到管理员 {admin_id}")
-                    except Exception as img_send_error:
-                        logger.error(f"发送本地图片失败: {img_send_error}, 回退到纯文本通知", exc_info=True)
-                        message_text += f"\n\n⚠️ <i>图片发送失败，请在网页管理界面查看二维码。</i>"
+                    else:
+                        logger.error(f"图片文件未找到: {local_image_path}, 回退到纯文本通知")
+                        message_text += f"\n\n⚠️ <i>二维码图片文件未找到，请在网页管理界面查看。图片URL: {qrcode_image}</i>"
                         await bot_application.bot.send_message(
                             chat_id=admin_id,
                             text=message_text,
@@ -1558,20 +1596,55 @@ async def send_dispute_notification(data):
 # ===== 主函数 =====
 def run_bot(notification_queue):
     """在一个新事件循环中运行Telegram机器人"""
-    global BOT_LOOP
-    if not BOT_LOOP:
-        logger.error("机器人事件循环未初始化，无法运行")
-        print("ERROR: 机器人事件循环未初始化，无法运行")
-        return
-
+    global BOT_LOOP, bot_application
+    
+    # 初始化应用
     try:
-        # 在机器人的事件循环中运行异步处理函数
-        asyncio.run_coroutine_threadsafe(
-            process_telegram_update_async(notification_queue.get(), notification_queue),
-            BOT_LOOP
-        )
-        logger.info("已将webhook更新提交到机器人事件循环处理")
-        print("DEBUG: 已将webhook更新提交到机器人事件循环处理")
+        if not bot_application:
+            bot_application = ApplicationBuilder().token(BOT_TOKEN).build()
+            
+            # 注册处理器
+            bot_application.add_handler(CommandHandler("test", on_test))
+            bot_application.add_handler(CommandHandler("start", on_start))
+            bot_application.add_handler(CommandHandler("admin", on_admin_command))
+            bot_application.add_handler(CommandHandler("stats", on_stats))
+            bot_application.add_handler(CallbackQueryHandler(on_callback_query))
+            bot_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+            
+            logger.info("Telegram机器人应用已初始化")
+            
+            # 创建一个新的事件循环
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            BOT_LOOP = loop
+            
+            # 启动消息队列处理线程
+            def process_notification_queue():
+                while True:
+                    try:
+                        # 非阻塞方式获取队列消息，避免阻塞整个线程
+                        try:
+                            data = notification_queue.get(block=False)
+                            # 提交到事件循环处理
+                            asyncio.run_coroutine_threadsafe(
+                                send_notification_from_queue(data),
+                                BOT_LOOP
+                            )
+                        except queue.Empty:
+                            # 队列为空，等待一会再尝试
+                            time.sleep(1)
+                    except Exception as e:
+                        logger.error(f"处理通知队列时出错: {str(e)}", exc_info=True)
+                        time.sleep(1)
+            
+            # 启动队列处理线程
+            queue_thread = threading.Thread(target=process_notification_queue, daemon=True)
+            queue_thread.start()
+            
+            # 启动机器人
+            bot_application.run_polling(close_loop=False)
+        else:
+            logger.info("Telegram机器人应用已经初始化，无需重复初始化")
     except Exception as e:
         logger.error(f"运行机器人时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 运行机器人时出错: {str(e)}")
