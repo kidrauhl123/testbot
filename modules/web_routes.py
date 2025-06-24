@@ -876,95 +876,67 @@ def register_routes(app, notification_queue):
     @login_required
     @admin_required
     def admin_api_orders():
-        """获取所有订单"""
-        # 获取查询参数
-        limit = int(request.args.get('limit', 50))
-        offset = int(request.args.get('offset', 0))
-        status = request.args.get('status')
-        search = request.args.get('search', '')
-        
-        # 构建查询条件
-        conditions = []
-        params = []
-        
-        if status:
-            conditions.append("status = ?")
-            params.append(status)
-        
-        if search:
-            conditions.append("(account LIKE ? OR web_user_id LIKE ? OR id LIKE ?)")
-            search_param = f"%{search}%"
-            params.extend([search_param, search_param, search_param])
-        
-        where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
-        
-        # 查询订单
-        if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL查询，使用COALESCE获取web_user_id或从users表联查username
-            orders = execute_query(f"""
-                SELECT o.id, o.account, o.password, o.package, o.status, o.remark, o.created_at, o.accepted_at, o.completed_at, 
-                       COALESCE(o.web_user_id, u.username) as creator, o.accepted_by, o.accepted_by_username, o.accepted_by_first_name, o.refunded
+        try:
+            # 获取分页参数
+            page = int(request.args.get('page', 1))
+            per_page = int(request.args.get('per_page', 20))
+            offset = (page - 1) * per_page
+            
+            # 获取搜索参数
+            search = request.args.get('search', '').strip()
+            
+            # 构建查询条件
+            conditions = []
+            params = []
+            
+            if search:
+                conditions.append("(o.id LIKE ? OR o.account LIKE ? OR u.username LIKE ?)")
+                search_param = f"%{search}%"
+                params.extend([search_param, search_param, search_param])
+            
+            where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+            
+            # 查询订单 - 关联users表获取创建者用户名，并关联sellers表获取接单人昵称
+            query = f"""
+                SELECT o.id, o.account, o.package, o.status, o.created_at, 
+                       u.username as creator, s.nickname as accepter
+                FROM orders o
+                LEFT JOIN users u ON o.user_id = u.id
+                LEFT JOIN sellers s ON o.accepted_by = s.telegram_id
+                {where_clause}
+                ORDER BY o.id DESC
+                LIMIT ? OFFSET ?
+            """
+            params.extend([per_page, offset])
+            orders = execute_query(query, params, fetch=True)
+            
+            # 查询总数用于分页
+            count_query = f"""
+                SELECT COUNT(*) 
                 FROM orders o
                 LEFT JOIN users u ON o.user_id = u.id
                 {where_clause}
-                ORDER BY o.id DESC
-                LIMIT %s OFFSET %s
-            """, params + [limit, offset], fetch=True)
+            """
+            total_count = execute_query(count_query, params[:-2], fetch=True)[0][0]
             
-            # 查询订单总数
-            count = execute_query(f"""
-                SELECT COUNT(*) FROM orders {where_clause}
-            """, params, fetch=True)[0][0]
-        else:
-            # SQLite查询
-            orders = execute_query(f"""
-                SELECT id, account, password, package, status, remark, created_at, accepted_at, completed_at, 
-                       web_user_id as creator, accepted_by, accepted_by_username, accepted_by_first_name, refunded
-                FROM orders
-                {where_clause}
-                ORDER BY id DESC
-                LIMIT ? OFFSET ?
-            """, params + [limit, offset], fetch=True)
-            
-            # 查询订单总数
-            count = execute_query(f"""
-                SELECT COUNT(*) FROM orders {where_clause}
-            """, params, fetch=True)[0][0]
-        
-        # 格式化订单数据
-        formatted_orders = []
-        for order in orders:
-            order_id, account, password, package, status, remark, created_at, accepted_at, completed_at, creator, accepted_by, accepted_by_username, accepted_by_first_name, refunded = order
-            
-            # 格式化卖家信息
-            seller_info = None
-            if accepted_by:
-                seller_info = {
-                    "telegram_id": accepted_by,
-                    "username": accepted_by_username or str(accepted_by),
-                    "name": accepted_by_first_name or str(accepted_by)
-                }
-            
-            formatted_orders.append({
-                "id": order_id,
-                "account": account,
-                "password": password,
-                "package": package,
-                "status": status,
-                "status_text": STATUS_TEXT_ZH.get(status, status),
-                "remark": remark,
-                "created_at": created_at,
-                "accepted_at": accepted_at,
-                "completed_at": completed_at,
-                "creator": creator or "N/A",
-                "seller": seller_info,
-                "refunded": bool(refunded)
+            return jsonify({
+                "success": True,
+                "data": [{
+                    "id": order[0],
+                    "account": order[1],
+                    "package": order[2],
+                    "status": order[3],
+                    "created_at": order[4],
+                    "creator": order[5],
+                    "accepter": order[6] if order[6] else ""
+                } for order in orders],
+                "total": total_count,
+                "page": page,
+                "per_page": per_page
             })
-        
-        return jsonify({
-            "orders": formatted_orders,
-            "total": count
-        })
+        except Exception as e:
+            logger.error(f"获取订单列表失败: {str(e)}")
+            return jsonify({"success": False, "error": f"获取订单列表失败: {str(e)}"}), 500
         
     @app.route('/admin/api/sellers', methods=['GET'])
     @login_required
