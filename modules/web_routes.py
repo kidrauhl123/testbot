@@ -399,7 +399,7 @@ def register_routes(app, notification_queue):
     def orders_recent():
         """获取用户最近的订单"""
         # 获取查询参数
-        limit = int(request.args.get('limit', 1000))  # 默认返回1000条订单
+        limit = int(request.args.get('limit', 10000))  # 默认返回10000条订单，增加限制以便显示更多订单
         offset = int(request.args.get('offset', 0))
         user_filter = ""
         params = []
