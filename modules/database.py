@@ -1130,10 +1130,10 @@ def create_order_with_deduction_atomic(account, package, username, user_id):
             
             if DATABASE_URL.startswith('postgres'):
                 cursor.execute("""
-                    INSERT INTO orders (account, package, status, created_at, updated_at, user_id, notified, web_user_id)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO orders (account, password, package, status, created_at, updated_at, user_id, notified, web_user_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
-                """, (account, package, STATUS['SUBMITTED'], timestamp, timestamp, user_id, 0, user_id))
+                """, (account, '', package, STATUS['SUBMITTED'], timestamp, timestamp, user_id, 0, user_id))
                 order_id = cursor.fetchone()[0]
             else:
                 cursor.execute("""
