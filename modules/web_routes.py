@@ -261,9 +261,9 @@ def register_routes(app, notification_queue):
             try:
                 new_order_id, new_balance, success, message = create_order_with_deduction_atomic(
                     file_path, package, username, user_id
-            )
-            
-            if not success:
+                )
+                
+                if not success:
                     logger.error(f"创建订单失败: {message}")
                     return jsonify({"success": False, "error": message}), 400
                 
@@ -271,6 +271,9 @@ def register_routes(app, notification_queue):
                 
                 # 获取信用额度用于返回前端
                 credit_limit = get_user_credit_limit(user_id)
+            except Exception as e:
+                logger.error(f"创建订单时出错: {str(e)}", exc_info=True)
+                return jsonify({"success": False, "error": f"创建订单时出错: {str(e)}"}), 500
                 
                 # 如果创建了订单，将其加入通知队列
             if new_order_id:
