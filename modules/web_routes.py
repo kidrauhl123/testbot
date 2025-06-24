@@ -1138,209 +1138,188 @@ def register_routes(app, notification_queue):
     @login_required
     @admin_required
     def admin_api_batch_delete_orders():
-        """管理员批量删除订单"""
+        """批量删除订单（仅限管理员）"""
         data = request.json
-        order_ids = data.get('order_ids')
-
-        if not order_ids or not isinstance(order_ids, list):
-            return jsonify({"success": False, "error": "无效的订单ID列表"}), 400
-
+        
+        if not data or 'order_ids' not in data:
+            return jsonify({"error": "缺少order_ids参数"}), 400
+            
+        order_ids = data['order_ids']
+        
+        if not isinstance(order_ids, list) or len(order_ids) == 0:
+            return jsonify({"error": "order_ids必须是非空列表"}), 400
+            
         try:
-            # 获取订单总数
-            total_count = execute_query("SELECT COUNT(*) FROM orders", fetch=True)[0][0]
-            if len(order_ids) == total_count:
-                # 全部删除，直接truncate并重置自增ID
-                if DATABASE_URL.startswith('postgres'):
-                    import psycopg2
-                    from urllib.parse import urlparse
-                    url = urlparse(DATABASE_URL)
-                    conn = psycopg2.connect(
-                        dbname=url.path[1:],
-                        user=url.username,
-                        password=url.password,
-                        host=url.hostname,
-                        port=url.port
-                    )
-                    cur = conn.cursor()
-                    cur.execute("TRUNCATE TABLE orders RESTART IDENTITY;")
-                    conn.commit()
-                    cur.close()
-                    conn.close()
-                else:
-                    # SQLite等其他数据库的处理
-                    execute_query("DELETE FROM orders")
-                deleted_count = total_count
-            else:
-                # 普通批量删除
-                order_ids_int = [int(oid) for oid in order_ids]
-                placeholders = ','.join(['?'] * len(order_ids_int))
-                result = execute_query(
-                    f"DELETE FROM orders WHERE id IN ({placeholders})",
-                    order_ids_int,
-                    fetch=False,
-                    return_cursor=True
-                )
-                deleted_count = result.rowcount if result else 0
-
-            logger.info(f"管理员 {session.get('username')} 删除了 {deleted_count} 个订单: {order_ids}")
-            return jsonify({"success": True, "deleted_count": deleted_count})
-        except (ValueError, TypeError):
-            return jsonify({"success": False, "error": "订单ID必须是有效的数字"}), 400
+            # 构建SQL的IN子句
+            order_ids_str = ','.join(['?'] * len(order_ids))
+            
+            # 先获取订单信息用于日志
+            orders_info = execute_query(
+                f"SELECT id, account, status FROM orders WHERE id IN ({order_ids_str})",
+                order_ids,
+                fetch=True
+            )
+            
+            # 删除订单
+            execute_query(
+                f"DELETE FROM orders WHERE id IN ({order_ids_str})",
+                order_ids
+            )
+            
+            logger.info(f"管理员批量删除了{len(order_ids)}个订单: {order_ids}")
+            
+            # 记录详细的订单信息
+            for order in orders_info:
+                oid, account, status = order
+                logger.info(f"已删除订单: ID={oid}, 账号={account}, 状态={status}")
+            
+            return jsonify({"success": True, "message": f"成功删除{len(order_ids)}个订单"})
         except Exception as e:
-            logger.error(f"批量删除订单时出错: {e}", exc_info=True)
-            return jsonify({"success": False, "error": "服务器内部错误"}), 500 
+            logger.error(f"批量删除订单失败: {str(e)}", exc_info=True)
+            return jsonify({"error": f"删除失败: {str(e)}"}), 500
 
-    # ===== 充值相关路由 =====
-    @app.route('/recharge', methods=['GET'])
+    @app.route('/api/notifications')
     @login_required
-    def recharge_page():
-        """显示充值页面"""
+    def api_get_notifications():
+        """获取用户通知"""
         user_id = session.get('user_id')
-        balance = get_user_balance(user_id)
         
-        # 获取用户的充值记录
-        recharge_history = get_user_recharge_requests(user_id)
-        
-        return render_template('recharge.html',
-                              username=session.get('username'),
-                              is_admin=session.get('is_admin'),
-                              balance=balance,
-                              recharge_history=recharge_history)
-    
-    @app.route('/recharge', methods=['POST'])
-    @login_required
-    def submit_recharge():
-        """提交充值请求"""
+        # 获取未读通知数量和最新的几条通知
         try:
-            user_id = session.get('user_id')
-            amount = request.form.get('amount')
-            payment_method = request.form.get('payment_method')
-            payment_command = request.form.get('payment_command', '')
-            details = None
-
-            if payment_method == '支付宝口令红包':
-                details = payment_command
+            # 获取未读通知数量
+            unread_count = execute_query(
+                "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0",
+                (user_id,),
+                fetch=True
+            )[0][0]
             
-            logger.info(f"收到充值请求: 用户ID={user_id}, 金额={amount}, 支付方式={payment_method}, 详情={details}")
+            # 获取最新的10条通知
+            notifications = execute_query(
+                "SELECT id, type, content, created_at, is_read FROM notifications WHERE user_id = ? ORDER BY id DESC LIMIT 10",
+                (user_id,),
+                fetch=True
+            )
             
-            # 验证输入
-            try:
-                amount = float(amount)
-                if amount <= 0:
-                    return jsonify({"success": False, "error": "充值金额必须大于0"}), 400
-            except ValueError:
-                return jsonify({"success": False, "error": "请输入有效的金额"}), 400
-            
-            if not payment_method:
-                payment_method = "未指定"
-            
-            # 处理上传的支付凭证
-            proof_image = None
-            if 'proof_image' in request.files:
-                file = request.files['proof_image']
-                if file and file.filename:
-                    try:
-                        # 确保上传目录存在
-                        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                        upload_dir = os.path.join(current_dir, 'static', 'uploads')
-                        logger.info(f"上传目录路径: {upload_dir}")
-                        
-                        if not os.path.exists(upload_dir):
-                            try:
-                                os.makedirs(upload_dir)
-                                logger.info(f"创建上传目录: {upload_dir}")
-                            except Exception as mkdir_error:
-                                logger.error(f"创建上传目录失败: {str(mkdir_error)}", exc_info=True)
-                                return jsonify({"success": False, "error": f"创建上传目录失败: {str(mkdir_error)}"}), 500
-                        
-                        # 生成唯一文件名
-                        filename = f"{int(time.time())}_{file.filename}"
-                        file_path = os.path.join(upload_dir, filename)
-                        
-                        # 保存文件
-                        file.save(file_path)
-                        logger.info(f"已保存文件到: {file_path}")
-                        
-                        # 确保URL路径正确
-                        proof_image = f"/static/uploads/{filename}"
-                        logger.info(f"设置凭证URL: {proof_image}")
-                        
-                        # 验证文件是否成功保存
-                        if not os.path.exists(file_path):
-                            logger.error(f"文件保存失败，路径不存在: {file_path}")
-                            return jsonify({"success": False, "error": "文件保存失败，请重试"}), 500
-                    except Exception as e:
-                        logger.error(f"保存充值凭证失败: {str(e)}", exc_info=True)
-                        return jsonify({"success": False, "error": f"保存充值凭证失败: {str(e)}"}), 500
-            
-            # 创建充值请求
-            logger.info(f"正在创建充值请求: 用户ID={user_id}, 金额={amount}, 支付方式={payment_method}")
-            request_id, success, message = create_recharge_request(user_id, amount, payment_method, proof_image, details)
-            
-            if success:
-                # 发送通知到TG管理员
-                username = session.get('username')
-                notification_queue.put({
-                    'type': 'recharge_request',
-                    'request_id': request_id,
-                    'username': username,
-                    'amount': amount,
-                    'payment_method': payment_method,
-                    'proof_image': proof_image,
-                    'details': details
-                })
-                logger.info(f"充值请求 #{request_id} 已提交成功，已加入通知队列")
+            # 格式化通知
+            formatted_notifications = []
+            for notif in notifications:
+                notif_id, notif_type, content_str, created_at, is_read = notif
                 
-                return jsonify({
-                    "success": True,
-                    "message": "充值请求已提交，请等待管理员审核"
+                try:
+                    content = json.loads(content_str)
+                except:
+                    content = {"message": content_str}
+                
+                formatted_notifications.append({
+                    "id": notif_id,
+                    "type": notif_type,
+                    "content": content,
+                    "created_at": created_at,
+                    "is_read": bool(is_read)
                 })
-            else:
-                logger.error(f"创建充值请求失败: {message}")
-                return jsonify({"success": False, "error": message}), 500
+            
+            return jsonify({
+                "success": True,
+                "unread_count": unread_count,
+                "notifications": formatted_notifications
+            })
         except Exception as e:
-            logger.error(f"处理充值请求时出错: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "error": f"处理充值请求时出错: {str(e)}"}), 500
-    
-    @app.route('/admin/recharge-requests', methods=['GET'])
+            logger.error(f"获取通知失败: {str(e)}", exc_info=True)
+            return jsonify({"error": f"获取通知失败: {str(e)}"}), 500
+
+    @app.route('/api/notifications/mark-read', methods=['POST'])
     @login_required
-    @admin_required
-    def admin_recharge_requests():
-        """管理员查看充值请求列表"""
-        pending_requests = get_pending_recharge_requests()
+    def api_mark_notifications_read():
+        """标记通知为已读"""
+        user_id = session.get('user_id')
+        data = request.json
         
-        return render_template('admin_recharge.html',
-                              username=session.get('username'),
-                              is_admin=session.get('is_admin'),
-                              pending_requests=pending_requests)
+        if not data:
+            return jsonify({"error": "缺少参数"}), 400
+            
+        # 如果提供了notification_ids，则只标记指定的通知
+        notification_ids = data.get('notification_ids', [])
+        
+        try:
+            if notification_ids:
+                # 标记指定的通知为已读
+                ids_str = ','.join(['?'] * len(notification_ids))
+                params = notification_ids + [user_id]
+                execute_query(
+                    f"UPDATE notifications SET is_read = 1 WHERE id IN ({ids_str}) AND user_id = ?",
+                    params
+                )
+                logger.info(f"已标记用户{user_id}的通知{notification_ids}为已读")
+            else:
+                # 标记所有通知为已读
+                execute_query(
+                    "UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0",
+                    (user_id,)
+                )
+                logger.info(f"已标记用户{user_id}的所有通知为已读")
+            
+            return jsonify({"success": True})
+        except Exception as e:
+            logger.error(f"标记通知已读失败: {str(e)}", exc_info=True)
+            return jsonify({"error": f"标记通知已读失败: {str(e)}"}), 500
     
-    @app.route('/admin/api/recharge/<int:request_id>/approve', methods=['POST'])
+    @app.route('/orders/confirm/<int:oid>', methods=['POST'])
     @login_required
-    @admin_required
-    def approve_recharge(request_id):
-        """批准充值请求"""
-        admin_id = session.get('user_id')
+    def confirm_order(oid):
+        """用户确认收货"""
+        user_id = session.get('user_id')
+        username = session.get('username')
         
-        success, message = approve_recharge_request(request_id, admin_id)
+        # 验证订单是否属于该用户
+        order = execute_query("""
+            SELECT id, status, web_user_id FROM orders WHERE id = ?
+        """, (oid,), fetch=True)
         
-        if success:
-            return jsonify({"success": True, "message": message})
-        else:
-            return jsonify({"success": False, "error": message}), 400
-    
-    @app.route('/admin/api/recharge/<int:request_id>/reject', methods=['POST'])
-    @login_required
-    @admin_required
-    def reject_recharge(request_id):
-        """拒绝充值请求"""
-        admin_id = session.get('user_id')
+        if not order:
+            return jsonify({"success": False, "error": "订单不存在"}), 404
+            
+        order_id, status, web_user_id = order[0]
         
-        success, message = reject_recharge_request(request_id, admin_id)
-        
-        if success:
-            return jsonify({"success": True, "message": message})
-        else:
-            return jsonify({"success": False, "error": message}), 400
+        # 验证用户权限
+        if str(web_user_id) != str(user_id) and not session.get('is_admin', False):
+            return jsonify({"success": False, "error": "无权操作此订单"}), 403
+            
+        # 验证订单状态
+        if status != STATUS['ACCEPTED']:
+            return jsonify({
+                "success": False, 
+                "error": f"订单状态为 {status}，无法确认收货",
+                "status": status
+            }), 400
+            
+        try:
+            # 更新订单状态
+            timestamp = get_china_time()
+            execute_query(
+                "UPDATE orders SET status = ?, completed_at = ? WHERE id = ?",
+                (STATUS['COMPLETED'], timestamp, oid)
+            )
+            
+            logger.info(f"用户 {username} 确认了订单 #{oid} 收货")
+            
+            # 添加到通知队列，通知Telegram机器人
+            notification_queue.put({
+                'type': 'order_status_change',
+                'order_id': oid,
+                'status': STATUS['COMPLETED'],
+                'handler_id': user_id,
+                'update_original': True
+            })
+            
+            return jsonify({
+                "success": True, 
+                "message": "订单已确认收货",
+                "new_status": STATUS['COMPLETED'],
+                "new_status_text": STATUS_TEXT_ZH[STATUS['COMPLETED']]
+            })
+        except Exception as e:
+            logger.error(f"确认订单 #{oid} 收货失败: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": f"确认收货失败: {str(e)}"}), 500
 
     @app.route('/api/balance/records')
     @login_required
@@ -1365,597 +1344,6 @@ def register_routes(app, notification_queue):
             return jsonify({
                 "success": True,
                 "records": records
-            })
-        except Exception as e:
-            logger.error(f"获取余额明细记录失败: {str(e)}", exc_info=True)
-            return jsonify({
-                "success": False,
-                "error": "获取余额明细记录失败，请刷新重试"
-            }), 500
-        
-    @app.route('/api/active-sellers')
-    @login_required
-    def api_active_sellers():
-        """获取活跃的卖家列表，供下单时选择接单人使用"""
-        sellers = get_active_sellers()
-        
-        # 格式化最后活跃时间
-        for seller in sellers:
-            if seller['last_active_at']:
-                # 计算距离现在的时间差
-                try:
-                    last_active = datetime.strptime(seller['last_active_at'], "%Y-%m-%d %H:%M:%S")
-                    now = datetime.now()
-                    diff = now - last_active
-                    
-                    if diff.days > 0:
-                        seller['active_status'] = f"{diff.days}天前活跃"
-                    elif diff.seconds > 3600:
-                        seller['active_status'] = f"{diff.seconds // 3600}小时前活跃"
-                    elif diff.seconds > 60:
-                        seller['active_status'] = f"{diff.seconds // 60}分钟前活跃"
-                    else:
-                        seller['active_status'] = "刚刚活跃"
-                except:
-                    seller['active_status'] = "未知"
-            else:
-                seller['active_status'] = "从未活跃"
-        
-        return jsonify({
-            "success": True,
-            "sellers": sellers
-        })
-        
-    @app.route('/api/check-seller-activity/<int:seller_id>', methods=['POST'])
-    @login_required
-    def check_seller_activity_api(seller_id):
-        """发送卖家活跃度检查请求"""
-        try:
-            # 检查卖家是否存在且活跃
-            if DATABASE_URL.startswith('postgres'):
-                seller = execute_query(
-                    "SELECT telegram_id FROM sellers WHERE telegram_id = ? AND is_active = TRUE", 
-                    (seller_id,), 
-                    fetch=True
-                )
-            else:
-                seller = execute_query(
-                    "SELECT telegram_id FROM sellers WHERE telegram_id = ? AND is_active = 1", 
-                    (seller_id,), 
-                    fetch=True
-                )
-            
-            if not seller:
-                return jsonify({"success": False, "message": "卖家不存在或未激活"}), 404
-            
-            # 记录检查请求
-            check_seller_activity(seller_id)
-            
-            # 发送通知
-            notification_queue.put({
-                'type': 'activity_check',
-                'seller_id': seller_id
-            })
-            
-            return jsonify({
-                "success": True,
-                "message": "活跃度检查请求已发送"
-            })
-        except Exception as e:
-            logger.error(f"发送卖家活跃度检查请求失败: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "message": f"操作失败: {str(e)}"}), 500
-
-    @app.route('/api/user-prices')
-    @login_required
-    def api_get_user_prices():
-        """获取用户套餐价格"""
-        user_id = session.get('user_id')
-        custom_prices = get_user_custom_prices(user_id)
-        
-        result = {}
-        for package, price in WEB_PRICES.items():
-            result[package] = custom_prices.get(package, price)
-            
-        return jsonify({"success": True, "prices": result})
-        
-    @app.route('/api/notifications')
-    @login_required
-    def api_get_notifications():
-        """获取用户通知"""
-        user_id = session.get('user_id')
-        limit = int(request.args.get('limit', 10))
-        offset = int(request.args.get('offset', 0))
-        unread_only = request.args.get('unread_only') == '1'
-        
-        # 构建查询条件
-        where_clause = "WHERE user_id = ?"
-        params = [user_id]
-        
-        if unread_only:
-            where_clause += " AND is_read = 0"
-        
-        # 查询通知
-        notifications = execute_query(f"""
-            SELECT id, type, content, created_at, is_read
-            FROM notifications
-            {where_clause}
-            ORDER BY created_at DESC
-            LIMIT ? OFFSET ?
-        """, params + [limit, offset], fetch=True)
-        
-        # 格式化结果
-        result = []
-        for note in notifications:
-            note_id, note_type, content, created_at, is_read = note
-            
-            # 解析JSON内容
-            try:
-                content_data = json.loads(content)
-            except:
-                content_data = content
-                
-            result.append({
-                "id": note_id,
-                "type": note_type,
-                "content": content_data,
-                "created_at": created_at,
-                "is_read": is_read == 1
-            })
-            
-        return jsonify({"success": True, "notifications": result})
-        
-    @app.route('/api/notifications/mark-read', methods=['POST'])
-    @login_required
-    def api_mark_notifications_read():
-        """标记通知为已读"""
-        user_id = session.get('user_id')
-        notification_ids = request.json.get('notification_ids', [])
-        
-        if not notification_ids:
-            return jsonify({"success": False, "error": "未指定通知ID"}), 400
-            
-        # 确保只能标记自己的通知
-        id_list = ','.join(['?'] * len(notification_ids))
-        params = notification_ids + [user_id]
-        
-        execute_query(f"""
-            UPDATE notifications
-            SET is_read = 1
-            WHERE id IN ({id_list}) AND user_id = ?
-        """, params)
-        
-        return jsonify({"success": True})
-    
-    @app.route('/redeem', methods=['GET'])
-    def redeem_page():
-        """激活码兑换页面"""
-        # 从URL获取激活码参数
-        code = request.args.get('code', '')
-        
-        try:
-            orders = execute_query("SELECT id, account, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
-            
-            # 如果有激活码参数，检查是否已被使用，并获取相关订单信息
-            order_info = None
-            code_info = None
-            
-            # 1. 检查URL中的激活码
-            if code:
-                code_info = get_activation_code(code)
-                if code_info:
-                    # 查找使用此激活码创建的订单
-                    order_query = execute_query(
-                        "SELECT id, account, package, status, created_at, completed_at, remark FROM orders WHERE remark LIKE ? ORDER BY id DESC LIMIT 1", 
-                        (f"%通过激活码兑换: {code}%",), 
-                        fetch=True
-                    )
-                    if order_query and len(order_query) > 0:
-                        order = order_query[0]
-                        order_info = {
-                            "id": order[0],
-                            "account": order[1],
-                            "package": order[2],
-                            "status": order[3],
-                            "status_text": STATUS_TEXT_ZH.get(order[3], order[3]),
-                            "created_at": order[4],
-                            "completed_at": order[5] or "",
-                            "remark": order[6]
-                        }
-            
-            # 2. 如果URL中没有激活码或没找到订单，检查session中的上次兑换记录
-            if not order_info and 'last_redeemed_code' in session and 'last_order_id' in session:
-                last_code = session.get('last_redeemed_code')
-                last_order_id = session.get('last_order_id')
-                
-                # 查询订单详情
-                order_query = execute_query(
-                    "SELECT id, account, package, status, created_at, completed_at, remark FROM orders WHERE id = ?", 
-                    (last_order_id,), 
-                    fetch=True
-                )
-                
-                if order_query and len(order_query) > 0:
-                    order = order_query[0]
-                    order_info = {
-                        "id": order[0],
-                        "account": order[1],
-                        "package": order[2],
-                        "status": order[3],
-                        "status_text": STATUS_TEXT_ZH.get(order[3], order[3]),
-                        "created_at": order[4],
-                        "completed_at": order[5] or "",
-                        "remark": order[6]
-                    }
-                    
-                    # 如果URL没有激活码，但session有，使用session中的激活码
-                    if not code:
-                        code = last_code
-                        code_info = get_activation_code(code)
-            
-            return render_template('redeem.html', 
-                                   code=code,
-                                   orders=orders, 
-                                   status_text=STATUS_TEXT_ZH,
-                                   username=session.get('username'),
-                                   is_admin=session.get('is_admin'),
-                                   balance=get_user_balance(session.get('user_id', 0)),
-                                   order_info=order_info,
-                                   code_info=code_info)
-        except Exception as e:
-            logger.error(f"加载兑换页面失败: {str(e)}", exc_info=True)
-            return render_template('redeem.html', 
-                                   code=code,
-                                   error='加载数据失败', 
-                                   username=session.get('username'),
-                                   is_admin=session.get('is_admin'))
-
-    @app.route('/redeem/<code>', methods=['GET'])
-    def redeem_with_code(code):
-        """带激活码的兑换链接"""
-        return redirect(url_for('redeem_page', code=code))
-
-    @app.route('/api/verify-code', methods=['POST'])
-    def verify_activation_code():
-        """验证激活码"""
-        try:
-            code = request.json.get('code', '')
-            
-            if not code:
-                return jsonify({"success": False, "message": "请输入激活码"}), 400
-            
-            # 获取激活码信息
-            code_info = get_activation_code(code)
-            
-            # 检查激活码是否存在
-            if not code_info:
-                logger.warning(f"无效的激活码: {code}")
-                return jsonify({"success": False, "message": "无效的激活码"}), 400
-            
-            # 检查激活码是否已使用
-            if code_info['is_used']:
-                # 查找使用此激活码创建的订单
-                order_query = execute_query(
-                    "SELECT id, status FROM orders WHERE remark LIKE ? ORDER BY id DESC LIMIT 1", 
-                    (f"%通过激活码兑换: {code}%",), 
-                    fetch=True
-                )
-                
-                if order_query and len(order_query) > 0:
-                    order_id = order_query[0][0]
-                    order_status = order_query[0][1]
-                    status_text = STATUS_TEXT_ZH.get(order_status, order_status)
-                    logger.warning(f"激活码已被使用: {code}, 关联订单 #{order_id}, 状态: {status_text}")
-                    return jsonify({
-                        "success": False, 
-                        "message": f"此激活码已被使用，关联订单 #{order_id}，状态: {status_text}"
-                    }), 400
-                else:
-                    logger.warning(f"激活码已被使用: {code}, 但未找到关联订单")
-                    return jsonify({"success": False, "message": "此激活码已被使用"}), 400
-            
-            # 返回成功和套餐信息
-            return jsonify({
-                "success": True, 
-                "package": code_info['package'],
-                "message": "有效的激活码"
-            })
-                
-        except Exception as e:
-            logger.error(f"验证激活码失败: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "message": "验证失败，请稍后再试"}), 500
-
-    @app.route('/redeem', methods=['POST'])
-    def process_redeem():
-        """处理激活码兑换请求"""
-        try:
-            # 从JSON获取数据
-            data = request.json
-            code = data.get('code', '')
-            account = data.get('account', '')
-            password = data.get('password', '')
-            remark = data.get('remark', '')
-            
-            if not code:
-                return jsonify({"success": False, "error": "请输入激活码"}), 400
-            
-            if not account or not password:
-                return jsonify({"success": False, "error": "请输入账号和密码"}), 400
-            
-            # 获取激活码信息
-            code_info = get_activation_code(code)
-            
-            # 检查激活码是否存在
-            if not code_info:
-                logger.warning(f"无效的激活码: {code}")
-                return jsonify({"success": False, "error": "无效的激活码"}), 400
-            
-            # 检查激活码是否已使用 - 使用数据库事务确保原子性
-            if code_info['is_used']:
-                # 查找使用此激活码创建的订单
-                order_query = execute_query(
-                    "SELECT id, status FROM orders WHERE remark LIKE ? ORDER BY id DESC LIMIT 1", 
-                    (f"%通过激活码兑换: {code}%",), 
-                    fetch=True
-                )
-                
-                if order_query and len(order_query) > 0:
-                    order_id = order_query[0][0]
-                    order_status = order_query[0][1]
-                    status_text = STATUS_TEXT_ZH.get(order_status, order_status)
-                    logger.warning(f"激活码已被使用: {code}, 关联订单 #{order_id}, 状态: {status_text}")
-                    return jsonify({
-                        "success": False, 
-                        "error": f"此激活码已被使用，关联订单 #{order_id}，状态: {status_text}"
-                    }), 400
-                else:
-                    logger.warning(f"激活码已被使用: {code}, 但未找到关联订单")
-                    return jsonify({"success": False, "error": "此激活码已被使用"}), 400
-            
-            # 用户ID和用户名 - 如果已登录则使用登录信息，否则使用临时值
-            user_id = session.get('user_id', 0)  # 未登录用户使用0作为ID
-            username = session.get('username', '未登录用户')
-            
-            # 创建订单记录（状态为已提交，而非已完成）
-            now = get_china_time()
-            order_id = None
-            
-            # 使用数据库事务确保原子性操作
-            try:
-                if DATABASE_URL.startswith('postgres'):
-                    # PostgreSQL事务
-                    import psycopg2
-                    from urllib.parse import urlparse
-                    url = urlparse(DATABASE_URL)
-                    conn = psycopg2.connect(
-                        dbname=url.path[1:],
-                        user=url.username,
-                        password=url.password,
-                        host=url.hostname,
-                        port=url.port
-                    )
-                    cursor = conn.cursor()
-                    
-                    # 开始事务
-                    conn.autocommit = False
-                    
-                    # 1. 先检查激活码是否仍然可用
-                    cursor.execute(
-                        "SELECT id, is_used FROM activation_codes WHERE code = %s FOR UPDATE",
-                        (code,)
-                    )
-                    code_check = cursor.fetchone()
-                    if not code_check or code_check[1] == 1:
-                        conn.rollback()
-                        return jsonify({"success": False, "error": "此激活码已被使用或不存在"}), 400
-                    
-                    # 2. 创建订单
-                    cursor.execute("""
-                        INSERT INTO orders (account, password, package, remark, status, created_at, user_id)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        RETURNING id
-                    """, (
-                        account,
-                        password,
-                        code_info['package'],
-                        f"通过激活码兑换: {code}",
-                        STATUS['SUBMITTED'],
-                        now,
-                        user_id
-                    ))
-                    order_id = cursor.fetchone()[0]
-                    
-                    # 3. 标记激活码为已使用
-                    cursor.execute("""
-                        UPDATE activation_codes
-                        SET is_used = 1, used_at = %s, used_by = %s
-                        WHERE id = %s
-                    """, (now, user_id if user_id > 0 else None, code_info['id']))
-                    
-                    # 提交事务
-                    conn.commit()
-                    
-                else:
-                    # SQLite事务
-                    conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
-                    cursor = conn.cursor()
-                    
-                    # 开始事务
-                    conn.execute("BEGIN TRANSACTION")
-                    
-                    # 1. 先检查激活码是否仍然可用
-                    cursor.execute(
-                        "SELECT id, is_used FROM activation_codes WHERE code = ?",
-                        (code,)
-                    )
-                    code_check = cursor.fetchone()
-                    if not code_check or code_check[1] == 1:
-                        conn.rollback()
-                        conn.close()
-                        return jsonify({"success": False, "error": "此激活码已被使用或不存在"}), 400
-                    
-                    # 2. 创建订单
-                    cursor.execute("""
-                        INSERT INTO orders (account, password, package, remark, status, created_at, user_id)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        account,
-                        password,
-                        code_info['package'],
-                        f"通过激活码兑换: {code}",
-                        STATUS['SUBMITTED'],
-                        now,
-                        user_id
-                    ))
-                    order_id = cursor.lastrowid
-                    
-                    # 3. 标记激活码为已使用
-                    cursor.execute("""
-                        UPDATE activation_codes
-                        SET is_used = 1, used_at = ?, used_by = ?
-                        WHERE id = ?
-                    """, (now, user_id if user_id > 0 else None, code_info['id']))
-                    
-                    # 提交事务
-                    conn.commit()
-                    conn.close()
-                
-                # 记录成功日志
-                logger.info(f"用户 {username} 成功兑换激活码 {code}, 套餐: {code_info['package']}, 订单ID: {order_id}")
-                
-                # 将激活码和订单ID保存到session，以便刷新页面后仍能显示
-                session['last_redeemed_code'] = code
-                session['last_order_id'] = order_id
-                
-            except Exception as e:
-                # 回滚事务
-                if 'conn' in locals():
-                    if DATABASE_URL.startswith('postgres'):
-                        conn.rollback()
-                    else:
-                        conn.rollback()
-                        conn.close()
-                logger.error(f"激活码兑换事务失败: {str(e)}", exc_info=True)
-                return jsonify({"success": False, "error": f"处理激活码兑换失败: {str(e)}"}), 500
-            
-            # 获取完整的订单信息
-            order = {
-                "id": order_id,
-                "account": account,
-                "password": password,
-                "package": code_info['package'],
-                "status": STATUS['SUBMITTED'],
-                "status_text": STATUS_TEXT_ZH.get(STATUS['SUBMITTED'], STATUS['SUBMITTED']),
-                "created_at": now,
-                "completed_at": None,  # 未完成
-                "remark": f"通过激活码兑换: {code}",
-                "creator": username,
-                "accepted_by": "",
-                "can_cancel": True  # 已提交的订单可以取消
-            }
-            
-            # 如果用户已登录并成功完成兑换，可以选择重定向到仪表板
-            redirect_url = url_for('dashboard') if 'user_id' in session else None
-            
-            # 返回成功消息和订单数据
-            return jsonify({
-                "success": True, 
-                "message": f"激活码兑换成功，订单已提交，等待处理!",
-                "orders": [order],  # 返回包含单个订单的数组
-                "redirect": redirect_url,
-                "redirect_delay": 3000  # 延迟3秒后重定向，给用户足够时间查看结果
-            })
-                
-        except Exception as e:
-            logger.error(f"处理激活码兑换请求失败: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "error": "处理请求失败，请稍后再试"}), 500
-
-    # 管理员激活码管理页面
-    @app.route('/admin/activation-codes', methods=['GET'])
-    @login_required
-    @admin_required
-    def admin_activation_codes():
-        """管理员管理激活码页面"""
-        return render_template('admin_activation_codes.html')
-
-    @app.route('/admin/api/activation-codes', methods=['GET'])
-    @login_required
-    @admin_required
-    def admin_api_get_activation_codes():
-        """获取激活码列表"""
-        limit = int(request.args.get('limit', 100))
-        offset = int(request.args.get('offset', 0))
-        is_used = request.args.get('is_used')
-        package = request.args.get('package')
-        
-        # 构建查询条件
-        conditions = []
-        params = []
-        
-        if is_used is not None:
-            is_used = int(is_used)
-            conditions.append("is_used = ?")
-            params.append(is_used)
-            
-        if package:
-            conditions.append("package = ?")
-            params.append(package)
-            
-        # 将条件传递给数据库函数
-        codes = get_admin_activation_codes(limit, offset, conditions, params)
-        return jsonify({"success": True, "codes": codes})
-
-    @app.route('/admin/api/activation-codes', methods=['POST'])
-    @login_required
-    @admin_required
-    def admin_api_create_activation_code():
-        """创建新激活码"""
-        package = request.json.get('package')
-        count = int(request.json.get('count', 1))
-        
-        if not package:
-            return jsonify({"success": False, "message": "请选择套餐"}), 400
-        
-        if count < 1 or count > 100:
-            return jsonify({"success": False, "message": "生成数量必须在1-100之间"}), 400
-        
-        user_id = session.get('user_id')
-        codes = create_activation_code(package, user_id, count)
-        
-        return jsonify({
-            "success": True, 
-            "message": f"成功生成{len(codes)}个激活码",
-            "codes": codes
-        })
-
-    @app.route('/admin/api/activation-codes/batch-delete', methods=['POST'])
-    @login_required
-    @admin_required
-    def admin_api_batch_delete_activation_codes():
-        """批量删除激活码"""
-        try:
-            data = request.json
-            code_ids = data.get('code_ids', [])
-            
-            if not code_ids:
-                return jsonify({"success": False, "message": "未选择任何激活码"}), 400
-                
-            # 构建占位符
-            if DATABASE_URL.startswith('postgres'):
-                placeholders = ','.join(['%s'] * len(code_ids))
-                query = f"DELETE FROM activation_codes WHERE id IN ({placeholders}) AND is_used = 0"
-            else:
-                placeholders = ','.join(['?'] * len(code_ids))
-                query = f"DELETE FROM activation_codes WHERE id IN ({placeholders}) AND is_used = 0"
-            
-            # 执行删除
-            result = execute_query(query, code_ids, return_cursor=True)
-            deleted_count = result.rowcount if result else 0
-            
-            logger.info(f"管理员删除了 {deleted_count} 个激活码")
-            return jsonify({
-                "success": True, 
-                "deleted_count": deleted_count,
-                "message": f"成功删除 {deleted_count} 个未使用的激活码"
             })
         except Exception as e:
             logger.error(f"批量删除激活码失败: {str(e)}", exc_info=True)

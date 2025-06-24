@@ -109,11 +109,6 @@ def init_db():
     create_recharge_tables()
     logger.info("充值记录表和余额记录表创建完成")
     
-    # 创建激活码表
-    logger.info("正在创建激活码表...")
-    create_activation_code_table()
-    logger.info("激活码表创建完成")
-    
     # 创建通知表
     logger.info("正在创建通知表...")
     create_notifications_table()
@@ -283,16 +278,44 @@ def init_postgres_db():
         package TEXT,
         remark TEXT,
         status TEXT DEFAULT 'submitted',
-        created_at TEXT,
-        updated_at TEXT,
+        created_at TIMESTAMP,
+        updated_at TIMESTAMP,
         user_id INTEGER,
         username TEXT,
         accepted_by TEXT,
         accepted_at TEXT,
         completed_at TEXT,
-        notified INTEGER DEFAULT 0
+        notified INTEGER DEFAULT 0,
+        web_user_id INTEGER
     )
     ''')
+    
+    # 检查orders表中是否有updated_at列
+    try:
+        # 检查PostgreSQL中是否存在updated_at列
+        c.execute("""
+            SELECT column_name FROM information_schema.columns 
+            WHERE table_name = 'orders' AND column_name = 'updated_at'
+        """)
+        if not c.fetchone():
+            # 如果不存在updated_at列，添加它
+            logger.info("为orders表添加updated_at列")
+            c.execute("ALTER TABLE orders ADD COLUMN updated_at TIMESTAMP")
+    except Exception as e:
+        logger.error(f"检查或添加updated_at列时出错: {str(e)}")
+    
+    # 检查orders表中是否有web_user_id列
+    try:
+        c.execute("""
+            SELECT column_name FROM information_schema.columns 
+            WHERE table_name = 'orders' AND column_name = 'web_user_id'
+        """)
+        if not c.fetchone():
+            # 如果不存在web_user_id列，添加它
+            logger.info("为orders表添加web_user_id列")
+            c.execute("ALTER TABLE orders ADD COLUMN web_user_id INTEGER")
+    except Exception as e:
+        logger.error(f"检查或添加web_user_id列时出错: {str(e)}")
     
     # 创建用户表
     c.execute('''
