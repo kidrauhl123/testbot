@@ -74,7 +74,7 @@ def main():
         initialize_app()
     except Exception as e:
         logger.error(f"初始化应用失败: {str(e)}")
-    
+
     # 同步环境变量中的卖家到数据库
     try:
         sync_env_sellers_to_db()
@@ -87,7 +87,7 @@ def main():
     
     # 配置会话
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev_key_for_youtube_bot")
-    
+        
     # 尝试使用Flask-Session如果可用
     if Session is not None:
         app.config["SESSION_TYPE"] = "filesystem"
