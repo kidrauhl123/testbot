@@ -1589,15 +1589,6 @@ async def bot_main(queue):
         print("DEBUG: 已添加测试命令处理程序")
         
         # 添加回调处理程序，确保正确处理各种回调
-        accept_handler = CallbackQueryHandler(on_accept, pattern="^accept$")
-        bot_application.add_handler(accept_handler)
-        print(f"DEBUG: 已添加接单回调处理程序: {accept_handler}")
-        
-        # 添加接单按钮回调处理程序
-        accept_button_handler = CallbackQueryHandler(on_accept_button, pattern="^accept_")
-        bot_application.add_handler(accept_button_handler)
-        print(f"DEBUG: 已添加接单按钮回调处理程序: {accept_button_handler}")
-        
         feedback_handler = CallbackQueryHandler(on_feedback_button, pattern="^(done|fail|reason)_")
         bot_application.add_handler(feedback_handler)
         
