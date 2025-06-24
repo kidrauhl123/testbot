@@ -140,8 +140,8 @@ feedback_waiting = {}
 # 用户信息缓存
 user_info_cache = {}
 
-# 全局变量
-notification_queue = None  # 将在run_bot函数中初始化
+# 通知队列全局变量
+notification_queue = None
 
 # ===== TG 辅助函数 =====
 def is_seller(chat_id):
@@ -152,7 +152,7 @@ def is_seller(chat_id):
 # 添加处理 Telegram webhook 更新的函数
 async def process_telegram_update_async(update_data, notification_queue):
     """异步处理来自Telegram webhook的更新"""
-    global bot_application
+    global bot_application, notification_queue
     
     try:
         if not bot_application:
@@ -184,7 +184,7 @@ async def process_telegram_update_async(update_data, notification_queue):
 
 def process_telegram_update(update_data, notification_queue):
     """处理来自Telegram webhook的更新（同步包装器）"""
-    global BOT_LOOP
+    global BOT_LOOP, notification_queue
     
     try:
         if not BOT_LOOP:
@@ -1564,7 +1564,7 @@ def run_bot(queue):
 
 async def bot_main(queue):
     """机器人的主异步函数"""
-    global bot_application
+    global bot_application, notification_queue, BOT_LOOP
     
     logger.info("正在启动Telegram机器人...")
     print("DEBUG: 正在启动Telegram机器人...")
