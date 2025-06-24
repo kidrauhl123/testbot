@@ -1530,24 +1530,32 @@ async def send_activity_check_notification(data):
 
 # ===== 主函数 =====
 def run_bot(queue):
-    """在单独的线程中运行机器人"""
-    global BOT_LOOP
-    global bot_application
-    global notified_orders_lock
-    global notified_orders
-    global notification_queue
+    """运行Telegram机器人"""
+    global notification_queue  # 声明使用全局变量
+    notification_queue = queue  # 设置全局队列变量
     
-    # 初始化锁和集合
-    notified_orders_lock = threading.Lock()
-    notified_orders = set()
-    globals()['notification_queue'] = queue  # 设置全局变量
+    # 检查是否已经有机器人实例在运行
+    if os.path.exists('bot.lock'):
+        logger.warning("检测到bot.lock目录，可能有另一个机器人实例正在运行")
+        try:
+            # 尝试删除锁文件
+            os.rmdir('bot.lock')
+            logger.info("已删除旧的bot.lock目录")
+        except:
+            logger.warning("无法删除bot.lock目录，可能有另一个机器人实例正在运行")
+            return
+    
+    # 创建锁文件
+    try:
+        os.mkdir('bot.lock')
+    except:
+        logger.warning("无法创建bot.lock目录")
+    
+    # 运行机器人
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     
     try:
-        # 创建事件循环
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        BOT_LOOP = loop
-        
         # 运行机器人
         loop.run_until_complete(bot_main(queue))
     except Exception as e:
