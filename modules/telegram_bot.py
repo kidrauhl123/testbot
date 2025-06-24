@@ -370,8 +370,7 @@ async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 f"🔹 *Order #{oid}* - {created_at}\n\n"
                 f"• 👤 Account: `{account}`\n"
-                f"• 📦 Package: *{PLAN_LABELS_EN[package]}*\n"
-                f"• 💰 Payment: *${TG_PRICES[package]}*",
+                f"• 📦 Package: *{PLAN_LABELS_EN[package]}*\n",
                 reply_markup=reply_markup,
                 parse_mode='Markdown'
             )
@@ -401,128 +400,12 @@ async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"🔸 *Order #{oid}*\n\n"
                     f"• 👤 Account: `{account}`\n"
                     f"• 🔑 Password: `{password}`\n"
-                    f"• 📦 Package: *{PLAN_LABELS_EN[package]}*\n"
-                    f"• 💰 Payment: *${TG_PRICES[package]}*",
+                    f"• 📦 Package: *{PLAN_LABELS_EN[package]}*\n",
                     reply_markup=reply_markup,
                     parse_mode='Markdown'
                 )
 
 # ===== TG 回调处理 =====
-@callback_error_handler
-async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理接单回调"""
-    global notification_queue  # 添加全局变量引用
-    
-    query = update.callback_query
-    data = query.data
-    user_id = update.effective_user.id
-    
-    # 验证是否为卖家
-    if not is_seller(user_id):
-        await query.answer("您不是卖家，无法接单", show_alert=True)
-        return
-    
-    # 解析订单ID
-    if not data.startswith("accept:"):
-        oid = int(data.split("_")[1])
-    else:
-        oid = int(data.split(":")[1])
-    
-    # 添加到处理中集合
-    key = f"{oid}_{user_id}"
-    if key in processing_accepts:
-        await query.answer("您的接单请求正在处理中，请稍等...", show_alert=True)
-        return
-    
-    processing_accepts.add(key)
-    processing_accepts_time[key] = time.time()
-    
-    try:
-        # 再次确认订单存在且状态为已提交
-        conn = get_db_connection()
-        if not conn:
-            processing_accepts.remove(key)
-            processing_accepts_time.pop(key, None)
-            await query.answer("数据库连接失败，请稍后重试", show_alert=True)
-            return
-            
-        cursor = conn.cursor()
-        cursor.execute("SELECT status, account FROM orders WHERE id = ?", (oid,))
-        order = cursor.fetchone()
-        
-        if not order:
-            processing_accepts.remove(key)
-            processing_accepts_time.pop(key, None)
-            await query.answer("订单不存在", show_alert=True)
-            return
-            
-        status, qr_code_path = order
-        
-        if status != 'submitted':
-            processing_accepts.remove(key)
-            processing_accepts_time.pop(key, None)
-            
-            if status == 'accepted':
-                await query.answer("订单已被接单", show_alert=True)
-            else:
-                await query.answer(f"订单状态为 {status}，无法接单", show_alert=True)
-            return
-        
-        # 获取用户信息
-        user_info = await get_user_info(user_id)
-        username = user_info.get('username', '')
-        first_name = user_info.get('first_name', '')
-        
-        # 更新订单状态
-        timestamp = get_china_time()
-        cursor.execute("""
-            UPDATE orders 
-            SET status = ?, accepted_by = ?, accepted_by_username = ?, accepted_by_first_name = ?, accepted_at = ? 
-            WHERE id = ?
-        """, ('accepted', str(user_id), username, first_name, timestamp, oid))
-        conn.commit()
-        
-        # 关闭数据库连接
-        cursor.close()
-        conn.close()
-        
-        # 更新卖家最后活跃时间
-        update_seller_last_active(user_id)
-        
-        # 更新回调查询按钮
-        keyboard = [
-            [InlineKeyboardButton("✅ Complete", callback_data=f"complete_{oid}")],
-            [InlineKeyboardButton("❌ Fail", callback_data=f"fail_{oid}")],
-            [InlineKeyboardButton("⚠️ Problem", callback_data=f"problem_{oid}")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        # 回复确认
-        await query.edit_message_reply_markup(reply_markup=reply_markup)
-        await query.answer("您已成功接单！", show_alert=True)
-        
-        # 确保notification_queue已初始化
-        if notification_queue:
-            notification_queue.put({
-                'type': 'order_accepted',
-                'order_id': oid,
-                'accepted_by': user_id,
-                'accepted_by_username': username,
-                'accepted_by_first_name': first_name
-            })
-            logger.info(f"卖家 {user_id} 已接单 #{oid}，通知已加入队列")
-        else:
-            logger.error("notification_queue未初始化，无法发送通知")
-        
-        logger.info(f"卖家 {user_id} ({username}) 已成功接单 #{oid}")
-    except Exception as e:
-        logger.error(f"接单时出错: {str(e)}", exc_info=True)
-        await query.answer("处理接单请求时出错，请稍后重试", show_alert=True)
-    finally:
-        # 无论成功或失败，都从处理中集合移除
-        processing_accepts.discard(key)
-        processing_accepts_time.pop(key, None)
-
 async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理反馈按钮回调"""
     global notification_queue  # 添加全局变量引用
@@ -878,16 +761,12 @@ async def show_personal_stats(query, user_id, date_str, period_text):
         package = order[0]
         package_counts[package] = package_counts.get(package, 0) + 1
     
-    # 计算总收入
-    total_income = 0
+    # 计算总订单数
     order_count = 0
     stats_text = []
     
     for package, count in package_counts.items():
-        price = TG_PRICES.get(package, 0)
-        income = price * count
-        stats_text.append(f"{PLAN_LABELS_EN[package]}: {count} x ${price:.2f} = ${income:.2f}")
-        total_income += income
+        stats_text.append(f"{PLAN_LABELS_EN[package]}: {count} orders")
         order_count += count
     
     # 发送统计消息
@@ -895,8 +774,7 @@ async def show_personal_stats(query, user_id, date_str, period_text):
         message = (
             f"📊 Your Statistics ({period_text}):\n\n"
             + "\n".join(stats_text) + "\n\n"
-            f"Total Orders: {order_count}\n"
-            f"Total Earnings: ${total_income:.2f}"
+            f"Total Orders: {order_count}"
         )
     else:
         message = f"No completed orders found for {period_text}."
@@ -946,8 +824,7 @@ async def show_period_stats(query, user_id, start_date, end_date, period_text):
         
         package_counts[package] += 1
     
-    # 计算总收入和订单数
-    total_income = 0
+    # 计算总订单数
     order_count = 0
     
     # 生成消息
@@ -958,30 +835,23 @@ async def show_period_stats(query, user_id, start_date, end_date, period_text):
         # 生成每日统计
         daily_messages = []
         for date in sorted_dates:
-            day_income = 0
             day_count = 0
             day_details = []
             
             for package, count in daily_stats[date].items():
-                price = TG_PRICES.get(package, 0)
-                income = price * count
-                day_income += income
                 day_count += count
-                day_details.append(f"  {PLAN_LABELS_EN[package]}: {count} x ${price:.2f} = ${income:.2f}")
+                day_details.append(f"  {PLAN_LABELS_EN[package]}: {count} orders")
             
             daily_messages.append(
-                f"📅 {date}: {day_count} orders, ${day_income:.2f}\n" +
+                f"📅 {date}: {day_count} orders\n" +
                 "\n".join(day_details)
             )
         
         # 生成总计统计
         summary_lines = []
         for package, count in package_counts.items():
-            price = TG_PRICES.get(package, 0)
-            income = price * count
-            total_income += income
             order_count += count
-            summary_lines.append(f"{PLAN_LABELS_EN[package]}: {count} x ${price:.2f} = ${income:.2f}")
+            summary_lines.append(f"{PLAN_LABELS_EN[package]}: {count} orders")
         
         # 组合消息
         message = (
@@ -989,8 +859,7 @@ async def show_period_stats(query, user_id, start_date, end_date, period_text):
             + "\n\n".join(daily_messages) + "\n\n"
             + "📈 Summary:\n"
             + "\n".join(summary_lines) + "\n\n"
-            f"Total Orders: {order_count}\n"
-            f"Total Earnings: ${total_income:.2f}"
+            f"Total Orders: {order_count}"
         )
     else:
         message = f"No completed orders found for {period_text} ({start_str} to {end_str})."
@@ -1040,7 +909,6 @@ async def show_all_stats(query, date_str, period_text):
     # 生成消息
     if user_stats:
         all_user_messages = []
-        total_all_income = 0
         total_all_orders = 0
         
         for user_id, packages in user_stats.items():
@@ -1052,23 +920,18 @@ async def show_all_stats(query, date_str, period_text):
                 user_name = f"User {user_id}"
             
             # 统计该用户的订单
-            user_income = 0
             user_orders = 0
             user_details = []
             
             for package, count in packages.items():
-                price = TG_PRICES.get(package, 0)
-                income = price * count
-                user_income += income
                 user_orders += count
-                user_details.append(f"  {PLAN_LABELS_EN[package]}: {count} x ${price:.2f} = ${income:.2f}")
+                user_details.append(f"  {PLAN_LABELS_EN[package]}: {count} orders")
             
             all_user_messages.append(
-                f"👤 {user_name}: {user_orders} orders, ${user_income:.2f}\n" +
+                f"👤 {user_name}: {user_orders} orders\n" +
                 "\n".join(user_details)
             )
             
-            total_all_income += user_income
             total_all_orders += user_orders
         
         # 组合消息
@@ -1076,8 +939,7 @@ async def show_all_stats(query, date_str, period_text):
             f"📊 All Staff Statistics ({period_text}):\n\n"
             + "\n\n".join(all_user_messages) + "\n\n"
             f"Total Staff: {len(user_stats)}\n"
-            f"Total Orders: {total_all_orders}\n"
-            f"Total Revenue: ${total_all_income:.2f}"
+            f"Total Orders: {total_all_orders}"
         )
     else:
         message = f"No completed orders found for {period_text}."
@@ -1271,7 +1133,7 @@ async def send_new_order_notification(data):
         message_text = (
             f"📦 *New YouTube Premium Order #{oid}*\n"
             f"• Package: 1 Year Premium\n"
-            f"• Status: Pending\n"
+            f"• Status: Processing\n"
             f"• Time: {get_china_time()}"
         )
         
@@ -1280,9 +1142,11 @@ async def send_new_order_notification(data):
         logger.info(f"订单 #{oid} 二维码路径: {account}")
         logger.info(f"二维码文件是否存在: {has_qr_code}")
         
-        # 创建接单按钮
-        callback_data = f'accept_{oid}'
-        keyboard = [[InlineKeyboardButton("Accept", callback_data=callback_data)]]
+        # 创建完成和失败按钮
+        keyboard = [
+            [InlineKeyboardButton("✅ Complete", callback_data=f"complete_{oid}")],
+            [InlineKeyboardButton("❌ Fail", callback_data=f"fail_{oid}")]
+        ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         # 确定要通知哪些卖家
@@ -1301,6 +1165,16 @@ async def send_new_order_notification(data):
         success_count = 0
         for seller_id in seller_ids:
             try:
+                # 自动将订单分配给卖家
+                timestamp = get_china_time()
+                execute_query(
+                    "UPDATE orders SET status = ?, accepted_by = ?, accepted_at = ? WHERE id = ?", 
+                    (STATUS['ACCEPTED'], str(seller_id), timestamp, oid)
+                )
+                
+                # 更新卖家最后活跃时间
+                update_seller_last_active(seller_id)
+                
                 if account and os.path.exists(account):
                     with open(account, 'rb') as photo_file:
                         await bot_application.bot.send_photo(
@@ -1319,6 +1193,9 @@ async def send_new_order_notification(data):
                     )
                 success_count += 1
                 logger.info(f"成功向卖家 {seller_id} 推送订单 #{oid}")
+                
+                # 成功分配给一个卖家后就退出循环
+                break
             except Exception as e:
                 logger.error(f"向卖家 {seller_id} 发送订单 #{oid} 通知失败: {str(e)}", exc_info=True)
         
@@ -1326,7 +1203,7 @@ async def send_new_order_notification(data):
             # 标记订单为已通知
             try:
                 execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
-                logger.info(f"订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家")
+                logger.info(f"订单 #{oid} 已成功推送给 {success_count} 个卖家")
             except Exception as update_error:
                 logger.error(f"更新订单 #{oid} 通知状态时出错: {str(update_error)}", exc_info=True)
         else:
@@ -2000,9 +1877,7 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"收到回调查询: {data} 来自用户 {user_id}")
     
     # 处理不同类型的回调
-    if data.startswith("accept:"):
-        await on_accept(update, context)
-    elif data.startswith("feedback:"):
+    if data.startswith("feedback:"):
         await on_feedback_button(update, context)
     elif data.startswith("stats:"):
         await on_stats_callback(update, context)
@@ -2186,149 +2061,6 @@ async def on_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     logger.info(f"卖家 {user_id} 设置期望接单数量为 {desired_orders}")
-
-@callback_error_handler
-async def on_accept_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理接单按钮回调"""
-    query = update.callback_query
-    user_id = query.from_user.id
-    data = query.data
-    
-    logger.info(f"收到接单按钮回调: 用户={user_id}, 数据={data}")
-    
-    if not is_seller(user_id):
-        logger.warning(f"非卖家 {user_id} 尝试接单")
-        await query.answer("您不是卖家，无法接单", show_alert=True)
-        return
-    
-    # 先确认回调
-    try:    
-        await query.answer()
-    except Exception as e:
-        logger.error(f"确认接单回调时出错: {str(e)}")
-    
-    try:
-        if data.startswith('accept_'):
-            oid = int(data.split('_')[1])
-            
-            logger.info(f"卖家 {user_id} 尝试接单 #{oid}")
-            
-            # 获取卖家信息
-            seller_info = execute_query(
-                "SELECT username, first_name FROM sellers WHERE telegram_id = ?", 
-                (user_id,), 
-                fetch=True
-            )
-            
-            if not seller_info:
-                logger.error(f"接单失败: 找不到卖家 {user_id} 的信息")
-                await query.message.reply_text("❌ 接单失败: 找不到您的卖家信息")
-                return
-                
-            username, first_name = seller_info[0]
-            
-            # 检查该卖家是否已有3个未确认订单
-            unconfirmed_orders_query = """
-                SELECT COUNT(*) FROM orders 
-                WHERE accepted_by = ? 
-                AND status = ? 
-                AND completed_at IS NULL
-            """
-            unconfirmed_count = execute_query(
-                unconfirmed_orders_query, 
-                (user_id, STATUS['ACCEPTED']), 
-                fetch=True
-            )[0][0]
-            
-            if unconfirmed_count >= 3:
-                logger.warning(f"卖家 {user_id} 已有 {unconfirmed_count} 个未确认订单，无法接单")
-                await query.message.reply_text(
-                    "❌ 您已有3个未确认订单，请先完成现有订单后再接新单。"
-                )
-                return
-            
-            # 执行接单操作
-            timestamp = get_china_time()
-            
-            # 检查订单状态
-            order_status = execute_query(
-                "SELECT status FROM orders WHERE id = ?", 
-                (oid,), 
-                fetch=True
-            )
-            
-            if not order_status:
-                logger.error(f"接单失败: 订单 #{oid} 不存在")
-                await query.message.reply_text(f"❌ 接单失败: 订单 #{oid} 不存在")
-                return
-                
-            if order_status[0][0] != STATUS['SUBMITTED']:
-                logger.warning(f"接单失败: 订单 #{oid} 状态为 {order_status[0][0]}，不可接单")
-                await query.message.reply_text(f"❌ 接单失败: 订单 #{oid} 已被接单或已完成")
-                return
-            
-            # 更新订单状态
-            execute_query(
-                "UPDATE orders SET status=?, accepted_at=?, accepted_by=? WHERE id=?", 
-                (STATUS['ACCEPTED'], timestamp, user_id, oid)
-            )
-            
-            # 更新卖家活跃时间
-            update_seller_last_active(user_id)
-            
-            logger.info(f"卖家 {user_id} 成功接单 #{oid}")
-            
-            # 获取订单详情
-            order = execute_query(
-                "SELECT account, package, remark FROM orders WHERE id = ?", 
-                (oid,), 
-                fetch=True
-            )
-            
-            if not order:
-                logger.error(f"接单后获取订单详情失败: 订单 #{oid} 不存在")
-                await query.message.reply_text(f"✅ 接单成功，但获取订单详情失败")
-                return
-                
-            account, package, remark = order[0]
-            
-            # 编辑原消息，移除接单按钮
-            keyboard = [
-                [InlineKeyboardButton("✅ 完成", callback_data=f"done_{oid}")],
-                [InlineKeyboardButton("❌ 失败", callback_data=f"fail_{oid}")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            try:
-                await query.edit_message_text(
-                    text=f"📋 订单 #{oid}\n\n"
-                         f"📱 账号: {account}\n"
-                         f"📦 套餐: {package}个月\n"
-                         f"📝 备注: {remark}\n\n"
-                         f"✅ 已被 {first_name or username or user_id} 接单\n"
-                         f"⏰ 接单时间: {timestamp}",
-                    reply_markup=reply_markup
-                )
-            except Exception as e:
-                logger.error(f"编辑接单消息失败: {str(e)}")
-                # 如果编辑失败，发送新消息
-                await query.message.reply_text(
-                    f"✅ 您已成功接单 #{oid}\n\n"
-                    f"📱 账号: {account}\n"
-                    f"📦 套餐: {package}个月\n"
-                    f"📝 备注: {remark}\n\n"
-                    f"⏰ 接单时间: {timestamp}",
-                    reply_markup=reply_markup
-                )
-            
-            # 通知管理员
-            await notify_admins_order_accepted(oid, user_id, first_name or username or str(user_id))
-            
-        else:
-            await query.message.reply_text("未知命令")
-    except Exception as e:
-        logger.error(f"处理接单按钮时出错: {str(e)}", exc_info=True)
-        await query.message.reply_text(f"❌ 操作失败: {str(e)}")
 
 async def notify_admins_order_accepted(order_id, seller_id, seller_name):
     """通知管理员订单已被接单"""

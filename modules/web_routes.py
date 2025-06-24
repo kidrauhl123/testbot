@@ -260,7 +260,7 @@ def register_routes(app, notification_queue):
             # 创建订单并扣款
             try:
                 new_order_id, new_balance, success, message = create_order_with_deduction_atomic(
-                    file_path, '', package, '', username, user_id
+                    file_path, package, username, user_id
                 )
                 
                 if not success:

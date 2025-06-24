@@ -998,15 +998,13 @@ def refund_order(order_id):
         logger.error(f"退款到用户余额失败: {str(e)}", exc_info=True)
         return False, str(e)
 
-def create_order_with_deduction_atomic(account, password, package, remark, username, user_id):
+def create_order_with_deduction_atomic(account, package, username, user_id):
     """
     创建订单并扣款（原子操作）
     
     参数:
-    - account: 账号/二维码图片路径
-    - password: 密码（不再使用）
+    - account: 二维码图片路径
     - package: 套餐
-    - remark: 备注
     - username: 用户名
     - user_id: 用户ID
     
