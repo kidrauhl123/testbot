@@ -301,22 +301,11 @@
     }
 
     .order-list-container {
-      display: grid;
-      grid-template-columns: repeat(1, 1fr);
-      gap: 15px;
+      display: none; /* 隐藏网格视图 */
     }
 
     .order-list-item {
-      background: #fff; 
-      padding: 16px; 
-      margin-bottom: 0;
-      border-radius: 10px; 
-      border-left: 4px solid #667eea;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-      transition: all 0.3s ease;
-      font-size: 13px;
-      position: relative;
-      overflow: hidden;
+      display: none; /* 隐藏网格视图项 */
     }
     
     .order-list-item::after {
@@ -966,6 +955,11 @@
       box-shadow: 0 5px 15px rgba(0,0,0,0.2);
       border-radius: 10px;
       transition: transform 0.3s ease;
+    }
+
+    /* 移除网格视图相关样式 */
+    .order-list-container, .order-list-item {
+      display: none !important;
     }
   </style>
 </head>
@@ -1791,7 +1785,7 @@
       }
       
       // 获取所有订单，不使用分页限制
-      const response = await fetch('/orders/recent?limit=1000&offset=0');
+      const response = await fetch('/orders/recent?limit=10000&offset=0');
       
       if (!response.ok) {
         throw new Error(`获取订单失败: ${response.status}`);
