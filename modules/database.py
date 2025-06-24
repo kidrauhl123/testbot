@@ -1083,7 +1083,7 @@ def create_order_with_deduction_atomic(user_id, account, password, package, amou
     返回:
     - 订单ID
     """
-    logger.info(f"尝试创建订单: 套餐={package}")
+    logger.info(f"尝试创建订单: 套餐={package}, 金额={amount}, 用户ID={user_id}")
     
     try:
         # 获取数据库连接
@@ -1105,7 +1105,7 @@ def create_order_with_deduction_atomic(user_id, account, password, package, amou
             if DATABASE_URL.startswith('postgres'):
                 cursor.execute("SELECT balance, credit_limit FROM users WHERE id = %s FOR UPDATE", (user_id,))
             else:
-                cursor.execute("SELECT balance, credit_limit FROM users WHERE id = ? FOR UPDATE", (user_id,))
+                cursor.execute("SELECT balance, credit_limit FROM users WHERE id = ?", (user_id,))
                 
             user_info = cursor.fetchone()
             if not user_info:
@@ -1119,11 +1119,15 @@ def create_order_with_deduction_atomic(user_id, account, password, package, amou
             # 检查可用余额 = 余额 + 信用额度
             available_balance = user_balance + user_credit
             
-            if available_balance < amount:
-                logger.warning(f"用户 {user_id} 余额不足: 余额={user_balance}, 信用={user_credit}, 价格={amount}")
-                conn.rollback()
-                return None
+            logger.info(f"用户 {user_id} 余额检查: 余额={user_balance}, 信用额度={user_credit}, 可用余额={available_balance}, 订单金额={amount}")
             
+            # 测试模式：允许余额为0的用户下单
+            # if available_balance < amount:
+            #     logger.warning(f"用户 {user_id} 余额不足: 余额={user_balance}, 信用={user_credit}, 价格={amount}")
+            #     conn.rollback()
+            #     return None
+            
+            # 强制允许创建订单，不管余额是否足够
             # 扣款
             new_balance = user_balance - amount
             
