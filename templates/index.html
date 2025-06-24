@@ -945,18 +945,21 @@
 
     .qr-code-container img {
       border: 1px solid #eee;
-      padding: 5px;
+      padding: 3px;
       background: white;
-      margin-top: 8px;
+      margin-top: 5px;
       transition: transform 0.2s;
+      max-width: 150px; /* 控制最大宽度 */
+      max-height: 150px; /* 控制最大高度 */
     }
 
     .qr-code-container img:hover {
-      transform: scale(1.05);
+      transform: scale(1.2);
+      z-index: 10;
     }
 
     .order-list-item .account {
-      margin-bottom: 15px;
+      margin-bottom: 10px;
     }
   </style>
 </head>
@@ -1425,7 +1428,7 @@
         // 创建预览图片元素和重置按钮
         imagePreview.innerHTML = `
           <div style="position:relative;display:inline-block;">
-            <img src="${e.target.result}" alt="预览图">
+            <img src="${e.target.result}" alt="预览图" style="max-width:150px;max-height:150px;">
             <button type="button" id="resetImage" style="position:absolute;top:-8px;right:-8px;background:#f56565;color:white;border:none;border-radius:50%;width:24px;height:24px;line-height:1;font-size:12px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.2);">×</button>
           </div>
         `;
@@ -1897,7 +1900,7 @@
           <p class="account"><strong>YouTube：</strong>${o.account.includes('uploads') ? 
             `<div class="qr-code-container">
                <a href="/${o.account}" target="_blank">查看二维码</a>
-               <img src="/${o.account}" alt="二维码" style="max-width:100%; margin-top:10px; border-radius:4px; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+               <img src="/${o.account}" alt="二维码" style="max-width:120px; max-height:120px; margin-top:5px; border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,0.1);">
              </div>` : 
             '未上传二维码'}</p>
           <p class="package"><strong>套餐：</strong>一年个人会员</p>
@@ -1946,7 +1949,7 @@
           <td>${o.account.includes('uploads') ? 
             `<div class="qr-code-container">
                <a href="/${o.account}" target="_blank">查看二维码</a>
-               <img src="/${o.account}" alt="二维码" style="max-width:150px; margin-top:5px; border-radius:4px; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+               <img src="/${o.account}" alt="二维码" style="max-width:100px; max-height:100px; margin-top:3px; border-radius:4px;">
              </div>` : 
             '未上传二维码'}</td>
           <td>一年个人会员</td>
