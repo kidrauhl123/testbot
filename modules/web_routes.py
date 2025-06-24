@@ -879,7 +879,7 @@ def register_routes(app, notification_queue):
         try:
             # 获取分页参数
             page = int(request.args.get('page', 1))
-            per_page = int(request.args.get('per_page', 20))
+            per_page = int(request.args.get('per_page', 100))  # 默认每页显示100条订单，增加限制以便显示更多订单
             offset = (page - 1) * per_page
             
             # 获取搜索参数
