@@ -7,13 +7,13 @@ import time
 # 设置日志
 logger = logging.getLogger(__name__)
 
-# ✅ 写死变量（优先）
+# ✅ Telegram Bot Token
 if not os.environ.get('BOT_TOKEN'):
     os.environ['BOT_TOKEN'] = '7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk'
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 
-# ✅ 管理员默认凭证（优先从环境变量读取）
+# ✅ 管理员默认凭证
 ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', '755439')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '755439')
 

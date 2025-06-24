@@ -6,7 +6,6 @@ import queue
 import sys
 import atexit
 import signal
-import json
 import traceback
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash, send_file
 import sqlite3
@@ -26,7 +25,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 导入自定义模块
-from modules.database import init_db, execute_query
+from modules.database import init_db
 from modules.telegram_bot import run_bot, process_telegram_update
 from modules.web_routes import register_routes
 from modules.constants import sync_env_sellers_to_db
@@ -183,7 +182,6 @@ def telegram_webhook():
         # 获取更新数据
         update_data = request.get_json()
         logger.info(f"收到Telegram webhook更新: {update_data}")
-        print(f"DEBUG: 收到Telegram webhook更新: {update_data}")
         
         # 在单独的线程中处理更新，避免阻塞Flask响应
         threading.Thread(
@@ -196,7 +194,6 @@ def telegram_webhook():
         return jsonify({"status": "success"}), 200
     except Exception as e:
         logger.error(f"处理Telegram webhook时出错: {str(e)}", exc_info=True)
-        print(f"ERROR: 处理Telegram webhook时出错: {str(e)}")
         traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -204,7 +201,6 @@ def telegram_webhook():
 def handle_exception(e):
     """处理所有未捕获的异常"""
     logger.error(f"未捕获的异常: {str(e)}", exc_info=True)
-    print(f"ERROR: 未捕获的异常: {str(e)}")
     traceback.print_exc()
     return jsonify({"error": str(e)}), 500
 
