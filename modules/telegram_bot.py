@@ -1078,7 +1078,7 @@ async def check_and_push_orders():
 # ===== 通知发送函数 =====
 async def send_notification_from_queue(data):
     """根据队列中的数据发送通知"""
-    global bot_application
+    global bot_application, notification_queue
     
     if not bot_application:
         logger.error("机器人应用未初始化，无法发送通知")
@@ -1133,7 +1133,7 @@ def set_order_notified_atomic(oid):
 
 async def send_new_order_notification(data):
     """发送新订单通知到所有卖家"""
-    global bot_application
+    global bot_application, notification_queue
     
     try:
         # 获取新订单详情
@@ -1230,7 +1230,7 @@ async def send_new_order_notification(data):
 
 async def send_status_change_notification(data):
     """发送订单状态变更通知到超级管理员和Web用户"""
-    global bot_application
+    global bot_application, notification_queue
     
     try:
         # 获取订单状态变更详情
@@ -1696,6 +1696,7 @@ async def periodic_order_check():
 
 async def process_notification_queue(queue):
     """处理来自Flask的通知队列"""
+    global notification_queue
     loop = asyncio.get_running_loop()
     while True:
         try:
