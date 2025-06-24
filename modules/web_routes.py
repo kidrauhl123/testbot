@@ -1265,61 +1265,63 @@ def register_routes(app, notification_queue):
     
     @app.route('/orders/confirm/<int:oid>', methods=['POST'])
     @login_required
-    def confirm_order(oid):
-        """用户确认收货"""
+    def confirm_order_admin(oid):
+        """用户确认收货，强制将订单状态置为已完成"""
         user_id = session.get('user_id')
-        username = session.get('username')
-        
-        # 验证订单是否属于该用户
+        is_admin = session.get('is_admin', 0)
+
+        # 查询订单
         order = execute_query("""
-            SELECT id, status, web_user_id FROM orders WHERE id = ?
+            SELECT id, user_id, status, accepted_by
+            FROM orders WHERE id=?
         """, (oid,), fetch=True)
-        
+
         if not order:
-            return jsonify({"success": False, "error": "订单不存在"}), 404
-            
-        order_id, status, web_user_id = order[0]
+            logger.error(f"确认收货失败: 订单 {oid} 不存在")
+            return jsonify({"error": "订单不存在"}), 404
+
+        order_id, order_user_id, status, accepted_by = order[0]
+
+        # 权限：只能确认自己的订单，或管理员
+        if user_id != order_user_id and not is_admin:
+            logger.warning(f"用户 {user_id} 尝试确认不属于自己的订单 {oid}")
+            return jsonify({"error": "权限不足"}), 403
+
+        # 允许确认已提交或已接单状态的订单，但已完成状态不需要再确认
+        if status == STATUS['COMPLETED']:
+            logger.info(f"订单 {oid} 已是完成状态，无需再次确认")
+            return jsonify({"success": True, "message": "订单已是完成状态"})
         
-        # 验证用户权限
-        if str(web_user_id) != str(user_id) and not session.get('is_admin', False):
-            return jsonify({"success": False, "error": "无权操作此订单"}), 403
-            
-        # 验证订单状态
-        if status != STATUS['ACCEPTED']:
-            return jsonify({
-                "success": False, 
-                "error": f"订单状态为 {status}，无法确认收货",
-                "status": status
-            }), 400
-            
+        # 只有已提交、已接单、正在质疑状态的订单可以确认收货
+        if status not in [STATUS['SUBMITTED'], STATUS['ACCEPTED'], STATUS['DISPUTING']]:
+            logger.warning(f"订单 {oid} 状态为 {status}，不允许确认收货")
+            return jsonify({"error": "订单状态不允许确认收货"}), 400
+
         try:
-            # 更新订单状态
+            # 更新状态
             timestamp = get_china_time()
-            execute_query(
-                "UPDATE orders SET status = ?, completed_at = ? WHERE id = ?",
-                (STATUS['COMPLETED'], timestamp, oid)
-            )
-            
-            logger.info(f"用户 {username} 确认了订单 #{oid} 收货")
-            
-            # 添加到通知队列，通知Telegram机器人
-            notification_queue.put({
-                'type': 'order_status_change',
-                'order_id': oid,
-                'status': STATUS['COMPLETED'],
-                'handler_id': user_id,
-                'update_original': True
-            })
-            
-            return jsonify({
-                "success": True, 
-                "message": "订单已确认收货",
-                "new_status": STATUS['COMPLETED'],
-                "new_status_text": STATUS_TEXT_ZH[STATUS['COMPLETED']]
-            })
+            execute_query("UPDATE orders SET status=?, completed_at=? WHERE id= ?", 
+                         (STATUS['COMPLETED'], timestamp, oid))
+            logger.info(f"用户 {user_id} 确认订单 {oid} 收货成功，状态已更新为已完成")
+
+            # 只发送一个通知，直接更新原始订单消息
+            try:
+                # 使用 order_status_change 类型，这会在 TG 中更新原始消息
+                notification_queue.put({
+                    'type': 'order_status_change',
+                    'order_id': oid,
+                    'status': STATUS['COMPLETED'],
+                    'handler_id': user_id,
+                    'update_original': True  # 标记需要更新原始消息
+                })
+                logger.info(f"已将订单 {oid} 确认收货通知添加到队列")
+            except Exception as e:
+                logger.error(f"添加订单状态变更通知到队列失败: {e}", exc_info=True)
+
+            return jsonify({"success": True})
         except Exception as e:
-            logger.error(f"确认订单 #{oid} 收货失败: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "error": f"确认收货失败: {str(e)}"}), 500
+            logger.error(f"确认订单 {oid} 收货时发生错误: {e}", exc_info=True)
+            return jsonify({"error": "服务器错误，请稍后重试"}), 500
 
     @app.route('/api/balance/records')
     @login_required
@@ -1422,63 +1424,3 @@ def register_routes(app, notification_queue):
         except Exception as e:
             logger.error(f"更新卖家 {telegram_id} 昵称失败: {e}")
             return jsonify({"error": "Update failed"}), 500
-
-    @app.route('/orders/confirm/<int:oid>', methods=['POST'])
-    @login_required
-    def confirm_order(oid):
-        """用户确认收货，强制将订单状态置为已完成"""
-        user_id = session.get('user_id')
-        is_admin = session.get('is_admin', 0)
-
-        # 查询订单
-        order = execute_query("""
-            SELECT id, user_id, status, accepted_by
-            FROM orders WHERE id=?
-        """, (oid,), fetch=True)
-
-        if not order:
-            logger.error(f"确认收货失败: 订单 {oid} 不存在")
-            return jsonify({"error": "订单不存在"}), 404
-
-        order_id, order_user_id, status, accepted_by = order[0]
-
-        # 权限：只能确认自己的订单，或管理员
-        if user_id != order_user_id and not is_admin:
-            logger.warning(f"用户 {user_id} 尝试确认不属于自己的订单 {oid}")
-            return jsonify({"error": "权限不足"}), 403
-
-        # 允许确认已提交或已接单状态的订单，但已完成状态不需要再确认
-        if status == STATUS['COMPLETED']:
-            logger.info(f"订单 {oid} 已是完成状态，无需再次确认")
-            return jsonify({"success": True, "message": "订单已是完成状态"})
-        
-        # 只有已提交、已接单、正在质疑状态的订单可以确认收货
-        if status not in [STATUS['SUBMITTED'], STATUS['ACCEPTED'], STATUS['DISPUTING']]:
-            logger.warning(f"订单 {oid} 状态为 {status}，不允许确认收货")
-            return jsonify({"error": "订单状态不允许确认收货"}), 400
-
-        try:
-            # 更新状态
-            timestamp = get_china_time()
-            execute_query("UPDATE orders SET status=?, completed_at=? WHERE id= ?", 
-                         (STATUS['COMPLETED'], timestamp, oid))
-            logger.info(f"用户 {user_id} 确认订单 {oid} 收货成功，状态已更新为已完成")
-
-            # 只发送一个通知，直接更新原始订单消息
-            try:
-                # 使用 order_status_change 类型，这会在 TG 中更新原始消息
-                notification_queue.put({
-                    'type': 'order_status_change',
-                    'order_id': oid,
-                    'status': STATUS['COMPLETED'],
-                    'handler_id': user_id,
-                    'update_original': True  # 标记需要更新原始消息
-                })
-                logger.info(f"已将订单 {oid} 确认收货通知添加到队列")
-            except Exception as e:
-                logger.error(f"添加订单状态变更通知到队列失败: {e}", exc_info=True)
-
-            return jsonify({"success": True})
-        except Exception as e:
-            logger.error(f"确认订单 {oid} 收货时发生错误: {e}", exc_info=True)
-            return jsonify({"error": "服务器错误，请稍后重试"}), 500
