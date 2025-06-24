@@ -18,6 +18,26 @@ logger = logging.getLogger(__name__)
 # 中国时区
 CN_TIMEZONE = pytz.timezone('Asia/Shanghai')
 
+# 定义常量
+STATUS = {
+    'SUBMITTED': 'submitted',
+    'ACCEPTED': 'accepted',
+    'COMPLETED': 'completed',
+    'FAILED': 'failed',
+    'CANCELLED': 'cancelled',
+    'DISPUTING': 'disputing'
+}
+
+# 状态的中文显示文本
+STATUS_TEXT_ZH = {
+    'submitted': '已提交',
+    'accepted': '已提交',  # 修改为"已提交"而不是"已接单"
+    'completed': '已完成',
+    'failed': '失败',
+    'cancelled': '已取消',
+    'disputing': '质疑中'
+}
+
 # 获取数据库连接
 def get_db_connection():
     """获取数据库连接"""
