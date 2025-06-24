@@ -12,7 +12,12 @@ from flask import Flask, request, jsonify, render_template, redirect, url_for, s
 import sqlite3
 import shutil
 import argparse
-from flask_session import Session
+try:
+    from flask_session import Session
+except ImportError:
+    # 如果没有flask_session，使用Flask自带的session
+    print("Warning: flask_session not found, using default Flask session")
+    Session = None
 from modules.web_routes import register_routes
 from modules.telegram_bot import run_bot_in_thread, process_telegram_update
 from modules.init import initialize_app
@@ -82,10 +87,16 @@ def main():
     
     # 配置会话
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev_key_for_youtube_bot")
-    app.config["SESSION_TYPE"] = "filesystem"
-    app.config["SESSION_PERMANENT"] = True
-    app.config["PERMANENT_SESSION_LIFETIME"] = 86400 * 30  # 30天
-    Session(app)
+    
+    # 尝试使用Flask-Session如果可用
+    if Session is not None:
+        app.config["SESSION_TYPE"] = "filesystem"
+        app.config["SESSION_PERMANENT"] = True
+        app.config["PERMANENT_SESSION_LIFETIME"] = 86400 * 30  # 30天
+        Session(app)
+    else:
+        # 使用默认的Flask session（基于cookie）
+        app.config["PERMANENT_SESSION_LIFETIME"] = 86400 * 30  # 30天
     
     # 注册Web路由
     register_routes(app, notification_queue)
