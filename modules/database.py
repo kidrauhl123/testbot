@@ -9,7 +9,7 @@ from datetime import datetime
 from urllib.parse import urlparse
 import pytz
 
-from modules.constants import DATABASE_URL, STATUS, ADMIN_USERNAME, ADMIN_PASSWORD
+from modules.constants import DATABASE_URL, STATUS, ADMIN_USERNAME, ADMIN_PASSWORD, WEB_PRICES, get_user_package_price
 
 # 设置日志
 logger = logging.getLogger(__name__)
@@ -883,8 +883,6 @@ def set_user_balance(user_id, balance):
 
 def check_balance_for_package(user_id, package):
     """检查用户余额是否足够购买指定套餐"""
-    from modules.constants import WEB_PRICES
-    
     # 获取套餐价格
     price = WEB_PRICES.get(package, 0)
     
@@ -923,7 +921,6 @@ def refund_order(order_id):
         logger.warning(f"退款失败: 订单已退款 (ID={order_id})")
         return False, "订单已退款"
 
-    from modules.constants import WEB_PRICES
     price = WEB_PRICES.get(package, 0)
     if price <= 0:
         logger.warning(f"退款失败: 套餐价格无效 (ID={order_id}, 套餐={package}, 价格={price})")

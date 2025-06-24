@@ -1271,7 +1271,6 @@ async def send_new_order_notification(data):
         message_text = (
             f"📦 *New YouTube Premium Order #{oid}*\n"
             f"• Package: 1 Year Premium\n"
-            f"• Price: 10 USD\n"
             f"• Status: Pending\n"
             f"• Time: {get_china_time()}"
         )
@@ -2330,3 +2329,43 @@ async def on_accept_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"处理接单按钮时出错: {str(e)}", exc_info=True)
         await query.message.reply_text(f"❌ 操作失败: {str(e)}")
+
+async def notify_admins_order_accepted(order_id, seller_id, seller_name):
+    """通知管理员订单已被接单"""
+    global bot_application
+    
+    # 超级管理员的Telegram ID
+    admin_id = 1878943383
+    
+    try:
+        # 获取订单详情
+        order = execute_query(
+            "SELECT account, package FROM orders WHERE id=?", 
+            (order_id,), 
+            fetch=True
+        )
+        
+        if not order:
+            logger.error(f"通知管理员订单接单失败: 订单 #{order_id} 不存在")
+            return
+            
+        account, package = order[0]
+        
+        # 构建消息文本
+        message_text = (
+            f"📢 *Order Accepted Notification* 📢\n\n"
+            f"Order #{order_id} has been accepted by seller: {seller_name}\n"
+            f"Package: YouTube Premium (1 Year)\n"
+            f"Time: {get_china_time()}"
+        )
+        
+        # 发送通知
+        await bot_application.bot.send_message(
+            chat_id=admin_id,
+            text=message_text,
+            parse_mode='Markdown'
+        )
+        
+        logger.info(f"已通知管理员订单 #{order_id} 被 {seller_name} 接单")
+    except Exception as e:
+        logger.error(f"通知管理员订单接单失败: {str(e)}", exc_info=True)
