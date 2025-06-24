@@ -261,7 +261,8 @@ def register_routes(app, notification_queue):
             # 获取表单数据
             account = request.form.get('account', '').strip()
             password = request.form.get('password', '').strip()
-            package = request.form.get('package', 'default_package').strip()  # 设置默认值
+            # 固定套餐为"12"（一年个人会员）
+            package = "12"
             
             # 获取用户ID
             user_id = session.get('user_id')
@@ -272,13 +273,13 @@ def register_routes(app, notification_queue):
             # 获取用户自定义价格
             custom_prices = get_user_custom_prices(user_id)
             
-            # 确定订单金额
-            plan_key = package.split('-')[0] if '-' in package else package
-            amount = float(custom_prices.get(plan_key, WEB_PRICES.get(plan_key, 0.0)))
+            # 确定订单金额 - 直接使用键"12"
+            amount = float(custom_prices.get("12", WEB_PRICES.get("12", 0.0)))
             
             if amount <= 0:
-                logger.warning(f"订单提交失败: 无效的套餐金额 - {package}")
-                return jsonify({"success": False, "error": "无效的套餐金额"}), 400
+                # 如果金额仍然无效，尝试使用默认价格
+                amount = 200.0  # 设置一个默认价格
+                logger.warning(f"使用默认套餐金额: {amount}")
             
             # 创建订单 - 使用原子操作
             try:
