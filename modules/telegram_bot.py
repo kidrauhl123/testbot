@@ -1881,6 +1881,8 @@ def update_order_status(order_id, status, handler_id=None):
 @callback_error_handler
 async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理回调查询"""
+    global notification_queue  # 添加全局变量引用
+    
     query = update.callback_query
     data = query.data
     user_id = update.effective_user.id
