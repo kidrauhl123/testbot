@@ -2095,7 +2095,7 @@
   async function confirmOrder(orderId) {
     if (!confirm('确定已收到并完成此订单吗？')) return;
     try {
-      const resp = await fetch(`/orders/confirm/${orderId}`, { method: 'POST' });
+      const resp = await fetch(`/orders/user_confirm/${orderId}`, { method: 'POST' });
       const result = await resp.json();
       if (result.success) {
         showCustomAlert('已确认收货，订单完成', 'success');

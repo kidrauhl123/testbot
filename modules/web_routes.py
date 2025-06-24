@@ -261,9 +261,9 @@ def register_routes(app, notification_queue):
             try:
                 new_order_id, new_balance, success, message = create_order_with_deduction_atomic(
                     file_path, package, username, user_id
-                )
-                
-                if not success:
+            )
+            
+            if not success:
                     logger.error(f"创建订单失败: {message}")
                     return jsonify({"success": False, "error": message}), 400
                 
@@ -273,37 +273,37 @@ def register_routes(app, notification_queue):
                 credit_limit = get_user_credit_limit(user_id)
                 
                 # 如果创建了订单，将其加入通知队列
-                if new_order_id:
-                    # 加入通知队列，通知类型为new_order
-                    # 获取指定的接单人
-                    preferred_seller = request.form.get('preferred_seller', '')
-                    # 确保图片路径是绝对路径
-                    absolute_file_path = os.path.abspath(file_path)
-                    logger.info(f"添加到通知队列的图片路径: {absolute_file_path}")
-                    
-                    notification_queue.put({
-                        'type': 'new_order',
-                        'order_id': new_order_id,
-                        'account': absolute_file_path,  # 使用绝对路径
-                        'package': package,
-                        'preferred_seller': preferred_seller
-                    })
-                    logger.info(f"已将订单 #{new_order_id} 加入通知队列")
-                    print(f"DEBUG: 已将订单 #{new_order_id} 加入通知队列")
-                else:
-                    logger.warning("无法获取新创建的订单ID，无法发送通知")
-                    print("WARNING: 无法获取新创建的订单ID，无法发送通知")
+            if new_order_id:
+                # 加入通知队列，通知类型为new_order
+                # 获取指定的接单人
+                preferred_seller = request.form.get('preferred_seller', '')
+                # 确保图片路径是绝对路径
+                absolute_file_path = os.path.abspath(file_path)
+                logger.info(f"添加到通知队列的图片路径: {absolute_file_path}")
                 
-                return jsonify({
-                    "success": True,
-                    "message": '订单已提交成功！',
-                    "balance": new_balance,
-                    "credit_limit": credit_limit
+                notification_queue.put({
+                    'type': 'new_order',
+                    'order_id': new_order_id,
+                    'account': absolute_file_path,  # 使用绝对路径
+                    'package': package,
+                    'preferred_seller': preferred_seller
                 })
-                
-            except Exception as e:
-                logger.error(f"创建订单时出错: {str(e)}", exc_info=True)
-                return jsonify({"success": False, "error": f"创建订单时出错: {str(e)}"}), 500
+                logger.info(f"已将订单 #{new_order_id} 加入通知队列")
+                print(f"DEBUG: 已将订单 #{new_order_id} 加入通知队列")
+            else:
+                logger.warning("无法获取新创建的订单ID，无法发送通知")
+                print("WARNING: 无法获取新创建的订单ID，无法发送通知")
+            
+            return jsonify({
+                "success": True,
+                "message": '订单已提交成功！',
+                "balance": new_balance,
+                "credit_limit": credit_limit
+            })
+            
+        except Exception as e:
+            logger.error(f"创建订单时出错: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": f"创建订单时出错: {str(e)}"}), 500
                 
         except Exception as e:
             logger.error(f"处理上传图片时出错: {str(e)}", exc_info=True)
@@ -1174,7 +1174,7 @@ def register_routes(app, notification_queue):
                 logger.info(f"已删除订单: ID={oid}, 账号={account}, 状态={status}")
             
             return jsonify({"success": True, "message": f"成功删除{len(order_ids)}个订单"})
-        except Exception as e:
+                    except Exception as e:
             logger.error(f"批量删除订单失败: {str(e)}", exc_info=True)
             return jsonify({"error": f"删除失败: {str(e)}"}), 500
 
@@ -1182,7 +1182,7 @@ def register_routes(app, notification_queue):
     @login_required
     def api_get_notifications():
         """获取用户通知"""
-        user_id = session.get('user_id')
+            user_id = session.get('user_id')
         
         # 获取未读通知数量和最新的几条通知
         try:
@@ -1197,8 +1197,8 @@ def register_routes(app, notification_queue):
             notifications = execute_query(
                 "SELECT id, type, content, created_at, is_read FROM notifications WHERE user_id = ? ORDER BY id DESC LIMIT 10",
                 (user_id,),
-                fetch=True
-            )
+                    fetch=True
+                )
             
             # 格式化通知
             formatted_notifications = []
@@ -1216,7 +1216,7 @@ def register_routes(app, notification_queue):
                     "content": content,
                     "created_at": created_at,
                     "is_read": bool(is_read)
-                })
+            })
             
             return jsonify({
                 "success": True,
@@ -1231,7 +1231,7 @@ def register_routes(app, notification_queue):
     @login_required
     def api_mark_notifications_read():
         """标记通知为已读"""
-        user_id = session.get('user_id')
+            user_id = session.get('user_id')
         data = request.json
         
         if not data:
@@ -1263,9 +1263,9 @@ def register_routes(app, notification_queue):
             logger.error(f"标记通知已读失败: {str(e)}", exc_info=True)
             return jsonify({"error": f"标记通知已读失败: {str(e)}"}), 500
     
-    @app.route('/orders/confirm/<int:oid>', methods=['POST'])
+    @app.route('/orders/user_confirm/<int:oid>', methods=['POST'])
     @login_required
-    def confirm_order_admin(oid):
+    def confirm_order_user(oid):
         """用户确认收货，强制将订单状态置为已完成"""
         user_id = session.get('user_id')
         is_admin = session.get('is_admin', 0)
@@ -1329,8 +1329,8 @@ def register_routes(app, notification_queue):
         """获取用户余额明细记录"""
         try:
             limit = int(request.args.get('limit', 50))
-            offset = int(request.args.get('offset', 0))
-            user_id = session.get('user_id')
+        offset = int(request.args.get('offset', 0))
+        user_id = session.get('user_id')
             is_admin = session.get('is_admin', False)
             
             # 如果是管理员，可以查看指定用户的记录或所有用户的记录
@@ -1344,7 +1344,7 @@ def register_routes(app, notification_queue):
             records = get_balance_records(view_user_id, limit, offset)
             
             return jsonify({
-                "success": True,
+                "success": True, 
                 "records": records
             })
         except Exception as e:
