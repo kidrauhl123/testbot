@@ -1103,15 +1103,33 @@ async def send_notification_from_queue(data):
 # ===== 推送通知函数 =====
 def set_order_notified_atomic(oid):
     """原子性地将订单notified字段设为1，只有notified=0时才更新，防止重复推送"""
-    current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    db_path = os.path.join(current_dir, "orders.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute("UPDATE orders SET notified=1 WHERE id=? AND notified=0", (oid,))
-    affected = cursor.rowcount
-    conn.commit()
-    conn.close()
-    return affected > 0
+    try:
+        conn = get_db_connection()
+        if not conn:
+            logger.error(f"标记订单 {oid} 已通知时无法获取数据库连接")
+            return False
+            
+        cursor = conn.cursor()
+        
+        # 根据数据库类型执行不同的查询
+        if DATABASE_URL.startswith('postgres'):
+            cursor.execute("UPDATE orders SET notified=1 WHERE id=%s AND notified=0", (oid,))
+        else:
+            cursor.execute("UPDATE orders SET notified=1 WHERE id=? AND notified=0", (oid,))
+            
+        affected = cursor.rowcount
+        conn.commit()
+        conn.close()
+        
+        if affected > 0:
+            logger.info(f"订单 {oid} 已标记为已通知")
+        else:
+            logger.info(f"订单 {oid} 已经被标记为已通知，跳过")
+            
+        return affected > 0
+    except Exception as e:
+        logger.error(f"标记订单 {oid} 已通知时出错: {str(e)}", exc_info=True)
+        return False
 
 async def send_new_order_notification(data):
     """发送新订单通知到所有卖家"""
@@ -1702,11 +1720,14 @@ async def process_notification_queue(queue):
             # 等待一会避免在持续出错时刷屏
             await asyncio.sleep(5)
     
-def run_bot_in_thread():
+def run_bot_in_thread(queue):
     """在单独的线程中运行机器人"""
-    # 这个函数现在可以被废弃或重构，因为启动逻辑已移至app.py
-    logger.warning("run_bot_in_thread 已被调用，但可能已废弃。")
-    pass
+    try:
+        logger.info("在线程中启动Telegram机器人...")
+        run_bot(queue)
+    except Exception as e:
+        logger.error(f"在线程中启动Telegram机器人时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 在线程中启动Telegram机器人时出错: {str(e)}")
 
 def restricted(func):
     """限制只有卖家才能访问的装饰器"""
