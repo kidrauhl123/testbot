@@ -19,7 +19,7 @@ except ImportError:
     print("Warning: flask_session not found, using default Flask session")
     Session = None
 from modules.web_routes import register_routes
-from modules.telegram_bot import run_bot_in_thread, process_telegram_update
+from modules.telegram_bot import run_bot_in_thread, process_telegram_update, NotificationQueueManager
 from modules.init import initialize_app
 from modules.database import init_db, execute_query
 from modules.constants import sync_env_sellers_to_db
@@ -40,6 +40,9 @@ logger.info(f"环境: {'生产环境' if is_production else '开发环境'}")
 
 # 创建通知队列
 notification_queue = queue.Queue()
+# 设置队列管理器
+queue_manager = NotificationQueueManager.get_instance()
+queue_manager.set_queue(notification_queue)
 
 # 清理资源的函数
 def cleanup_resources():

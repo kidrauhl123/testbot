@@ -14,6 +14,7 @@ import traceback
 import psycopg2
 from urllib.parse import urlparse
 import json
+from typing import Dict, List, Any, Optional, Union, Tuple
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -140,8 +141,32 @@ feedback_waiting = {}
 # 用户信息缓存
 user_info_cache = {}
 
-# 通知队列全局变量
-notification_queue = None
+# 通知队列管理器
+class NotificationQueueManager:
+    _instance = None
+    _queue = None
+    
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            cls._instance = NotificationQueueManager()
+        return cls._instance
+    
+    def set_queue(self, queue):
+        self._queue = queue
+        
+    def get_queue(self):
+        return self._queue
+        
+    def put(self, item):
+        if self._queue:
+            self._queue.put(item)
+            logger.info(f"已将通知添加到队列: {item.get('type', 'unknown')}")
+        else:
+            logger.error("通知队列未初始化，无法添加通知")
+
+# 创建全局队列管理器实例
+queue_manager = NotificationQueueManager.get_instance()
 
 # ===== TG 辅助函数 =====
 def is_seller(chat_id):
@@ -1531,8 +1556,10 @@ async def send_activity_check_notification(data):
 # ===== 主函数 =====
 def run_bot(queue):
     """运行Telegram机器人"""
-    global notification_queue  # 声明使用全局变量
-    notification_queue = queue  # 设置全局队列变量
+    global BOT_LOOP
+    
+    # 设置队列管理器
+    queue_manager.set_queue(queue)
     
     # 检查是否已经有机器人实例在运行
     if os.path.exists('bot.lock'):
@@ -1554,6 +1581,7 @@ def run_bot(queue):
     # 运行机器人
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+    BOT_LOOP = loop
     
     try:
         # 运行机器人
@@ -1698,6 +1726,11 @@ async def process_notification_queue(queue):
     """处理来自Flask的通知队列"""
     global bot_application
     loop = asyncio.get_running_loop()
+    
+    # 确保队列管理器已设置
+    if queue_manager.get_queue() is None:
+        queue_manager.set_queue(queue)
+    
     while True:
         try:
             # 在执行器中运行阻塞的 queue.get()，这样不会阻塞事件循环
@@ -1890,8 +1923,6 @@ def update_order_status(order_id, status, handler_id=None):
 @callback_error_handler
 async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理回调查询"""
-    global notification_queue  # 添加全局变量引用
-    
     query = update.callback_query
     data = query.data
     user_id = update.effective_user.id
@@ -1927,19 +1958,14 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 向通知队列添加状态变更通知，让网页端也能收到通知
         try:
-            # 使用全局队列变量
-            from app import notification_queue
-            if notification_queue:
-                notification_queue.put({
-                    'type': 'order_status_change',
-                    'order_id': oid,
-                    'status': 'completed',
-                    'handler_id': user_id,
-                    'update_original': True  # 标记需要更新原始消息
-                })
-                logger.info(f"已将订单 {oid} 状态变更通知添加到队列")
-            else:
-                logger.error("notification_queue未初始化，无法发送通知")
+            queue_manager.put({
+                'type': 'order_status_change',
+                'order_id': oid,
+                'status': 'completed',
+                'handler_id': user_id,
+                'update_original': True  # 标记需要更新原始消息
+            })
+            logger.info(f"已将订单 {oid} 状态变更通知添加到队列")
         except Exception as e:
             logger.error(f"添加订单状态变更通知到队列失败: {e}", exc_info=True)
         
@@ -1954,19 +1980,14 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 向通知队列添加状态变更通知，让网页端也能收到通知
         try:
-            # 使用全局队列变量
-            from app import notification_queue
-            if notification_queue:
-                notification_queue.put({
-                    'type': 'order_status_change',
-                    'order_id': oid,
-                    'status': 'failed',
-                    'handler_id': user_id,
-                    'update_original': True  # 标记需要更新原始消息
-                })
-                logger.info(f"已将订单 {oid} 状态变更通知添加到队列")
-            else:
-                logger.error("notification_queue未初始化，无法发送通知")
+            queue_manager.put({
+                'type': 'order_status_change',
+                'order_id': oid,
+                'status': 'failed',
+                'handler_id': user_id,
+                'update_original': True  # 标记需要更新原始消息
+            })
+            logger.info(f"已将订单 {oid} 状态变更通知添加到队列")
         except Exception as e:
             logger.error(f"添加订单状态变更通知到队列失败: {e}", exc_info=True)
         
