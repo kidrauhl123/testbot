@@ -303,10 +303,6 @@ def register_routes(app, notification_queue):
                 "balance": new_balance,
                 "credit_limit": credit_limit
             })
-            
-        except Exception as e:
-            logger.error(f"创建订单时出错: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "error": f"创建订单时出错: {str(e)}"}), 500
                 
         except Exception as e:
             logger.error(f"处理上传图片时出错: {str(e)}", exc_info=True)
