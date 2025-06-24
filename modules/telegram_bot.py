@@ -1147,11 +1147,10 @@ async def send_new_order_notification(data):
         # 获取指定接单人ID
         preferred_seller = data.get('preferred_seller')
         
-        # 构建消息文本 - 只关注YouTube充值功能
+        # 构建消息文本 - 只关注YouTube充值功能，不显示价格
         message_text = (
-            f"📦 *New YouTube Premium Order #{oid}*\n"
-            f"• Package: 1 Year Premium\n"
-            f"• Status: Processing\n"
+            f"📦 *New Order #{oid}*\n"
+            f"• Package: 1 Year Premium (YouTube)\n"
             f"• Time: {get_china_time()}"
         )
         
