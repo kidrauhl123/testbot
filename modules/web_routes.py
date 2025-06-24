@@ -249,67 +249,73 @@ def register_routes(app, notification_queue):
                 file_size = os.path.getsize(file_path)
                 if file_size == 0:
                     logger.error(f"图片保存失败，文件大小为0: {file_path}")
+                    os.remove(temp_path)  # 清理临时文件
                     return jsonify({"success": False, "error": "图片保存失败，文件大小为0"}), 500
                 
-                logger.info(f"图片保存成功: {file_path}, 大小: {file_size}字节")
-                
-                # 获取其他参数
-                package = request.form.get('package', '12')  # 默认一年期
-                user_id = session.get('user_id')
-                username = session.get('username')
-                
-                # 创建订单并扣款
-                try:
-                    new_order_id, new_balance, success, message = create_order_with_deduction_atomic(
-                        file_path, package, username, user_id
-                    )
-                    
-                    if not success:
-                        logger.error(f"创建订单失败: {message}")
-                        return jsonify({"success": False, "error": message}), 400
-                    
-                    logger.info(f"订单创建成功: ID={new_order_id}, 余额={new_balance}")
-                    
-                    # 获取信用额度用于返回前端
-                    credit_limit = get_user_credit_limit(user_id)
-                    
-                    # 如果创建了订单，将其加入通知队列
-                    if new_order_id:
-                        # 加入通知队列，通知类型为new_order
-                        # 获取指定的接单人
-                        preferred_seller = request.form.get('preferred_seller', '')
-                        # 确保图片路径是绝对路径
-                        absolute_file_path = os.path.abspath(file_path)
-                        logger.info(f"添加到通知队列的图片路径: {absolute_file_path}")
-                        
-                        notification_queue.put({
-                            'type': 'new_order',
-                            'order_id': new_order_id,
-                            'account': absolute_file_path,  # 使用绝对路径
-                            'package': package,
-                            'preferred_seller': preferred_seller
-                        })
-                        logger.info(f"已将订单 #{new_order_id} 加入通知队列")
-                        print(f"DEBUG: 已将订单 #{new_order_id} 加入通知队列")
-                    else:
-                        logger.warning("无法获取新创建的订单ID，无法发送通知")
-                        print("WARNING: 无法获取新创建的订单ID，无法发送通知")
-                    
-                    return jsonify({
-                        "success": True,
-                        "message": '订单已提交成功！',
-                        "balance": new_balance,
-                        "credit_limit": credit_limit
-                    })
-                except Exception as e:
-                    logger.error(f"创建订单时出错: {str(e)}", exc_info=True)
-                    return jsonify({"success": False, "error": f"创建订单时出错: {str(e)}"}), 500
+                # 清理临时文件
+                os.remove(temp_path)
             except Exception as e:
-                logger.error(f"处理上传图片时出错: {str(e)}", exc_info=True)
-                return jsonify({"success": False, "error": f"处理上传图片时出错: {str(e)}"}), 500
+                logger.error(f"保存图片失败: {str(e)}")
+                return jsonify({"success": False, "error": f"保存图片失败: {str(e)}"}), 500
+            
+            # 获取表单数据
+            account = request.form.get('account', '').strip()
+            password = request.form.get('password', '').strip()
+            package = request.form.get('package', '').strip()
+            
+            if not account or not package:
+                logger.warning("订单提交失败: 缺少必要字段")
+                return jsonify({"success": False, "error": "请填写所有必要字段"}), 400
+            
+            # 获取用户ID
+            user_id = session.get('user_id')
+            if not user_id:
+                logger.warning("订单提交失败: 用户未登录")
+                return jsonify({"success": False, "error": "用户未登录"}), 401
+            
+            # 获取用户自定义价格
+            custom_prices = get_user_custom_prices(user_id)
+            
+            # 确定订单金额
+            plan_key = package.split('-')[0] if '-' in package else package
+            amount = float(custom_prices.get(plan_key, WEB_PRICES.get(plan_key, 0.0)))
+            
+            if amount <= 0:
+                logger.warning(f"订单提交失败: 无效的套餐金额 - {package}")
+                return jsonify({"success": False, "error": "无效的套餐金额"}), 400
+            
+            # 创建订单 - 使用原子操作
+            try:
+                order_id = create_order_with_deduction_atomic(
+                    user_id=user_id,
+                    account=account,
+                    password=password,
+                    package=package,
+                    amount=amount,
+                    qr_code_path=file_path,
+                    created_at=get_china_time()
+                )
+                
+                if order_id is None:
+                    logger.warning("订单创建失败: 余额不足")
+                    return jsonify({"success": False, "error": "余额不足，无法创建订单"}), 400
+                
+                logger.info(f"订单创建成功: ID={order_id}, 用户ID={user_id}, 套餐={package}")
+                
+                # 发送通知到Telegram机器人
+                try:
+                    from modules.telegram_bot import send_order_notification
+                    send_order_notification(notification_queue, order_id, account, package, amount, file_path)
+                except Exception as e:
+                    logger.error(f"发送Telegram通知失败: {str(e)}")
+                
+                return jsonify({"success": True, "order_id": order_id, "message": "订单创建成功"})
+            except Exception as e:
+                logger.error(f"创建订单失败: {str(e)}")
+                return jsonify({"success": False, "error": f"创建订单失败: {str(e)}"}), 500
         except Exception as e:
-            logger.error(f"处理请求时出错: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "error": f"处理请求时出错: {str(e)}"}), 500
+            logger.error(f"处理订单请求时发生错误: {str(e)}")
+            return jsonify({"success": False, "error": f"处理订单请求时发生错误: {str(e)}"}), 500
 
     @app.route('/orders/stats/web/<user_id>')
     @login_required
