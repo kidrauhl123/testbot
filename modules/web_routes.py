@@ -261,11 +261,7 @@ def register_routes(app, notification_queue):
             # 获取表单数据
             account = request.form.get('account', '').strip()
             password = request.form.get('password', '').strip()
-            package = request.form.get('package', '').strip()
-            
-            if not account or not package:
-                logger.warning("订单提交失败: 缺少必要字段")
-                return jsonify({"success": False, "error": "请填写所有必要字段"}), 400
+            package = request.form.get('package', 'default_package').strip()  # 设置默认值
             
             # 获取用户ID
             user_id = session.get('user_id')
