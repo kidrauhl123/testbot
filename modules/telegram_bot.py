@@ -150,9 +150,9 @@ def is_seller(chat_id):
     return chat_id in get_active_seller_ids()
 
 # 添加处理 Telegram webhook 更新的函数
-async def process_telegram_update_async(update_data, notification_queue):
+async def process_telegram_update_async(update_data, queue):
     """异步处理来自Telegram webhook的更新"""
-    global bot_application, notification_queue
+    global bot_application
     
     try:
         if not bot_application:
@@ -182,9 +182,9 @@ async def process_telegram_update_async(update_data, notification_queue):
         logger.error(f"处理webhook更新时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 处理webhook更新时出错: {str(e)}")
 
-def process_telegram_update(update_data, notification_queue):
+def process_telegram_update(update_data, queue):
     """处理来自Telegram webhook的更新（同步包装器）"""
-    global BOT_LOOP, notification_queue
+    global BOT_LOOP
     
     try:
         if not BOT_LOOP:
@@ -194,7 +194,7 @@ def process_telegram_update(update_data, notification_queue):
         
         # 在机器人的事件循环中运行异步处理函数
         asyncio.run_coroutine_threadsafe(
-            process_telegram_update_async(update_data, notification_queue),
+            process_telegram_update_async(update_data, queue),
             BOT_LOOP
         )
         
@@ -1078,7 +1078,7 @@ async def check_and_push_orders():
 # ===== 通知发送函数 =====
 async def send_notification_from_queue(data):
     """根据队列中的数据发送通知"""
-    global bot_application, notification_queue
+    global bot_application
     
     if not bot_application:
         logger.error("机器人应用未初始化，无法发送通知")
@@ -1133,7 +1133,7 @@ def set_order_notified_atomic(oid):
 
 async def send_new_order_notification(data):
     """发送新订单通知到所有卖家"""
-    global bot_application, notification_queue
+    global bot_application
     
     try:
         # 获取新订单详情
@@ -1230,7 +1230,7 @@ async def send_new_order_notification(data):
 
 async def send_status_change_notification(data):
     """发送订单状态变更通知到超级管理员和Web用户"""
-    global bot_application, notification_queue
+    global bot_application
     
     try:
         # 获取订单状态变更详情
@@ -1564,7 +1564,7 @@ def run_bot(queue):
 
 async def bot_main(queue):
     """机器人的主异步函数"""
-    global bot_application, notification_queue, BOT_LOOP
+    global bot_application, BOT_LOOP
     
     logger.info("正在启动Telegram机器人...")
     print("DEBUG: 正在启动Telegram机器人...")
@@ -1696,7 +1696,7 @@ async def periodic_order_check():
 
 async def process_notification_queue(queue):
     """处理来自Flask的通知队列"""
-    global notification_queue
+    global bot_application
     loop = asyncio.get_running_loop()
     while True:
         try:
@@ -1927,6 +1927,8 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 向通知队列添加状态变更通知，让网页端也能收到通知
         try:
+            # 使用全局队列变量
+            from app import notification_queue
             if notification_queue:
                 notification_queue.put({
                     'type': 'order_status_change',
@@ -1952,6 +1954,8 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 向通知队列添加状态变更通知，让网页端也能收到通知
         try:
+            # 使用全局队列变量
+            from app import notification_queue
             if notification_queue:
                 notification_queue.put({
                     'type': 'order_status_change',
