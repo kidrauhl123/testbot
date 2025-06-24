@@ -203,8 +203,6 @@
 
     .right {
       width: 65%;
-      display: flex;
-      justify-content: center;
     }
     
     .card {
@@ -301,11 +299,22 @@
     }
 
     .order-list-container {
-      display: none; /* 隐藏网格视图 */
+      display: grid;
+      grid-template-columns: repeat(1, 1fr);
+      gap: 15px;
     }
 
     .order-list-item {
-      display: none; /* 隐藏网格视图项 */
+      background: #fff; 
+      padding: 16px; 
+      margin-bottom: 0;
+      border-radius: 10px; 
+      border-left: 4px solid #667eea;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      transition: all 0.3s ease;
+      font-size: 13px;
+      position: relative;
+      overflow: hidden;
     }
     
     .order-list-item::after {
@@ -695,15 +704,23 @@
     }
     
     .view-toggle {
-      display: none; /* 隐藏视图切换按钮 */
+      display: flex;
+      background: rgba(0,0,0,0.05);
+      border-radius: 6px;
+      overflow: hidden;
     }
     
     .view-btn {
-      display: none; /* 隐藏视图切换按钮 */
+      border: none;
+      background: transparent;
+      padding: 6px 10px;
+      cursor: pointer;
+      transition: all 0.2s;
     }
     
     .view-btn.active {
-      display: none; /* 隐藏视图切换按钮 */
+      background: rgba(102,126,234,0.8);
+      color: white;
     }
     
     /* 表格视图样式 */
@@ -941,26 +958,6 @@
     .order-list-item .account {
       margin-bottom: 15px;
     }
-
-    .qrcode-container {
-      text-align: center;
-      margin-top: 20px;
-    }
-
-    .qrcode-container img {
-      max-width: 200px;
-      max-height: 200px;
-      width: 100%;
-      height: auto;
-      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-      border-radius: 10px;
-      transition: transform 0.3s ease;
-    }
-
-    /* 移除网格视图相关样式 */
-    .order-list-container, .order-list-item {
-      display: none !important;
-    }
   </style>
 </head>
 <body>
@@ -1090,8 +1087,10 @@
                     }
                   </style>
                   <div class="form-group">
-                    <label>套餐</label>
-                    <div class="form-control" style="background-color:#f8f9fa;">一年个人会员</div>
+                    <label>套餐类型</label>
+                    <select name="package" class="form-control" id="packageSelect" required>
+                      <option value="12">一年个人会员</option>
+                    </select>
                   </div>
                   
                   <div class="form-group">
@@ -1783,7 +1782,7 @@
       }
       
       // 获取所有订单，不使用分页限制
-      const response = await fetch('/orders/recent?limit=10000&offset=0');
+      const response = await fetch('/orders/recent?limit=1000&offset=0');
       
       if (!response.ok) {
         throw new Error(`获取订单失败: ${response.status}`);

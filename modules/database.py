@@ -1067,30 +1067,37 @@ def refund_order(order_id):
         logger.error(f"退款到用户余额失败: {str(e)}", exc_info=True)
         return False, str(e)
 
-def create_order_with_deduction_atomic(user_id, account, password, package, amount, qr_code_path, created_at):
+def create_order_with_deduction_atomic(account, package, username, user_id):
     """
     创建订单并扣款（原子操作）
     
     参数:
-    - user_id: 用户ID
-    - account: 账户信息
-    - password: 密码
+    - account: 二维码图片路径
     - package: 套餐
-    - amount: 金额
-    - qr_code_path: 二维码路径
-    - created_at: 创建时间
+    - username: 用户名
+    - user_id: 用户ID
     
     返回:
-    - 订单ID
+    - (新订单ID, 扣款后余额, 成功或失败) 元组
     """
-    logger.info(f"尝试创建订单: 套餐={package}, 金额={amount}, 用户ID={user_id}")
+    logger.info(f"尝试创建订单: 套餐={package}")
+    
+    # 获取套餐价格
+    try:
+        package_price = get_user_package_price(user_id, package)
+        if not package_price or package_price <= 0:
+            logger.error(f"套餐 {package} 价格无效: {package_price}")
+            return None, 0, False, "无效的套餐价格"
+    except Exception as e:
+        logger.error(f"获取套餐价格失败: {str(e)}")
+        return None, 0, False, f"获取套餐价格失败: {str(e)}"
     
     try:
         # 获取数据库连接
         conn = get_db_connection()
         if not conn:
             logger.error("无法获取数据库连接")
-            return None
+            return None, 0, False, "数据库连接失败"
         
         cursor = conn.cursor()
         
@@ -1105,13 +1112,13 @@ def create_order_with_deduction_atomic(user_id, account, password, package, amou
             if DATABASE_URL.startswith('postgres'):
                 cursor.execute("SELECT balance, credit_limit FROM users WHERE id = %s FOR UPDATE", (user_id,))
             else:
-                cursor.execute("SELECT balance, credit_limit FROM users WHERE id = ?", (user_id,))
+                cursor.execute("SELECT balance, credit_limit FROM users WHERE id = ? FOR UPDATE", (user_id,))
                 
             user_info = cursor.fetchone()
             if not user_info:
                 logger.error(f"用户 {user_id} 不存在")
                 conn.rollback()
-                return None
+                return None, 0, False, "用户不存在"
                 
             user_balance = float(user_info[0])
             user_credit = float(user_info[1])
@@ -1119,17 +1126,13 @@ def create_order_with_deduction_atomic(user_id, account, password, package, amou
             # 检查可用余额 = 余额 + 信用额度
             available_balance = user_balance + user_credit
             
-            logger.info(f"用户 {user_id} 余额检查: 余额={user_balance}, 信用额度={user_credit}, 可用余额={available_balance}, 订单金额={amount}")
+            if available_balance < package_price:
+                logger.warning(f"用户 {user_id} 余额不足: 余额={user_balance}, 信用={user_credit}, 价格={package_price}")
+                conn.rollback()
+                return None, user_balance, False, "余额不足，请充值"
             
-            # 测试模式：允许余额为0的用户下单
-            # if available_balance < amount:
-            #     logger.warning(f"用户 {user_id} 余额不足: 余额={user_balance}, 信用={user_credit}, 价格={amount}")
-            #     conn.rollback()
-            #     return None
-            
-            # 强制允许创建订单，不管余额是否足够
             # 扣款
-            new_balance = user_balance - amount
+            new_balance = user_balance - package_price
             
             # 如果余额不足，则需要消耗信用额度
             if new_balance < 0:
@@ -1142,29 +1145,22 @@ def create_order_with_deduction_atomic(user_id, account, password, package, amou
             else:
                 cursor.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
             
-            # 获取当前最大订单ID
-            if DATABASE_URL.startswith('postgres'):
-                cursor.execute("SELECT MAX(id) FROM orders")
-            else:
-                cursor.execute("SELECT MAX(id) FROM orders")
-            
-            max_id = cursor.fetchone()[0]
-            new_order_id = 1 if max_id is None else max_id + 1
-            
             # 创建订单
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
             if DATABASE_URL.startswith('postgres'):
                 cursor.execute("""
-                    INSERT INTO orders (id, account, password, package, status, created_at, updated_at, user_id, notified, qr_code_path)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO orders (account, password, package, status, created_at, updated_at, user_id, notified, web_user_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
-                """, (new_order_id, account, password, package, STATUS['SUBMITTED'], created_at, created_at, user_id, 0, qr_code_path))
+                """, (account, '', package, STATUS['SUBMITTED'], timestamp, timestamp, user_id, 0, user_id))
                 order_id = cursor.fetchone()[0]
             else:
                 cursor.execute("""
-                    INSERT INTO orders (id, account, password, package, status, created_at, updated_at, user_id, notified, qr_code_path)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (new_order_id, account, password, package, STATUS['SUBMITTED'], created_at, created_at, user_id, 0, qr_code_path))
-                order_id = new_order_id
+                    INSERT INTO orders (account, package, status, created_at, updated_at, user_id, username, notified, web_user_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (account, package, STATUS['SUBMITTED'], timestamp, timestamp, user_id, username, 0, user_id))
+                order_id = cursor.lastrowid
             
             # 添加余额变动记录
             try:
@@ -1172,12 +1168,12 @@ def create_order_with_deduction_atomic(user_id, account, password, package, amou
                     cursor.execute("""
                         INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
                         VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """, (user_id, -amount, 'consume', f'购买{package}套餐', order_id, new_balance, created_at))
+                    """, (user_id, -package_price, 'consume', f'购买{package}个月套餐', order_id, new_balance, timestamp))
                 else:
                     cursor.execute("""
                         INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (user_id, -amount, 'consume', f'购买{package}套餐', order_id, new_balance, created_at))
+                    """, (user_id, -package_price, 'consume', f'购买{package}个月套餐', order_id, new_balance, timestamp))
             except Exception as e:
                 logger.error(f"添加余额变动记录失败，但不影响订单创建: {str(e)}")
                 # 不要回滚，继续创建订单
@@ -1185,14 +1181,14 @@ def create_order_with_deduction_atomic(user_id, account, password, package, amou
             # 提交事务
             conn.commit()
             
-            logger.info(f"订单创建成功: ID={order_id}, 套餐={package}, 扣款={amount}, 新余额={new_balance}")
-            return order_id
+            logger.info(f"订单创建成功: ID={order_id}, 套餐={package}, 扣款={package_price}, 新余额={new_balance}")
+            return order_id, new_balance, True, "订单创建成功"
             
         except Exception as e:
             # 回滚事务
             conn.rollback()
             logger.error(f"创建订单事务失败: {str(e)}", exc_info=True)
-            return None
+            return None, 0, False, f"创建订单失败: {str(e)}"
             
         finally:
             # 关闭连接
@@ -1201,7 +1197,7 @@ def create_order_with_deduction_atomic(user_id, account, password, package, amou
             
     except Exception as e:
         logger.error(f"创建订单时出错: {str(e)}", exc_info=True)
-        return None
+        return None, 0, False, f"创建订单时出错: {str(e)}"
 
 # ===== 充值相关函数 =====
 def create_recharge_tables():
@@ -1983,5 +1979,31 @@ def create_notifications_table():
         logger.info("通知表创建/检查完成")
     except Exception as e:
         logger.error(f"创建通知表失败: {str(e)}", exc_info=True)
+
+def reset_sqlite_sequence(table_name):
+    """
+    重置SQLite表的自增ID序列
+    
+    参数:
+    - table_name: 要重置的表名
+    
+    说明:
+    - 找出表中当前最大的ID值
+    - 将sqlite_sequence表中对应表的seq值更新为该最大值
+    - 如果表中没有记录，则将seq值设为0
+    """
+    try:
+        # 获取表中最大ID值
+        max_id_result = execute_query(f"SELECT MAX(id) FROM {table_name}", fetch=True)
+        max_id = max_id_result[0][0] if max_id_result and max_id_result[0][0] is not None else 0
+        
+        # 更新sqlite_sequence表
+        execute_query(f"UPDATE sqlite_sequence SET seq = ? WHERE name = ?", (max_id, table_name))
+        logger.info(f"已重置表 {table_name} 的自增ID序列为 {max_id}")
+        
+        return True
+    except Exception as e:
+        logger.error(f"重置表 {table_name} 的自增ID序列失败: {str(e)}", exc_info=True)
+        return False
 
 # ... rest of the file remains unchanged ... 

@@ -20,7 +20,7 @@ from modules.database import (
     get_pending_recharge_requests, approve_recharge_request, reject_recharge_request, toggle_seller_admin,
     get_balance_records, get_activation_code, mark_activation_code_used, create_activation_code,
     get_admin_activation_codes, get_user_custom_prices, set_user_custom_price, delete_user_custom_price,
-    get_active_sellers, update_seller_nickname, check_seller_activity
+    get_active_sellers, update_seller_nickname, check_seller_activity, reset_sqlite_sequence
 )
 import modules.constants as constants
 
@@ -249,70 +249,67 @@ def register_routes(app, notification_queue):
                 file_size = os.path.getsize(file_path)
                 if file_size == 0:
                     logger.error(f"图片保存失败，文件大小为0: {file_path}")
-                    os.remove(temp_path)  # 清理临时文件
                     return jsonify({"success": False, "error": "图片保存失败，文件大小为0"}), 500
                 
-                # 清理临时文件
-                os.remove(temp_path)
-            except Exception as e:
-                logger.error(f"保存图片失败: {str(e)}")
-                return jsonify({"success": False, "error": f"保存图片失败: {str(e)}"}), 500
-            
-            # 获取表单数据
-            account = request.form.get('account', '').strip()
-            password = request.form.get('password', '').strip()
-            # 固定套餐为"12"（一年个人会员）
-            package = "12"
-            
-            # 获取用户ID
-            user_id = session.get('user_id')
-            if not user_id:
-                logger.warning("订单提交失败: 用户未登录")
-                return jsonify({"success": False, "error": "用户未登录"}), 401
-            
-            # 获取用户自定义价格
-            custom_prices = get_user_custom_prices(user_id)
-            
-            # 确定订单金额 - 直接使用键"12"
-            amount = float(custom_prices.get("12", WEB_PRICES.get("12", 0.0)))
-            
-            if amount <= 0:
-                # 如果金额仍然无效，尝试使用默认价格
-                amount = 200.0  # 设置一个默认价格
-                logger.warning(f"使用默认套餐金额: {amount}")
-            
-            # 创建订单 - 使用原子操作
-            try:
-                order_id = create_order_with_deduction_atomic(
-                    user_id=user_id,
-                    account=account,
-                    password=password,
-                    package=package,
-                    amount=amount,
-                    qr_code_path=file_path,
-                    created_at=get_china_time()
-                )
+                logger.info(f"图片保存成功: {file_path}, 大小: {file_size}字节")
                 
-                if order_id is None:
-                    logger.warning("订单创建失败: 余额不足")
-                    return jsonify({"success": False, "error": "余额不足，无法创建订单"}), 400
+                # 获取其他参数
+                package = request.form.get('package', '12')  # 默认一年期
+                user_id = session.get('user_id')
+                username = session.get('username')
                 
-                logger.info(f"订单创建成功: ID={order_id}, 用户ID={user_id}, 套餐={package}")
-                
-                # 发送通知到Telegram机器人
+                # 创建订单并扣款
                 try:
-                    from modules.telegram_bot import send_order_notification
-                    send_order_notification(notification_queue, order_id, account, package, amount, file_path)
+                    new_order_id, new_balance, success, message = create_order_with_deduction_atomic(
+                        file_path, package, username, user_id
+                    )
+                    
+                    if not success:
+                        logger.error(f"创建订单失败: {message}")
+                        return jsonify({"success": False, "error": message}), 400
+                    
+                    logger.info(f"订单创建成功: ID={new_order_id}, 余额={new_balance}")
+                    
+                    # 获取信用额度用于返回前端
+                    credit_limit = get_user_credit_limit(user_id)
+                    
+                    # 如果创建了订单，将其加入通知队列
+                    if new_order_id:
+                        # 加入通知队列，通知类型为new_order
+                        # 获取指定的接单人
+                        preferred_seller = request.form.get('preferred_seller', '')
+                        # 确保图片路径是绝对路径
+                        absolute_file_path = os.path.abspath(file_path)
+                        logger.info(f"添加到通知队列的图片路径: {absolute_file_path}")
+                        
+                        notification_queue.put({
+                            'type': 'new_order',
+                            'order_id': new_order_id,
+                            'account': absolute_file_path,  # 使用绝对路径
+                            'package': package,
+                            'preferred_seller': preferred_seller
+                        })
+                        logger.info(f"已将订单 #{new_order_id} 加入通知队列")
+                        print(f"DEBUG: 已将订单 #{new_order_id} 加入通知队列")
+                    else:
+                        logger.warning("无法获取新创建的订单ID，无法发送通知")
+                        print("WARNING: 无法获取新创建的订单ID，无法发送通知")
+                    
+                    return jsonify({
+                        "success": True,
+                        "message": '订单已提交成功！',
+                        "balance": new_balance,
+                        "credit_limit": credit_limit
+                    })
                 except Exception as e:
-                    logger.error(f"发送Telegram通知失败: {str(e)}")
-                
-                return jsonify({"success": True, "order_id": order_id, "message": "订单创建成功"})
+                    logger.error(f"创建订单时出错: {str(e)}", exc_info=True)
+                    return jsonify({"success": False, "error": f"创建订单时出错: {str(e)}"}), 500
             except Exception as e:
-                logger.error(f"创建订单失败: {str(e)}")
-                return jsonify({"success": False, "error": f"创建订单失败: {str(e)}"}), 500
+                logger.error(f"处理上传图片时出错: {str(e)}", exc_info=True)
+                return jsonify({"success": False, "error": f"处理上传图片时出错: {str(e)}"}), 500
         except Exception as e:
-            logger.error(f"处理订单请求时发生错误: {str(e)}")
-            return jsonify({"success": False, "error": f"处理订单请求时发生错误: {str(e)}"}), 500
+            logger.error(f"处理请求时出错: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": f"处理请求时出错: {str(e)}"}), 500
 
     @app.route('/orders/stats/web/<user_id>')
     @login_required
@@ -400,7 +397,7 @@ def register_routes(app, notification_queue):
     def orders_recent():
         """获取用户最近的订单"""
         # 获取查询参数
-        limit = int(request.args.get('limit', 10000))  # 默认返回10000条订单，增加限制以便显示更多订单
+        limit = int(request.args.get('limit', 1000))  # 默认返回1000条订单
         offset = int(request.args.get('offset', 0))
         user_filter = ""
         params = []
@@ -877,67 +874,95 @@ def register_routes(app, notification_queue):
     @login_required
     @admin_required
     def admin_api_orders():
-        try:
-            # 获取分页参数
-            page = int(request.args.get('page', 1))
-            per_page = int(request.args.get('per_page', 100))  # 默认每页显示100条订单，增加限制以便显示更多订单
-            offset = (page - 1) * per_page
-            
-            # 获取搜索参数
-            search = request.args.get('search', '').strip()
-            
-            # 构建查询条件
-            conditions = []
-            params = []
-            
-            if search:
-                conditions.append("(o.id LIKE ? OR o.account LIKE ? OR u.username LIKE ?)")
-                search_param = f"%{search}%"
-                params.extend([search_param, search_param, search_param])
-            
-            where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
-            
-            # 查询订单 - 关联users表获取创建者用户名，并关联sellers表获取接单人昵称
-            query = f"""
-                SELECT o.id, o.account, o.package, o.status, o.created_at, 
-                       u.username as creator, s.nickname as accepter
+        """获取所有订单"""
+        # 获取查询参数
+        limit = int(request.args.get('limit', 50))
+        offset = int(request.args.get('offset', 0))
+        status = request.args.get('status')
+        search = request.args.get('search', '')
+        
+        # 构建查询条件
+        conditions = []
+        params = []
+        
+        if status:
+            conditions.append("status = ?")
+            params.append(status)
+        
+        if search:
+            conditions.append("(account LIKE ? OR web_user_id LIKE ? OR id LIKE ?)")
+            search_param = f"%{search}%"
+            params.extend([search_param, search_param, search_param])
+        
+        where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+        
+        # 查询订单
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL查询，使用COALESCE获取web_user_id或从users表联查username
+            orders = execute_query(f"""
+                SELECT o.id, o.account, o.password, o.package, o.status, o.remark, o.created_at, o.accepted_at, o.completed_at, 
+                       COALESCE(o.web_user_id, u.username) as creator, o.accepted_by, o.accepted_by_username, o.accepted_by_first_name, o.refunded
                 FROM orders o
                 LEFT JOIN users u ON o.user_id = u.id
-                LEFT JOIN sellers s ON o.accepted_by = s.telegram_id
                 {where_clause}
                 ORDER BY o.id DESC
-                LIMIT ? OFFSET ?
-            """
-            params.extend([per_page, offset])
-            orders = execute_query(query, params, fetch=True)
+                LIMIT %s OFFSET %s
+            """, params + [limit, offset], fetch=True)
             
-            # 查询总数用于分页
-            count_query = f"""
-                SELECT COUNT(*) 
-                FROM orders o
-                LEFT JOIN users u ON o.user_id = u.id
+            # 查询订单总数
+            count = execute_query(f"""
+                SELECT COUNT(*) FROM orders {where_clause}
+            """, params, fetch=True)[0][0]
+        else:
+            # SQLite查询
+            orders = execute_query(f"""
+                SELECT id, account, password, package, status, remark, created_at, accepted_at, completed_at, 
+                       web_user_id as creator, accepted_by, accepted_by_username, accepted_by_first_name, refunded
+                FROM orders
                 {where_clause}
-            """
-            total_count = execute_query(count_query, params[:-2], fetch=True)[0][0]
+                ORDER BY id DESC
+                LIMIT ? OFFSET ?
+            """, params + [limit, offset], fetch=True)
             
-            return jsonify({
-                "success": True,
-                "data": [{
-                    "id": order[0],
-                    "account": order[1],
-                    "package": order[2],
-                    "status": order[3],
-                    "created_at": order[4],
-                    "creator": order[5],
-                    "accepter": order[6] if order[6] else ""
-                } for order in orders],
-                "total": total_count,
-                "page": page,
-                "per_page": per_page
+            # 查询订单总数
+            count = execute_query(f"""
+                SELECT COUNT(*) FROM orders {where_clause}
+            """, params, fetch=True)[0][0]
+        
+        # 格式化订单数据
+        formatted_orders = []
+        for order in orders:
+            order_id, account, password, package, status, remark, created_at, accepted_at, completed_at, creator, accepted_by, accepted_by_username, accepted_by_first_name, refunded = order
+            
+            # 格式化卖家信息
+            seller_info = None
+            if accepted_by:
+                seller_info = {
+                    "telegram_id": accepted_by,
+                    "username": accepted_by_username or str(accepted_by),
+                    "name": accepted_by_first_name or str(accepted_by)
+                }
+            
+            formatted_orders.append({
+                "id": order_id,
+                "account": account,
+                "password": password,
+                "package": package,
+                "status": status,
+                "status_text": STATUS_TEXT_ZH.get(status, status),
+                "remark": remark,
+                "created_at": created_at,
+                "accepted_at": accepted_at,
+                "completed_at": completed_at,
+                "creator": creator or "N/A",
+                "seller": seller_info,
+                "refunded": bool(refunded)
             })
-        except Exception as e:
-            logger.error(f"获取订单列表失败: {str(e)}")
-            return jsonify({"success": False, "error": f"获取订单列表失败: {str(e)}"}), 500
+        
+        return jsonify({
+            "orders": formatted_orders,
+            "total": count
+        })
         
     @app.route('/admin/api/sellers', methods=['GET'])
     @login_required
@@ -1142,6 +1167,9 @@ def register_routes(app, notification_queue):
                 f"DELETE FROM orders WHERE id IN ({order_ids_str})",
                 order_ids
             )
+            
+            # 重置SQLite自增ID序列
+            reset_sqlite_sequence('orders')
             
             logger.info(f"管理员批量删除了{len(order_ids)}个订单: {order_ids}")
             
