@@ -509,4 +509,125 @@ def fail_order(order_id, reason=None):
         (STATUS["FAILED"], reason, timestamp, order_id)
     )
     
-    return True, "订单已标记为失败" 
+    return True, "订单已标记为失败"
+
+# 获取未通知的订单
+def get_unnotified_orders():
+    """获取尚未通知卖家的新订单
+    
+    返回:
+    - 订单列表，每个订单包含id, account, package, qr_code_path, created_at, username
+    """
+    try:
+        # 查询订单但排除已通知的订单
+        result = execute_query(
+            """
+            SELECT o.id, o.account, o.package, o.created_at, u.username
+            FROM orders o
+            LEFT JOIN users u ON o.creator_id = u.id
+            LEFT JOIN order_notifications n ON o.id = n.order_id
+            WHERE o.status = ? AND n.id IS NULL
+            ORDER BY o.created_at ASC
+            """,
+            (STATUS["SUBMITTED"],),
+            fetch=True
+        )
+        
+        if not result:
+            return []
+        
+        # 构建包含二维码路径的订单列表
+        orders = []
+        for row in result:
+            # 查找订单的二维码路径
+            order_id = row[0]
+            account = row[1]
+            
+            # 获取账号中的二维码路径
+            qr_code_path = None
+            if account and account.startswith('uploads/'):
+                qr_code_path = account
+                
+            orders.append({
+                'id': order_id,
+                'account': account,
+                'package': row[2],
+                'qr_code_path': qr_code_path,
+                'created_at': row[3],
+                'username': row[4] or '未知用户'
+            })
+        
+        return orders
+    
+    except Exception as e:
+        logger.error(f"获取未通知订单时出错: {str(e)}", exc_info=True)
+        return []
+
+# 获取活跃卖家ID
+def get_active_seller_ids():
+    """获取所有活跃卖家的Telegram ID列表"""
+    try:
+        result = execute_query(
+            "SELECT telegram_id FROM sellers WHERE is_active = 1",
+            fetch=True
+        )
+        
+        if not result:
+            return []
+        
+        # 将ID转换为整数
+        seller_ids = []
+        for row in result:
+            try:
+                seller_ids.append(int(row[0]))
+            except (ValueError, TypeError):
+                logger.warning(f"无法转换卖家ID为整数: {row[0]}")
+        
+        return seller_ids
+    
+    except Exception as e:
+        logger.error(f"获取活跃卖家ID时出错: {str(e)}", exc_info=True)
+        return []
+
+# 更新卖家最后活跃时间
+def update_seller_last_active(telegram_id):
+    """更新卖家的最后活跃时间"""
+    try:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        execute_query(
+            "UPDATE sellers SET last_active_at=? WHERE telegram_id=?",
+            (timestamp, str(telegram_id))
+        )
+        
+        return True
+    except Exception as e:
+        logger.error(f"更新卖家活跃时间时出错: {str(e)}", exc_info=True)
+        return False
+
+# 获取用户定制价格
+def get_user_custom_prices(user_id):
+    """获取用户的定制价格"""
+    if not user_id:
+        return {}
+        
+    try:
+        result = execute_query(
+            "SELECT package, price FROM user_custom_prices WHERE user_id=?",
+            (user_id,),
+            fetch=True
+        )
+        
+        if not result:
+            return {}
+            
+        # 构建价格字典
+        prices = {}
+        for row in result:
+            package, price = row
+            prices[package] = price
+            
+        return prices
+    except Exception as e:
+        logger.error(f"获取用户定制价格时出错: {str(e)}", exc_info=True)
+        return {} 
