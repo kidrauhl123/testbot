@@ -8,6 +8,7 @@ from functools import wraps
 from datetime import datetime
 from urllib.parse import urlparse
 import pytz
+import json
 
 from modules.constants import DATABASE_URL, STATUS, ADMIN_USERNAME, ADMIN_PASSWORD, WEB_PRICES, get_user_package_price
 
@@ -16,6 +17,31 @@ logger = logging.getLogger(__name__)
 
 # 中国时区
 CN_TIMEZONE = pytz.timezone('Asia/Shanghai')
+
+# 获取数据库连接
+def get_db_connection():
+    """获取数据库连接"""
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL 连接
+            parsed_url = urlparse(DATABASE_URL)
+            conn = psycopg2.connect(
+                database=parsed_url.path[1:],
+                user=parsed_url.username,
+                password=parsed_url.password,
+                host=parsed_url.hostname,
+                port=parsed_url.port
+            )
+            return conn
+        else:
+            # SQLite 连接
+            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(current_dir, "orders.db")
+            conn = sqlite3.connect(db_path)
+            return conn
+    except Exception as e:
+        logger.error(f"数据库连接失败: {str(e)}", exc_info=True)
+        return None
 
 # 获取中国时间的函数
 def get_china_time():
