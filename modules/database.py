@@ -65,6 +65,26 @@ def init_db():
             )
         """)
         
+        # 尝试添加可能缺失的列
+        try:
+            # 检查customer_name列是否存在，若不存在则添加
+            c.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_name='orders' AND column_name='customer_name'
+                    ) THEN
+                        ALTER TABLE orders ADD COLUMN customer_name TEXT;
+                    END IF;
+                END
+                $$;
+            """)
+            logger.info("已检查并确保customer_name列存在")
+        except Exception as column_e:
+            logger.warning(f"检查或添加customer_name列时出错: {str(column_e)}")
+        
         # 卖家表
         c.execute("""
             CREATE TABLE IF NOT EXISTS sellers (
@@ -147,17 +167,35 @@ def create_order(customer_name, package, qr_image):
     """创建新订单"""
     try:
         created_at = get_china_time()
-        order_id = execute_query(
-            """
-            INSERT INTO orders (customer_name, package, qr_image, status, created_at, notified)
-            VALUES (%s, %s, %s, %s, %s, 0)
-            RETURNING id
-            """,
-            (customer_name, package, qr_image, STATUS['SUBMITTED'], created_at),
-            fetch=True
-        )
-        
-        return order_id[0][0] if order_id else None
+        try:
+            # 首先尝试带有customer_name的插入
+            order_id = execute_query(
+                """
+                INSERT INTO orders (customer_name, package, qr_image, status, created_at, notified)
+                VALUES (%s, %s, %s, %s, %s, 0)
+                RETURNING id
+                """,
+                (customer_name, package, qr_image, STATUS['SUBMITTED'], created_at),
+                fetch=True
+            )
+            return order_id[0][0] if order_id else None
+        except Exception as e:
+            if 'column "customer_name" of relation "orders" does not exist' in str(e):
+                # 如果customer_name列不存在，尝试不使用该字段
+                logger.warning("customer_name列不存在，尝试不使用该字段进行插入")
+                order_id = execute_query(
+                    """
+                    INSERT INTO orders (package, qr_image, status, created_at, notified)
+                    VALUES (%s, %s, %s, %s, 0)
+                    RETURNING id
+                    """,
+                    (package, qr_image, STATUS['SUBMITTED'], created_at),
+                    fetch=True
+                )
+                return order_id[0][0] if order_id else None
+            else:
+                # 其他错误直接抛出
+                raise
     except Exception as e:
         logger.error(f"创建订单失败: {str(e)}", exc_info=True)
         return None
@@ -165,37 +203,79 @@ def create_order(customer_name, package, qr_image):
 def get_order_details(order_id):
     """获取订单详情"""
     try:
-        order = execute_query(
-            """
-            SELECT id, customer_name, package, qr_image, status, message, 
-                   created_at, paid_at, confirmed_at, 
-                   seller_id, seller_username, seller_first_name
-            FROM orders
-            WHERE id = %s
-            """,
-            (order_id,),
-            fetch=True
-        )
-        
-        if not order or len(order) == 0:
-            return None
+        try:
+            # 首先尝试查询包含customer_name的完整数据
+            order = execute_query(
+                """
+                SELECT id, customer_name, package, qr_image, status, message, 
+                       created_at, paid_at, confirmed_at, 
+                       seller_id, seller_username, seller_first_name
+                FROM orders
+                WHERE id = %s
+                """,
+                (order_id,),
+                fetch=True
+            )
             
-        order_data = {
-            'id': order[0][0],
-            'customer_name': order[0][1],
-            'package': order[0][2],
-            'qr_image': order[0][3],
-            'status': order[0][4],
-            'message': order[0][5],
-            'created_at': order[0][6],
-            'paid_at': order[0][7],
-            'confirmed_at': order[0][8],
-            'seller_id': order[0][9],
-            'seller_username': order[0][10],
-            'seller_first_name': order[0][11]
-        }
-        
-        return order_data
+            if not order or len(order) == 0:
+                return None
+                
+            order_data = {
+                'id': order[0][0],
+                'customer_name': order[0][1],
+                'package': order[0][2],
+                'qr_image': order[0][3],
+                'status': order[0][4],
+                'message': order[0][5],
+                'created_at': order[0][6],
+                'paid_at': order[0][7],
+                'confirmed_at': order[0][8],
+                'seller_id': order[0][9],
+                'seller_username': order[0][10],
+                'seller_first_name': order[0][11]
+            }
+            
+            return order_data
+            
+        except Exception as e:
+            if 'column "customer_name" of relation "orders" does not exist' in str(e):
+                # 如果customer_name列不存在，使用替代查询
+                logger.warning("customer_name列不存在，使用替代查询获取订单详情")
+                order = execute_query(
+                    """
+                    SELECT id, package, qr_image, status, message, 
+                           created_at, paid_at, confirmed_at, 
+                           seller_id, seller_username, seller_first_name
+                    FROM orders
+                    WHERE id = %s
+                    """,
+                    (order_id,),
+                    fetch=True
+                )
+                
+                if not order or len(order) == 0:
+                    return None
+                    
+                order_data = {
+                    'id': order[0][0],
+                    'customer_name': "",  # 提供默认空值
+                    'package': order[0][1],
+                    'qr_image': order[0][2],
+                    'status': order[0][3],
+                    'message': order[0][4],
+                    'created_at': order[0][5],
+                    'paid_at': order[0][6],
+                    'confirmed_at': order[0][7],
+                    'seller_id': order[0][8],
+                    'seller_username': order[0][9],
+                    'seller_first_name': order[0][10]
+                }
+                
+                return order_data
+            else:
+                # 其他错误直接抛出
+                raise
+                
     except Exception as e:
         logger.error(f"获取订单详情失败: {str(e)}", exc_info=True)
         return None
