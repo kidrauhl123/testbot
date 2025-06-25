@@ -9,7 +9,6 @@ from functools import wraps
 import pytz
 import sys
 import functools
-import sqlite3
 import traceback
 import psycopg2
 from urllib.parse import urlparse
@@ -49,39 +48,27 @@ CN_TIMEZONE = pytz.timezone('Asia/Shanghai')
 
 # 获取数据库连接
 def get_db_connection():
-    """获取数据库连接，根据环境变量决定使用SQLite或PostgreSQL"""
+    """获取PostgreSQL数据库连接"""
     
     try:
-        if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL连接
-            url = urlparse(DATABASE_URL)
-            dbname = url.path[1:]
-            user = url.username
-            password = url.password
-            host = url.hostname
-            port = url.port
-            
-            logger.info(f"连接PostgreSQL数据库: {host}:{port}/{dbname}")
-            
-            conn = psycopg2.connect(
-                dbname=dbname,
-                user=user,
-                password=password,
-                host=host,
-                port=port
-            )
-            return conn
-        else:
-            # SQLite连接
-            # 使用绝对路径访问数据库
-            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            db_path = os.path.join(current_dir, "orders.db")
-            logger.info(f"连接SQLite数据库: {db_path}")
-            print(f"DEBUG: 连接SQLite数据库: {db_path}")
-            
-            conn = sqlite3.connect(db_path)
-            conn.row_factory = sqlite3.Row  # 使查询结果可以通过列名访问
-            return conn
+        # PostgreSQL连接
+        url = urlparse(DATABASE_URL)
+        dbname = url.path[1:]
+        user = url.username
+        password = url.password
+        host = url.hostname
+        port = url.port
+        
+        logger.info(f"连接PostgreSQL数据库: {host}:{port}/{dbname}")
+        
+        conn = psycopg2.connect(
+            dbname=dbname,
+            user=user,
+            password=password,
+            host=host,
+            port=port
+        )
+        return conn
     except Exception as e:
         logger.error(f"获取数据库连接时出错: {str(e)}", exc_info=True)
         print(f"ERROR: 获取数据库连接时出错: {str(e)}")
@@ -322,7 +309,7 @@ async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 首先检查当前用户的活跃订单数
     active_orders_count = execute_query("""
         SELECT COUNT(*) FROM orders 
-        WHERE accepted_by = ? AND status = ?
+        WHERE accepted_by = %s AND status = %s
     """, (str(user_id), STATUS['ACCEPTED']), fetch=True)[0][0]
     
     # 发送当前状态
@@ -341,12 +328,12 @@ async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 查询待处理订单
     new_orders = execute_query("""
         SELECT id, account, password, package, created_at FROM orders 
-        WHERE status = ? ORDER BY id DESC LIMIT 5
+        WHERE status = %s ORDER BY id DESC LIMIT 5
     """, (STATUS['SUBMITTED'],), fetch=True)
     
     my_orders = execute_query("""
         SELECT id, account, password, package, status FROM orders 
-        WHERE accepted_by = ? AND status IN (?, ?) ORDER BY id DESC LIMIT 5
+        WHERE accepted_by = %s AND status IN (%s, %s) ORDER BY id DESC LIMIT 5
     """, (str(user_id), STATUS['ACCEPTED'], STATUS['FAILED']), fetch=True)
     
     # 发送订单信息
@@ -481,10 +468,7 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        if DATABASE_URL.startswith('postgres'):
-            cursor.execute("SELECT * FROM orders WHERE id = %s", (oid,))
-        else:
-            cursor.execute("SELECT * FROM orders WHERE id = ?", (oid,))
+        cursor.execute("SELECT * FROM orders WHERE id = %s", (oid,))
             
         order_row = cursor.fetchone()
         columns = [column[0] for column in cursor.description]
@@ -564,12 +548,12 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             
             timestamp = get_china_time()
             # 确保使用STATUS['COMPLETED']常量而不是字符串
-            execute_query("UPDATE orders SET status=?, completed_at=? WHERE id=? AND accepted_by=?",
+            execute_query("UPDATE orders SET status=%s, completed_at=%s WHERE id=%s AND accepted_by=%s",
                         (STATUS['COMPLETED'], timestamp, oid, str(user_id)))
             
             # 获取订单创建者ID，用于发送通知
             order_creator = execute_query(
-                "SELECT user_id FROM orders WHERE id=?", 
+                "SELECT user_id FROM orders WHERE id=%s", 
                 (oid,), 
                 fetch=True
             )
@@ -683,7 +667,7 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 reason_text = f"Unknown reason: {reason_type}"
             
             # 更新数据库
-            execute_query("UPDATE orders SET status=?, completed_at=?, remark=? WHERE id=? AND accepted_by=?",
+            execute_query("UPDATE orders SET status=%s, completed_at=%s, remark=%s WHERE id=%s AND accepted_by=%s",
                         (STATUS['FAILED'], timestamp, reason_text, oid, str(user_id)))
             
             # 获取原始消息内容
@@ -738,7 +722,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         oid = feedback_waiting[user_id]
         feedback = update.message.text
         
-        execute_query("UPDATE orders SET remark=? WHERE id=?", (feedback, oid))
+        execute_query("UPDATE orders SET remark=%s WHERE id=%s", (feedback, oid))
         del feedback_waiting[user_id]
         
         await update.message.reply_text("Feedback recorded. Thank you.")
@@ -882,7 +866,7 @@ async def show_personal_stats(query, user_id, date_str, period_text):
     # 查询指定日期完成的订单
     completed_orders = execute_query("""
         SELECT package FROM orders 
-        WHERE accepted_by = ? AND status = ? AND completed_at LIKE ?
+        WHERE accepted_by = %s AND status = %s AND completed_at LIKE %s
     """, (str(user_id), STATUS['COMPLETED'], f"{date_str}%"), fetch=True)
     
     # 统计各套餐数量
@@ -929,8 +913,8 @@ async def show_period_stats(query, user_id, start_date, end_date, period_text):
     # 获取该时间段内用户完成的所有订单
     orders = execute_query("""
         SELECT package, completed_at FROM orders 
-        WHERE accepted_by = ? AND status = ? 
-        AND completed_at >= ? AND completed_at <= ?
+        WHERE accepted_by = %s AND status = %s 
+        AND completed_at >= %s AND completed_at <= %s
     """, (
         str(user_id), STATUS['COMPLETED'], 
         f"{start_str} 00:00:00", f"{end_str} 23:59:59"
@@ -1030,13 +1014,13 @@ async def show_all_stats(query, date_str, period_text):
     if len(date_str) == 10:  # 单日格式 YYYY-MM-DD
         completed_orders = execute_query("""
             SELECT accepted_by, package FROM orders 
-            WHERE status = ? AND completed_at LIKE ?
+            WHERE status = %s AND completed_at LIKE %s
         """, (STATUS['COMPLETED'], f"{date_str}%"), fetch=True)
     else:  # 时间段
         start_str = date_str
         completed_orders = execute_query("""
             SELECT accepted_by, package FROM orders 
-            WHERE status = ? AND completed_at >= ?
+            WHERE status = %s AND completed_at >= %s
         """, (STATUS['COMPLETED'], f"{start_str} 00:00:00"), fetch=True)
     
     # 按用户统计
@@ -1210,7 +1194,7 @@ async def check_and_push_orders():
                 if success_count > 0:
                     # 只有成功推送给至少一个卖家时才标记为已通知
                     try:
-                        execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
+                        execute_query("UPDATE orders SET notified = 1 WHERE id = %s", (oid,))
                         logger.info(f"订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家")
                         print(f"DEBUG: 订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家")
                     except Exception as update_error:
@@ -1253,28 +1237,15 @@ async def send_notification_from_queue(data):
 def set_order_notified_atomic(oid):
     """原子性地将订单notified字段设为1，只有notified=0时才更新，防止重复推送"""
     try:
-        from modules.database import DATABASE_URL, execute_query
+        from modules.database import get_postgres_connection
         
-        # 根据数据库类型选择不同的查询方式
-        if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL版本
-            from modules.database import get_postgres_connection
-            conn = get_postgres_connection()
-            cursor = conn.cursor()
-            cursor.execute("UPDATE orders SET notified=1 WHERE id=%s AND notified=0", (oid,))
-            affected = cursor.rowcount
-            conn.commit()
-            conn.close()
-        else:
-            # SQLite版本
-            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            db_path = os.path.join(current_dir, "orders.db")
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            cursor.execute("UPDATE orders SET notified=1 WHERE id=? AND notified=0", (oid,))
-            affected = cursor.rowcount
-            conn.commit()
-            conn.close()
+        # PostgreSQL版本
+        conn = get_postgres_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE orders SET notified=1 WHERE id=%s AND notified=0", (oid,))
+        affected = cursor.rowcount
+        conn.commit()
+        conn.close()
         
         logger.info(f"原子性更新订单 #{oid} 通知状态: 影响行数={affected}")
         return affected > 0
@@ -1291,13 +1262,10 @@ async def send_new_order_notification(data):
         oid = data.get('order_id')
         # 先检查订单是否已被通知过，但不立即标记
         try:
-            from modules.database import DATABASE_URL, execute_query
+            from modules.database import execute_query
             
-            # 根据数据库类型执行查询
-            if DATABASE_URL.startswith('postgres'):
-                result = execute_query("SELECT notified FROM orders WHERE id=%s", (oid,), fetch=True)
-            else:
-                result = execute_query("SELECT notified FROM orders WHERE id=?", (oid,), fetch=True)
+            # 执行查询
+            result = execute_query("SELECT notified FROM orders WHERE id=%s", (oid,), fetch=True)
                 
             if result and result[0][0] == 1:
                 logger.info(f"订单 #{oid} 已经被其他进程推送过，跳过")
@@ -1399,7 +1367,7 @@ async def send_status_change_notification(data):
         try:
             # 检查当前订单状态
             current_status = execute_query(
-                "SELECT status FROM orders WHERE id=?", 
+                "SELECT status FROM orders WHERE id=%s", 
                 (oid,), 
                 fetch=True
             )
@@ -1415,7 +1383,7 @@ async def send_status_change_notification(data):
                 logger.warning(f"订单 {oid} 数据库状态 ({current_status}) 与通知状态 ({status}) 不一致，正在更新数据库")
                 timestamp = get_china_time()
                 execute_query(
-                    "UPDATE orders SET status=?, completed_at=? WHERE id=?",
+                    "UPDATE orders SET status=%s, completed_at=%s WHERE id=%s",
                     (status, timestamp, oid)
                 )
                 logger.info(f"已更新订单 {oid} 数据库状态为 {status}")
@@ -1425,7 +1393,7 @@ async def send_status_change_notification(data):
         # 如果需要更新原始消息而不是发送新消息
         if update_original and status == STATUS['COMPLETED']:
             # 获取接单人ID
-            order = execute_query("SELECT accepted_by FROM orders WHERE id=?", (oid,), fetch=True)
+            order = execute_query("SELECT accepted_by FROM orders WHERE id=%s", (oid,), fetch=True)
             if order and order[0][0]:
                 seller_id = int(order[0][0])
                 
@@ -1834,29 +1802,16 @@ def get_order_by_id(order_id):
             
         cursor = conn.cursor()
         
-        # 根据数据库类型执行不同的查询
-        if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL使用%s作为占位符
-            cursor.execute("SELECT * FROM orders WHERE id = %s", (order_id,))
-            order = cursor.fetchone()
-            
-            if order:
-                # 将结果转换为字典
-                columns = [desc[0] for desc in cursor.description]
-                result = {columns[i]: order[i] for i in range(len(columns))}
-                conn.close()
-                return result
-        else:
-            # SQLite
-            cursor.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
-            order = cursor.fetchone()
-            
-            if order:
-                # 将结果转换为字典
-                columns = [column[0] for column in cursor.description]
-                result = {columns[i]: order[i] for i in range(len(columns))}
-                conn.close()
-                return result
+        # PostgreSQL查询
+        cursor.execute("SELECT * FROM orders WHERE id = %s", (order_id,))
+        order = cursor.fetchone()
+        
+        if order:
+            # 将结果转换为字典
+            columns = [desc[0] for desc in cursor.description]
+            result = {columns[i]: order[i] for i in range(len(columns))}
+            conn.close()
+            return result
                 
         conn.close()
         return None
@@ -1878,14 +1833,8 @@ def check_order_exists(order_id):
         logger.info(f"正在检查订单ID={order_id}是否存在...")
         print(f"DEBUG: 正在检查订单ID={order_id}是否存在...")
         
-        # 根据数据库类型执行不同的查询
-        if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL使用%s作为占位符
-            cursor.execute("SELECT COUNT(*) FROM orders WHERE id = %s", (order_id,))
-        else:
-            # SQLite
-            cursor.execute("SELECT COUNT(*) FROM orders WHERE id = ?", (order_id,))
-            
+        # PostgreSQL查询
+        cursor.execute("SELECT COUNT(*) FROM orders WHERE id = %s", (order_id,))
         count = cursor.fetchone()[0]
         
         # 增加更多查询记录debug问题
@@ -1894,20 +1843,13 @@ def check_order_exists(order_id):
             print(f"WARNING: 订单 {order_id} 在数据库中不存在")
             
             # 检查是否有任何订单
-            if DATABASE_URL.startswith('postgres'):
-                cursor.execute("SELECT COUNT(*) FROM orders")
-            else:
-                cursor.execute("SELECT COUNT(*) FROM orders")
-                
+            cursor.execute("SELECT COUNT(*) FROM orders")
             total_count = cursor.fetchone()[0]
             logger.info(f"数据库中总共有 {total_count} 个订单")
             print(f"INFO: 数据库中总共有 {total_count} 个订单")
             
             # 列出最近的几个订单ID
-            if DATABASE_URL.startswith('postgres'):
-                cursor.execute("SELECT id FROM orders ORDER BY id DESC LIMIT 5")
-            else:
-                cursor.execute("SELECT id FROM orders ORDER BY id DESC LIMIT 5")
+            cursor.execute("SELECT id FROM orders ORDER BY id DESC LIMIT 5")
                 
             recent_orders = cursor.fetchall()
             if recent_orders:
@@ -1936,31 +1878,17 @@ def update_order_status(order_id, status, handler_id=None):
             
         cursor = conn.cursor()
         
-        # 根据数据库类型执行不同的查询
-        if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL使用%s作为占位符，并且时间戳函数不同
-            if handler_id:
-                cursor.execute(
-                    "UPDATE orders SET status = %s, handler_id = %s, updated_at = NOW() WHERE id = %s",
-                    (status, handler_id, order_id)
-                )
-            else:
-                cursor.execute(
-                    "UPDATE orders SET status = %s, updated_at = NOW() WHERE id = %s",
-                    (status, order_id)
-                )
+        # PostgreSQL查询
+        if handler_id:
+            cursor.execute(
+                "UPDATE orders SET status = %s, handler_id = %s, updated_at = NOW() WHERE id = %s",
+                (status, handler_id, order_id)
+            )
         else:
-            # SQLite
-            if handler_id:
-                cursor.execute(
-                    "UPDATE orders SET status = ?, handler_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    (status, handler_id, order_id)
-                )
-            else:
-                cursor.execute(
-                    "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    (status, order_id)
-                )
+            cursor.execute(
+                "UPDATE orders SET status = %s, updated_at = NOW() WHERE id = %s",
+                (status, order_id)
+            )
         
         conn.commit()
         conn.close()
@@ -2016,7 +1944,7 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 根据订单ID获取充值请求ID
             recharge_id = execute_query("""
                 SELECT id FROM recharge_requests 
-                WHERE reference_order_id = ? AND status = 'pending'
+                WHERE reference_order_id = %s AND status = 'pending'
             """, (oid,), fetch=True)
             
             if recharge_id:
@@ -2025,8 +1953,8 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 now = get_china_time()
                 execute_query("""
                     UPDATE recharge_requests
-                    SET status = 'recharged', processed_at = ?
-                    WHERE id = ?
+                    SET status = 'recharged', processed_at = %s
+                    WHERE id = %s
                 """, (now, request_id))
                 logger.info(f"TG完成订单 {oid} 后，将充值请求 {request_id} 状态更新为已充值")
         except Exception as e:
@@ -2186,7 +2114,7 @@ async def on_accept_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # 获取卖家信息
             seller_info = execute_query(
-                "SELECT username, first_name FROM sellers WHERE telegram_id = ?", 
+                "SELECT username, first_name FROM sellers WHERE telegram_id = %s", 
                 (user_id,), 
                 fetch=True
             )
@@ -2201,8 +2129,8 @@ async def on_accept_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 检查该卖家是否已有3个未确认订单
             unconfirmed_orders_query = """
                 SELECT COUNT(*) FROM orders 
-                WHERE accepted_by = ? 
-                AND status = ? 
+                WHERE accepted_by = %s 
+                AND status = %s 
                 AND completed_at IS NULL
             """
             unconfirmed_count = execute_query(
@@ -2223,7 +2151,7 @@ async def on_accept_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # 检查订单状态
             order_status = execute_query(
-                "SELECT status FROM orders WHERE id = ?", 
+                "SELECT status FROM orders WHERE id = %s", 
                 (oid,), 
                 fetch=True
             )
@@ -2240,7 +2168,7 @@ async def on_accept_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # 更新订单状态
             execute_query(
-                "UPDATE orders SET status=?, accepted_at=?, accepted_by=? WHERE id=?", 
+                "UPDATE orders SET status=%s, accepted_at=%s, accepted_by=%s WHERE id=%s", 
                 (STATUS['ACCEPTED'], timestamp, user_id, oid)
             )
             
@@ -2251,7 +2179,7 @@ async def on_accept_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # 获取订单详情
             order = execute_query(
-                "SELECT account, package, remark FROM orders WHERE id = ?", 
+                "SELECT account, package, remark FROM orders WHERE id = %s", 
                 (oid,), 
                 fetch=True
             )
