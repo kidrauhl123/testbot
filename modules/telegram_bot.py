@@ -1293,9 +1293,11 @@ async def send_new_order_notification(data):
         logger.info(f"订单 #{oid} 二维码路径: {account}")
         logger.info(f"二维码文件是否存在: {has_qr_code}")
         
-        # 创建接单按钮
-        callback_data = f'accept_{oid}'
-        keyboard = [[InlineKeyboardButton("Accept", callback_data=callback_data)]]
+        # 创建完成和失败按钮
+        keyboard = [[
+            InlineKeyboardButton("✅ Mark as Complete", callback_data=f'complete_{oid}'),
+            InlineKeyboardButton("❌ Mark as Failed", callback_data=f'fail_{oid}')
+        ]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         # 确定要通知哪些卖家
@@ -2135,7 +2137,7 @@ async def on_accept_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             """
             unconfirmed_count = execute_query(
                 unconfirmed_orders_query, 
-                (user_id, STATUS['ACCEPTED']), 
+                (str(user_id), STATUS['ACCEPTED']), 
                 fetch=True
             )[0][0]
             
@@ -2166,10 +2168,10 @@ async def on_accept_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.message.reply_text(f"❌ 接单失败: 订单 #{oid} 已被接单或已完成")
                 return
             
-            # 更新订单状态
+            # 更新订单状态，确保accepted_by为字符串
             execute_query(
                 "UPDATE orders SET status=%s, accepted_at=%s, accepted_by=%s WHERE id=%s", 
-                (STATUS['ACCEPTED'], timestamp, user_id, oid)
+                (STATUS['ACCEPTED'], timestamp, str(user_id), oid)
             )
             
             # 更新卖家活跃时间
