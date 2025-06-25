@@ -95,7 +95,12 @@ user_info_cache = {}
 # ===== TG 辅助函数 =====
 def is_seller(chat_id):
     """检查用户是否为已授权的卖家"""
-    return str(chat_id) in get_active_seller_ids()
+    try:
+        # 确保chat_id是整数
+        chat_id = int(chat_id)
+        return chat_id in get_active_seller_ids()
+    except (ValueError, TypeError):
+        return False
 
 # 添加处理 Telegram webhook 更新的函数
 async def process_telegram_update_async(update_data, notification_queue):

@@ -43,15 +43,17 @@ def sync_env_sellers_to_db():
     # 获取数据库中已存在的卖家ID
     try:
         db_seller_ids = execute_query("SELECT telegram_id FROM sellers", fetch=True)
-        db_seller_ids = [row[0] for row in db_seller_ids] if db_seller_ids else []
+        db_seller_ids = [int(row[0]) for row in db_seller_ids] if db_seller_ids else []
         
         # 将环境变量中的卖家ID添加到数据库
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         for seller_id in SELLER_CHAT_IDS:
+            # 确保seller_id是整数
+            seller_id = int(seller_id)
             if seller_id not in db_seller_ids:
                 logger.info(f"将环境变量中的卖家ID {seller_id} 同步到数据库")
                 execute_query(
-                    "INSERT INTO sellers (telegram_id, username, first_name, is_active, added_at, added_by) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO sellers (telegram_id, username, first_name, is_active, added_at, added_by) VALUES (%s, %s, %s, %s, %s, %s)",
                     (seller_id, f"env_seller_{seller_id}", f"环境变量卖家 {seller_id}", 1, timestamp, "环境变量")
                 )
     except Exception as e:

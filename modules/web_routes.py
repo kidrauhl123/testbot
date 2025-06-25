@@ -387,6 +387,13 @@ def register_routes(app, notification_queue):
             flash('请填写所有字段', 'error')
             return redirect(url_for('admin_sellers'))
         
+        # 确保telegram_id是整数
+        try:
+            telegram_id = int(telegram_id)
+        except ValueError:
+            flash('Telegram ID必须是一个有效的数字', 'error')
+            return redirect(url_for('admin_sellers'))
+        
         success = add_seller(
             telegram_id,
             username,
@@ -405,12 +412,17 @@ def register_routes(app, notification_queue):
     @admin_required
     def admin_toggle_seller(telegram_id):
         """切换卖家激活状态"""
-        success = toggle_seller_status(telegram_id)
-        
-        if success:
-            flash('卖家状态已更新', 'success')
-        else:
-            flash('卖家状态更新失败', 'error')
+        try:
+            # 确保telegram_id是整数
+            telegram_id = int(telegram_id)
+            success = toggle_seller_status(telegram_id)
+            
+            if success:
+                flash('卖家状态已更新', 'success')
+            else:
+                flash('卖家状态更新失败', 'error')
+        except ValueError:
+            flash('无效的卖家ID', 'error')
         
         return redirect(url_for('admin_sellers'))
     
@@ -418,12 +430,17 @@ def register_routes(app, notification_queue):
     @admin_required
     def admin_toggle_seller_admin(telegram_id):
         """切换卖家管理员状态"""
-        success = toggle_seller_admin(telegram_id)
-        
-        if success:
-            flash('卖家管理员状态已更新', 'success')
-        else:
-            flash('卖家管理员状态更新失败', 'error')
+        try:
+            # 确保telegram_id是整数
+            telegram_id = int(telegram_id)
+            success = toggle_seller_admin(telegram_id)
+            
+            if success:
+                flash('卖家管理员状态已更新', 'success')
+            else:
+                flash('卖家管理员状态更新失败', 'error')
+        except ValueError:
+            flash('无效的卖家ID', 'error')
         
         return redirect(url_for('admin_sellers'))
     
@@ -431,12 +448,17 @@ def register_routes(app, notification_queue):
     @admin_required
     def admin_remove_seller(telegram_id):
         """删除卖家"""
-        success = remove_seller(telegram_id)
-        
-        if success:
-            flash('卖家已删除', 'success')
-        else:
-            flash('卖家删除失败', 'error')
+        try:
+            # 确保telegram_id是整数
+            telegram_id = int(telegram_id)
+            success = remove_seller(telegram_id)
+            
+            if success:
+                flash('卖家已删除', 'success')
+            else:
+                flash('卖家删除失败', 'error')
+        except ValueError:
+            flash('无效的卖家ID', 'error')
         
         return redirect(url_for('admin_sellers'))
         
