@@ -71,8 +71,8 @@ def init_db():
                 telegram_id BIGINT PRIMARY KEY,
                 username TEXT,
                 first_name TEXT,
-                is_active INTEGER DEFAULT 1,
-                is_admin INTEGER DEFAULT 0,
+                is_active BOOLEAN DEFAULT TRUE,
+                is_admin BOOLEAN DEFAULT FALSE,
                 added_at TEXT NOT NULL,
                 added_by TEXT
             )
@@ -83,7 +83,7 @@ def init_db():
         admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
         c.execute("""
             INSERT INTO sellers (telegram_id, username, first_name, is_active, is_admin, added_at, added_by)
-            VALUES (%s, %s, %s, 1, 1, %s, 'system')
+            VALUES (%s, %s, %s, TRUE, TRUE, %s, 'system')
             ON CONFLICT (telegram_id) DO NOTHING
         """, (admin_id, ADMIN_USERNAME, 'SuperAdmin', get_china_time()))
         
@@ -320,7 +320,7 @@ def get_active_seller_ids():
     """获取所有活跃卖家的ID"""
     try:
         sellers = execute_query(
-            "SELECT telegram_id FROM sellers WHERE is_active = 1",
+            "SELECT telegram_id FROM sellers WHERE is_active = TRUE",
             fetch=True
         )
         
@@ -335,7 +335,7 @@ def add_seller(telegram_id, username, first_name, added_by):
         execute_query(
             """
             INSERT INTO sellers (telegram_id, username, first_name, is_active, is_admin, added_at, added_by)
-            VALUES (%s, %s, %s, 1, 0, %s, %s)
+            VALUES (%s, %s, %s, TRUE, FALSE, %s, %s)
             ON CONFLICT (telegram_id) DO NOTHING
             """,
             (telegram_id, username, first_name, get_china_time(), added_by)
@@ -349,7 +349,7 @@ def toggle_seller_status(telegram_id):
     """切换卖家激活状态"""
     try:
         execute_query(
-            "UPDATE sellers SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE telegram_id = %s",
+            "UPDATE sellers SET is_active = CASE WHEN is_active = TRUE THEN FALSE ELSE TRUE END WHERE telegram_id = %s",
             (telegram_id,)
         )
         return True
@@ -373,7 +373,7 @@ def toggle_seller_admin(telegram_id):
     """切换卖家管理员状态"""
     try:
         execute_query(
-            "UPDATE sellers SET is_admin = CASE WHEN is_admin = 1 THEN 0 ELSE 1 END WHERE telegram_id = %s",
+            "UPDATE sellers SET is_admin = CASE WHEN is_admin = TRUE THEN FALSE ELSE TRUE END WHERE telegram_id = %s",
             (telegram_id,)
         )
         return True
@@ -385,13 +385,13 @@ def is_admin_seller(telegram_id):
     """检查卖家是否为管理员"""
     try:
         result = execute_query(
-            "SELECT is_admin FROM sellers WHERE telegram_id = %s AND is_active = 1",
+            "SELECT is_admin FROM sellers WHERE telegram_id = %s AND is_active = TRUE",
             (telegram_id,),
             fetch=True
         )
         
         if result and len(result) > 0:
-            return result[0][0] == 1
+            return result[0][0] == TRUE
         return False
     except Exception as e:
         logger.error(f"检查卖家管理员状态失败: {str(e)}", exc_info=True)
