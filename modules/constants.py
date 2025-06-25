@@ -90,17 +90,28 @@ def get_user_package_price(user_id, package):
 
 # ===== 状态常量 =====
 STATUS = {
-    'SUBMITTED': 'submitted',
-    'ACCEPTED': 'accepted',
-    'COMPLETED': 'completed',
-    'FAILED': 'failed',
-    'CANCELLED': 'cancelled',
-    'DISPUTING': 'disputing'
+    'PENDING': 0,      # 待处理
+    'SUBMITTED': 1,    # 已提交
+    'ACCEPTED': 2,     # 已接单
+    'COMPLETED': 3,    # 已完成
+    'CANCELLED': 4,    # 已取消
+    'DISPUTING': 5,    # 质疑中
+    'FAILED': 6,       # 失败
+    'RECHARGED': 7,    # 已充值
 }
+
+# 状态对应的中文文本
 STATUS_TEXT_ZH = {
-    'submitted': '已提交', 'accepted': '已接单', 'completed': '充值成功',
-    'failed': '充值失败', 'cancelled': '已撤销', 'disputing': '正在质疑'
+    0: '待处理',
+    1: '已提交',
+    2: '已接单',
+    3: '已完成',
+    4: '已取消',
+    5: '质疑中',
+    6: '失败',
+    7: '已充值',
 }
+
 PLAN_OPTIONS = [('12', '一年个人会员')]
 PLAN_LABELS_ZH = {v: l for v, l in PLAN_OPTIONS}
 PLAN_LABELS_EN = {'12': '1 Year Premium'}
