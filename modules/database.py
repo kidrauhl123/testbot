@@ -462,11 +462,11 @@ def get_unnotified_orders():
         """, (STATUS['SUBMITTED'],), fetch=True)
     else:
         # SQLite版本
-        orders = execute_query("""
-            SELECT id, account, password, package, created_at, web_user_id 
-            FROM orders 
-            WHERE notified = 0 AND status = ?
-        """, (STATUS['SUBMITTED'],), fetch=True)
+    orders = execute_query("""
+        SELECT id, account, password, package, created_at, web_user_id 
+        FROM orders 
+        WHERE notified = 0 AND status = ?
+    """, (STATUS['SUBMITTED'],), fetch=True)
     
     # 记录获取到的未通知订单
     if orders:
