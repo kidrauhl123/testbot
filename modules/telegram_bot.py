@@ -12,6 +12,7 @@ import functools
 import traceback
 import psycopg2
 from urllib.parse import urlparse
+import sqlite3
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -1238,14 +1239,31 @@ def set_order_notified_atomic(oid):
     """原子性地将订单notified字段设为1，只有notified=0时才更新，防止重复推送"""
     try:
         from modules.database import get_postgres_connection
+        from modules.constants import DATABASE_URL
         
-        # PostgreSQL版本
-        conn = get_postgres_connection()
-        cursor = conn.cursor()
-        cursor.execute("UPDATE orders SET notified=1 WHERE id=%s AND notified=0", (oid,))
-        affected = cursor.rowcount
-        conn.commit()
-        conn.close()
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL版本
+            conn = get_postgres_connection()
+            cursor = conn.cursor()
+            cursor.execute("UPDATE orders SET notified=1 WHERE id=%s AND notified=0", (oid,))
+            affected = cursor.rowcount
+            conn.commit()
+            conn.close()
+        else:
+            # SQLite版本
+            import sqlite3
+            import os
+            
+            # 使用绝对路径访问数据库
+            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(current_dir, "orders.db")
+            
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute("UPDATE orders SET notified=1 WHERE id=? AND notified=0", (oid,))
+            affected = cursor.rowcount
+            conn.commit()
+            conn.close()
         
         logger.info(f"原子性更新订单 #{oid} 通知状态: 影响行数={affected}")
         return affected > 0
@@ -1872,6 +1890,15 @@ def check_order_exists(order_id):
 def update_order_status(order_id, status, handler_id=None):
     """更新订单状态"""
     try:
+        # 将字符串状态转换为常量状态值
+        from modules.constants import STATUS
+        
+        # 如果传入的是字符串状态，转换为对应的数字状态
+        if isinstance(status, str) and status.upper() in STATUS:
+            numeric_status = STATUS[status.upper()]
+            logger.info(f"将字符串状态 '{status}' 转换为数字状态 {numeric_status}")
+            status = numeric_status
+        
         conn = get_db_connection()
         if not conn:
             logger.error(f"更新订单 {order_id} 状态时无法获取数据库连接")
@@ -1935,7 +1962,7 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     elif data.startswith("complete_"):
         oid = int(data.split('_')[1])
-        update_order_status(oid, 'completed', user_id)
+        update_order_status(oid, STATUS['COMPLETED'], user_id)
         keyboard = [[InlineKeyboardButton("✅ Completed", callback_data="noop")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_reply_markup(reply_markup=reply_markup)
@@ -1965,7 +1992,7 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     elif data.startswith("fail_"):
         oid = int(data.split('_')[1])
-        update_order_status(oid, 'failed', user_id)
+        update_order_status(oid, STATUS['FAILED'], user_id)
         keyboard = [[InlineKeyboardButton("❌ Failed", callback_data="noop")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_reply_markup(reply_markup=reply_markup)
