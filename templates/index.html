@@ -934,33 +934,6 @@
       font-size: 12px;
       margin-top: 3px;
     }
-
-    /* 添加到现有样式中 */
-    .qr-code-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-top: 5px;
-    }
-
-    .qr-code-container img {
-      border: 1px solid #eee;
-      padding: 3px;
-      background: white;
-      margin-top: 5px;
-      transition: transform 0.2s;
-      max-width: 150px; /* 控制最大宽度 */
-      max-height: 150px; /* 控制最大高度 */
-    }
-
-    .qr-code-container img:hover {
-      transform: scale(1.2);
-      z-index: 10;
-    }
-
-    .order-list-item .account {
-      margin-bottom: 10px;
-    }
   </style>
 </head>
 <body>
@@ -1428,7 +1401,7 @@
         // 创建预览图片元素和重置按钮
         imagePreview.innerHTML = `
           <div style="position:relative;display:inline-block;">
-            <img src="${e.target.result}" alt="预览图" style="max-width:150px;max-height:150px;">
+            <img src="${e.target.result}" alt="预览图">
             <button type="button" id="resetImage" style="position:absolute;top:-8px;right:-8px;background:#f56565;color:white;border:none;border-radius:50%;width:24px;height:24px;line-height:1;font-size:12px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.2);">×</button>
           </div>
         `;
@@ -1619,7 +1592,8 @@
   
   // 生成订单数据的简单哈希
   function generateOrdersHash(orders) {
-    return JSON.stringify(orders.map(o => ({id: o.id, status: o.status})));
+    const relevant = orders.map(o => `${o.id}-${o.status}-${o.accepted_at || ''}-${o.completed_at || ''}`).join('|');
+    return btoa(relevant).substring(0, 16); // 简化的哈希
   }
 
   // 计算今日总金额
@@ -1784,47 +1758,44 @@
         showRefreshIndicator();
       }
       
-      // 获取所有订单，不使用分页限制
-      const response = await fetch('/orders/recent?limit=1000&offset=0');
+      const resp = await fetch('/orders/recent');
+      const newOrders = await resp.json();
       
-      if (!response.ok) {
-        throw new Error(`获取订单失败: ${response.status}`);
-      }
-      
-      const orders = await response.json();
-      
-      // 更新全局变量
-      allOrders = orders;
-      
-      // 计算订单哈希，用于检测变化
-      const ordersHash = generateOrdersHash(orders);
-      
-      // 如果订单没有变化，不重新渲染
-      if (ordersHash === lastOrdersHash && document.getElementById('orders-container').innerHTML !== '加载中...') {
+      // 检查订单是否有变化
+      const newHash = generateOrdersHash(newOrders);
+      if (newHash === lastOrdersHash && allOrders.length > 0) {
+        // 没有变化，不需要重新渲染
         if (showIndicator) {
           hideRefreshIndicator();
         }
         return;
       }
       
-      // 更新哈希
-      lastOrdersHash = ordersHash;
+      lastOrdersHash = newHash;
+      allOrders = newOrders;
       
-      // 根据搜索关键词过滤订单
-      const filteredOrders = searchKeyword ? 
-        orders.filter(order => 
+      // 仅显示今日订单
+      const today = new Date().toISOString().split('T')[0]; // 获取今天的日期 YYYY-MM-DD
+      const todayOrders = allOrders.filter(order => {
+        return order.created_at && order.created_at.startsWith(today);
+      });
+      
+      // 应用搜索过滤
+      let filteredOrders = todayOrders;
+      if (searchKeyword) {
+        filteredOrders = todayOrders.filter(order => 
           order.id.toString().includes(searchKeyword) || 
           order.account.toLowerCase().includes(searchKeyword.toLowerCase())
-        ) : orders;
+        );
+      }
       
-      // 渲染订单
       renderOrders(filteredOrders);
       
-      // 显示今日订单数量
-      updateTodayOrdersCount(orders);
+      // 更新今日总金额
+      updateTodayTotal(allOrders);
       
       if (showIndicator) {
-        hideRefreshIndicator();
+        setTimeout(hideRefreshIndicator, 300);
       }
     } catch (e) {
       console.error('加载订单失败', e);
@@ -1897,12 +1868,7 @@
         <div class="order-list-item" data-order-id="${o.id}">
           <h4>订单 #${o.id} <span class="status-badge ${cls}">${o.status_text}</span></h4>
           ${isAdmin && o.accepted_by ? `<p class="creator">接单者：${escapeHtml(o.accepted_by)}</p>` : ''}
-          <p class="account"><strong>YouTube：</strong>${o.account.includes('uploads') ? 
-            `<div class="qr-code-container">
-               <a href="/${o.account}" target="_blank">查看二维码</a>
-               <img src="/${o.account}" alt="二维码" style="max-width:120px; max-height:120px; margin-top:5px; border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,0.1);">
-             </div>` : 
-            '未上传二维码'}</p>
+          <p class="account"><strong>YouTube：</strong>${o.account.includes('uploads') ? `<a href="/${o.account}" target="_blank">查看二维码</a>` : '未上传二维码'}</p>
           <p class="package"><strong>套餐：</strong>一年个人会员</p>
           <p class="price"><strong>价格：</strong>$${USER_PRICES[o.package] || 'N/A'} USDT</p>
           ${o.status === 'failed' ? 
@@ -1946,12 +1912,7 @@
       html += `
         <tr data-order-id="${o.id}">
           <td>${o.id}</td>
-          <td>${o.account.includes('uploads') ? 
-            `<div class="qr-code-container">
-               <a href="/${o.account}" target="_blank">查看二维码</a>
-               <img src="/${o.account}" alt="二维码" style="max-width:100px; max-height:100px; margin-top:3px; border-radius:4px;">
-             </div>` : 
-            '未上传二维码'}</td>
+          <td>${o.account.includes('uploads') ? `<a href="/${o.account}" target="_blank">查看二维码</a>` : '未上传二维码'}</td>
           <td>一年个人会员</td>
           <td><span class="table-price">$${USER_PRICES[o.package] || 'N/A'} USDT</span></td>
           <td><span class="status-badge ${cls}">${o.status_text}</span></td>
@@ -2134,7 +2095,7 @@
   async function confirmOrder(orderId) {
     if (!confirm('确定已收到并完成此订单吗？')) return;
     try {
-      const resp = await fetch(`/orders/user_confirm/${orderId}`, { method: 'POST' });
+      const resp = await fetch(`/orders/confirm/${orderId}`, { method: 'POST' });
       const result = await resp.json();
       if (result.success) {
         showCustomAlert('已确认收货，订单完成', 'success');
@@ -2146,23 +2107,6 @@
       console.error('确认订单失败', e);
       alert('确认失败，请重试');
     }
-  }
-
-  // 更新今日订单数量
-  function updateTodayOrdersCount(orders) {
-    const todayTotal = document.getElementById('today-total');
-    if (!todayTotal) return;
-    
-    // 获取今天的日期 YYYY-MM-DD
-    const today = new Date().toISOString().split('T')[0];
-    
-    // 过滤今日订单
-    const todayOrders = orders.filter(order => {
-      return order.created_at && order.created_at.startsWith(today);
-    });
-    
-    // 显示今日订单数量
-    todayTotal.textContent = `今日订单: ${todayOrders.length}`;
   }
 </script>
 
