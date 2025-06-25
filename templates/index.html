@@ -4,300 +4,1026 @@
   <meta charset="utf-8">
   <title>破天充值系统</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- 添加Font Awesome图标库 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     * { box-sizing: border-box; }
     body { 
       font-family: 'Microsoft YaHei', Arial, sans-serif; 
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
       margin: 0; padding: 0; min-height: 100vh;
-    }
-    .container { 
-      display: flex; 
-      min-height: 100vh; 
-      max-width: 1200px; 
-      margin: 0 auto;
-      background: rgba(255,255,255,0.1);
-      backdrop-filter: blur(10px);
-    }
-    .left, .right { padding: 20px; }
-    .left { 
-      width: 50%; 
-      display: flex; 
-      justify-content: center; 
-      align-items: center; 
-    }
-    .form-box { 
-      background: rgba(255,255,255,0.95); 
-      padding: 40px; 
-      border-radius: 15px; 
-      box-shadow: 0 8px 32px rgba(0,0,0,0.1); 
-      width: 100%; 
-      max-width: 420px;
-      backdrop-filter: blur(10px);
-    }
-    .form-box h2 { 
-      text-align: center; 
-      font-size: 28px; 
-      margin-bottom: 30px; 
       color: #333;
-      font-weight: 300;
-    }
-    .form-box label { 
-      font-weight: 600; 
-      margin-top: 20px; 
-      display: block; 
-      color: #555;
       font-size: 14px;
+      overflow-y: auto;
     }
-    .form-box input, .form-box select, .form-box button {
-      width: 100%; 
-      padding: 12px 15px; 
-      margin-top: 8px; 
-      border-radius: 8px; 
-      border: 2px solid #e1e5e9; 
+    
+    /* 自定义提示框样式 */
+    .custom-alert {
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 15px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 9999;
       font-size: 14px;
+      display: flex;
+      align-items: center;
+      min-width: 300px;
+      max-width: 80%;
+      animation: slideDown 0.3s ease-out;
+    }
+    
+    .custom-alert.success {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
+    }
+    
+    .custom-alert.warning {
+      background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%);
+      color: #333;
+    }
+    
+    .custom-alert.error {
+      background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+      color: white;
+    }
+    
+    .custom-alert-icon {
+      margin-right: 10px;
+      font-size: 18px;
+    }
+    
+    .custom-alert-close {
+      margin-left: auto;
+      cursor: pointer;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+    }
+    
+    .custom-alert-close:hover {
+      opacity: 1;
+    }
+    
+    @keyframes slideDown {
+      0% {
+        transform: translate(-50%, -20px);
+        opacity: 0;
+      }
+      100% {
+        transform: translate(-50%, 0);
+        opacity: 1;
+      }
+    }
+    
+    .navbar {
+      background: rgba(255,255,255,0.9);
+      padding: 12px 20px;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+    }
+    .navbar-brand {
+      font-size: 18px;
+      font-weight: bold;
+      color: #667eea;
+      display: flex;
+      align-items: center;
+    }
+    .navbar-brand::before {
+      content: '🎵';
+      margin-right: 6px;
+      font-size: 20px;
+    }
+    .navbar-user {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      position: relative;
+    }
+    .admin-badge {
+      background: linear-gradient(135deg, #ffb347 0%, #ffcc33 100%);
+      color: #333;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 2px 5px rgba(255,195,51,0.3);
+    }
+    .balance-badge {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 2px 5px rgba(56,239,125,0.3);
+      display: flex;
+      align-items: center;
+    }
+    .balance-badge.negative {
+      background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+    }
+    .balance-badge::before {
+      content: '💰';
+      margin-right: 5px;
+    }
+    
+    /* 充值按钮样式 */
+    .recharge-btn {
+      background: linear-gradient(135deg, #ff9966 0%, #ff5e62 100%);
+      color: white;
+      padding: 3px 8px;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 600;
+      margin-left: 8px;
+      cursor: pointer;
+      box-shadow: 0 2px 5px rgba(255,94,98,0.3);
       transition: all 0.3s ease;
     }
-    .form-box input:focus, .form-box select:focus {
-      outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
+    .recharge-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(255,94,98,0.4);
     }
-    .form-box button { 
+    .recharge-btn::before {
+      content: '➕';
+      margin-right: 3px;
+    }
+    
+    .btn {
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+      font-weight: 600;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .btn:hover { 
+      transform: translateY(-3px); 
+      box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+    }
+    .btn-primary { 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+      color: white; 
+    }
+    .btn-danger { 
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5253 100%); 
+      color: white; 
+    }
+    
+    .main-container {
+      max-width: 1200px;
+      margin: 30px auto;
+      padding: 0 20px;
+    }
+    
+    .container {
+      display: flex;
+      gap: 40px;
+      align-items: flex-start;
+    }
+
+    .left {
+      width: 35%;
+      flex-shrink: 0;
+    }
+
+    .right {
+      width: 65%;
+    }
+    
+    .card {
+      background: rgba(255,255,255,0.97);
+      border-radius: 15px;
+      padding: 25px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      border: 1px solid rgba(255,255,255,0.5);
+    }
+    
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+    }
+    
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .card-header h2 {
+      margin: 0;
+      font-weight: 600;
+      font-size: 18px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    .card-header h2::before {
+      content: '📝';
+      margin-right: 8px;
+      font-size: 18px;
+    }
+
+    .today-total {
+      font-size: 14px;
+      color: #667eea;
+      font-weight: 600;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+    
+    .form-group label {
+      display: block; 
+      margin-bottom: 5px; 
+      font-weight: 600; 
+      color: #555;
+      font-size: 13px;
+    }
+    
+    .form-control {
+      width: 100%; 
+      padding: 10px 12px; 
+      border-radius: 8px;
+      border: 2px solid #e1e5e9; 
+      font-size: 14px; 
+      transition: all 0.3s ease;
+      background-color: rgba(255,255,255,0.8);
+    }
+    
+    .form-control:focus {
+      outline: none; 
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102,126,234,0.2);
+      background-color: #fff;
+    }
+    
+    .submit-btn {
+      width: 100%; 
+      padding: 16px; 
+      font-size: 16px; 
+      font-weight: 600;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white; 
       border: none; 
-      cursor: pointer; 
-      font-weight: 600;
-      margin-top: 25px;
-      padding: 15px;
-      font-size: 16px;
-    }
-    .form-box button:hover {
-      transform: translateY(-2px);
+      border-radius: 10px; 
+      cursor: pointer;
+      transition: all 0.3s ease; 
+      margin-top: 15px;
       box-shadow: 0 5px 15px rgba(102,126,234,0.4);
     }
-    .right { 
-      width: 50%; 
-      background: rgba(255,255,255,0.95); 
-      border-radius: 15px;
-      margin: 20px 0;
-      overflow-y: auto; 
-      backdrop-filter: blur(10px);
-      max-height: calc(100vh - 40px);
+    
+    .submit-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(102,126,234,0.5);
     }
-    .right h3 {
-      color: #333;
-      font-weight: 300;
-      text-align: center;
-      padding: 20px 0 10px;
-      margin: 0;
-      border-bottom: 2px solid #f0f0f0;
+
+    .order-list-container {
+      display: grid;
+      grid-template-columns: repeat(1, 1fr);
+      gap: 15px;
+    }
+
+    .order-list-item {
+      background: #fff; 
+      padding: 16px; 
+      margin-bottom: 0;
+      border-radius: 10px; 
+      border-left: 4px solid #667eea;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      transition: all 0.3s ease;
+      font-size: 13px;
+      position: relative;
+      overflow: hidden;
     }
     
-    /* 搜索栏样式 */
-    .search-container {
-      padding: 20px;
-      background: #f8f9fa;
-      border-bottom: 1px solid #e9ecef;
+    .order-list-item::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+      width: 5px;
+      background: linear-gradient(to bottom, transparent, rgba(102,126,234,0.1), transparent);
     }
-    .search-box {
+    
+    .order-list-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    
+    .order-list-item h4 { 
+      margin: 0 0 10px; 
+      font-size: 15px; 
+      color: #333;
+      display: flex;
+      align-items: center;
+    }
+    
+    .order-list-item h4::before {
+      content: '🔔';
+      margin-right: 8px;
+    }
+    
+    .order-list-item p { 
+      margin: 8px 0; 
+      font-size: 15px; 
+      color: #666; 
+      display: flex;
+      align-items: center;
+    }
+    
+    .order-list-item p.account::before {
+      content: '👤';
+      margin-right: 8px;
+    }
+    
+    .order-list-item p.package::before {
+      content: '📦';
+      margin-right: 8px;
+    }
+    
+    /* 价格样式 */
+    .order-list-item p.price {
+      margin: 8px 0;
+      font-size: 14px;
+      color: #e74c3c;
+      font-weight: 500;
+    }
+    
+    .order-list-item p.price::before {
+      content: '💰';
+      margin-right: 8px;
+    }
+    
+    .order-list-item p.status::before {
+      content: '🔄';
+      margin-right: 8px;
+    }
+    
+    /* 时间样式 */
+    .time-info {
+      background: rgba(242, 242, 247, 0.5);
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin: 10px 0;
+    }
+    
+    .order-list-item p.time {
+      margin: 5px 0;
+      font-size: 13px;
+      color: #666;
+    }
+    
+    /* 失败原因样式 */
+    .order-list-item p.reason {
+      color: #e74c3c;
+      font-weight: 500;
+      background-color: #feeaea;
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin: 10px 0;
+      display: flex;
+      align-items: center;
+    }
+    
+    .order-list-item p.reason::before {
+      content: '❌';
+      margin-right: 8px;
+    }
+    
+    /* 状态标签 */
+    .status-badge {
+      display: inline-block;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+    
+    .status-submitted {
+      background-color: #e9f5fe;
+      color: #3498db;
+    }
+    
+    .status-accepted {
+      background-color: #fef2e5;
+      color: #f39c12;
+    }
+    
+    .status-completed {
+      background-color: #e6f8f1;
+      color: #2ecc71;
+    }
+    
+    .status-failed {
+      background-color: #feeaea;
+      color: #e74c3c;
+    }
+    
+    /* 刷新指示器样式 */
+    #refreshIndicator {
+      position: fixed;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 8px 15px;
+      border-radius: 20px;
+      font-size: 13px;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+    
+    #refreshIndicator.show {
+      opacity: 1;
+    }
+    
+    @media (max-width: 992px) {
+      .container {
+        flex-direction: column;
+      }
+      .left, .right {
+        width: 100%;
+      }
+      .order-list-container {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    @media (max-width: 768px) {
+      .navbar {
+        flex-direction: column;
+        padding: 10px;
+      }
+      .navbar-brand {
+        margin-bottom: 10px;
+      }
+      .navbar-user {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
+      }
+    }
+
+    .failed-reason {
+      background-color: rgba(255, 0, 0, 0.1);
+      border-left: 3px solid #ff3b30;
+      padding: 5px 8px;
+      margin: 5px 0;
+      border-radius: 4px;
+      color: #d32f2f;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+    }
+    
+    .failed-icon {
+      margin-right: 5px;
+      font-size: 14px;
+    }
+
+    .balance-info {
+      display: flex;
+      align-items: center;
+      color: #667eea;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    .balance-info .highlight {
+      color: #11998e;
+      margin: 0 4px;
+    }
+    
+    .balance-info .highlight-credit {
+      color: #f39c12;
+      margin: 0 4px;
+    }
+    
+    .balance-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .balance-display {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    .balance-amount {
+      font-size: 32px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 5px;
+    }
+    
+    .balance-label {
+      font-size: 14px;
+      color: #666;
+    }
+    
+    .credit-amount {
+      font-size: 24px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-top: 10px;
+      margin-bottom: 5px;
+    }
+    
+    .credit-label {
+      font-size: 14px;
+      color: #666;
+    }
+    
+    .credit-badge {
+      background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 2px 5px rgba(243,156,18,0.3);
+      display: flex;
+      align-items: center;
+    }
+    
+    .credit-badge::before {
+      content: '💳';
+      margin-right: 5px;
+    }
+    
+    .balance-actions {
       display: flex;
       gap: 10px;
     }
-    .search-box input {
-      flex: 1;
-      padding: 10px 15px;
-      border: 2px solid #e1e5e9;
-      border-radius: 8px;
-      font-size: 14px;
-      transition: all 0.3s ease;
-    }
-    .search-box input:focus {
-      outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
-    }
-    .search-box button {
-      padding: 10px 20px;
-      background: #667eea;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 600;
-      transition: all 0.3s ease;
-    }
-    .search-box button:hover {
-      background: #5a67d8;
-      transform: translateY(-1px);
-    }
-    
-    .order { 
-      background: #f8f9fa; 
-      padding: 20px; 
-      margin: 15px 20px; 
-      border-radius: 12px; 
-      border-left: 4px solid #667eea;
-      transition: all 0.3s ease;
-    }
-    .order:hover {
-      transform: translateX(5px);
-      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    }
-    .order h4 { 
-      margin: 0 0 12px; 
-      color: #333;
-      font-size: 18px;
-      font-weight: 600;
-    }
-    .order p { 
-      margin: 8px 0; 
-      font-size: 14px; 
-      color: #666;
-    }
-    .order .time { 
-      color: #999; 
-      font-size: 12px; 
-    }
-    .cancel-btn { 
-      display: inline-block; 
-      margin-top: 12px; 
-      padding: 6px 12px; 
-      font-size: 12px; 
-      color: #fff; 
-      background: #dc3545;
-      border-radius: 6px;
-      cursor: pointer; 
-      transition: all 0.3s ease;
-    }
-    .cancel-btn:hover {
-      background: #c82333;
-      transform: translateY(-1px);
-    }
-    .status-badge {
+
+    /* 用户下拉菜单样式 */
+    .user-dropdown {
+      position: relative;
       display: inline-block;
-      padding: 4px 12px;
-      border-radius: 15px;
-      font-size: 12px;
-      font-weight: 600;
-      color: white;
-    }
-    .status-submitted { background: #17a2b8; }
-    .status-accepted { background: #ffc107; color: #333; }
-    .status-completed { background: #28a745; }
-    .status-failed { background: #dc3545; }
-    .status-cancelled { background: #6c757d; }
-    
-    /* 加载更多按钮 */
-    .load-more-container {
-      text-align: center;
-      padding: 20px;
-    }
-    .load-more-btn {
-      padding: 12px 30px;
-      background: #667eea;
-      color: white;
-      border: none;
-      border-radius: 8px;
       cursor: pointer;
-      font-size: 14px;
-      font-weight: 600;
-      transition: all 0.3s ease;
-    }
-    .load-more-btn:hover {
-      background: #5a67d8;
-      transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(102,126,234,0.4);
-    }
-    .load-more-btn:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-      transform: none;
-    }
-    
-    /* 无结果提示 */
-    .no-results {
-      text-align: center;
-      color: #999;
-      padding: 40px;
-      font-size: 14px;
-    }
-    
-    /* 加载动画 */
-    .loading {
-      text-align: center;
-      padding: 20px;
-      color: #667eea;
-    }
-    .loading::after {
-      content: '...';
-      animation: dots 1.5s steps(4, end) infinite;
-    }
-    @keyframes dots {
-      0%, 20% { content: ''; }
-      40% { content: '.'; }
-      60% { content: '..'; }
-      80%, 100% { content: '...'; }
     }
 
-    @media (max-width: 768px) {
-      .container { flex-direction: column; }
-      .left, .right { width: 100%; }
-      .form-box { margin: 20px 0; }
-      .search-box { flex-direction: column; }
-      .search-box button { width: 100%; }
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background-color: rgba(0,0,0,0.05);
+      transition: all 0.3s ease;
+    }
+
+    .user-info:hover {
+      background-color: rgba(0,0,0,0.1);
+    }
+
+    .user-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background-color: #764ba2;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .user-name {
+      font-weight: 600;
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      width: 200px;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+      padding: 10px 0;
+      margin-top: 10px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+
+    .user-dropdown:hover .dropdown-menu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .dropdown-menu::before {
+      content: '';
+      position: absolute;
+      top: -6px;
+      right: 20px;
+      width: 12px;
+      height: 12px;
+      background-color: white;
+      transform: rotate(45deg);
+      border-radius: 2px;
+    }
+
+    .dropdown-menu-item {
+      padding: 8px 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #333;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    .dropdown-menu-item:hover {
+      background-color: rgba(0,0,0,0.05);
+    }
+
+    .dropdown-menu-item.danger {
+      color: #e74c3c;
+    }
+
+    .dropdown-menu-item.danger:hover {
+      background-color: rgba(231,76,60,0.1);
+    }
+
+    .dropdown-divider {
+      height: 1px;
+      background-color: rgba(0,0,0,0.1);
+      margin: 5px 0;
+    }
+
+    .dropdown-menu-header {
+      padding: 8px 15px;
+      font-size: 12px;
+      color: #666;
+      font-weight: 600;
+    }
+
+    /* 视图切换按钮样式 */
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    
+    .view-toggle {
+      display: flex;
+      background: rgba(0,0,0,0.05);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    
+    .view-btn {
+      border: none;
+      background: transparent;
+      padding: 6px 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .view-btn.active {
+      background: rgba(102,126,234,0.8);
+      color: white;
+    }
+    
+    /* 表格视图样式 */
+    .orders-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    
+    .orders-table th {
+      background: rgba(102,126,234,0.1);
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #555;
+      border-bottom: 2px solid rgba(102,126,234,0.2);
+    }
+    
+    .orders-table td {
+      padding: 12px;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+      vertical-align: middle;
+    }
+    
+    .orders-table tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .orders-table tr:hover {
+      background: rgba(102,126,234,0.05);
+    }
+    
+    .detail-btn {
+      background: rgba(102,126,234,0.1);
+      color: #667eea;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: 5px;
+    }
+    
+    .detail-btn:hover {
+      background: rgba(102,126,234,0.2);
+    }
+    
+    .cancel-btn {
+      background: rgba(231,76,60,0.1);
+      color: #e74c3c;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    
+    .cancel-btn:hover {
+      background: rgba(231,76,60,0.2);
+    }
+    
+    .dispute-btn {
+      background: rgba(241,196,15,0.1);
+      color: #f39c12;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: 5px;
+    }
+    
+    .dispute-btn:hover {
+      background: rgba(241,196,15,0.2);
+    }
+    
+    .urge-btn {
+      background: rgba(52,152,219,0.1);
+      color: #3498db;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: 5px;
+    }
+    
+    .urge-btn:hover {
+      background: rgba(52,152,219,0.2);
+    }
+    
+    /* 价格显示样式 */
+    .price-display {
+      font-size: 16px;
+      font-weight: 600;
+      color: #e74c3c;
+      background: rgba(231, 76, 60, 0.05);
+      padding: 8px 12px;
+      border-radius: 6px;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px dashed rgba(231, 76, 60, 0.3);
+    }
+    
+    #selectedPrice {
+      margin-left: 3px;
+      font-size: 15px;
+    }
+    
+    .table-price {
+      font-weight: 600;
+      color: #e74c3c;
+    }
+    
+    /* 搜索框样式 */
+    .search-container {
+      margin: 15px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .search-box {
+      display: flex;
+      position: relative;
+      width: 100%;
+    }
+    
+    .search-input {
+      flex: 1;
+      padding: 10px 15px;
+      padding-right: 80px;
+      border: 1px solid #e1e5e9;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: all 0.3s;
+      background-color: rgba(255,255,255,0.9);
+    }
+    
+    .search-input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102,126,234,0.2);
+    }
+    
+    .search-btn, .clear-search-btn {
+      position: absolute;
+      right: 0;
+      top: 0;
+      height: 100%;
+      border: none;
+      background: transparent;
+      padding: 0 12px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #667eea;
+      transition: all 0.2s;
+    }
+    
+    .clear-search-btn {
+      right: 36px;
+      color: #aaa;
+    }
+    
+    .search-btn:hover, .clear-search-btn:hover {
+      color: #764ba2;
+    }
+    
+    .refresh-hint {
+      font-size: 12px;
+      color: #888;
+      text-align: right;
+      font-style: italic;
     }
   </style>
 </head>
 <body>
-<div class="container">
-  <div class="left">
-    <div class="form-box">
-      <h2>充值下单</h2>
-      <form id="orderForm" autocomplete="off">
-        <label>破天账号：</label>
-        <input name="account" required autocomplete="off" placeholder="请输入您的破天账号">
-
-        <label>密码：</label>
-        <input name="password" required type="password" autocomplete="new-password" placeholder="请输入密码">
-
-        <label>套餐类型：</label>
-        <select name="package" required>
-          <option value="1">1个月</option>
-          <option value="2">2个月</option>
-          <option value="3">3个月</option>
-          <option value="6">6个月</option>
-          <option value="12">12个月</option>
-        </select>
-
-        <label>备注（可选）：</label>
-        <input name="remark" autocomplete="off" placeholder="如有特殊要求请备注">
-
-        <button type="submit">提交订单</button>
-      </form>
-    </div>
-  </div>
-  <div class="right">
-    <h3>系统订单状态<br><small style="font-weight:normal;color:#666;">（显示全部最新订单，每3秒自动更新）</small></h3>
-    
-    <!-- 搜索栏 -->
-    <div class="search-container">
-      <div class="search-box">
-        <input type="text" id="searchInput" placeholder="搜索订单号或账号..." autocomplete="off">
-        <button onclick="searchOrders()">搜索</button>
-        <button onclick="clearSearch()">清除</button>
+<div class="navbar">
+  <div class="navbar-brand">破天充值系统</div>
+  <div class="navbar-user">
+    <div class="user-dropdown">
+      <div class="user-info">
+        <div class="user-avatar">{{ session.username[0]|upper }}</div>
+        <span class="user-name">{{ session.username }}</span>
+        {% if session.is_admin %}
+          <span class="admin-badge">管理员</span>
+        {% endif %}
+      </div>
+      <div class="dropdown-menu">
+        <div class="dropdown-menu-header">账户信息</div>
+        {% if balance is defined %}
+        <div class="dropdown-menu-item">
+          <span>账户余额：</span>
+          <span class="{% if balance < 0 %}text-danger{% else %}text-success{% endif %}">
+            {{ balance }}{% if credit_limit is defined and credit_limit > 0 %} (额度：{{ credit_limit }}){% endif %}
+          </span>
+        </div>
+        {% endif %}
+        <div class="dropdown-divider"></div>
+        {% if session.is_admin %}
+          <a href="/admin" class="dropdown-menu-item">
+            <i class="fas fa-cog"></i>管理后台
+          </a>
+        {% else %}
+          <a href="/dashboard" class="dropdown-menu-item">
+            <i class="fas fa-user"></i>我的后台
+          </a>
+        {% endif %}
+        <a href="/logout" class="dropdown-menu-item danger">
+          <i class="fas fa-sign-out-alt"></i>退出登录
+        </a>
       </div>
     </div>
     
-    <div id="ordersContainer"></div>
-    
-    <!-- 加载更多按钮 -->
-    <div class="load-more-container" id="loadMoreContainer" style="display:none;">
-      <button class="load-more-btn" onclick="loadMoreOrders()">显示更多订单</button>
+    {% if balance is defined %}
+    <div id="balanceBadge" class="balance-badge {% if balance < 0 %}negative{% endif %}" style="cursor:pointer;">
+      余额: {{ balance }} 元
+      <a href="/recharge" class="recharge-btn">充值</a>
     </div>
+    {% endif %}
   </div>
+</div>
+
+<!-- 刷新指示器 -->
+<div id="refreshIndicator">正在刷新...</div>
+
+<div class="main-container">
+    <div class="container">
+        <div class="left">
+            <div class="card">
+                <div class="card-header">
+                  <h2>充值下单</h2>
+                </div>
+                <form id="orderForm" autocomplete="off">
+                  <div class="form-group">
+                    <label>破天账号</label>
+                    <input name="account" class="form-control" required placeholder="请输入您的破天账号">
+                  </div>
+                  <div class="form-group">
+                    <label>密码</label>
+                    <input name="password" type="text" class="form-control" required placeholder="请输入密码">
+                  </div>
+                  <div class="form-group">
+                    <label>套餐类型</label>
+                    <select name="package" class="form-control" id="packageSelect" required>
+                      <option value="1">1个月</option>
+                      <option value="2">2个月</option>
+                      <option value="3">3个月</option>
+                      <option value="6">6个月</option>
+                      <option value="12">12个月</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>价格</label>
+                    <div class="price-display">¥<span id="selectedPrice">12</span><small style="margin-left:2px;font-size:12px;font-weight:normal;opacity:0.8;">元</small></div>
+                  </div>
+                  <div class="form-group">
+                    <label>备注 (可选)</label>
+                    <input name="remark" class="form-control" placeholder="如有特殊要求请备注">
+                  </div>
+                  <button type="submit" class="submit-btn">提交订单</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="right">
+            <div class="card">
+                <div class="card-header">
+                  <h2>{% if session.is_admin %}系统订单状态{% else %}我的订单{% endif %}</h2>
+                  <div class="header-actions">
+                    <div class="view-toggle">
+                      <button id="gridViewBtn" class="view-btn" title="网格视图"><i class="fas fa-th"></i></button>
+                      <button id="tableViewBtn" class="view-btn active" title="表格视图"><i class="fas fa-list"></i></button>
+                    </div>
+                    <div id="today-total" class="today-total"></div>
+                  </div>
+                </div>
+                <div class="search-container">
+                  <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="搜索订单号或账号..." class="search-input">
+                    <button id="searchBtn" class="search-btn"><i class="fas fa-search"></i></button>
+                    <button id="clearSearchBtn" class="clear-search-btn"><i class="fas fa-times"></i></button>
+                  </div>
+                  <div class="refresh-hint">(显示全部最新订单，每5秒自动更新)</div>
+                </div>
+                <div id="orders-container">加载中...</div>
+                <div id="load-more-container" style="text-align:center; margin-top: 20px; display:none;">
+                    <button onclick="loadMoreOrders()" class="btn btn-primary">显示更多</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="balanceInfoBar" style="display:none;padding:8px 15px;background:#fff8e1;border-bottom:1px solid #ffcc33;font-size:13px;text-align:center;">
+  当前余额：{{ balance }} 元  {% if credit_limit is defined and credit_limit > 0 %}&nbsp;&nbsp;可透支额度：{{ credit_limit }} 元{% endif %}
 </div>
 
 <script>
@@ -306,7 +1032,183 @@
   let allOrders = []; // 存储所有订单
   let searchKeyword = ''; // 搜索关键词
   let autoRefreshInterval = null;
+  let userId = '{{ session.user_id }}'; // 当前用户ID
+  let isAdmin = {{ 'true' if session.is_admin else 'false' }}; // 是否是管理员
+  let lastOrdersHash = ''; // 用于检测订单变化的哈希
+  let viewMode = 'grid'; // 默认视图模式：grid 或 table
+  const WEB_PRICES = {
+    '1': 12,
+    '2': 18,
+    '3': 30,
+    '6': 50,
+    '12': 84
+  };
+  
+  // 搜索处理
+  document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    
+    // 搜索按钮点击事件
+    searchBtn.addEventListener('click', function() {
+      searchKeyword = searchInput.value.trim();
+      displayedOrders = 5; // 重置显示数量
+      
+      if (searchKeyword) {
+        const filteredOrders = allOrders.filter(order => 
+          order.id.toString().includes(searchKeyword) || 
+          order.account.toLowerCase().includes(searchKeyword.toLowerCase())
+        );
+        renderOrders(filteredOrders);
+      } else {
+        renderOrders(allOrders);
+      }
+    });
+    
+    // 回车键搜索
+    searchInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        searchBtn.click();
+      }
+    });
+    
+    // 清除搜索
+    clearSearchBtn.addEventListener('click', function() {
+      searchInput.value = '';
+      searchKeyword = '';
+      displayedOrders = 5;
+      renderOrders(allOrders);
+    });
+  });
+  
+  // 套餐选择处理
+  document.addEventListener('DOMContentLoaded', function() {
+    const packageSelect = document.getElementById('packageSelect');
+    const selectedPrice = document.getElementById('selectedPrice');
+    
+    // 初始价格设置
+    selectedPrice.textContent = WEB_PRICES[packageSelect.value];
+    
+    // 监听套餐选择变化
+    packageSelect.addEventListener('change', function() {
+      selectedPrice.textContent = WEB_PRICES[this.value];
+    });
+  });
+  
+  // 显示自定义提示框
+  function showCustomAlert(message, type = 'success') {
+    // 移除任何已经存在的提示框
+    const existingAlerts = document.querySelectorAll('.custom-alert');
+    existingAlerts.forEach(alert => alert.remove());
+    
+    // 创建新的提示框
+    const alert = document.createElement('div');
+    alert.className = `custom-alert ${type}`;
+    
+    // 根据类型设置图标
+    let icon = 'check-circle';
+    if (type === 'warning') icon = 'exclamation-triangle';
+    if (type === 'error') icon = 'times-circle';
+    
+    alert.innerHTML = `
+      <div class="custom-alert-icon"><i class="fas fa-${icon}"></i></div>
+      <div class="custom-alert-message">${message}</div>
+      <div class="custom-alert-close"><i class="fas fa-times"></i></div>
+    `;
+    
+    // 添加到文档
+    document.body.appendChild(alert);
+    
+    // 添加关闭按钮事件
+    alert.querySelector('.custom-alert-close').addEventListener('click', () => {
+      alert.remove();
+    });
+    
+    // 5秒后自动关闭
+    setTimeout(() => {
+      if (alert.parentNode) {
+        alert.style.opacity = '0';
+        alert.style.transform = 'translate(-50%, -20px)';
+        setTimeout(() => alert.remove(), 300);
+      }
+    }, 5000);
+  }
+  
+  // 生成订单数据的简单哈希
+  function generateOrdersHash(orders) {
+    const relevant = orders.map(o => `${o.id}-${o.status}-${o.accepted_at || ''}-${o.completed_at || ''}`).join('|');
+    return btoa(relevant).substring(0, 16); // 简化的哈希
+  }
 
+  // 计算今日总金额
+  function calculateTodayTotal(orders) {
+    const today = new Date().toISOString().split('T')[0]; // 获取今天的日期 YYYY-MM-DD
+    
+    // 筛选今天的订单
+    const todayOrders = orders.filter(order => {
+      return order.created_at && order.created_at.startsWith(today);
+    });
+    
+    // 计算金额总和
+    let totalAmount = 0;
+    let totalCount = 0;
+    
+    // 为管理员统计每个用户的金额
+    const userAmounts = {};
+    
+    // 计算全站总额（用于超级管理员）
+    let globalTotalAmount = 0;
+    
+    todayOrders.forEach(order => {
+      totalCount++;
+      // 计算订单价格（不管状态）
+      const price = WEB_PRICES[order.package] || 0;
+      
+      // 只有已完成订单才计入用户消费
+      if (order.status === 'completed') {
+        totalAmount += price;
+        
+        // 同时累计全站总额
+        globalTotalAmount += price;
+        
+        // 如果是管理员，记录每个用户的金额
+        if (isAdmin && order.creator) {
+          if (!userAmounts[order.creator]) {
+            userAmounts[order.creator] = {
+              username: order.creator,
+              amount: 0
+            };
+          }
+          userAmounts[order.creator].amount += price;
+        }
+      }
+      
+      // 如果订单状态不是已完成，但是管理员查看全站总额时也要计入
+      else if (isAdmin) {
+        globalTotalAmount += price;
+      }
+    });
+    
+    return { totalAmount, totalCount, userAmounts, globalTotalAmount };
+  }
+  
+  // 显示今日总金额
+  function updateTodayTotal(orders) {
+    const { totalAmount, totalCount, userAmounts, globalTotalAmount } = calculateTodayTotal(orders);
+    const todayTotalElement = document.getElementById('today-total');
+    
+    if (todayTotalElement) {
+      if (isAdmin) {
+        // 超级管理员显示全站总额
+        todayTotalElement.innerHTML = `今日总额: ¥${globalTotalAmount.toFixed(2)}`;
+      } else {
+        // 普通用户只显示自己的总金额
+        todayTotalElement.innerHTML = `今日总额: ¥${totalAmount.toFixed(2)}`;
+      }
+    }
+  }
+    
   // 提交订单
   document.getElementById('orderForm').addEventListener('submit', async e => {
     e.preventDefault();
@@ -316,52 +1218,156 @@
     btn.disabled = true;
     try {
       const data = new FormData(e.target);
+      
       const resp = await fetch('/', { method: 'POST', body: data });
-      if (!resp.ok) throw new Error('提交失败');
-      e.target.reset();
-      displayedOrders = 5; // 重置显示数量
-      searchKeyword = ''; // 清除搜索
-      document.getElementById('searchInput').value = '';
-      loadOrders();
-      alert('订单提交成功！');
+      const result = await resp.json();
+      
+      if (resp.ok && result.success) {
+        // 重置表单和状态
+        e.target.reset();
+        displayedOrders = 5;
+        searchKeyword = '';
+        
+        // 更新余额显示
+        if (result.balance !== undefined) {
+          updateBalanceDisplay(result.balance, result.credit_limit);
+        }
+        
+        // 更新订单列表
+        if (result.orders) {
+          allOrders = result.orders;
+          renderOrders(result.orders);
+        } else {
+          // 立即刷新订单和统计
+          await loadOrders();
+        }
+        
+        // 根据是否使用透支额度显示不同类型的成功消息
+        const messageType = result.used_credit > 0 ? 'warning' : 'success';
+        showCustomAlert(result.message || '订单提交成功！', messageType);
+
+      } else {
+        // 处理错误情况
+        showCustomAlert(result.error || '提交失败，请重试', 'error');
+        
+        // 更新余额显示（如果返回了）
+        if (result.balance !== undefined) {
+          updateBalanceDisplay(result.balance, result.credit_limit);
+        }
+      }
     } catch (error) {
-      alert(error.message || '提交失败，请重试');
+      showCustomAlert('网络错误或服务器无响应，请重试', 'error');
+      console.error('订单提交错误:', error);
     } finally {
       btn.textContent = orig;
       btn.disabled = false;
     }
   });
+  
+  // 更新余额显示的函数
+  function updateBalanceDisplay(balance, creditLimit) {
+    // 更新导航栏的余额显示
+    const balanceBadge = document.querySelector('.balance-badge');
+    if (balanceBadge) {
+      // 更新余额和透支额度的显示
+      balanceBadge.textContent = `余额: ${balance}元${creditLimit > 0 ? ` (额度: ${creditLimit}元)` : ''}`;
+      
+      // 根据余额正负设置不同的样式
+      if (balance < 0) {
+        balanceBadge.classList.add('negative');
+      } else {
+        balanceBadge.classList.remove('negative');
+      }
+    }
+    
+    // 更新下拉菜单中的余额显示
+    const dropdownBalance = document.querySelector('.dropdown-menu-item .text-success, .dropdown-menu-item .text-danger');
+    if (dropdownBalance) {
+      dropdownBalance.textContent = `${balance}${creditLimit > 0 ? ` (额度：${creditLimit})` : ''}`;
+      
+      // 根据余额正负设置不同的样式
+      if (balance < 0) {
+        dropdownBalance.classList.remove('text-success');
+        dropdownBalance.classList.add('text-danger');
+      } else {
+        dropdownBalance.classList.remove('text-danger');
+        dropdownBalance.classList.add('text-success');
+      }
+    }
+  }
 
   // 加载订单
-  async function loadOrders() {
+  async function loadOrders(showIndicator = true) {
     try {
-      const container = document.getElementById('ordersContainer');
-      container.innerHTML = '<div class="loading">加载中</div>';
+      if (showIndicator) {
+        showRefreshIndicator();
+      }
       
       const resp = await fetch('/orders/recent');
-      allOrders = await resp.json();
+      const newOrders = await resp.json();
+      
+      // 检查订单是否有变化
+      const newHash = generateOrdersHash(newOrders);
+      if (newHash === lastOrdersHash && allOrders.length > 0) {
+        // 没有变化，不需要重新渲染
+        if (showIndicator) {
+          hideRefreshIndicator();
+        }
+        return;
+      }
+      
+      lastOrdersHash = newHash;
+      allOrders = newOrders;
+      
+      // 仅显示今日订单
+      const today = new Date().toISOString().split('T')[0]; // 获取今天的日期 YYYY-MM-DD
+      const todayOrders = allOrders.filter(order => {
+        return order.created_at && order.created_at.startsWith(today);
+      });
       
       // 应用搜索过滤
-      let filteredOrders = allOrders;
+      let filteredOrders = todayOrders;
       if (searchKeyword) {
-        filteredOrders = allOrders.filter(order => 
+        filteredOrders = todayOrders.filter(order => 
           order.id.toString().includes(searchKeyword) || 
           order.account.toLowerCase().includes(searchKeyword.toLowerCase())
         );
       }
       
       renderOrders(filteredOrders);
+      
+      // 更新今日总金额
+      updateTodayTotal(allOrders);
+      
+      if (showIndicator) {
+        setTimeout(hideRefreshIndicator, 300);
+      }
     } catch (e) {
       console.error('加载订单失败', e);
-      document.getElementById('ordersContainer').innerHTML = 
+      document.getElementById('orders-container').innerHTML = 
         '<div class="no-results">加载失败，请刷新重试</div>';
+      if (showIndicator) {
+        hideRefreshIndicator();
+      }
     }
+  }
+
+  // 显示刷新指示器
+  function showRefreshIndicator() {
+    const indicator = document.getElementById('refreshIndicator');
+    indicator.classList.add('show');
+  }
+
+  // 隐藏刷新指示器
+  function hideRefreshIndicator() {
+    const indicator = document.getElementById('refreshIndicator');
+    indicator.classList.remove('show');
   }
 
   // 渲染订单
   function renderOrders(orders) {
-    const container = document.getElementById('ordersContainer');
-    const loadMoreBtn = document.getElementById('loadMoreContainer');
+    const container = document.getElementById('orders-container');
+    const loadMoreBtn = document.getElementById('load-more-container');
     
     if (!orders.length) {
       container.innerHTML = '<div class="no-results">暂无订单</div>';
@@ -369,7 +1375,7 @@
       return;
     }
     
-    // 确保 displayedOrders 至少为 5，即使订单总数少于 5
+    // 确保 displayedOrders 至少为 5
     if (displayedOrders < 5) {
       displayedOrders = Math.min(5, orders.length);
     }
@@ -377,22 +1383,12 @@
     // 只显示指定数量的订单
     const ordersToShow = orders.slice(0, displayedOrders);
     
-    container.innerHTML = '';
-    ordersToShow.forEach(o => {
-      const cls = 'status-' + o.status.replace('已','').toLowerCase();
-      const html = `
-        <div class="order">
-          <h4>订单 #${o.id} <span class="status-badge ${cls}">${o.status_text}</span></h4>
-          <p><strong>账号：</strong>${escapeHtml(o.account)}</p>
-          <p><strong>套餐：</strong>${escapeHtml(o.package)}</p>
-          ${o.remark ? `<p><strong>备注：</strong>${escapeHtml(o.remark)}</p>` : ''}
-          <p class="time"><strong>提交时间：</strong>${o.created_at}</p>
-          ${o.accepted_at ? `<p class="time"><strong>接单时间：</strong>${o.accepted_at}</p>` : ''}
-          ${o.completed_at ? `<p class="time"><strong>完成时间：</strong>${o.completed_at}</p>` : ''}
-          ${o.status === 'submitted' && o.can_cancel ? `<span class="cancel-btn" onclick="cancelOrder(${o.id})">撤销订单</span>` : ''}
-        </div>`;
-      container.insertAdjacentHTML('beforeend', html);
-    });
+    // 根据视图模式渲染
+    if (viewMode === 'grid') {
+      renderGridView(container, ordersToShow);
+    } else {
+      renderTableView(container, ordersToShow);
+    }
     
     // 显示或隐藏"加载更多"按钮
     if (orders.length > displayedOrders) {
@@ -402,6 +1398,88 @@
     } else {
       loadMoreBtn.style.display = 'none';
     }
+  }
+  
+  // 渲染网格视图
+  function renderGridView(container, orders) {
+    // 创建网格容器
+    container.innerHTML = '<div class="order-list-container"></div>';
+    const gridContainer = container.querySelector('.order-list-container');
+    
+    orders.forEach(o => {
+      const cls = 'status-' + o.status.replace('已','').toLowerCase();
+      
+      const html = `
+        <div class="order-list-item" data-order-id="${o.id}">
+          <h4>订单 #${o.id} <span class="status-badge ${cls}">${o.status_text}</span></h4>
+          ${isAdmin && o.accepted_by ? `<p class="creator">接单者：${escapeHtml(o.accepted_by)}</p>` : ''}
+          <p class="account"><strong>账号：</strong>${escapeHtml(o.account)}</p>
+          <p class="package"><strong>套餐：</strong>${escapeHtml(o.package)}个月</p>
+          <p class="price"><strong>价格：</strong>¥${WEB_PRICES[o.package] || 'N/A'}</p>
+          ${o.status === 'failed' ? 
+            `<p class="failed-reason"><span class="failed-icon">❌</span> <strong>失败原因：</strong>${escapeHtml(o.remark || '未提供')}</p>` : 
+            (o.remark ? `<p class="remark"><strong>备注：</strong>${escapeHtml(o.remark)}</p>` : '')
+          }
+          <div class="time-info">
+            <p class="time">提交时间：${o.created_at}</p>
+            ${o.accepted_at ? `<p class="time">接单时间：${o.accepted_at}</p>` : ''}
+            ${o.completed_at ? `<p class="time">完成时间：${o.completed_at}</p>` : ''}
+          </div>
+          ${o.can_cancel ? `<button class="cancel-btn" onclick="cancelOrder(${o.id}, this)">撤销订单</button>` : ''}
+        </div>`;
+      gridContainer.insertAdjacentHTML('beforeend', html);
+    });
+  }
+  
+  // 渲染表格视图
+  function renderTableView(container, orders) {
+    let html = `
+      <table class="orders-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>账号</th>
+            <th>套餐</th>
+            <th>价格</th>
+            <th>状态</th>
+            <th>提交时间</th>
+            <th>接单时间</th>
+            <th>完成时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    
+    orders.forEach(o => {
+      const cls = 'status-' + o.status.replace('已','').toLowerCase();
+      
+      html += `
+        <tr data-order-id="${o.id}">
+          <td>${o.id}</td>
+          <td>${escapeHtml(o.account)}</td>
+          <td>${escapeHtml(o.package)}个月</td>
+          <td><span class="table-price">¥${WEB_PRICES[o.package] || 'N/A'}</span></td>
+          <td><span class="status-badge ${cls}">${o.status_text}</span></td>
+          <td>${o.created_at}</td>
+          <td>${o.accepted_at || '-'}</td>
+          <td>${o.completed_at || '-'}</td>
+          <td>
+            ${o.can_cancel ? `<button class="cancel-btn" onclick="cancelOrder(${o.id}, this)">撤销</button>` : ''}
+            <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
+            ${o.status === 'completed' ? `<button class="dispute-btn" onclick="disputeOrder(${o.id})">质疑</button>` : ''}
+            ${o.status === 'accepted' && canRequestUpdate(o) ? `<button class="urge-btn" onclick="urgeOrder(${o.id})">催单</button>` : ''}
+          </td>
+        </tr>
+      `;
+    });
+    
+    html += `
+        </tbody>
+      </table>
+    `;
+    
+    container.innerHTML = html;
   }
 
   // 加载更多订单
@@ -415,41 +1493,42 @@
     renderOrders(filteredOrders);
   }
 
-  // 搜索订单
-  function searchOrders() {
-    searchKeyword = document.getElementById('searchInput').value.trim();
-    displayedOrders = 5; // 重置显示数量
+  // 显示订单详情
+  function showOrderDetail(orderId) {
+    const order = allOrders.find(o => o.id === orderId);
+    if (!order) return;
     
-    if (!searchKeyword) {
-      loadOrders();
-      return;
+    // 构建详细信息
+    let detailMessage = `订单 #${orderId} 详情\n\n`;
+    detailMessage += `账号: ${order.account}\n`;
+    detailMessage += `套餐: ${order.package}个月\n`;
+    detailMessage += `价格: ¥${WEB_PRICES[order.package] || 'N/A'}\n`;
+    detailMessage += `状态: ${order.status_text}\n`;
+    detailMessage += `提交时间: ${order.created_at}\n`;
+    
+    if (order.accepted_at) {
+      detailMessage += `接单时间: ${order.accepted_at}\n`;
     }
     
-    const filteredOrders = allOrders.filter(order => 
-      order.id.toString().includes(searchKeyword) || 
-      order.account.toLowerCase().includes(searchKeyword.toLowerCase())
-    );
-    
-    renderOrders(filteredOrders);
-  }
-
-  // 清除搜索
-  function clearSearch() {
-    searchKeyword = '';
-    document.getElementById('searchInput').value = '';
-    displayedOrders = 5;
-    renderOrders(allOrders);
-  }
-
-  // 监听回车键搜索
-  document.getElementById('searchInput').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-      searchOrders();
+    if (order.completed_at) {
+      detailMessage += `完成时间: ${order.completed_at}\n`;
     }
-  });
+    
+    if (order.remark) {
+      detailMessage += `备注: ${order.remark}\n`;
+    }
+    
+    // 只有管理员可以看到接单人
+    if (isAdmin && order.accepted_by) {
+      detailMessage += `接单人: ${order.accepted_by}\n`;
+    }
+    
+    alert(detailMessage);
+  }
 
   // HTML转义函数
   function escapeHtml(unsafe) {
+    if (!unsafe) return '';
     return unsafe
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
@@ -458,20 +1537,84 @@
       .replace(/'/g, "&#039;");
   }
 
+  // 检查是否可以催单（接单超过20分钟）
+  function canRequestUpdate(order) {
+    if (!order.accepted_at) return false;
+    
+    // 解析接单时间
+    const acceptedTime = new Date(order.accepted_at);
+    const now = new Date();
+    
+    // 计算时间差（毫秒）
+    const timeDiff = now - acceptedTime;
+    
+    // 如果时间差大于20分钟（1200000毫秒），允许催单
+    return timeDiff > 1200000;
+  }
+
+  // 质疑订单（当订单显示充值成功但实际未成功时）
+  async function disputeOrder(orderId) {
+    if (!confirm('您确定要质疑此订单吗？如果订单显示充值成功但实际未成功，请点击确定。')) return;
+    
+    try {
+      const resp = await fetch(`/orders/dispute/${orderId}`, { method: 'POST' });
+      const result = await resp.json();
+      
+      if (result.success) {
+        showCustomAlert('质疑已提交，订单状态已更新，卖家将收到通知处理此问题', 'warning');
+        // 重新加载订单列表
+        await loadOrders();
+      } else {
+        alert(result.error || '质疑提交失败，请重试');
+      }
+    } catch (e) {
+      console.error('质疑订单失败', e);
+      alert('质疑提交失败，请重试');
+    }
+  }
+
+  // 催单（当订单接单超过20分钟未完成时）
+  async function urgeOrder(orderId) {
+    if (!confirm('您确定要催促此订单吗？这将向卖家发送催单通知。')) return;
+    
+    try {
+      const resp = await fetch(`/orders/urge/${orderId}`, { method: 'POST' });
+      const result = await resp.json();
+      
+      if (result.success) {
+        showCustomAlert('催单通知已发送给卖家', 'success');
+      } else {
+        alert(result.error || '催单失败，请重试');
+      }
+    } catch (e) {
+      console.error('催单失败', e);
+      alert('催单失败，请重试');
+    }
+  }
+
   // 撤销订单
-  async function cancelOrder(id) {
+  async function cancelOrder(id, buttonElement) {
     if (!confirm('确定要撤销此订单吗？')) return;
+    
+    // 禁用按钮
+    buttonElement.disabled = true;
+    buttonElement.textContent = '撤销中...';
     
     try {
       const resp = await fetch('/orders/cancel/' + id, { method: 'POST' });
       if (resp.ok) {
-        loadOrders();
+        // 立即更新显示
+        await loadOrders(false);
         alert('订单已撤销');
       } else {
         alert('撤销失败');
+        buttonElement.disabled = false;
+        buttonElement.textContent = '撤销订单';
       }
     } catch (e) {
       alert('撤销失败，请重试');
+      buttonElement.disabled = false;
+      buttonElement.textContent = '撤销订单';
     }
   }
 
@@ -481,9 +1624,9 @@
     autoRefreshInterval = setInterval(() => {
       // 如果没有搜索关键词，则自动刷新
       if (!searchKeyword) {
-        loadOrders();
+        loadOrders(true);
       }
-    }, 3000);
+    }, 5000); // 改为5秒刷新一次，减少频率
   }
 
   function stopAutoRefresh() {
@@ -502,14 +1645,71 @@
     }
   });
 
-  // 初始化
-  window.addEventListener('load', () => {
+  // 切换视图模式
+  function toggleViewMode(mode) {
+    viewMode = mode;
+    
+    // 更新按钮状态
+    document.getElementById('gridViewBtn').classList.toggle('active', mode === 'grid');
+    document.getElementById('tableViewBtn').classList.toggle('active', mode === 'table');
+    
+    // 重新渲染订单
+    renderOrders(allOrders);
+  }
+
+  // 页面加载完成后的初始化
+  document.addEventListener('DOMContentLoaded', function() {
+    // 加载订单
     loadOrders();
+    
+    // 启动自动刷新
     startAutoRefresh();
+    
+    // 添加动画效果
+    const cards = document.querySelectorAll('.card');
+    cards.forEach((card, index) => {
+      card.style.opacity = '0';
+      card.style.transform = 'translateY(20px)';
+      setTimeout(() => {
+        card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+        card.style.opacity = '1';
+        card.style.transform = 'translateY(0)';
+      }, 100 * index);
+    });
+    
+    // 绑定视图切换按钮事件
+    document.getElementById('gridViewBtn').addEventListener('click', () => toggleViewMode('grid'));
+    document.getElementById('tableViewBtn').addEventListener('click', () => toggleViewMode('table'));
+    
+    // 给订单添加类名，用于添加图标
+    setTimeout(() => {
+      const orderItems = document.querySelectorAll('.order-list-item');
+      orderItems.forEach(item => {
+        const accountElem = item.querySelector('p:nth-child(2)');
+        if (accountElem) accountElem.classList.add('account');
+        
+        const packageElem = item.querySelector('p:nth-child(3)');
+        if (packageElem) packageElem.classList.add('package');
+        
+        const statusElem = item.querySelector('p:nth-child(4)');
+        if (statusElem) statusElem.classList.add('status');
+        
+        const timeElems = item.querySelectorAll('p.time');
+        if (timeElems.length > 0) {
+          timeElems.forEach(el => el.classList.add('time'));
+        }
+      });
+    }, 1000);
+
+    // 点击余额badge 显示/隐藏信息栏
+    document.getElementById('balanceBadge').addEventListener('click', () => {
+      const bar = document.getElementById('balanceInfoBar');
+      bar.style.display = bar.style.display === 'none' ? 'block' : 'none';
+    });
   });
 
-  // 页面卸载时清理
-  window.addEventListener('beforeunload', () => {
+  // 当用户离开页面时停止自动刷新
+  window.addEventListener('beforeunload', function() {
     stopAutoRefresh();
   });
 </script>
