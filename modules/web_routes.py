@@ -1,26 +1,21 @@
 import os
 import time
 import logging
-import asyncio
-import uuid
 import base64
-from functools import wraps
-from datetime import datetime, timedelta
-import pytz
 import re
 from io import BytesIO
+from datetime import datetime
+import pytz
+import uuid
+from PIL import Image
 
-from flask import Flask, request, render_template, jsonify, session, redirect, url_for, flash
+from flask import Flask, request, render_template, jsonify, redirect, url_for, flash, session, send_from_directory
 
-from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH
+from modules.constants import STATUS, STATUS_TEXT_ZH, RECHARGE_PRICES, PLAN_OPTIONS
 from modules.database import (
-    execute_query, hash_password, get_all_sellers, add_seller, remove_seller, toggle_seller_status,
-    get_user_balance, get_user_credit_limit, set_user_balance, set_user_credit_limit, refund_order, 
-    create_order_with_deduction_atomic, get_user_recharge_requests, create_recharge_request,
-    get_pending_recharge_requests, approve_recharge_request, reject_recharge_request, toggle_seller_admin,
-    is_admin_seller, create_order, get_order_details
+    execute_query, create_order, get_order_details, update_order_status,
+    get_all_sellers, add_seller, remove_seller, toggle_seller_status, toggle_seller_admin
 )
-import modules.constants as constants
 
 # 设置日志
 logger = logging.getLogger(__name__)
@@ -35,207 +30,147 @@ def get_china_time():
     china_now = utc_now.astimezone(CN_TIMEZONE)
     return china_now.strftime("%Y-%m-%d %H:%M:%S")
 
-# ===== 登录装饰器 =====
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-# ===== 管理员装饰器 =====
-def admin_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'is_admin' not in session or not session['is_admin']:
-            flash('您没有管理员权限。', 'error')
-            return redirect(url_for('index'))
-        return f(*args, **kwargs)
-    return decorated_function
-
 # ===== Web路由 =====
 def register_routes(app, notification_queue):
-    @app.route('/login', methods=['GET', 'POST'])
-    def login():
-        if request.method == 'POST':
-            username = request.form.get('username')
-            password = request.form.get('password')
-            
-            if not username or not password:
-                return render_template('login.html', error='请填写用户名和密码')
-                
-            # 验证用户
-            hashed_password = hash_password(password)
-            user = execute_query("SELECT id, username, is_admin FROM users WHERE username=%s AND password_hash=%s",
-                            (username, hashed_password), fetch=True)
-            
-            if user:
-                user_id, username, is_admin = user[0]
-                session['user_id'] = user_id
-                session['username'] = username
-                session['is_admin'] = is_admin
-                
-                # 更新最后登录时间
-                execute_query("UPDATE users SET last_login=%s WHERE id=%s",
-                            (get_china_time(), user_id))
-                
-                logger.info(f"用户 {username} 登录成功")
-                return redirect(url_for('index'))
-            else:
-                logger.warning(f"用户 {username} 登录失败 - 密码错误")
-                return render_template('login.html', error='用户名或密码错误')
-        
-        return render_template('login.html')
-
-    @app.route('/register', methods=['GET', 'POST'])
-    def register():
-        if request.method == 'POST':
-            username = request.form.get('username')
-            password = request.form.get('password')
-            confirm_password = request.form.get('password_confirm')  # 修正字段名称
-            
-            # 验证输入
-            if not username or not password or not confirm_password:
-                return render_template('register.html', error='请填写所有字段')
-                
-            if password != confirm_password:
-                return render_template('register.html', error='两次密码输入不一致')
-            
-            # 检查用户名是否已存在
-            existing_user = execute_query("SELECT id FROM users WHERE username=?", (username,), fetch=True)
-            if existing_user:
-                return render_template('register.html', error='用户名已存在')
-            
-            # 创建用户
-            hashed_password = hash_password(password)
-            execute_query("""
-                INSERT INTO users (username, password_hash, is_admin, created_at) 
-                VALUES (?, ?, 0, ?)
-            """, (username, hashed_password, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-            
-            return redirect(url_for('login'))
-        
-        return render_template('register.html')
-
-    @app.route('/logout')
-    def logout():
-        session.clear()
-        return redirect(url_for('login'))
-
     @app.route('/', methods=['GET'])
-    @login_required
     def index():
-        # 显示订单创建表单和最近订单
+        """显示订单创建表单和系统信息"""
         logger.info("访问首页")
         
         try:
-            orders = execute_query(
+            # 获取最近订单
+            orders_raw = execute_query(
                 """
-                SELECT id, qr_code_path, status, created_at, paid_at, confirmed_at 
-                FROM orders 
-                ORDER BY id DESC LIMIT 10
-                """, 
+                SELECT id, customer_name, package, status, created_at, paid_at, confirmed_at
+                FROM orders
+                ORDER BY id DESC
+                LIMIT 5
+                """,
                 fetch=True
             )
             
-            # 格式化订单数据
-            formatted_orders = []
-            for order in orders:
-                status = order[2]
-                status_text = STATUS_TEXT_ZH.get(status, status)
-                
-                formatted_orders.append({
-                    'id': order[0],
-                    'qr_code_path': order[1],
-                    'status': status,
-                    'status_text': status_text,
-                    'created_at': order[3],
-                    'paid_at': order[4],
-                    'confirmed_at': order[5]
+            orders = []
+            for o in orders_raw:
+                orders.append({
+                    "id": o[0],
+                    "customer_name": o[1] or "匿名用户",
+                    "package": o[2],
+                    "status": o[3],
+                    "status_text": STATUS_TEXT_ZH.get(o[3], o[3]),
+                    "created_at": o[4],
+                    "paid_at": o[5] or "",
+                    "confirmed_at": o[6] or ""
                 })
             
-            return render_template('index.html', 
-                                orders=formatted_orders,
-                                username=session.get('username'),
-                                is_admin=session.get('is_admin'))
+            return render_template(
+                'index.html',
+                orders=orders,
+                prices=RECHARGE_PRICES,
+                plan_options=PLAN_OPTIONS
+            )
         except Exception as e:
             logger.error(f"获取订单失败: {str(e)}", exc_info=True)
-            return render_template('index.html', 
-                                error='获取订单失败', 
-                                username=session.get('username'),
-                                is_admin=session.get('is_admin'))
+            return render_template(
+                'index.html',
+                error='获取订单失败',
+                prices=RECHARGE_PRICES,
+                plan_options=PLAN_OPTIONS
+            )
 
     @app.route('/', methods=['POST'])
-    @login_required
-    def create_order():
+    def create_new_order():
+        """创建新订单"""
+        customer_name = request.form.get('customer_name', '')
+        package = request.form.get('package', '30')
+        qr_image_data = request.form.get('qr_image_data', '')
+        
+        logger.info(f"收到订单提交请求: 客户={customer_name}, 套餐={package}")
+        
+        if not qr_image_data:
+            logger.warning("订单提交失败: 未上传二维码图片")
+            return jsonify({"success": False, "error": "请上传二维码图片"}), 400
+        
         try:
-            # 检查是否上传了文件
-            if 'qr_image' in request.files and request.files['qr_image'].filename:
-                qr_image = request.files['qr_image']
-                
-                # 生成唯一文件名
-                filename = f"{uuid.uuid4()}.png"
-                uploads_dir = os.path.join(app.static_folder, 'uploads')
-                if not os.path.exists(uploads_dir):
-                    os.makedirs(uploads_dir)
-                
-                # 保存文件
-                file_path = os.path.join(uploads_dir, filename)
-                qr_image.save(file_path)
-                
-                # 存储相对路径
-                relative_path = f"/static/uploads/{filename}"
-            elif 'qr_base64' in request.form and request.form['qr_base64']:
-                # 处理Base64图片数据
-                base64_data = request.form['qr_base64']
-                
-                # 移除可能的Base64前缀
-                if ',' in base64_data:
-                    base64_data = base64_data.split(',', 1)[1]
-                
-                # 生成唯一文件名
-                filename = f"{uuid.uuid4()}.png"
-                uploads_dir = os.path.join(app.static_folder, 'uploads')
-                if not os.path.exists(uploads_dir):
-                    os.makedirs(uploads_dir)
-                
-                # 保存Base64解码后的图片
-                file_path = os.path.join(uploads_dir, filename)
-                with open(file_path, "wb") as f:
-                    f.write(base64.b64decode(base64_data))
-                
-                # 存储相对路径
-                relative_path = f"/static/uploads/{filename}"
-            else:
-                return jsonify({"success": False, "error": "请上传二维码图片"}), 400
+            # 解析base64图片数据
+            image_data = re.sub(r'^data:image/.+;base64,', '', qr_image_data)
+            image_bytes = base64.b64decode(image_data)
+            
+            # 创建目录（如果不存在）
+            uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'uploads')
+            if not os.path.exists(uploads_dir):
+                os.makedirs(uploads_dir)
+            
+            # 保存图片到文件
+            image_filename = f"qr_{uuid.uuid4()}.png"
+            image_path = os.path.join(uploads_dir, image_filename)
+            
+            # 使用PIL处理图片，确保是有效的图片文件
+            try:
+                image = Image.open(BytesIO(image_bytes))
+                image.save(image_path)
+            except Exception as img_error:
+                logger.error(f"图片处理失败: {str(img_error)}", exc_info=True)
+                return jsonify({"success": False, "error": "上传的图片无效，请确保上传的是有效的二维码图片"}), 400
             
             # 创建订单
-            order_id = create_order(relative_path)
+            order_id = create_order(
+                customer_name,
+                package,
+                image_path
+            )
             
-            # 向队列添加通知
-            notification_data = {
+            if not order_id:
+                logger.warning("订单创建失败")
+                return jsonify({"success": False, "error": "创建订单失败，请重试"}), 500
+            
+            logger.info(f"订单提交成功: ID={order_id}, 套餐={package}")
+            
+            # 获取最新订单列表
+            orders_raw = execute_query(
+                """
+                SELECT id, customer_name, package, status, created_at, paid_at, confirmed_at
+                FROM orders
+                ORDER BY id DESC
+                LIMIT 5
+                """,
+                fetch=True
+            )
+            
+            orders = []
+            for o in orders_raw:
+                orders.append({
+                    "id": o[0],
+                    "customer_name": o[1] or "匿名用户",
+                    "package": o[2],
+                    "status": o[3],
+                    "status_text": STATUS_TEXT_ZH.get(o[3], o[3]),
+                    "created_at": o[4],
+                    "paid_at": o[5] or "",
+                    "confirmed_at": o[6] or ""
+                })
+            
+            # 将订单加入通知队列
+            notification_queue.put({
                 'type': 'new_order',
-                'order_id': order_id,
-                'qr_code_path': relative_path
-            }
-            notification_queue.put(notification_data)
+                'order_id': order_id
+            })
+            logger.info(f"已将订单 #{order_id} 加入通知队列")
             
-            logger.info(f"创建了新订单: ID={order_id}, 图片路径={relative_path}")
-            
+            # 返回成功信息
             return jsonify({
                 "success": True,
-                "message": "订单已提交成功！",
-                "order_id": order_id
+                "message": "订单已提交成功！我们的客服将尽快处理。",
+                "order_id": order_id,
+                "orders": orders
             })
             
         except Exception as e:
-            logger.error(f"创建订单失败: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "error": f"创建订单失败: {str(e)}"}), 500
+            logger.error(f"创建订单时发生意外错误: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": "服务器内部错误，请联系管理员。"}), 500
 
-    @app.route('/orders/<int:order_id>')
-    @login_required
-    def order_detail(order_id):
+    @app.route('/order/<int:order_id>', methods=['GET'])
+    def order_status(order_id):
+        """显示订单状态页面"""
         try:
             order = get_order_details(order_id)
             
@@ -243,188 +178,340 @@ def register_routes(app, notification_queue):
                 flash('订单不存在', 'error')
                 return redirect(url_for('index'))
             
-            return render_template('order_detail.html', 
-                                order=order,
-                                status_text=STATUS_TEXT_ZH.get(order['status'], order['status']),
-                                username=session.get('username'),
-                                is_admin=session.get('is_admin'))
+            # 检查是否需要上传新二维码
+            need_new_qr = order['status'] == STATUS['NEED_NEW_QR']
+            
+            return render_template(
+                'order_status.html',
+                order={
+                    "id": order['id'],
+                    "customer_name": order['customer_name'] or "匿名用户",
+                    "package": order['package'],
+                    "status": order['status'],
+                    "status_text": STATUS_TEXT_ZH.get(order['status'], order['status']),
+                    "message": order['message'],
+                    "created_at": order['created_at'],
+                    "paid_at": order['paid_at'] or "",
+                    "confirmed_at": order['confirmed_at'] or ""
+                },
+                need_new_qr=need_new_qr,
+                prices=RECHARGE_PRICES
+            )
         except Exception as e:
             logger.error(f"获取订单详情失败: {str(e)}", exc_info=True)
-            flash(f'获取订单详情失败: {str(e)}', 'error')
+            flash('获取订单详情失败', 'error')
             return redirect(url_for('index'))
 
-    @app.route('/admin')
-    @login_required
-    @admin_required
-    def admin_dashboard():
-        return render_template('admin.html', 
-                            username=session.get('username'),
-                            is_admin=session.get('is_admin'))
-
-    @app.route('/admin/sellers', methods=['GET'])
-    @login_required
-    @admin_required
-    def admin_sellers():
+    @app.route('/order/<int:order_id>/update_qr', methods=['POST'])
+    def update_qr_code(order_id):
+        """更新订单的二维码"""
+        qr_image_data = request.form.get('qr_image_data', '')
+        
+        if not qr_image_data:
+            return jsonify({"success": False, "error": "请上传二维码图片"}), 400
+        
         try:
-            sellers = get_all_sellers()
-            return render_template('admin_sellers.html',
-                                sellers=sellers,
-                                username=session.get('username'),
-                                is_admin=session.get('is_admin'))
-        except Exception as e:
-            logger.error(f"获取卖家列表失败: {str(e)}", exc_info=True)
-            flash(f'获取卖家列表失败: {str(e)}', 'error')
-            return redirect(url_for('admin_dashboard'))
-
-    @app.route('/admin/sellers/add', methods=['POST'])
-    @login_required
-    @admin_required
-    def admin_add_seller():
-        try:
-            telegram_id = request.form.get('telegram_id')
-            username = request.form.get('username')
-            first_name = request.form.get('first_name')
-            
-            if not telegram_id or not telegram_id.isdigit():
-                flash('Telegram ID必须是数字', 'error')
-                return redirect(url_for('admin_sellers'))
-            
-            if not username:
-                username = f"seller_{telegram_id}"
-            
-            if not first_name:
-                first_name = username
-            
-            added_by = session.get('username', 'admin')
-            
-            if add_seller(int(telegram_id), username, first_name, added_by):
-                flash(f'成功添加卖家: {username}', 'success')
-            else:
-                flash('添加卖家失败', 'error')
-            
-            return redirect(url_for('admin_sellers'))
-        except Exception as e:
-            logger.error(f"添加卖家失败: {str(e)}", exc_info=True)
-            flash(f'添加卖家失败: {str(e)}', 'error')
-            return redirect(url_for('admin_sellers'))
-
-    @app.route('/admin/sellers/<int:telegram_id>/toggle', methods=['POST'])
-    @login_required
-    @admin_required
-    def admin_toggle_seller(telegram_id):
-        try:
-            if toggle_seller_status(telegram_id):
-                flash('成功切换卖家状态', 'success')
-            else:
-                flash('切换卖家状态失败', 'error')
-            
-            return redirect(url_for('admin_sellers'))
-        except Exception as e:
-            logger.error(f"切换卖家状态失败: {str(e)}", exc_info=True)
-            flash(f'切换卖家状态失败: {str(e)}', 'error')
-            return redirect(url_for('admin_sellers'))
-
-    @app.route('/admin/sellers/<int:telegram_id>/toggle_admin', methods=['POST'])
-    @login_required
-    @admin_required
-    def admin_toggle_seller_admin(telegram_id):
-        try:
-            if toggle_seller_admin(telegram_id):
-                flash('成功切换卖家管理员状态', 'success')
-            else:
-                flash('切换卖家管理员状态失败', 'error')
-            
-            return redirect(url_for('admin_sellers'))
-        except Exception as e:
-            logger.error(f"切换卖家管理员状态失败: {str(e)}", exc_info=True)
-            flash(f'切换卖家管理员状态失败: {str(e)}', 'error')
-            return redirect(url_for('admin_sellers'))
-
-    @app.route('/admin/sellers/<int:telegram_id>/remove', methods=['POST'])
-    @login_required
-    @admin_required
-    def admin_remove_seller(telegram_id):
-        try:
-            if remove_seller(telegram_id):
-                flash('成功移除卖家', 'success')
-            else:
-                flash('移除卖家失败', 'error')
-            
-            return redirect(url_for('admin_sellers'))
-        except Exception as e:
-            logger.error(f"移除卖家失败: {str(e)}", exc_info=True)
-            flash(f'移除卖家失败: {str(e)}', 'error')
-            return redirect(url_for('admin_sellers'))
-
-    @app.route('/orders/status')
-    @login_required
-    def check_order_status():
-        try:
-            order_id = request.args.get('order_id')
-            
-            if not order_id or not order_id.isdigit():
-                return jsonify({"success": False, "error": "无效的订单ID"}), 400
-            
-            order = get_order_details(int(order_id))
+            # 获取订单详情
+            order = get_order_details(order_id)
             
             if not order:
                 return jsonify({"success": False, "error": "订单不存在"}), 404
             
+            # 确保订单状态正确
+            if order['status'] != STATUS['NEED_NEW_QR']:
+                return jsonify({"success": False, "error": "此订单当前不需要更新二维码"}), 400
+            
+            # 解析base64图片数据
+            image_data = re.sub(r'^data:image/.+;base64,', '', qr_image_data)
+            image_bytes = base64.b64decode(image_data)
+            
+            # 创建目录（如果不存在）
+            uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'uploads')
+            if not os.path.exists(uploads_dir):
+                os.makedirs(uploads_dir)
+            
+            # 保存图片到文件
+            image_filename = f"qr_{uuid.uuid4()}.png"
+            image_path = os.path.join(uploads_dir, image_filename)
+            
+            # 使用PIL处理图片，确保是有效的图片文件
+            try:
+                image = Image.open(BytesIO(image_bytes))
+                image.save(image_path)
+            except Exception as img_error:
+                logger.error(f"图片处理失败: {str(img_error)}", exc_info=True)
+                return jsonify({"success": False, "error": "上传的图片无效，请确保上传的是有效的二维码图片"}), 400
+            
+            # 更新订单状态和二维码
+            execute_query(
+                """
+                UPDATE orders 
+                SET status = %s, qr_image = %s, message = NULL, notified = 0
+                WHERE id = %s
+                """,
+                (STATUS['SUBMITTED'], image_path, order_id)
+            )
+            
+            # 将订单加入通知队列
+            notification_queue.put({
+                'type': 'new_order',
+                'order_id': order_id
+            })
+            
             return jsonify({
                 "success": True,
-                "order": {
-                    "id": order["id"],
-                    "status": order["status"],
-                    "status_text": STATUS_TEXT_ZH.get(order["status"], order["status"]),
-                    "created_at": order["created_at"],
-                    "paid_at": order["paid_at"],
-                    "confirmed_at": order["confirmed_at"],
-                    "feedback": order["feedback"]
-                }
+                "message": "二维码已更新成功！我们的客服将尽快处理。"
+            })
+            
+        except Exception as e:
+            logger.error(f"更新二维码时发生意外错误: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": "服务器内部错误，请联系管理员。"}), 500
+
+    @app.route('/uploads/<filename>')
+    def uploaded_file(filename):
+        """提供上传的文件访问"""
+        uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'uploads')
+        return send_from_directory(uploads_dir, filename)
+
+    # ===== 管理员路由 =====
+    def admin_required(f):
+        """管理员权限检查装饰器"""
+        from functools import wraps
+        
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            # 检查管理员 cookie 或会话
+            is_admin = session.get('is_admin', False)
+            if not is_admin:
+                flash('需要管理员权限', 'error')
+                return redirect(url_for('admin_login'))
+            return f(*args, **kwargs)
+        return decorated_function
+    
+    @app.route('/admin/login', methods=['GET', 'POST'])
+    def admin_login():
+        """管理员登录页面"""
+        if request.method == 'POST':
+            username = request.form.get('username')
+            password = request.form.get('password')
+            
+            from modules.database import hash_password
+            
+            # 检查是否是超级管理员
+            from modules.constants import ADMIN_USERNAME, ADMIN_PASSWORD
+            
+            if username == ADMIN_USERNAME and hash_password(password) == hash_password(ADMIN_PASSWORD):
+                session['is_admin'] = True
+                session['username'] = username
+                flash('登录成功', 'success')
+                return redirect(url_for('admin_dashboard'))
+            else:
+                flash('用户名或密码错误', 'error')
+        
+        return render_template('admin_login.html')
+    
+    @app.route('/admin/logout')
+    def admin_logout():
+        """管理员登出"""
+        session.pop('is_admin', None)
+        session.pop('username', None)
+        flash('已退出登录', 'success')
+        return redirect(url_for('admin_login'))
+    
+    @app.route('/admin')
+    @admin_required
+    def admin_dashboard():
+        """管理员仪表板页面"""
+        return render_template('admin_dashboard.html', username=session.get('username'))
+    
+    @app.route('/admin/orders')
+    @admin_required
+    def admin_orders():
+        """管理员订单列表页面"""
+        try:
+            orders_raw = execute_query(
+                """
+                SELECT id, customer_name, package, status, message, 
+                       created_at, paid_at, confirmed_at, 
+                       seller_id, seller_username, seller_first_name
+                FROM orders
+                ORDER BY id DESC
+                """,
+                fetch=True
+            )
+            
+            orders = []
+            for o in orders_raw:
+                orders.append({
+                    "id": o[0],
+                    "customer_name": o[1] or "匿名用户",
+                    "package": o[2],
+                    "status": o[3],
+                    "status_text": STATUS_TEXT_ZH.get(o[3], o[3]),
+                    "message": o[4],
+                    "created_at": o[5],
+                    "paid_at": o[6] or "",
+                    "confirmed_at": o[7] or "",
+                    "seller_id": o[8],
+                    "seller_username": o[9],
+                    "seller_first_name": o[10]
+                })
+            
+            return render_template('admin_orders.html', orders=orders, username=session.get('username'))
+        except Exception as e:
+            logger.error(f"获取订单列表失败: {str(e)}", exc_info=True)
+            flash('获取订单列表失败', 'error')
+            return redirect(url_for('admin_dashboard'))
+    
+    @app.route('/admin/sellers')
+    @admin_required
+    def admin_sellers():
+        """管理员卖家管理页面"""
+        try:
+            sellers = get_all_sellers()
+            return render_template('admin_sellers.html', sellers=sellers, username=session.get('username'))
+        except Exception as e:
+            logger.error(f"获取卖家列表失败: {str(e)}", exc_info=True)
+            flash('获取卖家列表失败', 'error')
+            return redirect(url_for('admin_dashboard'))
+    
+    @app.route('/admin/sellers/add', methods=['POST'])
+    @admin_required
+    def admin_add_seller():
+        """添加新卖家"""
+        telegram_id = request.form.get('telegram_id')
+        username = request.form.get('username')
+        first_name = request.form.get('first_name')
+        
+        if not telegram_id or not username or not first_name:
+            flash('请填写所有字段', 'error')
+            return redirect(url_for('admin_sellers'))
+        
+        success = add_seller(
+            telegram_id,
+            username,
+            first_name,
+            session.get('username', 'admin')
+        )
+        
+        if success:
+            flash('卖家添加成功', 'success')
+        else:
+            flash('卖家添加失败', 'error')
+        
+        return redirect(url_for('admin_sellers'))
+    
+    @app.route('/admin/sellers/<telegram_id>/toggle', methods=['POST'])
+    @admin_required
+    def admin_toggle_seller(telegram_id):
+        """切换卖家激活状态"""
+        success = toggle_seller_status(telegram_id)
+        
+        if success:
+            flash('卖家状态已更新', 'success')
+        else:
+            flash('卖家状态更新失败', 'error')
+        
+        return redirect(url_for('admin_sellers'))
+    
+    @app.route('/admin/sellers/<telegram_id>/toggle_admin', methods=['POST'])
+    @admin_required
+    def admin_toggle_seller_admin(telegram_id):
+        """切换卖家管理员状态"""
+        success = toggle_seller_admin(telegram_id)
+        
+        if success:
+            flash('卖家管理员状态已更新', 'success')
+        else:
+            flash('卖家管理员状态更新失败', 'error')
+        
+        return redirect(url_for('admin_sellers'))
+    
+    @app.route('/admin/sellers/<telegram_id>/remove', methods=['POST'])
+    @admin_required
+    def admin_remove_seller(telegram_id):
+        """删除卖家"""
+        success = remove_seller(telegram_id)
+        
+        if success:
+            flash('卖家已删除', 'success')
+        else:
+            flash('卖家删除失败', 'error')
+        
+        return redirect(url_for('admin_sellers'))
+        
+    @app.route('/admin/api/stats')
+    @admin_required
+    def admin_api_stats():
+        """获取系统统计数据"""
+        try:
+            # 获取订单统计
+            total_orders = execute_query("SELECT COUNT(*) FROM orders", fetch=True)[0][0]
+            pending_orders = execute_query(
+                "SELECT COUNT(*) FROM orders WHERE status = %s OR status = %s", 
+                (STATUS['SUBMITTED'], STATUS['NEED_NEW_QR']), 
+                fetch=True
+            )[0][0]
+            completed_orders = execute_query(
+                "SELECT COUNT(*) FROM orders WHERE status = %s", 
+                (STATUS['CONFIRMED'],), 
+                fetch=True
+            )[0][0]
+            
+            # 获取活跃卖家数
+            active_sellers = execute_query(
+                "SELECT COUNT(*) FROM sellers WHERE is_active = 1",
+                fetch=True
+            )[0][0]
+            
+            return jsonify({
+                'total_orders': total_orders,
+                'pending_orders': pending_orders,
+                'completed_orders': completed_orders,
+                'active_sellers': active_sellers
             })
         except Exception as e:
-            logger.error(f"检查订单状态失败: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "error": f"检查订单状态失败: {str(e)}"}), 500
-
-    @app.route('/orders/recent')
-    @login_required
-    def get_recent_orders():
-        try:
-            limit = request.args.get('limit', 5, type=int)
+            logger.error(f"获取统计数据失败: {str(e)}", exc_info=True)
+            return jsonify({'error': '获取统计数据失败'}), 500
             
-            orders = execute_query(
+    @app.route('/admin/api/orders')
+    @admin_required
+    def admin_api_orders():
+        """获取订单列表"""
+        try:
+            limit = request.args.get('limit', default=20, type=int)
+            
+            orders_raw = execute_query(
                 """
-                SELECT id, qr_code_path, status, created_at, paid_at, confirmed_at 
-                FROM orders 
-                ORDER BY id DESC LIMIT %s
-                """, 
+                SELECT id, customer_name, package, status, message, 
+                       created_at, paid_at, confirmed_at, 
+                       seller_id, seller_username, seller_first_name
+                FROM orders
+                ORDER BY id DESC
+                LIMIT %s
+                """,
                 (limit,),
                 fetch=True
             )
             
-            # 格式化订单数据
-            formatted_orders = []
-            for order in orders:
-                status = order[2]
-                status_text = STATUS_TEXT_ZH.get(status, status)
-                
-                formatted_orders.append({
-                    'id': order[0],
-                    'qr_code_path': order[1],
-                    'status': status,
-                    'status_text': status_text,
-                    'created_at': order[3],
-                    'paid_at': order[4],
-                    'confirmed_at': order[5]
+            orders = []
+            for o in orders_raw:
+                orders.append({
+                    "id": o[0],
+                    "customer_name": o[1] or "匿名用户",
+                    "package": o[2],
+                    "status": o[3],
+                    "status_text": STATUS_TEXT_ZH.get(o[3], o[3]),
+                    "message": o[4],
+                    "created_at": o[5],
+                    "paid_at": o[6] or "",
+                    "confirmed_at": o[7] or "",
+                    "seller_id": o[8],
+                    "seller_username": o[9],
+                    "seller_first_name": o[10]
                 })
             
-            return jsonify({
-                "success": True,
-                "orders": formatted_orders
-            })
+            return jsonify({'orders': orders})
         except Exception as e:
-            logger.error(f"获取最近订单失败: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "error": f"获取最近订单失败: {str(e)}"}), 500
-
-    # 返回所有注册的路由
-    return app 
+            logger.error(f"获取订单列表失败: {str(e)}", exc_info=True)
+            return jsonify({'error': '获取订单列表失败'}), 500 

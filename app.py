@@ -37,9 +37,9 @@ notification_queue = queue.Queue()
 # 锁目录路径
 lock_dir = 'bot.lock'
 
-# 清理锁目录的函数
+# 清理锁目录和数据库的函数
 def cleanup_resources():
-    """清理应用锁目录"""
+    """清理应用锁目录。"""
     # 清理应用锁目录
     if os.path.exists(lock_dir):
         try:
@@ -147,4 +147,4 @@ if __name__ == "__main__":
     # 启动 Flask
     port = int(os.environ.get("PORT", 5000))
     logger.info(f"正在启动Flask服务器，端口：{port}...")
-    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False) 

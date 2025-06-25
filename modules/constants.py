@@ -1,20 +1,23 @@
 import os
-from collections import defaultdict
-import threading
 import logging
+import threading
+from collections import defaultdict
 import time
 
 # 设置日志
 logger = logging.getLogger(__name__)
 
-# ✅ Telegram Bot Token (优先从环境变量读取)
-BOT_TOKEN = os.environ.get('BOT_TOKEN', '')
+# ✅ Telegram Bot Token
+if not os.environ.get('BOT_TOKEN'):
+    os.environ['BOT_TOKEN'] = '12345:ABCDEFG'  # 需要替换为真实的 Telegram Bot Token
 
-# ✅ 管理员默认凭证（优先从环境变量读取）
+BOT_TOKEN = os.environ["BOT_TOKEN"]
+
+# ✅ 管理员默认凭证
 ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin')
 
-if ADMIN_USERNAME == 'admin' or ADMIN_PASSWORD == 'admin123':
+if ADMIN_USERNAME == 'admin' or ADMIN_PASSWORD == 'admin':
     logger.warning("正在使用默认的管理员凭证。为了安全，请设置 ADMIN_USERNAME 和 ADMIN_PASSWORD 环境变量。")
 
 # 支持通过环境变量设置卖家ID
@@ -49,25 +52,22 @@ def sync_env_sellers_to_db():
                 logger.info(f"将环境变量中的卖家ID {seller_id} 同步到数据库")
                 execute_query(
                     "INSERT INTO sellers (telegram_id, username, first_name, is_active, added_at, added_by) VALUES (?, ?, ?, ?, ?, ?)",
-                    (seller_id, f"env_seller_{seller_id}", f"Environment Seller {seller_id}", 1, timestamp, "Environment")
+                    (seller_id, f"env_seller_{seller_id}", f"环境变量卖家 {seller_id}", 1, timestamp, "环境变量")
                 )
     except Exception as e:
         logger.error(f"同步环境变量卖家到数据库失败: {e}")
 
-# ===== 价格系统 =====
-# 网页端价格（人民币）
-WEB_PRICES = {'1': 12, '2': 18, '3': 30, '6': 50, '12': 84}
-# Telegram端卖家薪资（美元）
-TG_PRICES = {'1': 1.35, '2': 1.3, '3': 3.2, '6': 5.7, '12': 9.2}
+# ===== YouTube充值系统价格 =====
+# 不同套餐的价格 (人民币)
+RECHARGE_PRICES = {'7': 20, '30': 50, '90': 120, '365': 400}
 
-# ===== 状态常量 =====
+# ===== 订单状态常量 =====
 STATUS = {
-    'SUBMITTED': 'submitted',
-    'PAID': 'paid',
-    'CONFIRMED': 'confirmed',
-    'FAILED': 'failed',
-    'NEED_NEW_QR': 'need_new_qr',
-    'OTHER_ISSUE': 'other_issue'
+    'SUBMITTED': 'submitted',  # 已提交
+    'PAID': 'paid',            # 已支付
+    'CONFIRMED': 'confirmed',  # 已确认
+    'FAILED': 'failed',        # 失败
+    'NEED_NEW_QR': 'need_new_qr' # 需要新二维码
 }
 
 STATUS_TEXT_ZH = {
@@ -75,8 +75,7 @@ STATUS_TEXT_ZH = {
     'paid': '已支付', 
     'confirmed': '已确认',
     'failed': '充值失败', 
-    'need_new_qr': '需要新二维码',
-    'other_issue': '其他问题'
+    'need_new_qr': '需要新二维码'
 }
 
 STATUS_TEXT_EN = {
@@ -84,31 +83,19 @@ STATUS_TEXT_EN = {
     'paid': 'Paid', 
     'confirmed': 'Confirmed',
     'failed': 'Failed', 
-    'need_new_qr': 'Need New QR Code',
-    'other_issue': 'Other Issue'
+    'need_new_qr': 'Need New QR'
 }
 
-PLAN_OPTIONS = [('1', '1个月'), ('2', '2个月'), ('3', '3个月'), ('6', '6个月'), ('12', '12个月')]
+PLAN_OPTIONS = [('7', '7天'), ('30', '30天'), ('90', '90天'), ('365', '365天')]
 PLAN_LABELS_ZH = {v: l for v, l in PLAN_OPTIONS}
-PLAN_LABELS_EN = {'1': '1 Month', '2': '2 Months', '3': '3 Months', '6': '6 Months', '12': '12 Months'}
+PLAN_LABELS_EN = {'7': '7 Days', '30': '30 Days', '90': '90 Days', '365': '365 Days'}
 
-# 失败原因的中英文映射
-REASON_TEXT_ZH = {
-    'Wrong password': '密码错误',
-    'Membership not expired': '会员未到期',
-    'Other reason': '其他原因',
-    'Other reason (details pending)': '其他原因',
-    'Unknown reason': '未知原因'
-}
-
-# ===== 全局变量 =====
-user_languages = defaultdict(lambda: 'en')
-feedback_waiting = {}
+# 全局变量
 notified_orders = set()
-notified_orders_lock = threading.Lock()  # 在主应用中初始化
+notified_orders_lock = threading.Lock()
 
-# 数据库连接URL（用于PostgreSQL判断）
-DATABASE_URL = os.environ.get('DATABASE_URL', '')
+# 数据库连接URL
+DATABASE_URL = os.environ.get('DATABASE_URL', 'postgres://postgres:postgres@localhost:5432/youtube_recharge')
 
 # 用户信息缓存
 user_info_cache = {} 

@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>YouTube充值系统</title>
+  <title>订单状态 - YouTube充值系统</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- 添加Font Awesome图标库 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -130,24 +130,9 @@
     }
     
     .main-container {
-      max-width: 1200px;
+      max-width: 800px;
       margin: 30px auto;
       padding: 0 20px;
-    }
-    
-    .container {
-      display: flex;
-      gap: 40px;
-      align-items: flex-start;
-    }
-
-    .left {
-      width: 35%;
-      flex-shrink: 0;
-    }
-
-    .right {
-      width: 65%;
     }
     
     .card {
@@ -171,6 +156,9 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
     }
     
     .card-header h2 {
@@ -183,58 +171,182 @@
     }
     
     .card-header h2::before {
-      content: '📝';
+      content: '📋';
       margin-right: 8px;
       font-size: 18px;
     }
-
-    .form-group {
-      margin-bottom: 20px;
+    
+    .order-id {
+      font-weight: 600;
+      color: #555;
+      font-size: 16px;
     }
     
-    .form-label {
-      display: block;
-      margin-bottom: 8px;
+    .status-badge {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+    
+    .status-submitted {
+      background-color: rgba(52, 152, 219, 0.1);
+      color: #3498db;
+    }
+    
+    .status-paid {
+      background-color: rgba(241, 196, 15, 0.1);
+      color: #f1c40f;
+    }
+    
+    .status-confirmed {
+      background-color: rgba(46, 204, 113, 0.1);
+      color: #2ecc71;
+    }
+    
+    .status-failed {
+      background-color: rgba(231, 76, 60, 0.1);
+      color: #e74c3c;
+    }
+    
+    .status-need_new_qr {
+      background-color: rgba(155, 89, 182, 0.1);
+      color: #9b59b6;
+    }
+    
+    .order-details {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 15px;
+      margin-bottom: 25px;
+    }
+    
+    .order-label {
       font-weight: 600;
       color: #555;
     }
     
-    .form-control {
-      width: 100%;
-      padding: 12px 15px;
-      border-radius: 8px;
-      border: 1px solid rgba(0,0,0,0.1);
+    .order-value {
+      color: #333;
+    }
+    
+    .order-status-timeline {
+      display: flex;
+      justify-content: space-between;
+      margin: 30px 0;
+      position: relative;
+    }
+    
+    .order-status-timeline::before {
+      content: '';
+      position: absolute;
+      top: 15px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: rgba(0,0,0,0.1);
+      z-index: 1;
+    }
+    
+    .timeline-step {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+      width: 33.33%;
+    }
+    
+    .timeline-dot {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
       background: white;
-      font-size: 14px;
+      border: 2px solid rgba(0,0,0,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 10px;
+      position: relative;
       transition: all 0.3s ease;
     }
     
-    .form-control:focus {
-      outline: none;
-      box-shadow: 0 0 0 3px rgba(255,94,0,0.2);
-      border-color: #FF5E00;
-    }
-    
-    .form-select {
-      width: 100%;
-      padding: 12px 15px;
-      border-radius: 8px;
-      border: 1px solid rgba(0,0,0,0.1);
-      background: white;
+    .timeline-dot i {
       font-size: 14px;
+      color: rgba(0,0,0,0.3);
       transition: all 0.3s ease;
-      -webkit-appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23555' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 15px center;
-      background-size: 12px;
-      padding-right: 35px;
     }
     
-    .form-select:focus {
-      outline: none;
-      box-shadow: 0 0 0 3px rgba(255,94,0,0.2);
+    .timeline-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: rgba(0,0,0,0.5);
+      transition: all 0.3s ease;
+    }
+    
+    .timeline-date {
+      font-size: 11px;
+      color: rgba(0,0,0,0.3);
+      margin-top: 5px;
+    }
+    
+    .timeline-step.active .timeline-dot {
       border-color: #FF5E00;
+      background: #FF5E00;
+    }
+    
+    .timeline-step.active .timeline-dot i {
+      color: white;
+    }
+    
+    .timeline-step.active .timeline-label {
+      color: #FF5E00;
+    }
+    
+    .timeline-step.completed .timeline-dot {
+      border-color: #2ecc71;
+      background: #2ecc71;
+    }
+    
+    .timeline-step.completed .timeline-dot i {
+      color: white;
+    }
+    
+    .timeline-step.completed .timeline-label {
+      color: #2ecc71;
+    }
+    
+    .timeline-step.failed .timeline-dot {
+      border-color: #e74c3c;
+      background: #e74c3c;
+    }
+    
+    .timeline-step.failed .timeline-dot i {
+      color: white;
+    }
+    
+    .timeline-step.failed .timeline-label {
+      color: #e74c3c;
+    }
+    
+    .order-message {
+      background: rgba(0,0,0,0.02);
+      border-radius: 8px;
+      padding: 15px;
+      margin: 20px 0;
+      border-left: 3px solid #FF5E00;
+    }
+    
+    .order-message-title {
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #555;
+    }
+    
+    .order-actions {
+      display: flex;
+      justify-content: center;
+      margin-top: 25px;
     }
     
     /* 二维码上传区域 */
@@ -252,6 +364,7 @@
       background: rgba(255,255,255,0.5);
       position: relative;
       overflow: hidden;
+      margin-top: 20px;
     }
     
     .qr-upload-area:hover {
@@ -312,254 +425,125 @@
       background: #ff5e5e;
       color: white;
     }
-    
-    /* 套餐选择 */
-    .plan-options {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 5px;
-    }
-    
-    .plan-option {
-      flex: 1;
-      min-width: 100px;
-      text-align: center;
-    }
-    
-    .plan-radio {
-      display: none;
-    }
-    
-    .plan-label {
-      display: block;
-      padding: 12px 15px;
-      background: white;
-      border: 1px solid rgba(0,0,0,0.1);
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-    
-    .plan-label:hover {
-      border-color: #FF5E00;
-    }
-    
-    .plan-radio:checked + .plan-label {
-      background: rgba(255,94,0,0.1);
-      border-color: #FF5E00;
-      box-shadow: 0 0 0 2px rgba(255,94,0,0.2);
-    }
-    
-    .plan-name {
-      font-weight: 600;
-      margin-bottom: 5px;
-    }
-    
-    .plan-price {
-      font-size: 12px;
-      color: #888;
-    }
-    
-    /* 订单表格 */
-    .orders-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 14px;
-    }
-    
-    .orders-table th, .orders-table td {
-      padding: 12px 15px;
-      text-align: left;
-      border-bottom: 1px solid rgba(0,0,0,0.05);
-    }
-    
-    .orders-table thead th {
-      font-weight: 600;
-      color: #555;
-      background: rgba(0,0,0,0.02);
-    }
-    
-    .orders-table tbody tr:last-child td {
-      border-bottom: none;
-    }
-    
-    .status-badge {
-      display: inline-block;
-      padding: 5px 10px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-    }
-    
-    .status-submitted {
-      background-color: rgba(52, 152, 219, 0.1);
-      color: #3498db;
-    }
-    
-    .status-paid {
-      background-color: rgba(241, 196, 15, 0.1);
-      color: #f1c40f;
-    }
-    
-    .status-confirmed {
-      background-color: rgba(46, 204, 113, 0.1);
-      color: #2ecc71;
-    }
-    
-    .status-failed {
-      background-color: rgba(231, 76, 60, 0.1);
-      color: #e74c3c;
-    }
-    
-    .status-need_new_qr {
-      background-color: rgba(155, 89, 182, 0.1);
-      color: #9b59b6;
-    }
-    
-    /* 响应式适配 */
-    @media (max-width: 768px) {
-      .container {
-        flex-direction: column;
-      }
-      
-      .left, .right {
-        width: 100%;
-      }
-      
-      .plan-options {
-        flex-direction: column;
-      }
-      
-      .plan-option {
-        width: 100%;
-      }
-    }
   </style>
 </head>
 <body>
   <div class="navbar">
     <div class="navbar-brand">YouTube充值系统</div>
+    <a href="/" class="btn btn-primary" style="font-size: 12px; padding: 8px 12px;">
+      <i class="fas fa-home"></i> 返回首页
+    </a>
   </div>
   
   <div class="main-container">
-    <div class="container">
-      <div class="left">
-        <div class="card">
-          <div class="card-header">
-            <h2>创建充值订单</h2>
-          </div>
-          <div class="card-body">
-            <form id="order-form">
-              <div class="form-group">
-                <label class="form-label">您的昵称（选填）</label>
-                <input type="text" class="form-control" name="customer_name" placeholder="请输入您的昵称，方便识别订单">
-              </div>
-              
-              <div class="form-group">
-                <label class="form-label">充值套餐</label>
-                <div class="plan-options">
-                  {% for value, label in plan_options %}
-                  <div class="plan-option">
-                    <input type="radio" id="plan-{{ value }}" name="package" value="{{ value }}" class="plan-radio" {% if value == '30' %}checked{% endif %}>
-                    <label for="plan-{{ value }}" class="plan-label">
-                      <div class="plan-name">{{ label }}</div>
-                      <div class="plan-price">¥{{ prices[value] }}</div>
-                    </label>
-                  </div>
-                  {% endfor %}
-                </div>
-              </div>
-              
-              <div class="form-group">
-                <label class="form-label">上传YouTube二维码</label>
-                <div class="qr-upload-area" id="qr-upload-area">
-                  <div class="qr-upload-icon">
-                    <i class="fas fa-qrcode"></i>
-                  </div>
-                  <div class="qr-upload-text">
-                    点击上传二维码图片，或者将图片拖放到此处<br>
-                    <small>支持JPG、PNG格式，可以直接粘贴图片</small>
-                  </div>
-                  <img id="qr-preview" class="qr-preview" style="display: none;">
-                  <div class="qr-upload-actions">
-                    <button type="button" class="qr-upload-remove" id="qr-upload-remove">
-                      <i class="fas fa-times"></i>
-                    </button>
-                  </div>
-                </div>
-                <input type="file" id="qr-file" style="display: none;" accept="image/*">
-                <input type="hidden" name="qr_image_data" id="qr-image-data">
-              </div>
-              
-              <div class="form-group">
-                <button type="submit" class="btn btn-primary" style="width: 100%;">
-                  <i class="fas fa-paper-plane"></i> 提交订单
-                </button>
-              </div>
-            </form>
-          </div>
+    <div class="card">
+      <div class="card-header">
+        <h2>订单详情</h2>
+        <div>
+          <span class="order-id">#{{ order.id }}</span>
+          <span class="status-badge status-{{ order.status }}">{{ order.status_text }}</span>
         </div>
       </div>
       
-      <div class="right">
-        <div class="card">
-          <div class="card-header">
-            <h2>最近订单</h2>
+      <div class="order-details">
+        <div class="order-label">客户昵称</div>
+        <div class="order-value">{{ order.customer_name }}</div>
+        
+        <div class="order-label">充值套餐</div>
+        <div class="order-value">{{ order.package }}天（¥{{ prices[order.package] }}）</div>
+        
+        <div class="order-label">创建时间</div>
+        <div class="order-value">{{ order.created_at }}</div>
+        
+        {% if order.paid_at %}
+        <div class="order-label">支付时间</div>
+        <div class="order-value">{{ order.paid_at }}</div>
+        {% endif %}
+        
+        {% if order.confirmed_at %}
+        <div class="order-label">确认时间</div>
+        <div class="order-value">{{ order.confirmed_at }}</div>
+        {% endif %}
+      </div>
+      
+      <!-- 订单状态时间线 -->
+      <div class="order-status-timeline">
+        <div class="timeline-step {% if order.status in ['submitted', 'paid', 'confirmed'] %}completed{% elif order.status in ['failed', 'need_new_qr'] %}failed{% endif %}">
+          <div class="timeline-dot">
+            <i class="fas fa-check"></i>
           </div>
-          <div class="card-body">
-            <table class="orders-table">
-              <thead>
-                <tr>
-                  <th>订单号</th>
-                  <th>客户</th>
-                  <th>套餐</th>
-                  <th>状态</th>
-                  <th>创建时间</th>
-                </tr>
-              </thead>
-              <tbody id="orders-table-body">
-                {% if orders %}
-                  {% for order in orders %}
-                  <tr>
-                    <td><a href="/order/{{ order.id }}" target="_blank">#{{ order.id }}</a></td>
-                    <td>{{ order.customer_name }}</td>
-                    <td>{{ order.package }}天</td>
-                    <td><span class="status-badge status-{{ order.status }}">{{ order.status_text }}</span></td>
-                    <td>{{ order.created_at }}</td>
-                  </tr>
-                  {% endfor %}
-                {% else %}
-                  <tr>
-                    <td colspan="5" style="text-align: center;">暂无订单</td>
-                  </tr>
-                {% endif %}
-              </tbody>
-            </table>
-          </div>
+          <div class="timeline-label">已提交</div>
+          <div class="timeline-date">{{ order.created_at }}</div>
         </div>
         
-        <div class="card">
-          <div class="card-header">
-            <h2>充值说明</h2>
+        <div class="timeline-step {% if order.status in ['paid', 'confirmed'] %}completed{% elif order.status == 'submitted' %}active{% elif order.status in ['failed', 'need_new_qr'] %}failed{% endif %}">
+          <div class="timeline-dot">
+            <i class="fas fa-credit-card"></i>
           </div>
-          <div class="card-body">
-            <ol style="padding-left: 20px;">
-              <li>选择您需要的充值套餐和时长</li>
-              <li>上传您的YouTube二维码图片（登录YouTube后，在个人设置中找到）</li>
-              <li>提交订单后，我们的客服会立即处理您的订单</li>
-              <li>处理完成后，您可以通过订单号查询充值状态</li>
-              <li>如有任何问题，请保留订单号联系客服</li>
-            </ol>
-            <div style="background: rgba(255,94,0,0.1); padding: 15px; border-radius: 8px; margin-top: 15px;">
-              <div style="font-weight: 600; margin-bottom: 5px; color: #FF5E00;">温馨提示：</div>
-              <div style="font-size: 13px; color: #555;">
-                请确保上传的二维码清晰可辨，建议直接截图或者使用截图工具获取最佳效果。上传后的二维码信息将严格保密，仅用于本次充值操作。
-              </div>
-            </div>
+          <div class="timeline-label">已支付</div>
+          <div class="timeline-date">{{ order.paid_at or '' }}</div>
+        </div>
+        
+        <div class="timeline-step {% if order.status == 'confirmed' %}completed{% elif order.status == 'paid' %}active{% elif order.status in ['failed', 'need_new_qr'] %}failed{% endif %}">
+          <div class="timeline-dot">
+            <i class="fas fa-check-circle"></i>
           </div>
+          <div class="timeline-label">已确认</div>
+          <div class="timeline-date">{{ order.confirmed_at or '' }}</div>
         </div>
       </div>
+      
+      {% if order.message %}
+      <div class="order-message">
+        <div class="order-message-title">
+          <i class="fas fa-info-circle"></i> 订单消息
+        </div>
+        <div>{{ order.message }}</div>
+      </div>
+      {% endif %}
+      
+      {% if need_new_qr %}
+      <div class="order-message" style="border-left-color: #9b59b6;">
+        <div class="order-message-title">
+          <i class="fas fa-exclamation-circle"></i> 需要新二维码
+        </div>
+        <div>您的二维码已过期或无法识别，请上传新的二维码图片以继续处理您的订单。</div>
+        
+        <form id="update-qr-form">
+          <div class="qr-upload-area" id="qr-upload-area">
+            <div class="qr-upload-icon">
+              <i class="fas fa-qrcode"></i>
+            </div>
+            <div class="qr-upload-text">
+              点击上传新的二维码图片，或者将图片拖放到此处<br>
+              <small>支持JPG、PNG格式，可以直接粘贴图片</small>
+            </div>
+            <img id="qr-preview" class="qr-preview" style="display: none;">
+            <div class="qr-upload-actions">
+              <button type="button" class="qr-upload-remove" id="qr-upload-remove">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          </div>
+          <input type="file" id="qr-file" style="display: none;" accept="image/*">
+          <input type="hidden" name="qr_image_data" id="qr-image-data">
+          
+          <div class="order-actions">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-paper-plane"></i> 提交新二维码
+            </button>
+          </div>
+        </form>
+      </div>
+      {% endif %}
+      
+      {% if order.status == 'failed' %}
+      <div class="order-actions">
+        <a href="/" class="btn btn-primary">
+          <i class="fas fa-redo"></i> 创建新订单
+        </a>
+      </div>
+      {% endif %}
     </div>
   </div>
   
@@ -576,6 +560,7 @@
   
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      {% if need_new_qr %}
       // 文件上传处理
       const qrUploadArea = document.getElementById('qr-upload-area');
       const qrFile = document.getElementById('qr-file');
@@ -677,9 +662,9 @@
       });
       
       // 表单提交处理
-      const orderForm = document.getElementById('order-form');
+      const updateQrForm = document.getElementById('update-qr-form');
       
-      orderForm.addEventListener('submit', function(e) {
+      updateQrForm.addEventListener('submit', function(e) {
         e.preventDefault();
         
         // 验证表单
@@ -689,10 +674,11 @@
         }
         
         // 收集表单数据
-        const formData = new FormData(orderForm);
+        const formData = new FormData();
+        formData.append('qr_image_data', qrImageData.value);
         
         // 发送请求
-        fetch('/', {
+        fetch('/order/{{ order.id }}/update_qr', {
           method: 'POST',
           body: formData
         })
@@ -701,50 +687,20 @@
           if (data.success) {
             showAlert(data.message, 'success');
             
-            // 重置表单
-            qrPreview.src = '';
-            qrPreview.style.display = 'none';
-            qrImageData.value = '';
-            qrFile.value = '';
-            orderForm.reset();
-            
-            // 更新订单列表
-            updateOrdersTable(data.orders);
+            // 2秒后刷新页面
+            setTimeout(function() {
+              window.location.reload();
+            }, 2000);
           } else {
             showAlert(data.error, 'error');
           }
         })
         .catch(error => {
           console.error('Error:', error);
-          showAlert('提交订单时发生错误，请稍后重试', 'error');
+          showAlert('提交二维码时发生错误，请稍后重试', 'error');
         });
       });
-      
-      // 更新订单表格
-      function updateOrdersTable(orders) {
-        const tableBody = document.getElementById('orders-table-body');
-        
-        if (!orders || orders.length === 0) {
-          tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">暂无订单</td></tr>';
-          return;
-        }
-        
-        let html = '';
-        
-        orders.forEach(order => {
-          html += `
-            <tr>
-              <td><a href="/order/${order.id}" target="_blank">#${order.id}</a></td>
-              <td>${order.customer_name || '匿名用户'}</td>
-              <td>${order.package}天</td>
-              <td><span class="status-badge status-${order.status}">${order.status_text}</span></td>
-              <td>${order.created_at}</td>
-            </tr>
-          `;
-        });
-        
-        tableBody.innerHTML = html;
-      }
+      {% endif %}
       
       // 显示自定义警告框
       function showAlert(message, type) {
