@@ -37,9 +37,9 @@ notification_queue = queue.Queue()
 # 锁目录路径
 lock_dir = 'bot.lock'
 
-# 清理锁目录和数据库 journal 文件的函数
+# 清理锁目录的函数
 def cleanup_resources():
-    """清理应用锁目录和数据库 journal 文件。"""
+    """清理应用锁目录"""
     # 清理应用锁目录
     if os.path.exists(lock_dir):
         try:
@@ -51,15 +51,6 @@ def cleanup_resources():
                 logger.info(f"已清理锁文件: {lock_dir}")
         except Exception as e:
             logger.error(f"清理锁目录时出错: {str(e)}", exc_info=True)
-
-    # 清理数据库 journal 文件
-    try:
-        journal_path = "orders.db-journal"
-        if os.path.exists(journal_path):
-            os.remove(journal_path)
-            logger.info(f"已清理残留的 journal 文件: {journal_path}")
-    except Exception as e:
-        logger.error(f"清理 journal 文件时出错: {str(e)}", exc_info=True)
 
 # 信号处理函数
 def signal_handler(sig, frame):
@@ -99,7 +90,6 @@ def telegram_webhook():
         # 获取更新数据
         update_data = request.get_json()
         logger.info(f"收到Telegram webhook更新: {update_data}")
-        print(f"DEBUG: 收到Telegram webhook更新: {update_data}")
         
         # 在单独的线程中处理更新，避免阻塞Flask响应
         threading.Thread(
@@ -112,7 +102,6 @@ def telegram_webhook():
         return jsonify({"status": "success"}), 200
     except Exception as e:
         logger.error(f"处理Telegram webhook时出错: {str(e)}", exc_info=True)
-        print(f"ERROR: 处理Telegram webhook时出错: {str(e)}")
         traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -120,7 +109,6 @@ def telegram_webhook():
 def handle_exception(e):
     """处理所有未捕获的异常"""
     logger.error(f"未捕获的异常: {str(e)}", exc_info=True)
-    print(f"ERROR: 未捕获的异常: {str(e)}")
     traceback.print_exc()
     return jsonify({"error": str(e)}), 500
 

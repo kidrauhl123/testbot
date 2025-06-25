@@ -7,17 +7,14 @@ import time
 # 设置日志
 logger = logging.getLogger(__name__)
 
-# ✅ 写死变量（优先）
-if not os.environ.get('BOT_TOKEN'):
-    os.environ['BOT_TOKEN'] = '7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk'
-
-BOT_TOKEN = os.environ["BOT_TOKEN"]
+# ✅ Telegram Bot Token (优先从环境变量读取)
+BOT_TOKEN = os.environ.get('BOT_TOKEN', '')
 
 # ✅ 管理员默认凭证（优先从环境变量读取）
-ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', '755439')
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '755439')
+ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
 
-if ADMIN_USERNAME == '755439' or ADMIN_PASSWORD == '755439':
+if ADMIN_USERNAME == 'admin' or ADMIN_PASSWORD == 'admin123':
     logger.warning("正在使用默认的管理员凭证。为了安全，请设置 ADMIN_USERNAME 和 ADMIN_PASSWORD 环境变量。")
 
 # 支持通过环境变量设置卖家ID
@@ -52,7 +49,7 @@ def sync_env_sellers_to_db():
                 logger.info(f"将环境变量中的卖家ID {seller_id} 同步到数据库")
                 execute_query(
                     "INSERT INTO sellers (telegram_id, username, first_name, is_active, added_at, added_by) VALUES (?, ?, ?, ?, ?, ?)",
-                    (seller_id, f"env_seller_{seller_id}", f"环境变量卖家 {seller_id}", 1, timestamp, "环境变量")
+                    (seller_id, f"env_seller_{seller_id}", f"Environment Seller {seller_id}", 1, timestamp, "Environment")
                 )
     except Exception as e:
         logger.error(f"同步环境变量卖家到数据库失败: {e}")
@@ -66,16 +63,31 @@ TG_PRICES = {'1': 1.35, '2': 1.3, '3': 3.2, '6': 5.7, '12': 9.2}
 # ===== 状态常量 =====
 STATUS = {
     'SUBMITTED': 'submitted',
-    'ACCEPTED': 'accepted',
-    'COMPLETED': 'completed',
+    'PAID': 'paid',
+    'CONFIRMED': 'confirmed',
     'FAILED': 'failed',
-    'CANCELLED': 'cancelled',
-    'DISPUTING': 'disputing'
+    'NEED_NEW_QR': 'need_new_qr',
+    'OTHER_ISSUE': 'other_issue'
 }
+
 STATUS_TEXT_ZH = {
-    'submitted': '已提交', 'accepted': '已接单', 'completed': '充值成功',
-    'failed': '充值失败', 'cancelled': '已撤销', 'disputing': '正在质疑'
+    'submitted': '已提交', 
+    'paid': '已支付', 
+    'confirmed': '已确认',
+    'failed': '充值失败', 
+    'need_new_qr': '需要新二维码',
+    'other_issue': '其他问题'
 }
+
+STATUS_TEXT_EN = {
+    'submitted': 'Submitted', 
+    'paid': 'Paid', 
+    'confirmed': 'Confirmed',
+    'failed': 'Failed', 
+    'need_new_qr': 'Need New QR Code',
+    'other_issue': 'Other Issue'
+}
+
 PLAN_OPTIONS = [('1', '1个月'), ('2', '2个月'), ('3', '3个月'), ('6', '6个月'), ('12', '12个月')]
 PLAN_LABELS_ZH = {v: l for v, l in PLAN_OPTIONS}
 PLAN_LABELS_EN = {'1': '1 Month', '2': '2 Months', '3': '3 Months', '6': '6 Months', '12': '12 Months'}
@@ -95,8 +107,8 @@ feedback_waiting = {}
 notified_orders = set()
 notified_orders_lock = threading.Lock()  # 在主应用中初始化
 
-# 数据库连接URL（用于PostgreSQL判断，默认为SQLite）
-DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///orders.db')
+# 数据库连接URL（用于PostgreSQL判断）
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
 
 # 用户信息缓存
 user_info_cache = {} 

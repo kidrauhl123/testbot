@@ -26,18 +26,17 @@ def get_china_time():
 
 # ===== 数据库 =====
 def init_db():
-    """根据环境配置初始化数据库"""
-    logger.info(f"初始化数据库，使用连接: {DATABASE_URL[:10]}...")
-    if DATABASE_URL.startswith('postgres'):
-        init_postgres_db()
-    else:
-        init_sqlite_db()
+    """初始化PostgreSQL数据库"""
+    logger.info(f"初始化PostgreSQL数据库，使用连接: {DATABASE_URL[:20]}...")
     
-    # 创建充值记录表
-    logger.info("正在创建充值记录表...")
-    create_recharge_tables()
-    logger.info("充值记录表创建完成")
-        
+    # 检查环境变量中是否设置了数据库连接URL
+    if not DATABASE_URL:
+        logger.error("未找到DATABASE_URL环境变量，无法连接到PostgreSQL数据库")
+        raise ValueError("未找到DATABASE_URL环境变量，请在环境变量中设置Railway PostgreSQL数据库的连接URL")
+    
+    # 初始化PostgreSQL数据库
+    init_postgres_db()
+    
 def init_sqlite_db():
     """初始化SQLite数据库"""
     logger.info("使用SQLite数据库")
@@ -163,6 +162,9 @@ def init_sqlite_db():
 
 def init_postgres_db():
     """初始化PostgreSQL数据库"""
+    logger.info("使用PostgreSQL数据库")
+    
+    # 解析数据库连接URL
     url = urlparse(DATABASE_URL)
     dbname = url.path[1:]
     user = url.username
@@ -170,6 +172,7 @@ def init_postgres_db():
     host = url.hostname
     port = url.port
     
+    # 连接到PostgreSQL数据库
     conn = psycopg2.connect(
         dbname=dbname,
         user=user,
@@ -184,223 +187,131 @@ def init_postgres_db():
     c.execute("""
         CREATE TABLE IF NOT EXISTS orders (
             id SERIAL PRIMARY KEY,
-            account TEXT NOT NULL,
-            password TEXT NOT NULL,
-            package TEXT NOT NULL,
-            remark TEXT,
-            status TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            accepted_at TEXT,
-            completed_at TEXT,
-            accepted_by TEXT,
-            accepted_by_username TEXT,
-            accepted_by_first_name TEXT,
-            notified INTEGER DEFAULT 0,
-            web_user_id TEXT,
             user_id INTEGER,
-            refunded INTEGER DEFAULT 0
+            qr_code_path TEXT,
+            status TEXT NOT NULL,
+            created_at TIMESTAMP NOT NULL,
+            paid_at TIMESTAMP,
+            confirmed_at TIMESTAMP,
+            handled_by INTEGER,
+            handled_by_username TEXT,
+            notified INTEGER DEFAULT 0,
+            feedback TEXT,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
         )
     """)
     
-    # 用户表
+    # 用户表（超级管理员）
     c.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             is_admin INTEGER DEFAULT 0,
-            created_at TEXT NOT NULL,
-            last_login TEXT,
-            balance REAL DEFAULT 0,
-            credit_limit REAL DEFAULT 0
+            created_at TIMESTAMP NOT NULL,
+            last_login TIMESTAMP
         )
     """)
     
     # 卖家表
     c.execute("""
         CREATE TABLE IF NOT EXISTS sellers (
-            telegram_id BIGINT PRIMARY KEY,
+            telegram_id INTEGER PRIMARY KEY,
             username TEXT,
             first_name TEXT,
-            is_active BOOLEAN DEFAULT TRUE,
-            added_at TEXT NOT NULL,
+            is_active INTEGER DEFAULT 1,
+            added_at TIMESTAMP NOT NULL,
             added_by TEXT,
             is_admin BOOLEAN DEFAULT FALSE
         )
     """)
     
-    # 检查是否需要添加新列
-    try:
-        c.execute("SELECT user_id FROM orders LIMIT 1")
-    except psycopg2.errors.UndefinedColumn:
-        c.execute("ALTER TABLE orders ADD COLUMN user_id INTEGER")
-    
-    # 检查是否需要添加refunded列（是否已退款）
-    try:
-        c.execute("SELECT refunded FROM orders LIMIT 1")
-    except psycopg2.errors.UndefinedColumn:
-        logger.info("为orders表添加refunded列")
-        c.execute("ALTER TABLE orders ADD COLUMN refunded INTEGER DEFAULT 0")
-    
-    # 检查是否需要添加balance列（用户余额）
-    try:
-        c.execute("SELECT balance FROM users LIMIT 1")
-    except psycopg2.errors.UndefinedColumn:
-        logger.info("为users表添加balance列")
-        c.execute("ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0")
-    
-    # 检查是否需要添加credit_limit列（透支额度）
-    try:
-        c.execute("SELECT credit_limit FROM users LIMIT 1")
-    except psycopg2.errors.UndefinedColumn:
-        logger.info("为users表添加credit_limit列")
-        c.execute("ALTER TABLE users ADD COLUMN credit_limit REAL DEFAULT 0")
-    
-    # 检查是否需要添加accepted_by_username列（Telegram用户名）
-    try:
-        c.execute("SELECT accepted_by_username FROM orders LIMIT 1")
-    except psycopg2.errors.UndefinedColumn:
-        logger.info("为orders表添加accepted_by_username列")
-        c.execute("ALTER TABLE orders ADD COLUMN accepted_by_username TEXT")
-    
-    # 检查是否需要添加accepted_by_first_name列（Telegram昵称）
-    try:
-        c.execute("SELECT accepted_by_first_name FROM orders LIMIT 1")
-    except psycopg2.errors.UndefinedColumn:
-        logger.info("为orders表添加accepted_by_first_name列")
-        c.execute("ALTER TABLE orders ADD COLUMN accepted_by_first_name TEXT")
-    
-    # 检查是否需要添加details列（充值详情，如口令）
-    try:
-        c.execute("SELECT details FROM recharge_requests LIMIT 1")
-    except psycopg2.errors.UndefinedColumn:
-        logger.info("为recharge_requests表添加details列")
-        c.execute("ALTER TABLE recharge_requests ADD COLUMN details TEXT")
-    except psycopg2.errors.UndefinedTable:
-        # Table might not exist yet
-        pass
-    
     # 创建超级管理员账号（如果不存在）
     admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
     c.execute("SELECT id FROM users WHERE username = %s", (ADMIN_USERNAME,))
     if not c.fetchone():
+        logger.info(f"创建默认管理员账号: {ADMIN_USERNAME}")
         c.execute("""
             INSERT INTO users (username, password_hash, is_admin, created_at) 
             VALUES (%s, %s, 1, %s)
-        """, (ADMIN_USERNAME, admin_hash, get_china_time()))
+        """, (ADMIN_USERNAME, admin_hash, datetime.now()))
     
+    # 关闭连接
     conn.close()
+    logger.info("PostgreSQL数据库初始化完成")
 
 # 数据库执行函数
 def execute_query(query, params=(), fetch=False, return_cursor=False):
-    """执行数据库查询并返回结果"""
-    logger.debug(f"执行查询: {query[:50]}... 参数: {params}")
-    if DATABASE_URL.startswith('postgres'):
-        return execute_postgres_query(query, params, fetch, return_cursor)
-    else:
-        return execute_sqlite_query(query, params, fetch, return_cursor)
-
-def execute_sqlite_query(query, params=(), fetch=False, return_cursor=False):
-    """执行SQLite查询并返回结果"""
+    """
+    执行SQL查询
+    
+    参数:
+    - query: SQL查询语句
+    - params: 查询参数
+    - fetch: 是否获取结果
+    - return_cursor: 是否返回游标（用于获取lastrowid）
+    
+    返回:
+    - 如果fetch=True，返回查询结果
+    - 如果return_cursor=True，返回(结果, 游标)
+    - 否则返回None
+    """
+    # 确保使用PostgreSQL格式的占位符
+    if '?' in query:
+        # 将SQLite风格的占位符 ? 替换为PostgreSQL风格的 %s
+        query = query.replace('?', '%s')
+    
     try:
-        # 使用绝对路径访问数据库
-        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        db_path = os.path.join(current_dir, "orders.db")
-        logger.debug(f"执行查询，使用数据库: {db_path}")
+        # 解析数据库连接URL
+        url = urlparse(DATABASE_URL)
+        dbname = url.path[1:]
+        user = url.username
+        password = url.password
+        host = url.hostname
+        port = url.port
         
-        conn = sqlite3.connect(db_path)
+        # 连接到PostgreSQL数据库
+        conn = psycopg2.connect(
+            dbname=dbname,
+            user=user,
+            password=password,
+            host=host,
+            port=port
+        )
+        conn.autocommit = True
         cursor = conn.cursor()
         
-        # 检查是否为INSERT语句，确保notified字段被正确设置
-        if "INSERT INTO orders" in query and "notified" not in query:
-            logger.warning("检测到INSERT订单但未包含notified字段，自动添加notified=0")
-            # 修改查询添加notified字段
-            if ")" in query and "VALUES" in query:
-                parts = query.split(")")
-                values_part = parts[1].strip()
-                if values_part.startswith("VALUES"):
-                    # 在字段列表末尾添加notified
-                    parts[0] = parts[0] + ", notified"
-                    # 在值列表末尾添加0
-                    values_start = values_part.find("(")
-                    if values_start >= 0:
-                        values_part = values_part[:values_start+1] + "?, " + values_part[values_start+1:]
-                        parts[1] = values_part
-                        query = ")".join(parts)
-                        params = params + (0,)
-        
+        # 执行查询
         cursor.execute(query, params)
         
-        if return_cursor:
-            conn.commit()
-            return cursor
-
+        # 获取结果
         result = None
         if fetch:
             result = cursor.fetchall()
-            logger.debug(f"查询返回 {len(result)} 条结果")
-        else:
-            logger.debug(f"查询影响 {cursor.rowcount} 行")
         
-        conn.commit()
-        conn.close()
-        return result
+        # 返回结果
+        if return_cursor:
+            return result, cursor
+        else:
+            cursor.close()
+            conn.close()
+            return result
     except Exception as e:
-        logger.error(f"SQLite查询执行失败: {str(e)}", exc_info=True)
+        logger.error(f"执行数据库查询时出错: {str(e)}", exc_info=True)
         raise
-
-def execute_postgres_query(query, params=(), fetch=False, return_cursor=False):
-    """执行PostgreSQL查询并返回结果"""
-    url = urlparse(DATABASE_URL)
-    dbname = url.path[1:]
-    user = url.username
-    password = url.password
-    host = url.hostname
-    port = url.port
-    
-    conn = psycopg2.connect(
-        dbname=dbname,
-        user=user,
-        password=password,
-        host=host,
-        port=port
-    )
-    cursor = conn.cursor()
-    
-    # PostgreSQL使用%s作为参数占位符，而不是SQLite的?
-    query = query.replace('?', '%s')
-    cursor.execute(query, params)
-    
-    if return_cursor:
-        conn.commit()
-        return cursor
-
-    result = None
-    if fetch:
-        result = cursor.fetchall()
-    
-    conn.commit()
-    conn.close()
-    return result
 
 # ===== 密码加密 =====
 def hash_password(password):
+    """计算密码的SHA-256哈希值"""
     return hashlib.sha256(password.encode()).hexdigest()
 
 # 获取未通知订单
 def get_unnotified_orders():
     """获取未通知的订单"""
-    orders = execute_query("""
-        SELECT id, account, password, package, created_at, web_user_id 
-        FROM orders 
-        WHERE notified = 0 AND status = ?
-    """, (STATUS['SUBMITTED'],), fetch=True)
-    
-    # 记录获取到的未通知订单
-    if orders:
-        logger.info(f"获取到 {len(orders)} 个未通知订单")
-    
-    return orders
+    return execute_query(
+        "SELECT id, status FROM orders WHERE notified = 0", 
+        fetch=True
+    )
 
 # 接单原子操作
 def accept_order_atomic(oid, user_id):
@@ -611,107 +522,174 @@ def accept_order_atomic(oid, user_id):
             return False, "Database error"
 
 # 获取订单详情
-def get_order_details(oid):
-    return execute_query("SELECT id, account, password, package, status, remark FROM orders WHERE id = ?", (oid,), fetch=True)
+def get_order_details(order_id):
+    """获取订单详情"""
+    try:
+        result = execute_query(
+            """
+            SELECT id, qr_code_path, status, created_at, paid_at, confirmed_at, 
+                   handled_by, handled_by_username, feedback
+            FROM orders 
+            WHERE id = %s
+            """,
+            (order_id,),
+            fetch=True
+        )
+        
+        if result and len(result) > 0:
+            return {
+                "id": result[0][0],
+                "qr_code_path": result[0][1],
+                "status": result[0][2],
+                "created_at": result[0][3],
+                "paid_at": result[0][4],
+                "confirmed_at": result[0][5],
+                "handled_by": result[0][6],
+                "handled_by_username": result[0][7],
+                "feedback": result[0][8]
+            }
+        else:
+            logger.warning(f"未找到订单ID: {order_id}")
+            return None
+    except Exception as e:
+        logger.error(f"获取订单详情失败: {str(e)}", exc_info=True)
+        return None
 
 # ===== 卖家管理 =====
 def get_all_sellers():
-    """获取所有卖家信息"""
-    if DATABASE_URL.startswith('postgres'):
-        # PostgreSQL需要显式处理BOOLEAN类型
-        return execute_query("""
-            SELECT telegram_id, username, first_name, is_active, 
-                   added_at, added_by, 
-                   COALESCE(is_admin, FALSE) as is_admin 
+    """获取所有卖家"""
+    try:
+        result = execute_query(
+            """
+            SELECT telegram_id, username, first_name, is_active, added_at, added_by, is_admin 
             FROM sellers 
-            ORDER BY added_at DESC
-        """, fetch=True)
-    else:
-        # SQLite版本
-        return execute_query("""
-            SELECT telegram_id, username, first_name, is_active, 
-                   added_at, added_by, 
-                   COALESCE(is_admin, 0) as is_admin 
-            FROM sellers 
-            ORDER BY added_at DESC
-        """, fetch=True)
+            ORDER BY is_active DESC, added_at DESC
+            """,
+            fetch=True
+        )
+        
+        sellers = []
+        if result:
+            for row in result:
+                sellers.append({
+                    "telegram_id": row[0],
+                    "username": row[1],
+                    "first_name": row[2],
+                    "is_active": bool(row[3]),
+                    "added_at": row[4],
+                    "added_by": row[5],
+                    "is_admin": bool(row[6])
+                })
+        
+        return sellers
+    except Exception as e:
+        logger.error(f"获取所有卖家失败: {str(e)}", exc_info=True)
+        return []
 
 def get_active_seller_ids():
-    """获取所有活跃的卖家Telegram ID"""
-    if DATABASE_URL.startswith('postgres'):
-        sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = TRUE", fetch=True)
-    else:
-        sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = 1", fetch=True)
-    return [seller[0] for seller in sellers]
+    """获取活跃的卖家ID列表"""
+    try:
+        result = execute_query(
+            "SELECT telegram_id FROM sellers WHERE is_active = 1",
+            fetch=True
+        )
+        
+        if result:
+            return [row[0] for row in result]
+        else:
+            return []
+    except Exception as e:
+        logger.error(f"获取活跃卖家ID列表失败: {str(e)}", exc_info=True)
+        return []
 
 def add_seller(telegram_id, username, first_name, added_by):
-    """添加新卖家"""
-    timestamp = get_china_time()
-    execute_query(
-        "INSERT INTO sellers (telegram_id, username, first_name, added_at, added_by) VALUES (?, ?, ?, ?, ?)",
-        (telegram_id, username, first_name, timestamp, added_by)
-    )
-
-def toggle_seller_status(telegram_id):
-    """切换卖家活跃状态"""
-    execute_query("UPDATE sellers SET is_active = NOT is_active WHERE telegram_id = ?", (telegram_id,))
+    """添加卖家"""
+    try:
+        timestamp = get_china_time()
+        
+        execute_query(
+            """
+            INSERT INTO sellers (telegram_id, username, first_name, is_active, added_at, added_by) 
+            VALUES (%s, %s, %s, 1, %s, %s)
+            ON CONFLICT (telegram_id) DO UPDATE 
+            SET username = %s, first_name = %s, is_active = 1, added_at = %s, added_by = %s
+            """,
+            (telegram_id, username, first_name, timestamp, added_by,
+             username, first_name, timestamp, added_by)
+        )
+        
+        logger.info(f"添加/更新了卖家: {telegram_id} ({username})")
+        return True
+    except Exception as e:
+        logger.error(f"添加卖家失败: {str(e)}", exc_info=True)
+        return False
 
 def remove_seller(telegram_id):
     """移除卖家"""
-    return execute_query("DELETE FROM sellers WHERE telegram_id=?", (telegram_id,))
-
-def toggle_seller_admin(telegram_id):
-    """切换卖家的管理员状态"""
     try:
-        # 先获取当前状态
-        if DATABASE_URL.startswith('postgres'):
-            current = execute_query(
-                "SELECT COALESCE(is_admin, FALSE) FROM sellers WHERE telegram_id = ?", 
-                (telegram_id,), 
-                fetch=True
-            )
-        else:
-            current = execute_query(
-                "SELECT COALESCE(is_admin, 0) FROM sellers WHERE telegram_id = ?", 
-                (telegram_id,), 
-                fetch=True
-            )
-            
-        if not current:
-            return False
-            
-        new_status = not bool(current[0][0])
+        execute_query(
+            "DELETE FROM sellers WHERE telegram_id = %s",
+            (telegram_id,)
+        )
         
-        if DATABASE_URL.startswith('postgres'):
-            execute_query(
-                "UPDATE sellers SET is_admin = ? WHERE telegram_id = ?",
-                (new_status, telegram_id)
-            )
-        else:
-            execute_query(
-                "UPDATE sellers SET is_admin = ? WHERE telegram_id = ?",
-                (1 if new_status else 0, telegram_id)
-            )
+        logger.info(f"移除了卖家: {telegram_id}")
         return True
     except Exception as e:
-        logger.error(f"切换卖家管理员状态失败: {e}")
+        logger.error(f"移除卖家失败: {str(e)}", exc_info=True)
+        return False
+
+def toggle_seller_status(telegram_id):
+    """切换卖家状态（启用/禁用）"""
+    try:
+        execute_query(
+            """
+            UPDATE sellers 
+            SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END 
+            WHERE telegram_id = %s
+            """,
+            (telegram_id,)
+        )
+        
+        logger.info(f"切换了卖家状态: {telegram_id}")
+        return True
+    except Exception as e:
+        logger.error(f"切换卖家状态失败: {str(e)}", exc_info=True)
+        return False
+
+def toggle_seller_admin(telegram_id):
+    """切换卖家管理员状态"""
+    try:
+        execute_query(
+            """
+            UPDATE sellers 
+            SET is_admin = NOT is_admin 
+            WHERE telegram_id = %s
+            """,
+            (telegram_id,)
+        )
+        
+        logger.info(f"切换了卖家管理员状态: {telegram_id}")
+        return True
+    except Exception as e:
+        logger.error(f"切换卖家管理员状态失败: {str(e)}", exc_info=True)
         return False
 
 def is_admin_seller(telegram_id):
-    """检查卖家是否是管理员"""
-    if DATABASE_URL.startswith('postgres'):
+    """检查卖家是否为管理员"""
+    try:
         result = execute_query(
-            "SELECT COALESCE(is_admin, FALSE) FROM sellers WHERE telegram_id = ? AND is_active = TRUE",
+            "SELECT is_admin FROM sellers WHERE telegram_id = %s",
             (telegram_id,),
             fetch=True
         )
-    else:
-        result = execute_query(
-            "SELECT COALESCE(is_admin, 0) FROM sellers WHERE telegram_id = ? AND is_active = 1",
-            (telegram_id,),
-            fetch=True
-        )
-    return bool(result and result[0][0])
+        
+        if result and len(result) > 0:
+            return bool(result[0][0])
+        else:
+            return False
+    except Exception as e:
+        logger.error(f"检查卖家管理员状态失败: {str(e)}", exc_info=True)
+        return False
 
 # ===== 余额系统相关函数 =====
 def get_user_balance(user_id):
@@ -1164,4 +1142,225 @@ def reject_recharge_request(request_id, admin_id):
         return True, "已拒绝充值请求"
     except Exception as e:
         logger.error(f"拒绝充值请求失败: {str(e)}", exc_info=True)
-        return False, f"拒绝充值请求失败: {str(e)}" 
+        return False, f"拒绝充值请求失败: {str(e)}"
+
+def set_order_notified(order_id):
+    """将订单标记为已通知"""
+    execute_query(
+        "UPDATE orders SET notified = 1 WHERE id = %s",
+        (order_id,)
+    )
+
+def create_order(qr_code_path):
+    """创建订单"""
+    try:
+        timestamp = get_china_time()
+        
+        # 创建订单
+        result, cursor = execute_query(
+            "INSERT INTO orders (qr_code_path, status, created_at) VALUES (%s, %s, %s) RETURNING id",
+            (qr_code_path, STATUS['SUBMITTED'], timestamp),
+            fetch=True,
+            return_cursor=True
+        )
+        
+        order_id = result[0][0]
+        logger.info(f"创建了新订单，ID: {order_id}")
+        
+        return order_id
+    except Exception as e:
+        logger.error(f"创建订单失败: {str(e)}", exc_info=True)
+        raise
+
+def update_order_status(order_id, status, handler_id=None, handler_username=None, feedback=None):
+    """更新订单状态"""
+    try:
+        timestamp = get_china_time()
+        params = []
+        
+        # 根据状态设置对应的时间戳
+        if status == STATUS['PAID']:
+            query = """
+                UPDATE orders 
+                SET status = %s, paid_at = %s, notified = 0
+                WHERE id = %s
+            """
+            params = [status, timestamp, order_id]
+        elif status == STATUS['CONFIRMED']:
+            query = """
+                UPDATE orders 
+                SET status = %s, confirmed_at = %s, notified = 0
+                WHERE id = %s
+            """
+            params = [status, timestamp, order_id]
+        elif status == STATUS['FAILED'] or status == STATUS['NEED_NEW_QR'] or status == STATUS['OTHER_ISSUE']:
+            if feedback:
+                query = """
+                    UPDATE orders 
+                    SET status = %s, notified = 0, feedback = %s
+                    WHERE id = %s
+                """
+                params = [status, feedback, order_id]
+            else:
+                query = """
+                    UPDATE orders 
+                    SET status = %s, notified = 0
+                    WHERE id = %s
+                """
+                params = [status, order_id]
+        else:
+            query = """
+                UPDATE orders 
+                SET status = %s, notified = 0
+                WHERE id = %s
+            """
+            params = [status, order_id]
+        
+        # 如果提供了处理人信息，则更新处理人
+        if handler_id and handler_username:
+            query = query.replace("WHERE id = %s", ", handled_by = %s, handled_by_username = %s WHERE id = %s")
+            params.insert(-1, handler_id)
+            params.insert(-1, handler_username)
+        
+        execute_query(query, params)
+        logger.info(f"订单 {order_id} 状态更新为 {status}")
+        
+        return True
+    except Exception as e:
+        logger.error(f"更新订单状态失败: {str(e)}", exc_info=True)
+        return False
+
+def get_active_seller_ids():
+    """获取活跃的卖家ID列表"""
+    try:
+        result = execute_query(
+            "SELECT telegram_id FROM sellers WHERE is_active = 1",
+            fetch=True
+        )
+        
+        if result:
+            return [row[0] for row in result]
+        else:
+            return []
+    except Exception as e:
+        logger.error(f"获取活跃卖家ID列表失败: {str(e)}", exc_info=True)
+        return []
+
+def add_seller(telegram_id, username, first_name, added_by):
+    """添加卖家"""
+    try:
+        timestamp = get_china_time()
+        
+        execute_query(
+            """
+            INSERT INTO sellers (telegram_id, username, first_name, is_active, added_at, added_by) 
+            VALUES (%s, %s, %s, 1, %s, %s)
+            ON CONFLICT (telegram_id) DO UPDATE 
+            SET username = %s, first_name = %s, is_active = 1, added_at = %s, added_by = %s
+            """,
+            (telegram_id, username, first_name, timestamp, added_by,
+             username, first_name, timestamp, added_by)
+        )
+        
+        logger.info(f"添加/更新了卖家: {telegram_id} ({username})")
+        return True
+    except Exception as e:
+        logger.error(f"添加卖家失败: {str(e)}", exc_info=True)
+        return False
+
+def remove_seller(telegram_id):
+    """移除卖家"""
+    try:
+        execute_query(
+            "DELETE FROM sellers WHERE telegram_id = %s",
+            (telegram_id,)
+        )
+        
+        logger.info(f"移除了卖家: {telegram_id}")
+        return True
+    except Exception as e:
+        logger.error(f"移除卖家失败: {str(e)}", exc_info=True)
+        return False
+
+def toggle_seller_status(telegram_id):
+    """切换卖家状态（启用/禁用）"""
+    try:
+        execute_query(
+            """
+            UPDATE sellers 
+            SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END 
+            WHERE telegram_id = %s
+            """,
+            (telegram_id,)
+        )
+        
+        logger.info(f"切换了卖家状态: {telegram_id}")
+        return True
+    except Exception as e:
+        logger.error(f"切换卖家状态失败: {str(e)}", exc_info=True)
+        return False
+
+def toggle_seller_admin(telegram_id):
+    """切换卖家管理员状态"""
+    try:
+        execute_query(
+            """
+            UPDATE sellers 
+            SET is_admin = NOT is_admin 
+            WHERE telegram_id = %s
+            """,
+            (telegram_id,)
+        )
+        
+        logger.info(f"切换了卖家管理员状态: {telegram_id}")
+        return True
+    except Exception as e:
+        logger.error(f"切换卖家管理员状态失败: {str(e)}", exc_info=True)
+        return False
+
+def is_admin_seller(telegram_id):
+    """检查卖家是否为管理员"""
+    try:
+        result = execute_query(
+            "SELECT is_admin FROM sellers WHERE telegram_id = %s",
+            (telegram_id,),
+            fetch=True
+        )
+        
+        if result and len(result) > 0:
+            return bool(result[0][0])
+        else:
+            return False
+    except Exception as e:
+        logger.error(f"检查卖家管理员状态失败: {str(e)}", exc_info=True)
+        return False
+
+def get_all_sellers():
+    """获取所有卖家"""
+    try:
+        result = execute_query(
+            """
+            SELECT telegram_id, username, first_name, is_active, added_at, added_by, is_admin 
+            FROM sellers 
+            ORDER BY is_active DESC, added_at DESC
+            """,
+            fetch=True
+        )
+        
+        sellers = []
+        if result:
+            for row in result:
+                sellers.append({
+                    "telegram_id": row[0],
+                    "username": row[1],
+                    "first_name": row[2],
+                    "is_active": bool(row[3]),
+                    "added_at": row[4],
+                    "added_by": row[5],
+                    "is_admin": bool(row[6])
+                })
+        
+        return sellers
+    except Exception as e:
+        logger.error(f"获取所有卖家失败: {str(e)}", exc_info=True)
+        return [] 
