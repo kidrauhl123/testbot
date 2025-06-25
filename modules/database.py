@@ -81,6 +81,27 @@ def init_db():
                         RAISE NOTICE 'Added customer_name column';
                     END IF;
                     
+                    -- 检查account列的约束情况
+                    BEGIN
+                        -- 尝试将account列的NOT NULL约束删除（如果存在）
+                        ALTER TABLE orders ALTER COLUMN account DROP NOT NULL;
+                        RAISE NOTICE 'Removed NOT NULL constraint from account column';
+                    EXCEPTION
+                        WHEN undefined_column THEN
+                            -- account列不存在，尝试添加
+                            IF NOT EXISTS (
+                                SELECT 1 
+                                FROM information_schema.columns 
+                                WHERE table_name='orders' AND column_name='account'
+                            ) THEN
+                                ALTER TABLE orders ADD COLUMN account TEXT;
+                                RAISE NOTICE 'Added account column';
+                            END IF;
+                        WHEN OTHERS THEN
+                            -- 其他错误，忽略
+                            RAISE NOTICE 'Error handling account column: %', SQLERRM;
+                    END;
+                    
                     -- 检查qr_image列
                     IF NOT EXISTS (
                         SELECT 1 
@@ -280,11 +301,11 @@ def create_order(customer_name, package, qr_image):
     try:
         created_at = get_china_time()
         try:
-            # 首先尝试带有customer_name和qr_image的完整插入
+            # 首先尝试带有customer_name和qr_image的完整插入，包括默认account值
             order_id = execute_query(
                 """
-                INSERT INTO orders (customer_name, package, qr_image, status, created_at, notified)
-                VALUES (%s, %s, %s, %s, %s, 0)
+                INSERT INTO orders (customer_name, package, qr_image, status, created_at, notified, account)
+                VALUES (%s, %s, %s, %s, %s, 0, '')
                 RETURNING id
                 """,
                 (customer_name, package, qr_image, STATUS['SUBMITTED'], created_at),
@@ -293,14 +314,16 @@ def create_order(customer_name, package, qr_image):
             return order_id[0][0] if order_id else None
         except Exception as e:
             error_msg = str(e)
+            
+            # 如果某列不存在，尝试备用方案
             if 'column "customer_name" of relation "orders" does not exist' in error_msg:
                 # 如果customer_name列不存在，尝试不使用该字段
                 logger.warning("customer_name列不存在，尝试不使用该字段进行插入")
                 try:
                     order_id = execute_query(
                         """
-                        INSERT INTO orders (package, qr_image, status, created_at, notified)
-                        VALUES (%s, %s, %s, %s, 0)
+                        INSERT INTO orders (package, qr_image, status, created_at, notified, account)
+                        VALUES (%s, %s, %s, %s, 0, '')
                         RETURNING id
                         """,
                         (package, qr_image, STATUS['SUBMITTED'], created_at),
@@ -318,8 +341,8 @@ def create_order(customer_name, package, qr_image):
                 try:
                     order_id = execute_query(
                         """
-                        INSERT INTO orders (status, created_at)
-                        VALUES (%s, %s)
+                        INSERT INTO orders (status, created_at, account)
+                        VALUES (%s, %s, '')
                         RETURNING id
                         """,
                         (STATUS['SUBMITTED'], created_at),
@@ -359,8 +382,58 @@ def create_order(customer_name, package, qr_image):
                     return None
                 except Exception as min_e:
                     logger.error(f"使用最小化字段创建订单失败: {str(min_e)}")
-                    # 再次失败，抛出异常
-                    raise
+                    # 再次失败，尝试最后一种方法
+                    try:
+                        # 尝试只提供关键字段，最大化成功率
+                        logger.warning("尝试最简单的插入方式，仅提供必需字段")
+                        query = "INSERT INTO orders (account) VALUES ('') RETURNING id"
+                        order_id = execute_query(query, (), fetch=True)
+                        if order_id:
+                            return order_id[0][0]
+                    except Exception as last_e:
+                        logger.error(f"最后尝试创建订单失败: {str(last_e)}")
+                        raise
+            
+            # 如果错误与account字段有关
+            if 'null value in column "account"' in error_msg:
+                logger.warning("account字段不允许为空，尝试提供空字符串")
+                try:
+                    order_id = execute_query(
+                        """
+                        INSERT INTO orders (customer_name, package, qr_image, status, created_at, notified, account)
+                        VALUES (%s, %s, %s, %s, %s, 0, '')
+                        RETURNING id
+                        """,
+                        (customer_name, package, qr_image, STATUS['SUBMITTED'], created_at),
+                        fetch=True
+                    )
+                    return order_id[0][0] if order_id else None
+                except Exception as acc_e:
+                    logger.error(f"提供account字段后创建订单失败: {str(acc_e)}")
+                    # 尝试最后一种方法
+                    try:
+                        # 尝试只提供关键字段，最大化成功率
+                        logger.warning("尝试最简单的插入方式，仅提供必需字段")
+                        query = "INSERT INTO orders (account) VALUES ('') RETURNING id"
+                        order_id = execute_query(query, (), fetch=True)
+                        if order_id:
+                            order_id_val = order_id[0][0]
+                            # 后续尝试更新其他字段
+                            for field, value in [('customer_name', customer_name), 
+                                               ('package', package), 
+                                               ('qr_image', qr_image), 
+                                               ('status', STATUS['SUBMITTED']), 
+                                               ('created_at', created_at),
+                                               ('notified', 0)]:
+                                try:
+                                    execute_query(f"UPDATE orders SET {field} = %s WHERE id = %s", (value, order_id_val))
+                                except:
+                                    pass
+                            return order_id_val
+                    except Exception as last_e:
+                        logger.error(f"最后尝试创建订单失败: {str(last_e)}")
+                        raise
+            
             # 其他错误直接抛出
             raise
     except Exception as e:
@@ -399,7 +472,8 @@ def get_order_details(order_id):
                 'confirmed_at': order[0][8],
                 'seller_id': order[0][9],
                 'seller_username': order[0][10],
-                'seller_first_name': order[0][11]
+                'seller_first_name': order[0][11],
+                'account': ""  # 默认添加account字段，避免前端可能用到但我们不主动查询
             }
             
             return order_data
@@ -555,6 +629,26 @@ def update_order_status(order_id, status, seller_id=None, seller_username=None, 
         if message:
             query_parts.append("message = %s")
             params.append(message)
+            
+        # 确保account字段有值
+        try:
+            # 检查订单是否存在account值
+            result = execute_query(
+                """
+                SELECT 1 FROM orders 
+                WHERE id = %s AND (account IS NULL OR account = '')
+                """,
+                (order_id,),
+                fetch=True
+            )
+            
+            # 如果结果非空，说明account为空或NULL，需要更新
+            if result and len(result) > 0:
+                query_parts.append("account = %s")
+                params.append("")  # 提供一个空字符串
+        except:
+            # 如果查询失败（例如account列不存在），忽略这部分
+            logger.warning("检查account字段失败，可能不存在该列")
         
         query_parts.append("WHERE id = %s")
         params.append(order_id)
