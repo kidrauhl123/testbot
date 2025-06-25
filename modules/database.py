@@ -65,27 +65,27 @@ def init_db():
             )
         """)
         
-                 # 卖家表
-         c.execute("""
-             CREATE TABLE IF NOT EXISTS sellers (
-                 telegram_id BIGINT PRIMARY KEY,
-                 username TEXT,
-                 first_name TEXT,
-                 is_active INTEGER DEFAULT 1,
-                 is_admin INTEGER DEFAULT 0,
-                 added_at TEXT NOT NULL,
-                 added_by TEXT
-             )
-         """)
-         
-         # 创建超级管理员账号，使用一个特定的数字ID
-         admin_id = 999999999  # 一个特定的ID号，保留给管理员
-         admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
-         c.execute("""
-             INSERT INTO sellers (telegram_id, username, first_name, is_active, is_admin, added_at, added_by)
-             VALUES (%s, %s, %s, 1, 1, %s, 'system')
-             ON CONFLICT (telegram_id) DO NOTHING
-         """, (admin_id, ADMIN_USERNAME, 'SuperAdmin', get_china_time()))
+        # 卖家表
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS sellers (
+                telegram_id BIGINT PRIMARY KEY,
+                username TEXT,
+                first_name TEXT,
+                is_active INTEGER DEFAULT 1,
+                is_admin INTEGER DEFAULT 0,
+                added_at TEXT NOT NULL,
+                added_by TEXT
+            )
+        """)
+        
+        # 创建超级管理员账号，使用一个特定的数字ID
+        admin_id = 999999999  # 一个特定的ID号，保留给管理员
+        admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
+        c.execute("""
+            INSERT INTO sellers (telegram_id, username, first_name, is_active, is_admin, added_at, added_by)
+            VALUES (%s, %s, %s, 1, 1, %s, 'system')
+            ON CONFLICT (telegram_id) DO NOTHING
+        """, (admin_id, ADMIN_USERNAME, 'SuperAdmin', get_china_time()))
         
         conn.close()
         logger.info("数据库初始化完成")
