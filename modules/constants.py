@@ -95,9 +95,8 @@ STATUS = {
     'ACCEPTED': 2,     # 已接单
     'COMPLETED': 3,    # 已完成
     'CANCELLED': 4,    # 已取消
-    'DISPUTING': 5,    # 质疑中
-    'FAILED': 6,       # 失败
-    'RECHARGED': 7,    # 已充值
+    'FAILED': 5,       # 失败
+    'RECHARGED': 6,    # 已充值
 }
 
 # 状态对应的中文文本
@@ -107,9 +106,8 @@ STATUS_TEXT_ZH = {
     2: '已接单',
     3: '已完成',
     4: '已取消',
-    5: '质疑中',
-    6: '失败',
-    7: '已充值',
+    5: '失败',
+    6: '已充值',
 }
 
 PLAN_OPTIONS = [('12', '一年个人会员')]

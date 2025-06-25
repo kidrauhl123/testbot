@@ -573,53 +573,7 @@ def register_routes(app, notification_queue):
         
         return jsonify({"success": True})
 
-    @app.route('/orders/dispute/<int:oid>', methods=['POST'])
-    @login_required
-    def dispute_order(oid):
-        """质疑已完成的订单（用户发现充值未成功）"""
-        user_id = session.get('user_id')
-        is_admin = session.get('is_admin', 0)
-        
-        # 获取订单信息
-        order = execute_query("""
-            SELECT id, user_id, status, package, accepted_by, account, password
-            FROM orders 
-            WHERE id=?
-        """, (oid,), fetch=True)
-        
-        if not order:
-            return jsonify({"error": "订单不存在"}), 404
-            
-        order_id, order_user_id, status, package, accepted_by, account, password = order[0]
-        
-        # 验证权限：只能质疑自己的订单，或者管理员可以质疑任何人的订单
-        if user_id != order_user_id and not is_admin:
-            return jsonify({"error": "权限不足"}), 403
-            
-        # 只能质疑"已完成"状态的订单
-        if status != STATUS['COMPLETED']:
-            return jsonify({"error": "只能质疑已完成的订单"}), 400
-            
-        # 更新订单状态为正在质疑
-        execute_query("UPDATE orders SET status=? WHERE id=?", 
-                      (STATUS['DISPUTING'], oid))
-        
-        logger.info(f"订单已被质疑: ID={oid}, 用户ID={user_id}")
-        
-        # 如果有接单人，尝试通过Telegram通知接单人
-        if accepted_by:
-            logger.info(f"订单 {oid} 有接单人 {accepted_by}，准备发送TG通知。")
-            notification_queue.put({
-                'type': 'dispute',
-                'order_id': oid,
-                'seller_id': accepted_by,
-                'account': account,
-                'password': password,
-                'package': package
-            })
-            logger.info(f"已将订单 {oid} 的质疑通知任务放入队列。")
-        
-        return jsonify({"success": True})
+
 
     @app.route('/orders/urge/<int:oid>', methods=['POST'])
     @login_required
@@ -2089,8 +2043,8 @@ def register_routes(app, notification_queue):
             logger.info(f"订单 {oid} 已是完成状态，无需再次确认")
             return jsonify({"success": True, "message": "订单已是完成状态"})
         
-        # 只有已提交、已接单、正在质疑状态的订单可以确认收货
-        if status not in [STATUS['SUBMITTED'], STATUS['ACCEPTED'], STATUS['DISPUTING']]:
+        # 只有已提交、已接单、已充值状态的订单可以确认收货
+        if status not in [STATUS['SUBMITTED'], STATUS['ACCEPTED'], STATUS['RECHARGED']]:
             logger.warning(f"订单 {oid} 状态为 {status}，不允许确认收货")
             return jsonify({"error": "订单状态不允许确认收货"}), 400
 

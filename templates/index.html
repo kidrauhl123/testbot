@@ -786,20 +786,7 @@
       background: rgba(231,76,60,0.2);
     }
     
-    .dispute-btn {
-      background: rgba(241,196,15,0.1);
-      color: #f39c12;
-      border: none;
-      padding: 4px 8px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-      margin-left: 5px;
-    }
-    
-    .dispute-btn:hover {
-      background: rgba(241,196,15,0.2);
-    }
+
     
     .urge-btn {
       background: rgba(52,152,219,0.1);
@@ -1920,7 +1907,6 @@
           <td>${o.accepted_at || '-'}</td>
           <td>${o.completed_at || '-'}</td>
           <td>
-            ${o.status === 'completed' ? `<button class="dispute-btn" onclick="disputeOrder(${o.id})">质疑</button>` : ''}
             <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
             ${o.status === 'accepted' && canRequestUpdate(o) ? `<button class="urge-btn" onclick="urgeOrder(${o.id})">催单</button>` : ''}
             ${(o.status === 'accepted' || o.status === 'submitted') ? `<button class="confirm-btn" onclick="confirmOrder(${o.id})">确认</button>` : ''}
@@ -2007,26 +1993,7 @@
     return timeDiff > 1200000;
   }
 
-  // 质疑订单（当订单显示充值成功但实际未成功时）
-  async function disputeOrder(orderId) {
-    if (!confirm('您确定要质疑此订单吗？如果订单显示充值成功但实际未成功，请点击确定。')) return;
-    
-    try {
-      const resp = await fetch(`/orders/dispute/${orderId}`, { method: 'POST' });
-      const result = await resp.json();
-      
-      if (result.success) {
-        showCustomAlert('质疑已提交，订单状态已更新，卖家将收到通知处理此问题', 'warning');
-        // 重新加载订单列表
-        await loadOrders();
-      } else {
-        alert(result.error || '质疑提交失败，请重试');
-      }
-    } catch (e) {
-      console.error('质疑订单失败', e);
-      alert('质疑提交失败，请重试');
-    }
-  }
+
 
   // 催单（当订单接单超过20分钟未完成时）
   async function urgeOrder(orderId) {
