@@ -2010,6 +2010,28 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_reply_markup(reply_markup=reply_markup)
         await query.answer("Order marked as completed.", show_alert=True)
+        
+        # 将充值请求状态更新为"已充值"
+        try:
+            # 根据订单ID获取充值请求ID
+            recharge_id = execute_query("""
+                SELECT id FROM recharge_requests 
+                WHERE reference_order_id = ? AND status = 'pending'
+            """, (oid,), fetch=True)
+            
+            if recharge_id:
+                request_id = recharge_id[0][0]
+                # 更新充值请求状态为"已充值"
+                now = get_china_time()
+                execute_query("""
+                    UPDATE recharge_requests
+                    SET status = 'recharged', processed_at = ?
+                    WHERE id = ?
+                """, (now, request_id))
+                logger.info(f"TG完成订单 {oid} 后，将充值请求 {request_id} 状态更新为已充值")
+        except Exception as e:
+            logger.error(f"更新充值请求状态失败: {str(e)}", exc_info=True)
+            
         return
     elif data.startswith("fail_"):
         oid = int(data.split('_')[1])

@@ -297,6 +297,11 @@
       color: white;
     }
     
+    .status-recharged {
+      background-color: #3498db;
+      color: white;
+    }
+    
     .status-approved {
       background-color: #2ecc71;
       color: white;
@@ -468,8 +473,10 @@
                 <td>
                   {% if record[2] == 'pending' %}
                     <span class="status-badge status-pending">待审核</span>
+                  {% elif record[2] == 'recharged' %}
+                    <span class="status-badge status-recharged">已充值，待确认</span>
                   {% elif record[2] == 'approved' %}
-                    <span class="status-badge status-approved">已通过</span>
+                    <span class="status-badge status-approved">已确认</span>
                   {% elif record[2] == 'rejected' %}
                     <span class="status-badge status-rejected">已拒绝</span>
                   {% endif %}

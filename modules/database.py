@@ -1149,6 +1149,7 @@ def create_recharge_tables():
                         created_at TEXT NOT NULL,
                         processed_at TEXT,
                         processed_by TEXT,
+                        reference_order_id INTEGER,
                         FOREIGN KEY (user_id) REFERENCES users (id)
                     )
                 """)
@@ -1200,6 +1201,7 @@ def create_recharge_tables():
                         created_at TEXT NOT NULL,
                         processed_at TEXT,
                         processed_by TEXT,
+                        reference_order_id INTEGER,
                         FOREIGN KEY (user_id) REFERENCES users (id)
                     )
                 """)
@@ -1224,6 +1226,17 @@ def create_recharge_tables():
                 """)
                 conn.commit()
                 logger.info("已创建余额明细表(SQLite)")
+                
+            # 检查recharge_requests表中是否存在reference_order_id字段
+            cursor.execute("PRAGMA table_info(recharge_requests)")
+            columns = cursor.fetchall()
+            column_names = [column[1] for column in columns]
+            
+            if 'reference_order_id' not in column_names:
+                # 添加reference_order_id字段
+                cursor.execute("ALTER TABLE recharge_requests ADD COLUMN reference_order_id INTEGER")
+                conn.commit()
+                logger.info("已向充值记录表添加reference_order_id字段")
             
             conn.close()
         
@@ -1232,7 +1245,7 @@ def create_recharge_tables():
         logger.error(f"创建充值记录表或余额明细表失败: {str(e)}", exc_info=True)
         return False
 
-def create_recharge_request(user_id, amount, payment_method, proof_image, details=None):
+def create_recharge_request(user_id, amount, payment_method, proof_image, details=None, reference_order_id=None):
     """创建充值请求"""
     try:
         # 获取当前时间
@@ -1242,19 +1255,19 @@ def create_recharge_request(user_id, amount, payment_method, proof_image, detail
         if DATABASE_URL.startswith('postgres'):
             # PostgreSQL需要使用RETURNING子句获取新ID
             result = execute_query("""
-                INSERT INTO recharge_requests (user_id, amount, status, payment_method, proof_image, details, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO recharge_requests (user_id, amount, status, payment_method, proof_image, details, created_at, reference_order_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-            """, (user_id, amount, 'pending', payment_method, proof_image, details, now), fetch=True)
+            """, (user_id, amount, 'pending', payment_method, proof_image, details, now, reference_order_id), fetch=True)
             request_id = result[0][0]
         else:
             # SQLite可以直接获取lastrowid
             conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO recharge_requests (user_id, amount, status, payment_method, proof_image, details, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (user_id, amount, 'pending', payment_method, proof_image, details, now))
+                INSERT INTO recharge_requests (user_id, amount, status, payment_method, proof_image, details, created_at, reference_order_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (user_id, amount, 'pending', payment_method, proof_image, details, now, reference_order_id))
             request_id = cursor.lastrowid
             conn.commit()
             conn.close()
@@ -1292,20 +1305,20 @@ def get_pending_recharge_requests():
     try:
         if DATABASE_URL.startswith('postgres'):
             requests = execute_query("""
-                SELECT r.id, r.user_id, r.amount, r.payment_method, r.proof_image, r.created_at, u.username, r.details
+                SELECT r.id, r.user_id, r.amount, r.payment_method, r.proof_image, r.created_at, u.username, r.details, r.status
                 FROM recharge_requests r
                 JOIN users u ON r.user_id = u.id
-                WHERE r.status = %s
+                WHERE r.status IN (%s, %s)
                 ORDER BY r.created_at ASC
-            """, ('pending',), fetch=True)
+            """, ('pending', 'recharged'), fetch=True)
         else:
             requests = execute_query("""
-                SELECT r.id, r.user_id, r.amount, r.payment_method, r.proof_image, r.created_at, u.username, r.details
+                SELECT r.id, r.user_id, r.amount, r.payment_method, r.proof_image, r.created_at, u.username, r.details, r.status
                 FROM recharge_requests r
                 JOIN users u ON r.user_id = u.id
-                WHERE r.status = ?
+                WHERE r.status IN (?, ?)
                 ORDER BY r.created_at ASC
-            """, ('pending',), fetch=True)
+            """, ('pending', 'recharged'), fetch=True)
         
         return requests
     except Exception as e:
@@ -1318,19 +1331,22 @@ def approve_recharge_request(request_id, admin_id):
         # 获取充值请求详情
         if DATABASE_URL.startswith('postgres'):
             request = execute_query("""
-                SELECT user_id, amount
+                SELECT user_id, amount, status
                 FROM recharge_requests
-                WHERE id = %s AND status = %s
-            """, (request_id, 'pending'), fetch=True)
+                WHERE id = %s AND (status = %s OR status = %s)
+            """, (request_id, 'pending', 'recharged'), fetch=True)
         else:
             request = execute_query("""
-                SELECT user_id, amount
+                SELECT user_id, amount, status
                 FROM recharge_requests
-                WHERE id = ? AND status = ?
-            """, (request_id, 'pending'), fetch=True)
+                WHERE id = ? AND (status = ? OR status = ?)
+            """, (request_id, 'pending', 'recharged'), fetch=True)
         
         if not request:
             return False, "充值请求不存在或已处理"
+            
+        # 状态已经是'recharged'说明TG已经点击了完成，可以直接确认充值
+        status_already_recharged = request[0][2] == 'recharged'
             
         user_id, amount = request[0]
         

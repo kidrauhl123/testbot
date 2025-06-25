@@ -357,7 +357,11 @@
                       class="btn btn-success btn-sm" 
                       onclick="handleRecharge({{ request[0] }}, 'approve')"
                     >
-                      批准
+                      {% if request[8] == 'recharged' %}
+                        确认
+                      {% else %}
+                        批准
+                      {% endif %}
                     </button>
                     <button 
                       class="btn btn-danger btn-sm" 
