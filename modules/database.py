@@ -421,7 +421,18 @@ def execute_postgres_query(query, params=(), fetch=False, return_cursor=False):
     
     # PostgreSQL使用%s作为参数占位符，而不是SQLite的?
     query = query.replace('?', '%s')
-    cursor.execute(query, params)
+    
+    # 确保整数类型匹配 - 处理status字段类型不匹配的问题
+    # 创建新的参数列表，对可能需要类型转换的参数进行处理
+    processed_params = []
+    for param in params:
+        # 如果是整数类型的状态值，转为字符串
+        if isinstance(param, int) and param in range(10):  # 假设状态值是0-9之间的整数
+            processed_params.append(str(param))
+        else:
+            processed_params.append(param)
+    
+    cursor.execute(query, processed_params)
     
     if return_cursor:
         conn.commit()
