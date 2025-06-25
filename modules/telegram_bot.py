@@ -1252,15 +1252,35 @@ async def send_notification_from_queue(data):
 # ===== 推送通知函数 =====
 def set_order_notified_atomic(oid):
     """原子性地将订单notified字段设为1，只有notified=0时才更新，防止重复推送"""
-    current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    db_path = os.path.join(current_dir, "orders.db")
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute("UPDATE orders SET notified=1 WHERE id=? AND notified=0", (oid,))
-    affected = cursor.rowcount
-    conn.commit()
-    conn.close()
-    return affected > 0
+    try:
+        from modules.database import DATABASE_URL, execute_query
+        
+        # 根据数据库类型选择不同的查询方式
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL版本
+            from modules.database import get_postgres_connection
+            conn = get_postgres_connection()
+            cursor = conn.cursor()
+            cursor.execute("UPDATE orders SET notified=1 WHERE id=%s AND notified=0", (oid,))
+            affected = cursor.rowcount
+            conn.commit()
+            conn.close()
+        else:
+            # SQLite版本
+            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(current_dir, "orders.db")
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute("UPDATE orders SET notified=1 WHERE id=? AND notified=0", (oid,))
+            affected = cursor.rowcount
+            conn.commit()
+            conn.close()
+        
+        logger.info(f"原子性更新订单 #{oid} 通知状态: 影响行数={affected}")
+        return affected > 0
+    except Exception as e:
+        logger.error(f"原子性更新订单 #{oid} 通知状态时出错: {str(e)}", exc_info=True)
+        return False
 
 async def send_new_order_notification(data):
     """发送新订单通知到所有卖家"""
@@ -1269,10 +1289,23 @@ async def send_new_order_notification(data):
     try:
         # 获取新订单详情
         oid = data.get('order_id')
-        # 推送前先原子性标记
-        if not set_order_notified_atomic(oid):
-            logger.info(f"订单 #{oid} 已经被其他进程推送过，跳过")
-            return
+        # 先检查订单是否已被通知过，但不立即标记
+        try:
+            from modules.database import DATABASE_URL, execute_query
+            
+            # 根据数据库类型执行查询
+            if DATABASE_URL.startswith('postgres'):
+                result = execute_query("SELECT notified FROM orders WHERE id=%s", (oid,), fetch=True)
+            else:
+                result = execute_query("SELECT notified FROM orders WHERE id=?", (oid,), fetch=True)
+                
+            if result and result[0][0] == 1:
+                logger.info(f"订单 #{oid} 已经被其他进程推送过，跳过")
+                return
+        except Exception as e:
+            logger.error(f"检查订单 #{oid} 通知状态时出错: {str(e)}", exc_info=True)
+            # 如果检查失败，我们继续尝试发送通知，以免错过通知
+            
         account = data.get('account')
         password = data.get('password')
         package = data.get('package')
@@ -1335,10 +1368,12 @@ async def send_new_order_notification(data):
                 logger.error(f"向卖家 {seller_id} 发送订单 #{oid} 通知失败: {str(e)}", exc_info=True)
         
         if success_count > 0:
-            # 标记订单为已通知
+            # 标记订单为已通知，使用原子操作
             try:
-                execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
-                logger.info(f"订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家")
+                if set_order_notified_atomic(oid):
+                    logger.info(f"订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家并标记为已通知")
+                else:
+                    logger.warning(f"订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家，但标记已通知状态失败")
             except Exception as update_error:
                 logger.error(f"更新订单 #{oid} 通知状态时出错: {str(update_error)}", exc_info=True)
         else:
