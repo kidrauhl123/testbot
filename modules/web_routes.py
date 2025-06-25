@@ -88,7 +88,7 @@ def register_routes(app, notification_queue):
         
         if not qr_image_data:
             logger.warning("订单提交失败: 未上传二维码图片")
-            return jsonify({"success": False, "error": "请上传二维码图片"}), 400
+            return jsonify({"success": False, "message": "请上传二维码图片"}), 400
         
         try:
             # 解析base64图片数据
@@ -110,7 +110,7 @@ def register_routes(app, notification_queue):
                 image.save(image_path)
             except Exception as img_error:
                 logger.error(f"图片处理失败: {str(img_error)}", exc_info=True)
-                return jsonify({"success": False, "error": "上传的图片无效，请确保上传的是有效的二维码图片"}), 400
+                return jsonify({"success": False, "message": "上传的图片无效，请确保上传的是有效的二维码图片"}), 400
             
             # 创建订单
             order_id = create_order(
@@ -121,7 +121,7 @@ def register_routes(app, notification_queue):
             
             if not order_id:
                 logger.warning("订单创建失败")
-                return jsonify({"success": False, "error": "创建订单失败，请重试"}), 500
+                return jsonify({"success": False, "message": "创建订单失败，请重试"}), 500
             
             logger.info(f"订单提交成功: ID={order_id}, 套餐={package}")
             
@@ -166,7 +166,7 @@ def register_routes(app, notification_queue):
             
         except Exception as e:
             logger.error(f"创建订单时发生意外错误: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "error": "服务器内部错误，请联系管理员。"}), 500
+            return jsonify({"success": False, "message": "服务器内部错误，请联系管理员。"}), 500
 
     @app.route('/order/<int:order_id>', methods=['GET'])
     def order_status(order_id):
@@ -208,18 +208,18 @@ def register_routes(app, notification_queue):
         qr_image_data = request.form.get('qr_image_data', '')
         
         if not qr_image_data:
-            return jsonify({"success": False, "error": "请上传二维码图片"}), 400
+            return jsonify({"success": False, "message": "请上传二维码图片"}), 400
         
         try:
             # 获取订单详情
             order = get_order_details(order_id)
             
             if not order:
-                return jsonify({"success": False, "error": "订单不存在"}), 404
+                return jsonify({"success": False, "message": "订单不存在"}), 404
             
             # 确保订单状态正确
             if order['status'] != STATUS['NEED_NEW_QR']:
-                return jsonify({"success": False, "error": "此订单当前不需要更新二维码"}), 400
+                return jsonify({"success": False, "message": "此订单当前不需要更新二维码"}), 400
             
             # 解析base64图片数据
             image_data = re.sub(r'^data:image/.+;base64,', '', qr_image_data)
@@ -240,7 +240,7 @@ def register_routes(app, notification_queue):
                 image.save(image_path)
             except Exception as img_error:
                 logger.error(f"图片处理失败: {str(img_error)}", exc_info=True)
-                return jsonify({"success": False, "error": "上传的图片无效，请确保上传的是有效的二维码图片"}), 400
+                return jsonify({"success": False, "message": "上传的图片无效，请确保上传的是有效的二维码图片"}), 400
             
             # 更新订单状态和二维码
             execute_query(
@@ -265,7 +265,7 @@ def register_routes(app, notification_queue):
             
         except Exception as e:
             logger.error(f"更新二维码时发生意外错误: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "error": "服务器内部错误，请联系管理员。"}), 500
+            return jsonify({"success": False, "message": "服务器内部错误，请联系管理员。"}), 500
 
     @app.route('/uploads/<filename>')
     def uploaded_file(filename):
@@ -523,7 +523,7 @@ def register_routes(app, notification_queue):
             })
         except Exception as e:
             logger.error(f"获取统计数据失败: {str(e)}", exc_info=True)
-            return jsonify({'error': '获取统计数据失败'}), 500
+            return jsonify({'message': '获取统计数据失败'}), 500
             
     @app.route('/admin/api/orders')
     @admin_required
@@ -565,4 +565,4 @@ def register_routes(app, notification_queue):
             return jsonify({'orders': orders})
         except Exception as e:
             logger.error(f"获取订单列表失败: {str(e)}", exc_info=True)
-            return jsonify({'error': '获取订单列表失败'}), 500 
+            return jsonify({'message': '获取订单列表失败'}), 500 

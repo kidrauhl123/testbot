@@ -510,7 +510,9 @@
             qrPreview.style.display = 'none';
             qrImageData.value = '';
           } else {
-            showAlert('订单创建失败: ' + data.message, 'error');
+            // 使用message字段，如果不存在则使用error字段，都不存在则显示通用错误
+            const errorMessage = data.message || data.error || '创建失败，请稍后再试';
+            showAlert('订单创建失败: ' + errorMessage, 'error');
           }
         })
         .catch(error => {
