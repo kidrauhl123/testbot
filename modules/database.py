@@ -102,6 +102,27 @@ def init_db():
                             RAISE NOTICE 'Error handling account column: %', SQLERRM;
                     END;
                     
+                    -- 检查password列的约束情况
+                    BEGIN
+                        -- 尝试将password列的NOT NULL约束删除（如果存在）
+                        ALTER TABLE orders ALTER COLUMN password DROP NOT NULL;
+                        RAISE NOTICE 'Removed NOT NULL constraint from password column';
+                    EXCEPTION
+                        WHEN undefined_column THEN
+                            -- password列不存在，尝试添加
+                            IF NOT EXISTS (
+                                SELECT 1 
+                                FROM information_schema.columns 
+                                WHERE table_name='orders' AND column_name='password'
+                            ) THEN
+                                ALTER TABLE orders ADD COLUMN password TEXT;
+                                RAISE NOTICE 'Added password column';
+                            END IF;
+                        WHEN OTHERS THEN
+                            -- 其他错误，忽略
+                            RAISE NOTICE 'Error handling password column: %', SQLERRM;
+                    END;
+                    
                     -- 检查qr_image列
                     IF NOT EXISTS (
                         SELECT 1 
@@ -301,11 +322,11 @@ def create_order(customer_name, package, qr_image):
     try:
         created_at = get_china_time()
         try:
-            # 首先尝试带有customer_name和qr_image的完整插入，包括默认account值
+            # 首先尝试带有customer_name和qr_image的完整插入，包括默认account和password值
             order_id = execute_query(
                 """
-                INSERT INTO orders (customer_name, package, qr_image, status, created_at, notified, account)
-                VALUES (%s, %s, %s, %s, %s, 0, '')
+                INSERT INTO orders (customer_name, package, qr_image, status, created_at, notified, account, password)
+                VALUES (%s, %s, %s, %s, %s, 0, '', '')
                 RETURNING id
                 """,
                 (customer_name, package, qr_image, STATUS['SUBMITTED'], created_at),
@@ -322,8 +343,8 @@ def create_order(customer_name, package, qr_image):
                 try:
                     order_id = execute_query(
                         """
-                        INSERT INTO orders (package, qr_image, status, created_at, notified, account)
-                        VALUES (%s, %s, %s, %s, 0, '')
+                        INSERT INTO orders (package, qr_image, status, created_at, notified, account, password)
+                        VALUES (%s, %s, %s, %s, 0, '', '')
                         RETURNING id
                         """,
                         (package, qr_image, STATUS['SUBMITTED'], created_at),
@@ -341,8 +362,8 @@ def create_order(customer_name, package, qr_image):
                 try:
                     order_id = execute_query(
                         """
-                        INSERT INTO orders (status, created_at, account)
-                        VALUES (%s, %s, '')
+                        INSERT INTO orders (status, created_at, account, password)
+                        VALUES (%s, %s, '', '')
                         RETURNING id
                         """,
                         (STATUS['SUBMITTED'], created_at),
@@ -400,8 +421,8 @@ def create_order(customer_name, package, qr_image):
                 try:
                     order_id = execute_query(
                         """
-                        INSERT INTO orders (customer_name, package, qr_image, status, created_at, notified, account)
-                        VALUES (%s, %s, %s, %s, %s, 0, '')
+                        INSERT INTO orders (customer_name, package, qr_image, status, created_at, notified, account, password)
+                        VALUES (%s, %s, %s, %s, %s, 0, '', '')
                         RETURNING id
                         """,
                         (customer_name, package, qr_image, STATUS['SUBMITTED'], created_at),
@@ -414,7 +435,47 @@ def create_order(customer_name, package, qr_image):
                     try:
                         # 尝试只提供关键字段，最大化成功率
                         logger.warning("尝试最简单的插入方式，仅提供必需字段")
-                        query = "INSERT INTO orders (account) VALUES ('') RETURNING id"
+                        query = "INSERT INTO orders (account, password) VALUES ('', '') RETURNING id"
+                        order_id = execute_query(query, (), fetch=True)
+                        if order_id:
+                            order_id_val = order_id[0][0]
+                            # 后续尝试更新其他字段
+                            for field, value in [('customer_name', customer_name), 
+                                               ('package', package), 
+                                               ('qr_image', qr_image), 
+                                               ('status', STATUS['SUBMITTED']), 
+                                               ('created_at', created_at),
+                                               ('notified', 0)]:
+                                try:
+                                    execute_query(f"UPDATE orders SET {field} = %s WHERE id = %s", (value, order_id_val))
+                                except:
+                                    pass
+                            return order_id_val
+                    except Exception as last_e:
+                        logger.error(f"最后尝试创建订单失败: {str(last_e)}")
+                        raise
+            
+            # 如果错误与password字段有关
+            if 'null value in column "password"' in error_msg:
+                logger.warning("password字段不允许为空，尝试提供空字符串")
+                try:
+                    order_id = execute_query(
+                        """
+                        INSERT INTO orders (customer_name, package, qr_image, status, created_at, notified, account, password)
+                        VALUES (%s, %s, %s, %s, %s, 0, '', '')
+                        RETURNING id
+                        """,
+                        (customer_name, package, qr_image, STATUS['SUBMITTED'], created_at),
+                        fetch=True
+                    )
+                    return order_id[0][0] if order_id else None
+                except Exception as pwd_e:
+                    logger.error(f"提供password字段后创建订单失败: {str(pwd_e)}")
+                    # 尝试最后一种方法
+                    try:
+                        # 尝试只提供关键字段，最大化成功率
+                        logger.warning("尝试最简单的插入方式，仅提供必需字段")
+                        query = "INSERT INTO orders (account, password) VALUES ('', '') RETURNING id"
                         order_id = execute_query(query, (), fetch=True)
                         if order_id:
                             order_id_val = order_id[0][0]
@@ -473,7 +534,8 @@ def get_order_details(order_id):
                 'seller_id': order[0][9],
                 'seller_username': order[0][10],
                 'seller_first_name': order[0][11],
-                'account': ""  # 默认添加account字段，避免前端可能用到但我们不主动查询
+                'account': "",  # 默认添加account字段，避免前端可能用到但我们不主动查询
+                'password': ""  # 默认添加password字段，避免前端可能用到但我们不主动查询
             }
             
             return order_data
@@ -649,6 +711,26 @@ def update_order_status(order_id, status, seller_id=None, seller_username=None, 
         except:
             # 如果查询失败（例如account列不存在），忽略这部分
             logger.warning("检查account字段失败，可能不存在该列")
+        
+        # 确保password字段有值
+        try:
+            # 检查订单是否存在password值
+            result = execute_query(
+                """
+                SELECT 1 FROM orders 
+                WHERE id = %s AND (password IS NULL OR password = '')
+                """,
+                (order_id,),
+                fetch=True
+            )
+            
+            # 如果结果非空，说明password为空或NULL，需要更新
+            if result and len(result) > 0:
+                query_parts.append("password = %s")
+                params.append("")  # 提供一个空字符串
+        except:
+            # 如果查询失败（例如password列不存在），忽略这部分
+            logger.warning("检查password字段失败，可能不存在该列")
         
         query_parts.append("WHERE id = %s")
         params.append(order_id)
