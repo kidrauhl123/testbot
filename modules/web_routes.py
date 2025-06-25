@@ -77,11 +77,11 @@ def register_routes(app, notification_queue):
                 plan_options=PLAN_OPTIONS
             )
 
-    @app.route('/', methods=['POST'])
+    @app.route('/submit_order', methods=['POST'])
     def create_new_order():
         """创建新订单"""
         customer_name = request.form.get('customer_name', '')
-        package = request.form.get('package', '30')
+        package = request.form.get('package', 'default')
         qr_image_data = request.form.get('qr_image_data', '')
         
         logger.info(f"收到订单提交请求: 客户={customer_name}, 套餐={package}")
@@ -272,6 +272,35 @@ def register_routes(app, notification_queue):
         """提供上传的文件访问"""
         uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'uploads')
         return send_from_directory(uploads_dir, filename)
+
+    @app.route('/check_order/<int:order_id>', methods=['GET'])
+    def check_order_api(order_id):
+        """API端点：返回订单状态信息"""
+        try:
+            order = get_order_details(order_id)
+            
+            if not order:
+                return jsonify({"success": False, "message": "订单不存在"}), 404
+            
+            # 格式化返回数据
+            order_data = {
+                "id": order['id'],
+                "customer_name": order['customer_name'] or "",
+                "package": order['package'],
+                "status": order['status'],
+                "message": order['message'],
+                "created_at": order['created_at'],
+                "paid_at": order['paid_at'] or "",
+                "confirmed_at": order['confirmed_at'] or ""
+            }
+            
+            return jsonify({
+                "success": True,
+                "order": order_data
+            })
+        except Exception as e:
+            logger.error(f"获取订单详情API失败: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "message": "获取订单详情失败"}), 500
 
     # ===== 管理员路由 =====
     def admin_required(f):

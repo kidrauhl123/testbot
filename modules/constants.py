@@ -61,7 +61,8 @@ def sync_env_sellers_to_db():
 
 # ===== YouTube充值系统价格 =====
 # 不同套餐的价格 (人民币)
-RECHARGE_PRICES = {'7': 20, '30': 50, '90': 120, '365': 400}
+DEFAULT_PACKAGE = 'default'
+RECHARGE_PRICES = {'7': 20, '30': 50, '90': 120, '365': 400, DEFAULT_PACKAGE: 50}
 
 # ===== 订单状态常量 =====
 STATUS = {

@@ -10,7 +10,7 @@
     * { box-sizing: border-box; }
     body { 
       font-family: 'Microsoft YaHei', Arial, sans-serif; 
-      background: linear-gradient(135deg, #FF0000 0%, #FF5E00 100%);
+      background-color: #f8f9fa;
       margin: 0; padding: 0; min-height: 100vh;
       color: #333;
       font-size: 14px;
@@ -25,7 +25,7 @@
       transform: translateX(-50%);
       padding: 15px 20px;
       border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
       z-index: 9999;
       font-size: 14px;
       display: flex;
@@ -36,18 +36,21 @@
     }
     
     .custom-alert.success {
-      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-      color: white;
+      background: #ffffff;
+      color: #28a745;
+      border-left: 4px solid #28a745;
     }
     
     .custom-alert.warning {
-      background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%);
-      color: #333;
+      background: #ffffff;
+      color: #ffc107;
+      border-left: 4px solid #ffc107;
     }
     
     .custom-alert.error {
-      background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
-      color: white;
+      background: #ffffff;
+      color: #dc3545;
+      border-left: 4px solid #dc3545;
     }
     
     .custom-alert-icon {
@@ -78,116 +81,84 @@
     }
     
     .navbar {
-      background: rgba(255,255,255,0.9);
-      padding: 12px 20px;
-      box-shadow: 0 1px 8px rgba(0,0,0,0.08);
+      background: #ffffff;
+      padding: 15px 20px;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.03);
       display: flex;
       justify-content: space-between;
       align-items: center;
       position: sticky;
       top: 0;
       z-index: 100;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border-bottom: 1px solid rgba(255,255,255,0.2);
     }
     .navbar-brand {
       font-size: 18px;
-      font-weight: bold;
-      color: #FF0000;
+      font-weight: 600;
+      color: #4a4a4a;
       display: flex;
       align-items: center;
     }
     .navbar-brand::before {
       content: '📺';
-      margin-right: 6px;
+      margin-right: 8px;
       font-size: 20px;
     }
     
     .btn {
       border: none;
-      padding: 10px 18px;
-      border-radius: 8px;
+      padding: 12px 20px;
+      border-radius: 6px;
       cursor: pointer;
       font-size: 14px;
-      transition: all 0.3s ease;
+      transition: all 0.2s ease;
       text-decoration: none;
       display: inline-block;
-      font-weight: 600;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      font-weight: 500;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.04);
     }
     .btn:hover { 
-      transform: translateY(-3px); 
-      box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+      transform: translateY(-2px); 
+      box-shadow: 0 4px 8px rgba(0,0,0,0.08);
     }
     .btn-primary { 
-      background: linear-gradient(135deg, #FF0000 0%, #FF5E00 100%); 
+      background: #4d7cfe; 
       color: white; 
     }
     .btn-danger { 
-      background: linear-gradient(135deg, #ff6b6b 0%, #ee5253 100%); 
+      background: #ff6b6b; 
       color: white; 
     }
     
     .main-container {
-      max-width: 1200px;
-      margin: 30px auto;
+      max-width: 900px;
+      margin: 40px auto;
       padding: 0 20px;
     }
     
-    .container {
-      display: flex;
-      gap: 40px;
-      align-items: flex-start;
-    }
-
-    .left {
-      width: 35%;
-      flex-shrink: 0;
-    }
-
-    .right {
-      width: 65%;
-    }
-    
     .card {
-      background: rgba(255,255,255,0.97);
-      border-radius: 15px;
-      padding: 25px;
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 30px;
       margin-bottom: 20px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-      border: 1px solid rgba(255,255,255,0.5);
-    }
-    
-    .card:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      border: 1px solid rgba(0,0,0,0.02);
     }
     
     .card-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      margin-bottom: 20px;
     }
     
     .card-header h2 {
       margin: 0;
       font-weight: 600;
       font-size: 18px;
-      background: linear-gradient(135deg, #FF0000 0%, #FF5E00 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      color: #4a4a4a;
     }
     
-    .card-header h2::before {
-      content: '📝';
-      margin-right: 8px;
-      font-size: 18px;
-    }
-
     .form-group {
       margin-bottom: 20px;
     }
@@ -195,81 +166,61 @@
     .form-label {
       display: block;
       margin-bottom: 8px;
-      font-weight: 600;
+      font-weight: 500;
       color: #555;
     }
     
     .form-control {
       width: 100%;
       padding: 12px 15px;
-      border-radius: 8px;
-      border: 1px solid rgba(0,0,0,0.1);
+      border-radius: 6px;
+      border: 1px solid #e1e5eb;
       background: white;
       font-size: 14px;
-      transition: all 0.3s ease;
+      transition: all 0.2s ease;
     }
     
     .form-control:focus {
       outline: none;
-      box-shadow: 0 0 0 3px rgba(255,94,0,0.2);
-      border-color: #FF5E00;
-    }
-    
-    .form-select {
-      width: 100%;
-      padding: 12px 15px;
-      border-radius: 8px;
-      border: 1px solid rgba(0,0,0,0.1);
-      background: white;
-      font-size: 14px;
-      transition: all 0.3s ease;
-      -webkit-appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23555' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 15px center;
-      background-size: 12px;
-      padding-right: 35px;
-    }
-    
-    .form-select:focus {
-      outline: none;
-      box-shadow: 0 0 0 3px rgba(255,94,0,0.2);
-      border-color: #FF5E00;
+      box-shadow: 0 0 0 3px rgba(77,124,254,0.2);
+      border-color: #4d7cfe;
     }
     
     /* 二维码上传区域 */
     .qr-upload-area {
       width: 100%;
-      height: 200px;
-      border: 2px dashed rgba(0,0,0,0.15);
-      border-radius: 10px;
+      height: 240px;
+      border: 2px dashed #e1e5eb;
+      border-radius: 8px;
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
       cursor: pointer;
-      transition: all 0.3s ease;
-      background: rgba(255,255,255,0.5);
+      transition: all 0.2s ease;
+      background: #fafbfc;
       position: relative;
       overflow: hidden;
+      margin-bottom: 20px;
     }
     
     .qr-upload-area:hover {
-      border-color: #FF5E00;
-      background: rgba(255,94,0,0.05);
+      border-color: #4d7cfe;
+      background: rgba(77,124,254,0.02);
     }
     
     .qr-upload-icon {
       font-size: 40px;
-      color: rgba(0,0,0,0.3);
-      margin-bottom: 10px;
+      color: #a1a8b2;
+      margin-bottom: 15px;
     }
     
     .qr-upload-text {
       font-size: 14px;
-      color: #555;
+      color: #677788;
       text-align: center;
       padding: 0 20px;
+      line-height: 1.5;
     }
     
     .qr-preview {
@@ -279,7 +230,7 @@
       width: 100%;
       height: 100%;
       object-fit: contain;
-      padding: 10px;
+      padding: 15px;
       background: white;
     }
     
@@ -297,68 +248,20 @@
     .qr-upload-remove {
       background: white;
       border: none;
-      width: 30px;
-      height: 30px;
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.08);
       transition: all 0.2s ease;
     }
     
     .qr-upload-remove:hover {
-      background: #ff5e5e;
+      background: #ff6b6b;
       color: white;
-    }
-    
-    /* 套餐选择 */
-    .plan-options {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 5px;
-    }
-    
-    .plan-option {
-      flex: 1;
-      min-width: 100px;
-      text-align: center;
-    }
-    
-    .plan-radio {
-      display: none;
-    }
-    
-    .plan-label {
-      display: block;
-      padding: 12px 15px;
-      background: white;
-      border: 1px solid rgba(0,0,0,0.1);
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-    
-    .plan-label:hover {
-      border-color: #FF5E00;
-    }
-    
-    .plan-radio:checked + .plan-label {
-      background: rgba(255,94,0,0.1);
-      border-color: #FF5E00;
-      box-shadow: 0 0 0 2px rgba(255,94,0,0.2);
-    }
-    
-    .plan-name {
-      font-weight: 600;
-      margin-bottom: 5px;
-    }
-    
-    .plan-price {
-      font-size: 12px;
-      color: #888;
     }
     
     /* 订单表格 */
@@ -369,15 +272,15 @@
     }
     
     .orders-table th, .orders-table td {
-      padding: 12px 15px;
+      padding: 14px 15px;
       text-align: left;
-      border-bottom: 1px solid rgba(0,0,0,0.05);
+      border-bottom: 1px solid #e1e5eb;
     }
     
     .orders-table thead th {
       font-weight: 600;
       color: #555;
-      background: rgba(0,0,0,0.02);
+      background: #fafbfc;
     }
     
     .orders-table tbody tr:last-child td {
@@ -389,50 +292,38 @@
       padding: 5px 10px;
       border-radius: 20px;
       font-size: 12px;
-      font-weight: 600;
+      font-weight: 500;
     }
     
     .status-submitted {
-      background-color: rgba(52, 152, 219, 0.1);
+      background-color: #e8f4fd;
       color: #3498db;
     }
     
     .status-paid {
-      background-color: rgba(241, 196, 15, 0.1);
+      background-color: #fef8e6;
       color: #f1c40f;
     }
     
     .status-confirmed {
-      background-color: rgba(46, 204, 113, 0.1);
+      background-color: #e8f7f0;
       color: #2ecc71;
     }
     
     .status-failed {
-      background-color: rgba(231, 76, 60, 0.1);
+      background-color: #feeae9;
       color: #e74c3c;
     }
     
     .status-need_new_qr {
-      background-color: rgba(155, 89, 182, 0.1);
+      background-color: #f1e9f7;
       color: #9b59b6;
     }
     
     /* 响应式适配 */
     @media (max-width: 768px) {
-      .container {
-        flex-direction: column;
-      }
-      
-      .left, .right {
-        width: 100%;
-      }
-      
-      .plan-options {
-        flex-direction: column;
-      }
-      
-      .plan-option {
-        width: 100%;
+      .card {
+        padding: 20px;
       }
     }
   </style>
@@ -443,349 +334,314 @@
   </div>
   
   <div class="main-container">
-    <div class="container">
-      <div class="left">
-        <div class="card">
-          <div class="card-header">
-            <h2>创建充值订单</h2>
+    <div class="card">
+      <div class="card-header">
+        <h2>创建充值订单</h2>
+      </div>
+      <div class="card-body">
+        <form id="order-form">
+          <div class="form-group">
+            <label class="form-label">您的昵称（选填）</label>
+            <input type="text" class="form-control" name="customer_name" placeholder="请输入您的昵称，方便识别订单">
           </div>
-          <div class="card-body">
-            <form id="order-form">
-              <div class="form-group">
-                <label class="form-label">您的昵称（选填）</label>
-                <input type="text" class="form-control" name="customer_name" placeholder="请输入您的昵称，方便识别订单">
+          
+          <!-- 隐藏套餐字段，使用默认值 -->
+          <input type="hidden" name="package" value="default">
+          
+          <div class="form-group">
+            <label class="form-label">上传YouTube二维码</label>
+            <div class="qr-upload-area" id="qr-upload-area">
+              <div class="qr-upload-icon">
+                <i class="fas fa-qrcode"></i>
               </div>
-              
-              <div class="form-group">
-                <label class="form-label">充值套餐</label>
-                <div class="plan-options">
-                  {% for value, label in plan_options %}
-                  <div class="plan-option">
-                    <input type="radio" id="plan-{{ value }}" name="package" value="{{ value }}" class="plan-radio" {% if value == '30' %}checked{% endif %}>
-                    <label for="plan-{{ value }}" class="plan-label">
-                      <div class="plan-name">{{ label }}</div>
-                      <div class="plan-price">¥{{ prices[value] }}</div>
-                    </label>
-                  </div>
-                  {% endfor %}
-                </div>
+              <div class="qr-upload-text">
+                点击上传二维码图片，或者将图片拖放到此处<br>
+                <small>支持JPG、PNG格式，可以直接粘贴图片</small>
               </div>
-              
-              <div class="form-group">
-                <label class="form-label">上传YouTube二维码</label>
-                <div class="qr-upload-area" id="qr-upload-area">
-                  <div class="qr-upload-icon">
-                    <i class="fas fa-qrcode"></i>
-                  </div>
-                  <div class="qr-upload-text">
-                    点击上传二维码图片，或者将图片拖放到此处<br>
-                    <small>支持JPG、PNG格式，可以直接粘贴图片</small>
-                  </div>
-                  <img id="qr-preview" class="qr-preview" style="display: none;">
-                  <div class="qr-upload-actions">
-                    <button type="button" class="qr-upload-remove" id="qr-upload-remove">
-                      <i class="fas fa-times"></i>
-                    </button>
-                  </div>
-                </div>
-                <input type="file" id="qr-file" style="display: none;" accept="image/*">
-                <input type="hidden" name="qr_image_data" id="qr-image-data">
-              </div>
-              
-              <div class="form-group">
-                <button type="submit" class="btn btn-primary" style="width: 100%;">
-                  <i class="fas fa-paper-plane"></i> 提交订单
+              <img id="qr-preview" class="qr-preview" style="display: none;">
+              <div class="qr-upload-actions">
+                <button type="button" class="qr-upload-remove" id="qr-upload-remove">
+                  <i class="fas fa-times"></i>
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      </div>
-      
-      <div class="right">
-        <div class="card">
-          <div class="card-header">
-            <h2>最近订单</h2>
-          </div>
-          <div class="card-body">
-            <table class="orders-table">
-              <thead>
-                <tr>
-                  <th>订单号</th>
-                  <th>客户</th>
-                  <th>套餐</th>
-                  <th>状态</th>
-                  <th>创建时间</th>
-                </tr>
-              </thead>
-              <tbody id="orders-table-body">
-                {% if orders %}
-                  {% for order in orders %}
-                  <tr>
-                    <td><a href="/order/{{ order.id }}" target="_blank">#{{ order.id }}</a></td>
-                    <td>{{ order.customer_name }}</td>
-                    <td>{{ order.package }}天</td>
-                    <td><span class="status-badge status-{{ order.status }}">{{ order.status_text }}</span></td>
-                    <td>{{ order.created_at }}</td>
-                  </tr>
-                  {% endfor %}
-                {% else %}
-                  <tr>
-                    <td colspan="5" style="text-align: center;">暂无订单</td>
-                  </tr>
-                {% endif %}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        
-        <div class="card">
-          <div class="card-header">
-            <h2>充值说明</h2>
-          </div>
-          <div class="card-body">
-            <ol style="padding-left: 20px;">
-              <li>选择您需要的充值套餐和时长</li>
-              <li>上传您的YouTube二维码图片（登录YouTube后，在个人设置中找到）</li>
-              <li>提交订单后，我们的客服会立即处理您的订单</li>
-              <li>处理完成后，您可以通过订单号查询充值状态</li>
-              <li>如有任何问题，请保留订单号联系客服</li>
-            </ol>
-            <div style="background: rgba(255,94,0,0.1); padding: 15px; border-radius: 8px; margin-top: 15px;">
-              <div style="font-weight: 600; margin-bottom: 5px; color: #FF5E00;">温馨提示：</div>
-              <div style="font-size: 13px; color: #555;">
-                请确保上传的二维码清晰可辨，建议直接截图或者使用截图工具获取最佳效果。上传后的二维码信息将严格保密，仅用于本次充值操作。
-              </div>
             </div>
+            <input type="file" id="qr-file" style="display: none;" accept="image/*">
+            <input type="hidden" name="qr_image_data" id="qr-image-data">
+          </div>
+          
+          <div class="form-group">
+            <button type="submit" class="btn btn-primary" style="width: 100%;">
+              <i class="fas fa-paper-plane"></i> 提交订单
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    
+    <div class="card">
+      <div class="card-header">
+        <h2>订单查询</h2>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label class="form-label">输入订单号查询状态</label>
+          <div style="display: flex; gap: 10px;">
+            <input type="text" class="form-control" id="order-id-input" placeholder="请输入订单号">
+            <button type="button" class="btn btn-primary" id="check-order-btn" style="white-space: nowrap;">
+              <i class="fas fa-search"></i> 查询
+            </button>
           </div>
         </div>
       </div>
     </div>
   </div>
   
-  <!-- 自定义警告框 -->
-  <div id="custom-alert" class="custom-alert" style="display: none;">
-    <div class="custom-alert-icon">
-      <i class="fas fa-info-circle"></i>
-    </div>
-    <div class="custom-alert-message">提示信息</div>
-    <div class="custom-alert-close">
-      <i class="fas fa-times"></i>
+  <!-- 订单状态查询模态框，保留原代码 -->
+  <div id="order-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 999; overflow-y: auto;">
+    <div style="background: white; max-width: 600px; margin: 40px auto; padding: 30px; border-radius: 12px; position: relative; animation: fadeIn 0.3s ease-out;">
+      <button type="button" id="close-modal" style="position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 20px; cursor: pointer; color: #999;">&times;</button>
+      <div id="order-details"></div>
     </div>
   </div>
   
   <script>
+    // 保持原有JavaScript代码，但需要修改表单提交部分，不再需要套餐选择
     document.addEventListener('DOMContentLoaded', function() {
-      // 文件上传处理
       const qrUploadArea = document.getElementById('qr-upload-area');
-      const qrFile = document.getElementById('qr-file');
+      const qrFileInput = document.getElementById('qr-file');
       const qrPreview = document.getElementById('qr-preview');
       const qrImageData = document.getElementById('qr-image-data');
-      const qrUploadRemove = document.getElementById('qr-upload-remove');
+      const qrRemoveBtn = document.getElementById('qr-upload-remove');
+      const orderForm = document.getElementById('order-form');
+      const checkOrderBtn = document.getElementById('check-order-btn');
+      const orderIdInput = document.getElementById('order-id-input');
+      const orderModal = document.getElementById('order-modal');
+      const closeModal = document.getElementById('close-modal');
+      const orderDetails = document.getElementById('order-details');
       
-      // 点击上传区域触发文件选择
+      // QR上传相关函数
       qrUploadArea.addEventListener('click', function() {
-        if (qrPreview.style.display === 'none') {
-          qrFile.click();
+        qrFileInput.click();
+      });
+      
+      qrFileInput.addEventListener('change', function(e) {
+        if (e.target.files && e.target.files[0]) {
+          handleQrImage(e.target.files[0]);
         }
       });
       
-      // 文件选择变化处理
-      qrFile.addEventListener('change', function() {
-        if (this.files && this.files[0]) {
-          const reader = new FileReader();
-          
-          reader.onload = function(e) {
-            qrPreview.src = e.target.result;
-            qrPreview.style.display = 'block';
-            qrImageData.value = e.target.result;
-          }
-          
-          reader.readAsDataURL(this.files[0]);
-        }
-      });
-      
-      // 删除预览图
-      qrUploadRemove.addEventListener('click', function(e) {
+      qrRemoveBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        qrPreview.src = '';
         qrPreview.style.display = 'none';
         qrImageData.value = '';
-        qrFile.value = '';
+        qrFileInput.value = '';
       });
       
-      // 拖放文件处理
+      // 拖放上传
       qrUploadArea.addEventListener('dragover', function(e) {
         e.preventDefault();
-        e.stopPropagation();
-        this.style.borderColor = '#FF5E00';
-        this.style.background = 'rgba(255,94,0,0.05)';
+        qrUploadArea.style.borderColor = '#4d7cfe';
+        qrUploadArea.style.background = 'rgba(77,124,254,0.05)';
       });
       
       qrUploadArea.addEventListener('dragleave', function(e) {
         e.preventDefault();
-        e.stopPropagation();
-        this.style.borderColor = 'rgba(0,0,0,0.15)';
-        this.style.background = 'rgba(255,255,255,0.5)';
+        qrUploadArea.style.borderColor = '#e1e5eb';
+        qrUploadArea.style.background = '#fafbfc';
       });
       
       qrUploadArea.addEventListener('drop', function(e) {
         e.preventDefault();
-        e.stopPropagation();
-        this.style.borderColor = 'rgba(0,0,0,0.15)';
-        this.style.background = 'rgba(255,255,255,0.5)';
-        
+        qrUploadArea.style.borderColor = '#e1e5eb';
+        qrUploadArea.style.background = '#fafbfc';
         if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-          const file = e.dataTransfer.files[0];
-          if (file.type.match('image.*')) {
-            const reader = new FileReader();
-            
-            reader.onload = function(e) {
-              qrPreview.src = e.target.result;
-              qrPreview.style.display = 'block';
-              qrImageData.value = e.target.result;
-            }
-            
-            reader.readAsDataURL(file);
-          } else {
-            showAlert('请上传图片文件', 'error');
-          }
+          handleQrImage(e.dataTransfer.files[0]);
         }
       });
       
-      // 粘贴图片处理
+      // 粘贴上传
       document.addEventListener('paste', function(e) {
         if (e.clipboardData && e.clipboardData.items) {
           const items = e.clipboardData.items;
-          
           for (let i = 0; i < items.length; i++) {
             if (items[i].type.indexOf('image') !== -1) {
               const blob = items[i].getAsFile();
-              const reader = new FileReader();
-              
-              reader.onload = function(e) {
-                qrPreview.src = e.target.result;
-                qrPreview.style.display = 'block';
-                qrImageData.value = e.target.result;
-              }
-              
-              reader.readAsDataURL(blob);
+              handleQrImage(blob);
               break;
             }
           }
         }
       });
       
-      // 表单提交处理
-      const orderForm = document.getElementById('order-form');
+      function handleQrImage(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          qrPreview.src = e.target.result;
+          qrPreview.style.display = 'block';
+          qrImageData.value = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
       
+      // 表单提交
       orderForm.addEventListener('submit', function(e) {
         e.preventDefault();
         
         // 验证表单
         if (!qrImageData.value) {
-          showAlert('请上传二维码图片', 'error');
+          showAlert('请上传二维码图片', 'warning');
           return;
         }
         
         // 收集表单数据
         const formData = new FormData(orderForm);
         
-        // 发送请求
-        fetch('/', {
+        // 提交表单
+        fetch('/submit_order', {
           method: 'POST',
           body: formData
         })
         .then(response => response.json())
         .then(data => {
           if (data.success) {
-            showAlert(data.message, 'success');
-            
+            showAlert('订单创建成功，订单号: ' + data.order_id, 'success');
             // 重置表单
-            qrPreview.src = '';
+            orderForm.reset();
             qrPreview.style.display = 'none';
             qrImageData.value = '';
-            qrFile.value = '';
-            orderForm.reset();
-            
-            // 更新订单列表
-            updateOrdersTable(data.orders);
           } else {
-            showAlert(data.error, 'error');
+            showAlert('订单创建失败: ' + data.message, 'error');
           }
         })
         .catch(error => {
           console.error('Error:', error);
-          showAlert('提交订单时发生错误，请稍后重试', 'error');
+          showAlert('提交订单时发生错误', 'error');
         });
       });
       
-      // 更新订单表格
-      function updateOrdersTable(orders) {
-        const tableBody = document.getElementById('orders-table-body');
-        
-        if (!orders || orders.length === 0) {
-          tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">暂无订单</td></tr>';
+      // 查询订单
+      checkOrderBtn.addEventListener('click', function() {
+        const orderId = orderIdInput.value.trim();
+        if (!orderId) {
+          showAlert('请输入订单号', 'warning');
           return;
         }
         
-        let html = '';
-        
-        orders.forEach(order => {
-          html += `
-            <tr>
-              <td><a href="/order/${order.id}" target="_blank">#${order.id}</a></td>
-              <td>${order.customer_name || '匿名用户'}</td>
-              <td>${order.package}天</td>
-              <td><span class="status-badge status-${order.status}">${order.status_text}</span></td>
-              <td>${order.created_at}</td>
-            </tr>
-          `;
-        });
-        
-        tableBody.innerHTML = html;
-      }
+        fetch(`/check_order/${orderId}`)
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              showOrderDetails(data.order);
+            } else {
+              showAlert('查询订单失败: ' + data.message, 'error');
+            }
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            showAlert('查询订单时发生错误', 'error');
+          });
+      });
       
-      // 显示自定义警告框
-      function showAlert(message, type) {
-        const alert = document.getElementById('custom-alert');
-        const alertMessage = document.querySelector('.custom-alert-message');
-        const alertIcon = document.querySelector('.custom-alert-icon i');
-        
-        alertMessage.textContent = message;
-        
-        // 设置类型
-        alert.className = 'custom-alert';
-        alert.classList.add(type);
-        
-        // 设置图标
-        switch(type) {
-          case 'success':
-            alertIcon.className = 'fas fa-check-circle';
-            break;
-          case 'warning':
-            alertIcon.className = 'fas fa-exclamation-circle';
-            break;
-          case 'error':
-            alertIcon.className = 'fas fa-times-circle';
-            break;
-          default:
-            alertIcon.className = 'fas fa-info-circle';
+      // 显示订单详情模态框
+      function showOrderDetails(order) {
+        // 构建订单详情HTML
+        let statusClass = '';
+        switch(order.status) {
+          case 'SUBMITTED': statusClass = 'status-submitted'; break;
+          case 'PAID': statusClass = 'status-paid'; break;
+          case 'CONFIRMED': statusClass = 'status-confirmed'; break;
+          case 'FAILED': statusClass = 'status-failed'; break;
+          case 'NEED_NEW_QR': statusClass = 'status-need_new_qr'; break;
         }
         
-        // 显示警告框
-        alert.style.display = 'flex';
+        // 将状态翻译为中文
+        let statusText = '';
+        switch(order.status) {
+          case 'SUBMITTED': statusText = '已提交'; break;
+          case 'PAID': statusText = '已支付'; break;
+          case 'CONFIRMED': statusText = '已确认'; break;
+          case 'FAILED': statusText = '失败'; break;
+          case 'NEED_NEW_QR': statusText = '需要新二维码'; break;
+          default: statusText = order.status;
+        }
         
-        // 3秒后自动关闭
-        setTimeout(function() {
-          alert.style.display = 'none';
-        }, 3000);
+        let html = `
+          <h2 style="margin-top: 0; font-size: 18px;">订单详情 #${order.id}</h2>
+          <div style="margin-bottom: 20px;">
+            <span class="status-badge ${statusClass}" style="margin-right: 10px;">${statusText}</span>
+            <span style="font-size: 12px; color: #888;">创建时间: ${order.created_at}</span>
+          </div>
+        `;
+        
+        // 如果有客户名称
+        if (order.customer_name) {
+          html += `<p><strong>客户名称:</strong> ${order.customer_name}</p>`;
+        }
+        
+        // 如果有消息
+        if (order.message) {
+          html += `
+            <div style="margin-top: 15px; padding: 15px; background: #f7f7f7; border-radius: 6px;">
+              <p style="margin: 0; font-size: 13px;"><strong>处理消息:</strong><br>${order.message.replace(/\n/g, '<br>')}</p>
+            </div>
+          `;
+        }
+        
+        // 显示模态框
+        orderDetails.innerHTML = html;
+        orderModal.style.display = 'block';
+        document.body.style.overflow = 'hidden';
       }
       
-      // 关闭警告框
-      document.querySelector('.custom-alert-close').addEventListener('click', function() {
-        document.getElementById('custom-alert').style.display = 'none';
+      // 关闭模态框
+      closeModal.addEventListener('click', function() {
+        orderModal.style.display = 'none';
+        document.body.style.overflow = 'auto';
       });
+      
+      // 点击模态框外部也可以关闭
+      orderModal.addEventListener('click', function(e) {
+        if (e.target === orderModal) {
+          orderModal.style.display = 'none';
+          document.body.style.overflow = 'auto';
+        }
+      });
+      
+      // 自定义提示框
+      function showAlert(message, type = 'info') {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `custom-alert ${type}`;
+        
+        let icon = '';
+        switch(type) {
+          case 'success': icon = '<i class="fas fa-check-circle"></i>'; break;
+          case 'warning': icon = '<i class="fas fa-exclamation-triangle"></i>'; break;
+          case 'error': icon = '<i class="fas fa-times-circle"></i>'; break;
+          default: icon = '<i class="fas fa-info-circle"></i>';
+        }
+        
+        alertDiv.innerHTML = `
+          <div class="custom-alert-icon">${icon}</div>
+          <div>${message}</div>
+          <div class="custom-alert-close">&times;</div>
+        `;
+        
+        document.body.appendChild(alertDiv);
+        
+        // 自动消失
+        setTimeout(() => {
+          alertDiv.style.opacity = '0';
+          alertDiv.style.transform = 'translate(-50%, -20px)';
+          setTimeout(() => alertDiv.remove(), 300);
+        }, 3000);
+        
+        // 点击关闭
+        alertDiv.querySelector('.custom-alert-close').addEventListener('click', () => {
+          alertDiv.style.opacity = '0';
+          alertDiv.style.transform = 'translate(-50%, -20px)';
+          setTimeout(() => alertDiv.remove(), 300);
+        });
+      }
     });
   </script>
 </body>
