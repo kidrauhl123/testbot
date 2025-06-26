@@ -560,6 +560,7 @@ async def send_notification_from_queue(data):
             account = data.get('account')  # 这是二维码图片路径
             remark = data.get('remark', '')  # 获取备注信息
             preferred_seller = data.get('preferred_seller')
+            package = data.get('package', '')
             
             # 检查订单是否存在
             order = get_order_by_id(order_id)
@@ -628,21 +629,49 @@ async def send_notification_from_queue(data):
                     logger.error(f"列出目录内容时出错: {str(e)}")
                     print(f"ERROR: 列出目录内容时出错: {str(e)}")
                 return
+            
+            # 筛选活跃且未达到订单上限的卖家
+            eligible_sellers = []
+            for seller in active_sellers:
+                seller_id = seller.get('id', seller.get('telegram_id'))
+                seller_info = None
+                
+                if DATABASE_URL.startswith('postgres'):
+                    seller_info = execute_query(
+                        "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=%s",
+                        (str(seller_id),), fetch=True
+                    )
+                else:
+                    seller_info = execute_query(
+                        "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=?",
+                        (str(seller_id),), fetch=True
+                    )
+                
+                if seller_info and seller_info[0][0]:  # 确认是活跃状态
+                    max_orders = seller_info[0][1] if seller_info[0][1] is not None else 10
+                    current_orders = seller_info[0][2] if seller_info[0][2] is not None else 0
+                    
+                    if current_orders < max_orders:
+                        eligible_sellers.append(seller)
+            
+            if not eligible_sellers:
+                logger.warning("没有可用的卖家（全部已达到订单上限或非活跃状态）")
+                return
                 
             # 发送消息给卖家（如果指定了特定卖家，则只发给他们）
             if preferred_seller:
-                target_sellers = [seller for seller in active_sellers if str(seller.get('id', seller.get('telegram_id'))) == str(preferred_seller)]
+                target_sellers = [seller for seller in eligible_sellers if str(seller.get('id', seller.get('telegram_id'))) == str(preferred_seller)]
                 if not target_sellers:
-                    logger.warning(f"指定的卖家不存在或不活跃: {preferred_seller}")
-                    # 发送给所有活跃卖家
-                    target_sellers = active_sellers
+                    logger.warning(f"指定的卖家不存在、非活跃或已达到订单上限: {preferred_seller}")
+                    # 发送给所有符合条件的卖家
+                    target_sellers = eligible_sellers
             else:
-                target_sellers = active_sellers
+                target_sellers = eligible_sellers
                 
             # 为订单添加状态标记
             await mark_order_as_processing(order_id)
             
-            # 发送通知给每个活跃卖家
+            # 发送通知给每个符合条件的卖家
             for seller in target_sellers:
                 seller_id = seller.get('id', seller.get('telegram_id'))
                 try:
@@ -668,6 +697,44 @@ async def send_notification_from_queue(data):
                     
                     # 自动接单（标记该订单已被该卖家接受）
                     await auto_accept_order(order_id, seller_id)
+                    
+                    # 更新卖家的当前订单数
+                    if DATABASE_URL.startswith('postgres'):
+                        execute_query(
+                            "UPDATE sellers SET current_orders = current_orders + 1 WHERE telegram_id=%s",
+                            (str(seller_id),)
+                        )
+                    else:
+                        execute_query(
+                            "UPDATE sellers SET current_orders = current_orders + 1 WHERE telegram_id=?",
+                            (str(seller_id),)
+                        )
+                    
+                    # 检查是否达到最大订单数，如果是，则设置为非活跃
+                    if DATABASE_URL.startswith('postgres'):
+                        seller_info = execute_query(
+                            "SELECT current_orders, max_orders FROM sellers WHERE telegram_id=%s",
+                            (str(seller_id),), fetch=True
+                        )
+                    else:
+                        seller_info = execute_query(
+                            "SELECT current_orders, max_orders FROM sellers WHERE telegram_id=?",
+                            (str(seller_id),), fetch=True
+                        )
+                    
+                    if seller_info and seller_info[0][0] >= seller_info[0][1]:
+                        # 达到最大订单数，设为非活跃
+                        if DATABASE_URL.startswith('postgres'):
+                            execute_query(
+                                "UPDATE sellers SET is_active=FALSE WHERE telegram_id=%s",
+                                (str(seller_id),)
+                            )
+                        else:
+                            execute_query(
+                                "UPDATE sellers SET is_active=0 WHERE telegram_id=?",
+                                (str(seller_id),)
+                            )
+                        logger.info(f"卖家 {seller_id} 已达到最大订单数，已设置为非活跃状态")
                     
                 except Exception as e:
                     logger.error(f"向卖家 {seller_id} 发送订单通知时出错: {str(e)}", exc_info=True)
@@ -1047,6 +1114,22 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
             timestamp = get_china_time()
             conn = get_db_connection()
             cursor = conn.cursor()
+            
+            # 首先获取订单信息，包括接单人
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("SELECT accepted_by FROM orders WHERE id = %s", (oid,))
+            else:
+                cursor.execute("SELECT accepted_by FROM orders WHERE id = ?", (oid,))
+            order_info = cursor.fetchone()
+            
+            if not order_info:
+                await query.answer("订单信息未找到", show_alert=True)
+                conn.close()
+                return
+                
+            accepted_by = order_info[0]
+            
+            # 更新订单状态为已完成
             if DATABASE_URL.startswith('postgres'):
                 cursor.execute(
                     "UPDATE orders SET status=%s, completed_at=%s WHERE id=%s",
@@ -1059,6 +1142,7 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             conn.commit()
             conn.close()
+            
             # 向通知队列推送状态变更，供网页端更新
             if notification_queue:
                 notification_queue.put({
@@ -1068,12 +1152,17 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     'handler_id': user_id
                 })
                 logger.info(f"已将订单 #{oid} 状态变更(完成)添加到通知队列")
+            
             # 更新按钮显示
             keyboard = [[InlineKeyboardButton("✅ Completed", callback_data="noop")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_reply_markup(reply_markup=reply_markup)
             await query.answer("订单已标记为完成", show_alert=True)
             logger.info(f"用户 {user_id} 已将订单 {oid} 标记为完成 (done_)")
+            
+            # 更新卖家当前订单数
+            await update_seller_order_count(accepted_by)
+            
         except Exception as e:
             logger.error(f"处理订单完成(done_)时出错: {str(e)}", exc_info=True)
             await query.answer("处理订单时出错，请稍后重试", show_alert=True)
@@ -1177,26 +1266,30 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     elif data.startswith("complete_"):
         oid = int(data.split('_')[1])
-
-        # 与 done_ 分支相同的处理逻辑
+        
+        # 处理订单完成
         try:
             timestamp = get_china_time()
-            conn = get_db_connection()
-            cursor = conn.cursor()
+            
+            # 获取订单信息以便通知
+            order = get_order_by_id(oid)
+            if not order:
+                await query.answer("订单不存在", show_alert=True)
+                return
+            
+            # 更新订单状态
             if DATABASE_URL.startswith('postgres'):
-                cursor.execute(
-                    "UPDATE orders SET status=%s, completed_at=%s WHERE id=%s",
+                execute_query(
+                    "UPDATE orders SET status=%s, completed_at=%s WHERE id=%s", 
                     (STATUS['COMPLETED'], timestamp, oid)
                 )
             else:
-                cursor.execute(
-                    "UPDATE orders SET status=?, completed_at=? WHERE id=?",
+                execute_query(
+                    "UPDATE orders SET status=?, completed_at=? WHERE id=?", 
                     (STATUS['COMPLETED'], timestamp, oid)
                 )
-            conn.commit()
-            conn.close()
-
-            # 推送通知给网页端
+            
+            # 向通知队列推送状态变更，供网页端更新
             if notification_queue:
                 notification_queue.put({
                     'type': 'order_status_change',
@@ -1204,16 +1297,85 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     'status': STATUS['COMPLETED'],
                     'handler_id': user_id
                 })
-                logger.info(f"已将订单 #{oid} 状态变更(完成)添加到通知队列 (complete_)")
-
-            # 更新按钮显示
+                logger.info(f"已将订单 {oid} 状态变更(完成)添加到通知队列")
+                
+            # 如果有账户名和密码，通知用户
+            account = order.get("account", "")
+            remark = order.get("remark", "")
+            
+            # 更新按钮状态
             keyboard = [[InlineKeyboardButton("✅ Completed", callback_data="noop")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_reply_markup(reply_markup=reply_markup)
+            
             await query.answer("订单已标记为完成", show_alert=True)
-            logger.info(f"用户 {user_id} 已将订单 {oid} 标记为完成 (complete_)")
+            logger.info(f"用户 {user_id} 已将订单 {oid} 标记为完成")
+            
+            # 更新卖家当前订单数
+            accepted_by = order.get("accepted_by")
+            if accepted_by:
+                await update_seller_order_count(accepted_by)
+            
         except Exception as e:
-            logger.error(f"处理订单完成(complete_)时出错: {str(e)}", exc_info=True)
+            logger.error(f"标记订单完成时出错: {str(e)}", exc_info=True)
+            await query.answer("处理订单时出错，请稍后重试", show_alert=True)
+        return
+    elif data.startswith("fail_save_"):
+        parts = data.split('_')
+        oid = int(parts[2])
+        reason_code = parts[3] if len(parts) > 3 else "Unknown reason"
+
+        # 从feedback_waiting获取原因
+        reason = feedback_waiting.get(f"fail_{oid}", reason_code)
+        
+        try:
+            timestamp = get_china_time()
+            
+            # 更新订单状态
+            if DATABASE_URL.startswith('postgres'):
+                execute_query(
+                    "UPDATE orders SET status=%s, completed_at=%s, remark=%s WHERE id=%s", 
+                    (STATUS['FAILED'], timestamp, reason, oid)
+                )
+            else:
+                execute_query(
+                    "UPDATE orders SET status=?, completed_at=?, remark=? WHERE id=?", 
+                    (STATUS['FAILED'], timestamp, reason, oid)
+                )
+                
+            # 向通知队列推送状态变更，供网页端更新
+            if notification_queue:
+                notification_queue.put({
+                    'type': 'order_status_change',
+                    'order_id': oid,
+                    'status': STATUS['FAILED'],
+                    'reason': reason,
+                    'handler_id': user_id
+                })
+                logger.info(f"已将订单 {oid} 状态变更(失败)添加到通知队列")
+                
+            # 清理等待反馈
+            if f"fail_{oid}" in feedback_waiting:
+                del feedback_waiting[f"fail_{oid}"]
+                
+            # 更新按钮显示
+            keyboard = [[InlineKeyboardButton("❌ Failed", callback_data="noop")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_reply_markup(reply_markup=reply_markup)
+            
+            await query.answer("订单已标记为失败", show_alert=True)
+            logger.info(f"用户 {user_id} 已将订单 {oid} 标记为失败，原因: {reason}")
+            
+            # 获取订单信息
+            order = get_order_by_id(oid)
+            if order:
+                # 更新卖家当前订单数
+                accepted_by = order.get("accepted_by")
+                if accepted_by:
+                    await update_seller_order_count(accepted_by)
+            
+        except Exception as e:
+            logger.error(f"标记订单失败时出错: {str(e)}", exc_info=True)
             await query.answer("处理订单时出错，请稍后重试", show_alert=True)
         return
     else:

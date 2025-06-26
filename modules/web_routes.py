@@ -1029,6 +1029,59 @@ def register_routes(app, notification_queue):
         remove_seller(telegram_id)
         return jsonify({"success": True})
 
+    @app.route('/admin/api/sellers/<int:telegram_id>', methods=['PUT'])
+    @login_required
+    @admin_required
+    def admin_api_edit_seller(telegram_id):
+        """更新卖家信息"""
+        data = request.get_json()
+        
+        # 获取更新字段
+        nickname = data.get('nickname')
+        max_orders = data.get('max_orders')
+        
+        try:
+            if DATABASE_URL.startswith('postgres'):
+                # 构建更新查询
+                updates = []
+                params = []
+                
+                if nickname is not None:
+                    updates.append("nickname = %s")
+                    params.append(nickname)
+                
+                if max_orders is not None:
+                    updates.append("max_orders = %s")
+                    params.append(max_orders)
+                
+                if updates:  # 如果有需要更新的字段
+                    query = f"UPDATE sellers SET {', '.join(updates)} WHERE telegram_id = %s"
+                    params.append(str(telegram_id))
+                    execute_query(query, tuple(params))
+            else:
+                # SQLite
+                # 构建更新查询
+                updates = []
+                params = []
+                
+                if nickname is not None:
+                    updates.append("nickname = ?")
+                    params.append(nickname)
+                
+                if max_orders is not None:
+                    updates.append("max_orders = ?")
+                    params.append(max_orders)
+                
+                if updates:  # 如果有需要更新的字段
+                    query = f"UPDATE sellers SET {', '.join(updates)} WHERE telegram_id = ?"
+                    params.append(str(telegram_id))
+                    execute_query(query, tuple(params))
+            
+            return jsonify({"success": True})
+        except Exception as e:
+            logger.error(f"更新卖家信息出错: {str(e)}", exc_info=True)
+            return jsonify({"error": str(e)}), 500
+
     @app.route('/admin/api/sellers/<int:telegram_id>/toggle', methods=['POST'])
     @login_required
     @admin_required
@@ -1998,17 +2051,33 @@ def register_routes(app, notification_queue):
     @login_required
     @admin_required
     def admin_api_update_seller(telegram_id):
-        """更新卖家信息，目前仅支持修改nickname"""
+        """更新卖家信息，支持修改nickname和max_orders"""
         data = request.get_json()
         nickname = data.get('nickname')
-        if nickname is None:
-            return jsonify({"error": "Missing nickname"}), 400
+        max_orders = data.get('max_orders')
         
         try:
-            update_seller_nickname(telegram_id, nickname)
+            # 更新昵称
+            if nickname is not None:
+                update_seller_nickname(telegram_id, nickname)
+                
+            # 更新最大接单数
+            if max_orders is not None:
+                if DATABASE_URL.startswith('postgres'):
+                    execute_query(
+                        "UPDATE sellers SET max_orders = %s WHERE telegram_id = %s",
+                        (max_orders, str(telegram_id))
+                    )
+                else:
+                    execute_query(
+                        "UPDATE sellers SET max_orders = ? WHERE telegram_id = ?",
+                        (max_orders, str(telegram_id))
+                    )
+                logger.info(f"已更新卖家 {telegram_id} 的最大接单数为 {max_orders}")
+                
             return jsonify({"success": True})
         except Exception as e:
-            logger.error(f"更新卖家 {telegram_id} 昵称失败: {e}")
+            logger.error(f"更新卖家 {telegram_id} 信息失败: {e}")
             return jsonify({"error": "Update failed"}), 500
 
     @app.route('/orders/confirm/<int:oid>', methods=['POST'])
