@@ -2038,7 +2038,8 @@ def register_routes(app, notification_queue):
         # 允许确认已提交或已接单状态的订单，但已完成状态不需要再确认
         if status == STATUS['COMPLETED']:
             logger.info(f"订单 {oid} 已是完成状态，无需再次确认")
-            return jsonify({"success": True, "message": "订单已是完成状态"})
+            # 即使已经是完成状态，也返回成功，以便前端可以正确显示"已确认"按钮
+            return jsonify({"success": True, "message": "订单已是完成状态", "already_completed": True})
         
         # 只有已提交、已接单、正在质疑状态的订单可以确认收货
         if status not in [STATUS['SUBMITTED'], STATUS['ACCEPTED'], STATUS['DISPUTING']]:
