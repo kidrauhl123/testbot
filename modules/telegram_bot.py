@@ -666,6 +666,10 @@ async def send_notification_from_queue(data):
                 image_path.replace('/', '\\'),  # Windows 风格路径
                 os.path.join(os.getcwd(), image_path),  # 绝对路径
                 os.path.join(os.getcwd(), image_path.replace('/', '\\')),  # 绝对 Windows 路径
+                f"/app/{image_path}",  # Railway 部署路径
+                os.path.abspath(image_path),  # 绝对路径另一种写法
+                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), image_path),  # 基于模块位置的绝对路径
+                os.path.join(".", image_path)  # 相对当前目录
             ]
             
             logger.info(f"将尝试以下图片路径:")
@@ -692,6 +696,7 @@ async def send_notification_from_queue(data):
             print(f"DEBUG: 将发送图片: {image_path}")
             
             # 检查图片是否存在
+            image_exists = False
             if not os.path.exists(image_path):
                 logger.error(f"图片文件不存在: {image_path}")
                 print(f"ERROR: 图片文件不存在: {image_path}")
@@ -708,7 +713,8 @@ async def send_notification_from_queue(data):
                 except Exception as e:
                     logger.error(f"列出目录内容时出错: {str(e)}")
                     print(f"ERROR: 列出目录内容时出错: {str(e)}")
-                return
+            else:
+                image_exists = True
             
             # 筛选活跃且未达到订单上限的卖家
             eligible_sellers = []
@@ -756,7 +762,7 @@ async def send_notification_from_queue(data):
                 seller_id = seller.get('id', seller.get('telegram_id'))
                 try:
                     # 使用备注作为标题，不再显示订单ID
-                    caption = f"*{remark}*" if remark else f"新订单 #{order_id}"
+                    caption = f"*{remark}*" if remark else f"New Order #{order_id}"
                     
                     # 创建按钮
                     keyboard = [
@@ -765,14 +771,28 @@ async def send_notification_from_queue(data):
                     ]
                     reply_markup = InlineKeyboardMarkup(keyboard)
                     
-                    # 发送图片和备注
-                    await bot_application.bot.send_photo(
-                        chat_id=seller_id,
-                        photo=open(image_path, 'rb'),
-                        caption=caption,
-                        parse_mode='Markdown',
-                        reply_markup=reply_markup
-                    )
+                    if image_exists:
+                        # 发送图片和备注
+                        await bot_application.bot.send_photo(
+                            chat_id=seller_id,
+                            photo=open(image_path, 'rb'),
+                            caption=caption,
+                            parse_mode='Markdown',
+                            reply_markup=reply_markup
+                        )
+                    else:
+                        # 当图片不存在时，发送纯文本通知
+                        message_text = f"📋 *{caption}*\n\n" + \
+                                     f"⚠️ Image not available\n" + \
+                                     f"🆔 Order ID: #{order_id}\n"
+                        
+                        await bot_application.bot.send_message(
+                            chat_id=seller_id,
+                            text=message_text,
+                            parse_mode='Markdown',
+                            reply_markup=reply_markup
+                        )
+                        
                     logger.info(f"已发送订单 #{order_id} 通知到卖家 {seller_id}")
                     
                     # 自动接单（标记该订单已被该卖家接受）
@@ -1909,7 +1929,7 @@ async def check_and_push_orders():
     """检查新订单并推送通知"""
     try:
         # 导入必要的函数
-        from modules.database import get_unnotified_orders
+        from modules.database import get_unnotified_orders, execute_query
         
         # 获取未通知的订单
         unnotified_orders = get_unnotified_orders()
@@ -1940,6 +1960,22 @@ async def check_and_push_orders():
                     })
                     logger.info(f"已将订单 #{order_id} 添加到通知队列")
                     print(f"DEBUG: 已将订单 #{order_id} 添加到通知队列")
+                    
+                    # 立即将订单标记为已通知，防止重复通知
+                    try:
+                        if DATABASE_URL.startswith('postgres'):
+                            execute_query(
+                                "UPDATE orders SET notified=TRUE WHERE id=%s",
+                                (order_id,)
+                            )
+                        else:
+                            execute_query(
+                                "UPDATE orders SET notified=1 WHERE id=?",
+                                (order_id,)
+                            )
+                        logger.info(f"订单 #{order_id} 已标记为已通知")
+                    except Exception as e:
+                        logger.error(f"更新订单 #{order_id} 通知状态时出错: {e}", exc_info=True)
                 else:
                     logger.error("通知队列未初始化")
                     print("ERROR: 通知队列未初始化")
