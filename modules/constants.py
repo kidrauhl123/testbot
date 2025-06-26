@@ -1,61 +1,59 @@
 import os
-from collections import defaultdict
-import threading
 import logging
-import time
 
 # 设置日志
 logger = logging.getLogger(__name__)
 
-# ✅ 写死变量（优先）
-if not os.environ.get('BOT_TOKEN'):
-    os.environ['BOT_TOKEN'] = '7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk'
+# Telegram Bot Token - 从环境变量获取
+BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+if not BOT_TOKEN:
+    logger.warning("未设置TELEGRAM_BOT_TOKEN环境变量，Telegram机器人功能将不可用")
 
-BOT_TOKEN = os.environ["BOT_TOKEN"]
+# 订单状态常量
+STATUS = {
+    'SUBMITTED': 'submitted',  # 已提交
+    'ACCEPTED': 'accepted',    # 已接单
+    'COMPLETED': 'completed',  # 已完成
+    'FAILED': 'failed'         # 失败
+}
 
-# ✅ 管理员默认凭证（优先从环境变量读取）
-ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', '755439')
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '755439')
+# 状态对应的中文文本
+STATUS_TEXT_ZH = {
+    'submitted': '待处理',
+    'accepted': '已接单',
+    'completed': '已完成',
+    'failed': '充值失败'
+}
 
-if ADMIN_USERNAME == '755439' or ADMIN_PASSWORD == '755439':
-    logger.warning("正在使用默认的管理员凭证。为了安全，请设置 ADMIN_USERNAME 和 ADMIN_PASSWORD 环境变量。")
-
-# 支持通过环境变量设置卖家ID
-SELLER_CHAT_IDS = []
-if os.environ.get('SELLER_CHAT_IDS'):
+# 从环境变量获取卖家ID
+def get_env_sellers():
+    """从环境变量获取卖家ID列表"""
+    seller_ids_str = os.environ.get('SELLER_IDS', '')
+    if not seller_ids_str:
+        return []
+    
     try:
-        # 格式: "123456789,987654321"
-        seller_ids_str = os.environ.get('SELLER_CHAT_IDS', '')
-        SELLER_CHAT_IDS = [int(x.strip()) for x in seller_ids_str.split(',') if x.strip()]
-        logger.info(f"从环境变量加载卖家ID: {SELLER_CHAT_IDS}")
+        return [s.strip() for s in seller_ids_str.split(',') if s.strip()]
     except Exception as e:
-        logger.error(f"解析SELLER_CHAT_IDS环境变量出错: {e}")
+        logger.error(f"解析卖家ID环境变量出错: {str(e)}")
+        return []
 
-# 将环境变量中的卖家ID同步到数据库
+# 同步环境变量中的卖家到数据库
 def sync_env_sellers_to_db():
-    """将环境变量中的卖家ID同步到数据库"""
-    if not SELLER_CHAT_IDS:
+    """同步环境变量中的卖家ID到数据库"""
+    from modules.database import add_seller
+    
+    seller_ids = get_env_sellers()
+    if not seller_ids:
+        logger.warning("环境变量中未设置卖家ID，跳过同步")
         return
     
-    # 导入放在函数内部，避免循环导入
-    from modules.database import execute_query
-    
-    # 获取数据库中已存在的卖家ID
-    try:
-        db_seller_ids = execute_query("SELECT telegram_id FROM sellers", fetch=True)
-        db_seller_ids = [row[0] for row in db_seller_ids] if db_seller_ids else []
-        
-        # 将环境变量中的卖家ID添加到数据库
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        for seller_id in SELLER_CHAT_IDS:
-            if seller_id not in db_seller_ids:
-                logger.info(f"将环境变量中的卖家ID {seller_id} 同步到数据库")
-                execute_query(
-                    "INSERT INTO sellers (telegram_id, username, first_name, nickname, is_active, added_at, added_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (seller_id, f"env_seller_{seller_id}", f"环境变量卖家 {seller_id}", f"卖家 {seller_id}", 1, timestamp, "环境变量")
-                )
-    except Exception as e:
-        logger.error(f"同步环境变量卖家到数据库失败: {e}")
+    for seller_id in seller_ids:
+        try:
+            add_seller(seller_id, f"env_seller_{seller_id}", f"Seller {seller_id}", f"卖家 {seller_id}", "环境变量")
+            logger.info(f"已同步卖家ID: {seller_id}")
+        except Exception as e:
+            logger.error(f"同步卖家ID {seller_id} 到数据库失败: {str(e)}")
 
 # ===== 价格系统 =====
 # 网页端价格（美元USDT）

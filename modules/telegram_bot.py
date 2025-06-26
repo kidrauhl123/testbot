@@ -1,47 +1,22 @@
-import asyncio
-import threading
-import logging
-from datetime import datetime, timedelta
-from collections import defaultdict
-import time
 import os
-from functools import wraps
-import pytz
 import sys
+import logging
+import asyncio
 import functools
-import sqlite3
+import threading
+import queue
 import traceback
-import psycopg2
-from urllib.parse import urlparse
+from datetime import datetime
+import pytz
+import sqlite3
 
-from telegram import (Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup,
-                     ReplyKeyboardRemove, InputMediaPhoto)
-from telegram.ext import (Application, CommandHandler, MessageHandler, filters, ContextTypes,
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (Application, CommandHandler, MessageHandler, filters,
                          CallbackQueryHandler, ConversationHandler, ApplicationBuilder)
 
-from modules.constants import (
-    BOT_TOKEN, STATUS, PLAN_LABELS_EN,
-    STATUS_TEXT_ZH, TG_PRICES, WEB_PRICES, SELLER_CHAT_IDS, DATABASE_URL
-)
-from modules.database import (
-    get_order_details, execute_query, 
-    get_unnotified_orders, get_active_seller_ids,
-    update_seller_desired_orders, update_seller_last_active, get_active_sellers
-)
-
-# 定义bot_command_handler装饰器，用于处理命令
-def bot_command_handler(func):
-    """
-    命令处理器的装饰器，用于注册命令处理函数
-    """
-    @functools.wraps(func)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        try:
-            return await func(update, context)
-        except Exception as e:
-            logger.error(f"命令 {func.__name__} 处理出错: {str(e)}", exc_info=True)
-            await update.message.reply_text("处理命令时出错，请稍后重试")
-    return wrapper
+from modules.constants import BOT_TOKEN, STATUS, STATUS_TEXT_ZH
+from modules.database import (get_unnotified_orders, execute_query, 
+                                     get_active_seller_ids, get_china_time)
 
 # 设置日志
 logging.basicConfig(
@@ -56,51 +31,23 @@ logger = logging.getLogger(__name__)
 # 中国时区
 CN_TIMEZONE = pytz.timezone('Asia/Shanghai')
 
-# 获取数据库连接
-def get_db_connection():
-    """获取数据库连接，根据环境变量决定使用SQLite或PostgreSQL"""
-    
-    try:
-        if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL连接
-            url = urlparse(DATABASE_URL)
-            dbname = url.path[1:]
-            user = url.username
-            password = url.password
-            host = url.hostname
-            port = url.port
-            
-            logger.info(f"连接PostgreSQL数据库: {host}:{port}/{dbname}")
-            
-            conn = psycopg2.connect(
-                dbname=dbname,
-                user=user,
-                password=password,
-                host=host,
-                port=port
-            )
-            return conn
-        else:
-            # SQLite连接
-            # 使用绝对路径访问数据库
-            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            db_path = os.path.join(current_dir, "orders.db")
-            logger.info(f"连接SQLite数据库: {db_path}")
-            print(f"DEBUG: 连接SQLite数据库: {db_path}")
-            
-            conn = sqlite3.connect(db_path)
-            conn.row_factory = sqlite3.Row  # 使查询结果可以通过列名访问
-            return conn
-    except Exception as e:
-        logger.error(f"获取数据库连接时出错: {str(e)}", exc_info=True)
-        print(f"ERROR: 获取数据库连接时出错: {str(e)}")
-        return None
+# 定义bot_command_handler装饰器，用于处理命令
+def bot_command_handler(func):
+    """命令处理器的装饰器，用于注册命令处理函数"""
+    @functools.wraps(func)
+    async def wrapper(update: Update, context):
+        try:
+            return await func(update, context)
+        except Exception as e:
+            logger.error(f"命令 {func.__name__} 处理出错: {str(e)}", exc_info=True)
+            await update.message.reply_text("处理命令时出错，请稍后重试")
+    return wrapper
 
 # 错误处理装饰器
 def callback_error_handler(func):
     """装饰器：捕获并处理回调函数中的异常"""
     @functools.wraps(func)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def wrapper(update: Update, context):
         try:
             return await func(update, context)
         except Exception as e:
@@ -117,30 +64,24 @@ def callback_error_handler(func):
             error_msg += f"错误: {str(e)}"
             
             logger.error(error_msg, exc_info=True)
-            print(f"ERROR: {error_msg}")
             
             # 尝试通知用户
             try:
                 if update.callback_query:
-                    await update.callback_query.answer("Operation failed, please try again later", show_alert=True)
+                    await update.callback_query.answer("操作失败，请稍后重试", show_alert=True)
             except Exception as notify_err:
                 logger.error(f"无法通知用户错误: {str(notify_err)}")
-                print(f"ERROR: 无法通知用户错误: {str(notify_err)}")
             
             return None
     return wrapper
 
-# 获取中国时间的函数
-def get_china_time():
-    """获取当前中国时间（UTC+8）"""
-    utc_now = datetime.now(pytz.utc)
-    china_now = utc_now.astimezone(CN_TIMEZONE)
-    return china_now.strftime("%Y-%m-%d %H:%M:%S")
-
 # ===== 全局变量 =====
 bot_application = None
 BOT_LOOP = None
+notification_queue = None  # 将在run_bot函数中初始化
 
+# ===== TG 辅助函数 =====
+def is_seller(chat_id):
 # 跟踪等待额外反馈的订单
 feedback_waiting = {}
 

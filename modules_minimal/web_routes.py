@@ -6,8 +6,8 @@ from functools import wraps
 from datetime import datetime
 import mimetypes
 
-from modules.database import execute_query, get_china_time
-from modules.constants import STATUS
+from modules_minimal.database import execute_query, get_china_time
+from modules_minimal.constants import STATUS
 
 # 设置日志
 logger = logging.getLogger(__name__)
@@ -126,4 +126,4 @@ def register_routes(app, notification_queue):
 def allowed_file(filename):
     """检查文件类型是否允许上传"""
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS 
