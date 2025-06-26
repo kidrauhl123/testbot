@@ -1291,15 +1291,13 @@ def register_routes(app, notification_queue):
                         port=url.port
                     )
                     cur = conn.cursor()
-                    # 先删除关联表数据，再删除主表数据
-                    cur.execute("TRUNCATE TABLE order_notifications RESTART IDENTITY;")
+                    # 直接删除订单表数据
                     cur.execute("TRUNCATE TABLE orders RESTART IDENTITY;")
                     conn.commit()
                     cur.close()
                     conn.close()
                 else:
                     # SQLite等其他数据库的处理
-                    execute_query("DELETE FROM order_notifications")
                     execute_query("DELETE FROM orders")
                 deleted_count = total_count
             else:
@@ -1320,7 +1318,7 @@ def register_routes(app, notification_queue):
             return jsonify({"success": False, "error": "订单ID必须是有效的数字"}), 400
         except Exception as e:
             logger.error(f"批量删除订单时出错: {e}", exc_info=True)
-            return jsonify({"success": False, "error": "服务器内部错误"}), 500 
+            return jsonify({"success": False, "error": "服务器内部错误"}), 500
 
     # ===== 充值相关路由 =====
     @app.route('/recharge', methods=['GET'])
