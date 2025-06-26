@@ -156,17 +156,18 @@ def init_sqlite_db():
     except sqlite3.OperationalError:
         c.execute("ALTER TABLE sellers ADD COLUMN last_active_at TEXT")
         conn.commit()
-    
+        
+    # 检查sellers表是否需要添加max_orders和current_orders字段
     try:
-        c.execute("SELECT desired_orders FROM sellers LIMIT 1")
+        c.execute("SELECT max_orders FROM sellers LIMIT 1")
     except sqlite3.OperationalError:
-        c.execute("ALTER TABLE sellers ADD COLUMN desired_orders INTEGER DEFAULT 0")
+        c.execute("ALTER TABLE sellers ADD COLUMN max_orders INTEGER DEFAULT 10")
         conn.commit()
     
     try:
-        c.execute("SELECT activity_check_at FROM sellers LIMIT 1")
+        c.execute("SELECT current_orders FROM sellers LIMIT 1")
     except sqlite3.OperationalError:
-        c.execute("ALTER TABLE sellers ADD COLUMN activity_check_at TEXT")
+        c.execute("ALTER TABLE sellers ADD COLUMN current_orders INTEGER DEFAULT 0")
         conn.commit()
     
     # 检查sellers表是否需要添加nickname列
@@ -302,18 +303,19 @@ def init_postgres_db():
         c.execute("ALTER TABLE sellers ADD COLUMN last_active_at TEXT")
         conn.commit()
     
+    # 检查sellers表是否需要添加max_orders和current_orders字段
     try:
-        c.execute("SELECT desired_orders FROM sellers LIMIT 1")
+        c.execute("SELECT max_orders FROM sellers LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
-        logger.info("为sellers表添加desired_orders列")
-        c.execute("ALTER TABLE sellers ADD COLUMN desired_orders INTEGER DEFAULT 0")
+        logger.info("为sellers表添加max_orders列")
+        c.execute("ALTER TABLE sellers ADD COLUMN max_orders INTEGER DEFAULT 10")
         conn.commit()
     
     try:
-        c.execute("SELECT activity_check_at FROM sellers LIMIT 1")
+        c.execute("SELECT current_orders FROM sellers LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
-        logger.info("为sellers表添加activity_check_at列")
-        c.execute("ALTER TABLE sellers ADD COLUMN activity_check_at TEXT")
+        logger.info("为sellers表添加current_orders列")
+        c.execute("ALTER TABLE sellers ADD COLUMN current_orders INTEGER DEFAULT 0")
         conn.commit()
     
     # 检查sellers表是否需要添加nickname列

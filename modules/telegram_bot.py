@@ -1347,3 +1347,177 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "/test - 测试机器人状态"
             )
             context.user_data['welcomed'] = True
+
+# 添加新的命令处理函数
+@bot_command_handler
+async def on_status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理卖家设置活跃状态的命令: /status active|inactive"""
+    user_id = update.effective_user.id
+    
+    # 验证是否为卖家
+    if not is_seller(user_id):
+        await update.message.reply_text("你不是授权卖家，无法使用此命令")
+        return
+    
+    # 获取参数
+    args = context.args
+    if not args or args[0].lower() not in ['active', 'inactive']:
+        await update.message.reply_text("用法: /status active|inactive")
+        return
+        
+    status = True if args[0].lower() == 'active' else False
+    
+    # 更新数据库
+    if DATABASE_URL.startswith('postgres'):
+        execute_query("UPDATE sellers SET is_active=%s WHERE telegram_id=%s", (status, str(user_id)))
+    else:
+        execute_query("UPDATE sellers SET is_active=? WHERE telegram_id=?", (1 if status else 0, str(user_id)))
+    
+    status_text = "活跃" if status else "非活跃"
+    await update.message.reply_text(f"你的状态已更新为: {status_text}")
+
+@bot_command_handler
+async def on_maxorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理卖家设置最大接单数的命令: /maxorders 数量"""
+    user_id = update.effective_user.id
+    
+    # 验证是否为卖家
+    if not is_seller(user_id):
+        await update.message.reply_text("你不是授权卖家，无法使用此命令")
+        return
+    
+    # 获取参数
+    args = context.args
+    if not args or not args[0].isdigit() or int(args[0]) < 0:
+        await update.message.reply_text("用法: /maxorders [正整数]")
+        return
+        
+    max_orders = int(args[0])
+    
+    # 更新数据库
+    if DATABASE_URL.startswith('postgres'):
+        execute_query("UPDATE sellers SET max_orders=%s WHERE telegram_id=%s", (max_orders, str(user_id)))
+    else:
+        execute_query("UPDATE sellers SET max_orders=? WHERE telegram_id=?", (max_orders, str(user_id)))
+    
+    await update.message.reply_text(f"你的最大接单数已更新为: {max_orders}")
+
+@bot_command_handler
+async def on_mystatus_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理卖家查看自己状态的命令: /mystatus"""
+    user_id = update.effective_user.id
+    
+    # 验证是否为卖家
+    if not is_seller(user_id):
+        await update.message.reply_text("你不是授权卖家，无法使用此命令")
+        return
+    
+    # 获取卖家信息
+    if DATABASE_URL.startswith('postgres'):
+        seller = execute_query(
+            "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=%s", 
+            (str(user_id),), fetch=True
+        )
+    else:
+        seller = execute_query(
+            "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=?", 
+            (str(user_id),), fetch=True
+        )
+    
+    if not seller:
+        await update.message.reply_text("未找到你的卖家信息")
+        return
+    
+    is_active, max_orders, current_orders = seller[0]
+    status_text = "活跃" if is_active else "非活跃"
+    
+    await update.message.reply_text(
+        f"当前状态：{status_text}\n"
+        f"最大接单数：{max_orders}\n"
+        f"当前处理单数：{current_orders}"
+    )
+
+async def update_seller_order_count(seller_id, change=-1):
+    """更新卖家当前订单数"""
+    try:
+        # 更新卖家当前订单数
+        if DATABASE_URL.startswith('postgres'):
+            execute_query(
+                "UPDATE sellers SET current_orders = GREATEST(0, current_orders + %s) WHERE telegram_id=%s",
+                (change, str(seller_id))
+            )
+            
+            # 检查是否需要重新激活卖家
+            seller_info = execute_query(
+                "SELECT current_orders, max_orders FROM sellers WHERE telegram_id=%s",
+                (str(seller_id),), fetch=True
+            )
+        else:
+            execute_query(
+                "UPDATE sellers SET current_orders = MAX(0, current_orders + ?) WHERE telegram_id=?",
+                (change, str(seller_id))
+            )
+            
+            # 检查是否需要重新激活卖家
+            seller_info = execute_query(
+                "SELECT current_orders, max_orders FROM sellers WHERE telegram_id=?",
+                (str(seller_id),), fetch=True
+            )
+        
+        if seller_info:
+            current_orders, max_orders = seller_info[0]
+            # 如果当前订单数低于最大值，确保卖家状态为活跃
+            if current_orders < max_orders:
+                if DATABASE_URL.startswith('postgres'):
+                    execute_query(
+                        "UPDATE sellers SET is_active=TRUE WHERE telegram_id=%s AND current_orders < max_orders",
+                        (str(seller_id),)
+                    )
+                else:
+                    execute_query(
+                        "UPDATE sellers SET is_active=1 WHERE telegram_id=? AND current_orders < max_orders",
+                        (str(seller_id),)
+                    )
+                
+    except Exception as e:
+        logger.error(f"更新卖家订单计数时出错: {str(e)}")
+
+@bot_command_handler
+async def on_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理/help命令，显示帮助信息"""
+    user_id = update.effective_user.id
+    
+    # 基础命令
+    base_commands = [
+        "/start - 开始使用机器人",
+        "/help - 显示帮助信息"
+    ]
+    
+    # 卖家命令
+    seller_commands = [
+        "/orders - 查看订单列表",
+        "/status active|inactive - 设置活跃状态",
+        "/maxorders [数量] - 设置最大接单数",
+        "/mystatus - 查看当前状态信息"
+    ]
+    
+    # 管理员命令
+    admin_commands = [
+        "/addseller [id] - 添加卖家",
+        "/removeseller [id] - 删除卖家",
+        "/listsellers - 查看所有卖家"
+    ]
+    
+    # 生成帮助文本
+    help_text = ["📋 可用命令:"]
+    help_text.extend(base_commands)
+    
+    if is_seller(user_id):
+        help_text.append("\n🔔 卖家命令:")
+        help_text.extend(seller_commands)
+    
+    if is_admin(user_id):
+        help_text.append("\n👑 管理员命令:")
+        help_text.extend(admin_commands)
+    
+    await update.message.reply_text("\n".join(help_text))
