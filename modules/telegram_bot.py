@@ -450,6 +450,11 @@ def run_bot(queue):
 async def bot_main(queue):
     """机器人的主异步函数"""
     global bot_application
+    global background_tasks  # 添加全局变量跟踪后台任务
+    
+    # 初始化任务跟踪集合
+    if 'background_tasks' not in globals():
+        globals()['background_tasks'] = set()
     
     logger.info("正在启动Telegram机器人...")
     print("DEBUG: 正在启动Telegram机器人...")
@@ -525,19 +530,34 @@ async def bot_main(queue):
         else:
             logger.warning("无法获取公开URL，未设置webhook。机器人可能无法接收更新。")
 
-        # 启动后台任务
+        # 启动后台任务，确保每个任务只启动一次
         logger.info("启动后台任务...")
-        asyncio.create_task(periodic_order_check())
-        asyncio.create_task(process_notification_queue(queue))
-        asyncio.create_task(clean_notified_orders_periodically())  # 添加清理任务
         
+        # 每个任务只创建一次
+        task1 = asyncio.create_task(periodic_order_check())
+        task1.set_name("periodic_order_check")
+        globals()['background_tasks'].add(task1)
+        
+        task2 = asyncio.create_task(process_notification_queue(queue))
+        task2.set_name("process_notification_queue")
+        globals()['background_tasks'].add(task2)
+        
+        task3 = asyncio.create_task(clean_notified_orders_periodically())
+        task3.set_name("clean_notified_orders")
+        globals()['background_tasks'].add(task3)
+        
+        # 监控任务完成并移除
+        for task in globals()['background_tasks']:
+            task.add_done_callback(lambda t: globals()['background_tasks'].discard(t))
+        
+        logger.info(f"后台任务已启动，当前运行中的任务: {len(globals()['background_tasks'])}")
         logger.info("Telegram机器人主循环已启动，等待更新...")
         print("DEBUG: Telegram机器人主循环已启动，等待更新...")
         
         # 保持此协程运行以使后台任务可以执行
         while True:
             await asyncio.sleep(3600) # 每小时唤醒一次，但主要目的是保持运行
-
+            
     except Exception as e:
         logger.critical(f"Telegram机器人主函数 `bot_main` 发生严重错误: {str(e)}", exc_info=True)
         print(f"CRITICAL: Telegram机器人主函数 `bot_main` 发生严重错误: {str(e)}")
@@ -591,30 +611,75 @@ async def error_handler(update, context):
         print(f"ERROR: 尝试回复错误通知失败: {str(e)}")
 
 async def periodic_order_check():
-    """定期检查新订单的任务"""
-    check_count = 0
+    """周期性检查未通知的订单"""
+    logger.info("启动周期性订单检查任务")
+    
+    # 初始化时间间隔，开始时较短(10秒)，逐渐增加到最大值(60秒)
+    check_interval = 10  # 初始检查间隔，单位秒
+    max_interval = 60    # 最大检查间隔，单位秒
+    
     while True:
         try:
-            logger.debug(f"执行第 {check_count + 1} 次订单检查")
+            logger.debug(f"执行周期性订单检查，当前间隔: {check_interval}秒")
+            
+            # 在这里调用检查未通知订单的函数
             await check_and_push_orders()
-            await cleanup_processing_accepts()
-            check_count += 1
+            
+            # 延长检查间隔，直到最大值
+            check_interval = min(check_interval * 1.2, max_interval)
+            
+            # 等待下一次检查
+            await asyncio.sleep(check_interval)
+        except asyncio.CancelledError:
+            logger.info("周期性订单检查任务被取消")
+            break
         except Exception as e:
-            logger.error(f"订单检查任务出错: {e}", exc_info=True)
-        
-        await asyncio.sleep(5) # 每5秒检查一次
+            logger.error(f"周期性订单检查任务出错: {str(e)}", exc_info=True)
+            print(f"ERROR: 周期性订单检查任务出错: {str(e)}")
+            
+            # 出错后等待一段时间再继续
+            await asyncio.sleep(30)
 
 async def process_notification_queue(queue):
     """处理来自Flask的通知队列"""
+    global notified_orders_lock
+    global notified_orders
+    
+    # 用于跟踪已处理的通知
+    processed_notifications = set()
+    
     loop = asyncio.get_running_loop()
     while True:
         try:
             # 在执行器中运行阻塞的 queue.get()，这样不会阻塞事件循环
             data = await loop.run_in_executor(None, queue.get)
+            
+            # 生成通知的唯一标识符
+            notification_type = data.get('type')
+            notification_id = None
+            
+            if notification_type == 'new_order' or notification_type == 'order_status_change':
+                order_id = data.get('order_id')
+                notification_id = f"{notification_type}_{order_id}"
+                
+            # 检查是否已处理此通知
+            if notification_id and notification_id in processed_notifications:
+                logger.warning(f"通知 {notification_id} 已被处理过，跳过")
+                queue.task_done()
+                continue
+                
             logger.info(f"从队列中获取到通知任务: {data.get('type')}, 数据: {data}")
             
             # 确保调用send_notification_from_queue并等待其完成
             await send_notification_from_queue(data)
+            
+            # 标记通知为已处理
+            if notification_id:
+                processed_notifications.add(notification_id)
+                # 限制集合大小，防止内存泄漏
+                if len(processed_notifications) > 1000:
+                    # 只保留最近的500个
+                    processed_notifications = set(list(processed_notifications)[-500:])
             
             # 标记任务完成
             queue.task_done()
@@ -1931,17 +1996,44 @@ async def check_and_push_orders():
         # 导入必要的函数
         from modules.database import get_unnotified_orders, execute_query
         
-        # 获取未通知的订单
-        unnotified_orders = get_unnotified_orders()
+        # 获取未通知的订单，使用FOR UPDATE锁定这些行避免竞争条件
+        if DATABASE_URL.startswith('postgres'):
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, account, password, package, created_at, web_user_id, remark 
+                FROM orders 
+                WHERE notified = FALSE AND status = %s
+                FOR UPDATE
+            """, (STATUS['SUBMITTED'],))
+            unnotified_orders = cursor.fetchall()
+        else:
+            unnotified_orders = get_unnotified_orders()
         
         if unnotified_orders:
             logger.info(f"发现 {len(unnotified_orders)} 个未通知的订单")
             print(f"DEBUG: 发现 {len(unnotified_orders)} 个未通知的订单")
             
-            # 处理每个未通知的订单
+            # 立即标记这些订单为已通知，防止其他进程重复处理
+            order_ids = [order[0] for order in unnotified_orders]
+            
+            if DATABASE_URL.startswith('postgres'):
+                # PostgreSQL支持批量更新
+                placeholders = ','.join(['%s'] * len(order_ids))
+                cursor.execute(f"UPDATE orders SET notified = TRUE WHERE id IN ({placeholders})", order_ids)
+                conn.commit()
+                conn.close()
+            else:
+                # SQLite需要逐个更新
+                for order_id in order_ids:
+                    execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (order_id,))
+            
+            logger.info(f"已将订单 {order_ids} 标记为已通知")
+            
+            # 现在安全地处理这些订单
             for order in unnotified_orders:
                 # 注意：order是一个元组，不是字典
-                # 根据get_unnotified_orders的SQL查询，元素顺序为:
+                # 根据查询，元素顺序为:
                 # id, account, password, package, created_at, web_user_id, remark
                 order_id = order[0]
                 account = order[1]  # 图片路径
@@ -1950,32 +2042,26 @@ async def check_and_push_orders():
                 # 使用全局通知队列
                 global notification_queue
                 if notification_queue:
-                    # 添加到通知队列
-                    notification_queue.put({
-                        'type': 'new_order',
-                        'order_id': order_id,
-                        'account': account,
-                        'remark': remark,
-                        'preferred_seller': None  # 不指定特定卖家
-                    })
-                    logger.info(f"已将订单 #{order_id} 添加到通知队列")
-                    print(f"DEBUG: 已将订单 #{order_id} 添加到通知队列")
-                    
-                    # 立即将订单标记为已通知，防止重复通知
-                    try:
-                        if DATABASE_URL.startswith('postgres'):
-                            execute_query(
-                                "UPDATE orders SET notified=TRUE WHERE id=%s",
-                                (order_id,)
-                            )
-                        else:
-                            execute_query(
-                                "UPDATE orders SET notified=1 WHERE id=?",
-                                (order_id,)
-                            )
-                        logger.info(f"订单 #{order_id} 已标记为已通知")
-                    except Exception as e:
-                        logger.error(f"更新订单 #{order_id} 通知状态时出错: {e}", exc_info=True)
+                    # 检查队列中是否已经有此订单的通知
+                    queue_items = list(notification_queue.queue)
+                    existing_notification = False
+                    for item in queue_items:
+                        if item.get('type') == 'new_order' and item.get('order_id') == order_id:
+                            existing_notification = True
+                            logger.warning(f"订单 #{order_id} 已在通知队列中，跳过")
+                            break
+                            
+                    if not existing_notification:
+                        # 添加到通知队列
+                        notification_queue.put({
+                            'type': 'new_order',
+                            'order_id': order_id,
+                            'account': account,
+                            'remark': remark,
+                            'preferred_seller': None  # 不指定特定卖家
+                        })
+                        logger.info(f"已将订单 #{order_id} 添加到通知队列")
+                        print(f"DEBUG: 已将订单 #{order_id} 添加到通知队列")
                 else:
                     logger.error("通知队列未初始化")
                     print("ERROR: 通知队列未初始化")
