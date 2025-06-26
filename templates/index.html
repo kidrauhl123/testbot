@@ -937,6 +937,14 @@
       font-size: 12px;
       margin-top: 3px;
     }
+
+    /* 已确认按钮样式 */
+    .confirm-btn.confirmed {
+      background-color: #d4edda;
+      color: #155724;
+      border-color: #c3e6cb;
+      cursor: default;
+    }
   </style>
 </head>
 <body>
@@ -1864,7 +1872,7 @@
             <p class="time">提交时间：${o.created_at}</p>
             ${o.completed_at ? `<p class="time">完成时间：${o.completed_at}</p>` : ''}
           </div>
-          ${o.status === 'accepted' || o.status === 'submitted' ? `<button class="confirm-btn" onclick="confirmOrder(${o.id})">确认收货</button>` : ''}
+          ${o.status === 'accepted' || o.status === 'submitted' ? `<button class="confirm-btn" onclick="confirmOrder(${o.id})">确认</button>` : ''}
           <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
         </div>`;
       gridContainer.insertAdjacentHTML('beforeend', html);
@@ -2039,12 +2047,18 @@
 
   // 确认收货
   async function confirmOrder(orderId) {
-    if (!confirm('确定已收到并完成此订单吗？')) return;
     try {
       const resp = await fetch(`/orders/confirm/${orderId}`, { method: 'POST' });
       const result = await resp.json();
       if (result.success) {
-        showCustomAlert('已确认收货，订单完成', 'success');
+        // 直接更新按钮文本为"已确认"
+        const buttons = document.querySelectorAll(`button.confirm-btn[onclick="confirmOrder(${orderId})"]`);
+        buttons.forEach(btn => {
+          btn.textContent = "已确认";
+          btn.disabled = true;
+          btn.classList.add("confirmed");
+        });
+        // 更新订单状态，无需弹窗提示
         await loadOrders();
       } else {
         alert(result.error || '确认失败');
