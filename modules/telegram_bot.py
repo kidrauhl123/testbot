@@ -529,6 +529,7 @@ async def bot_main(queue):
         logger.info("启动后台任务...")
         asyncio.create_task(periodic_order_check())
         asyncio.create_task(process_notification_queue(queue))
+        asyncio.create_task(clean_notified_orders_periodically())  # 添加清理任务
         
         logger.info("Telegram机器人主循环已启动，等待更新...")
         print("DEBUG: Telegram机器人主循环已启动，等待更新...")
@@ -540,6 +541,31 @@ async def bot_main(queue):
     except Exception as e:
         logger.critical(f"Telegram机器人主函数 `bot_main` 发生严重错误: {str(e)}", exc_info=True)
         print(f"CRITICAL: Telegram机器人主函数 `bot_main` 发生严重错误: {str(e)}")
+
+# ====== 添加清理notified_orders的函数 ======
+async def clean_notified_orders_periodically():
+    """定期清理已通知的订单记录，防止内存泄漏"""
+    global notified_orders, notified_orders_lock
+    
+    while True:
+        try:
+            await asyncio.sleep(3600)  # 每小时清理一次
+            
+            # 获取当前时间
+            current_time = time.time()
+            
+            # 安全地清理集合
+            with notified_orders_lock:
+                # 清空集合 - 一小时后重置所有状态
+                before_size = len(notified_orders)
+                notified_orders.clear()
+                after_size = len(notified_orders)
+                
+            logger.info(f"已清理notified_orders集合，从 {before_size} 项减少到 {after_size} 项")
+        except Exception as e:
+            logger.error(f"清理notified_orders时出错: {e}", exc_info=True)
+            # 等待一段时间后继续尝试
+            await asyncio.sleep(300)
 
 # 添加错误处理函数
 async def error_handler(update, context):
@@ -1165,6 +1191,17 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 自动接单并标记为完成（与 complete_ 逻辑一致）
         try:
+            # 使用notified_orders_lock来避免重复处理
+            with notified_orders_lock:
+                # 检查订单是否已经被处理过
+                notification_key = f"done_{oid}_{user_id}"
+                if notification_key in notified_orders:
+                    await query.answer("订单状态已更新，请勿重复操作", show_alert=True)
+                    return
+                
+                # 标记为已处理
+                notified_orders.add(notification_key)
+            
             timestamp = get_china_time()
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -1226,6 +1263,17 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 将订单标记为失败
         try:
+            # 使用notified_orders_lock来避免重复处理
+            with notified_orders_lock:
+                # 检查订单是否已经被处理过
+                notification_key = f"problem_{oid}_{user_id}"
+                if notification_key in notified_orders:
+                    await query.answer("订单状态已更新，请勿重复操作", show_alert=True)
+                    return
+                
+                # 标记为已处理
+                notified_orders.add(notification_key)
+                
             timestamp = get_china_time()
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -1268,6 +1316,17 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("fail_"):
         oid = int(data.split('_')[1])
         try:
+            # 使用notified_orders_lock来避免重复处理
+            with notified_orders_lock:
+                # 检查订单是否已经被处理过
+                notification_key = f"fail_{oid}_{user_id}"
+                if notification_key in notified_orders:
+                    await query.answer("订单状态已更新，请勿重复操作", show_alert=True)
+                    return
+                
+                # 标记为已处理
+                notified_orders.add(notification_key)
+            
             timestamp = get_china_time()
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -1649,6 +1708,17 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 处理订单完成
         try:
+            # 使用notified_orders_lock来避免重复处理
+            with notified_orders_lock:
+                # 检查订单是否已经被处理过
+                notification_key = f"complete_{oid}_{user_id}"
+                if notification_key in notified_orders:
+                    await query.answer("订单状态已更新，请勿重复操作", show_alert=True)
+                    return
+                
+                # 标记为已处理
+                notified_orders.add(notification_key)
+            
             timestamp = get_china_time()
             
             # 获取订单信息以便通知
@@ -1709,6 +1779,17 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reason = feedback_waiting.get(f"fail_{oid}", reason_code)
         
         try:
+            # 使用notified_orders_lock来避免重复处理
+            with notified_orders_lock:
+                # 检查订单是否已经被处理过
+                notification_key = f"fail_save_{oid}_{user_id}"
+                if notification_key in notified_orders:
+                    await query.answer("订单状态已更新，请勿重复操作", show_alert=True)
+                    return
+                
+                # 标记为已处理
+                notified_orders.add(notification_key)
+            
             timestamp = get_china_time()
             
             # 更新订单状态
