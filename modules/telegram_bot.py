@@ -30,7 +30,7 @@ from modules.constants import (
 )
 from modules.database import (
     get_order_details, execute_query, 
-    get_unnotified_orders, get_active_seller_ids, approve_recharge_request, reject_recharge_request,
+    get_unnotified_orders, get_active_seller_ids,
     update_seller_desired_orders, update_seller_last_active, get_active_sellers
 )
 
@@ -345,6 +345,33 @@ async def on_seller_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message += "📭 当前没有可接的新订单。\n"
 
     await update.message.reply_text(message, parse_mode='Markdown')
+
+# ====== 恢复 /orders 命令处理 ======
+async def on_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理设置期望接单数量的命令"""
+    user_id = update.effective_user.id
+    
+    if not is_seller(user_id):
+        await update.message.reply_text("您不是卖家，无法使用此命令")
+        return
+    
+    # 检查参数
+    if not context.args or len(context.args) != 1 or not context.args[0].isdigit():
+        await update.message.reply_text(
+            "请提供您期望的每小时接单数量，例如：\n/orders 5"
+        )
+        return
+    
+    desired_orders = int(context.args[0])
+    desired_orders = max(0, min(desired_orders, 20))  # 0~20 范围
+    
+    update_seller_desired_orders(user_id, desired_orders)
+    update_seller_last_active(user_id)
+    
+    await update.message.reply_text(
+        f"✅ 您的期望接单数量已设置为: {desired_orders} 单/小时"
+    )
+    logger.info(f"卖家 {user_id} 设置期望接单数量为 {desired_orders}")
 
 # ===== 主函数 =====
 def run_bot(queue):
@@ -873,10 +900,6 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await on_accept(update, context)
     elif data.startswith("feedback:"):
         await on_feedback_button(update, context)
-    elif data.startswith("approve_recharge:"):
-        await on_approve_recharge(update, context)
-    elif data.startswith("reject_recharge:"):
-        await on_reject_recharge(update, context)
     elif data.startswith("problem_"):
         oid = int(data.split('_')[1])
         
@@ -1119,107 +1142,6 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     else:
         await query.answer("Unknown command")
-
-@callback_error_handler
-async def on_approve_recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理批准充值请求的回调"""
-    query = update.callback_query
-    user_id = update.effective_user.id
-    
-    # 只允许超级管理员处理充值请求
-    if user_id != 1878943383:
-        await query.answer("您没有权限执行此操作", show_alert=True)
-        return
-    
-    # 获取充值请求ID
-    request_id = int(query.data.split(":")[1])
-    
-    # 批准充值请求
-    success, message = approve_recharge_request(request_id, str(user_id))
-    
-    if success:
-        # 更新消息
-        keyboard = [[InlineKeyboardButton("✅ 已批准", callback_data="dummy_action")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        try:
-            await query.edit_message_reply_markup(reply_markup=reply_markup)
-            await query.answer("充值请求已批准", show_alert=True)
-        except Exception as e:
-            logger.error(f"更新消息失败: {str(e)}")
-            await query.answer("操作成功，但更新消息失败", show_alert=True)
-    else:
-        await query.answer(f"操作失败: {message}", show_alert=True)
-
-@callback_error_handler
-async def on_reject_recharge(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理拒绝充值请求的回调"""
-    query = update.callback_query
-    user_id = update.effective_user.id
-    
-    # 只允许超级管理员处理充值请求
-    if user_id != 1878943383:
-        await query.answer("您没有权限执行此操作", show_alert=True)
-        return
-    
-    # 获取充值请求ID
-    request_id = int(query.data.split(":")[1])
-    
-    # 拒绝充值请求
-    success, message = reject_recharge_request(request_id, str(user_id))
-    
-    if success:
-        # 更新消息
-        keyboard = [[InlineKeyboardButton("❌ 已拒绝", callback_data="dummy_action")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        try:
-            await query.edit_message_reply_markup(reply_markup=reply_markup)
-            await query.answer("充值请求已拒绝", show_alert=True)
-        except Exception as e:
-            logger.error(f"更新消息失败: {str(e)}")
-            await query.answer("操作成功，但更新消息失败", show_alert=True)
-    else:
-        await query.answer(f"操作失败: {message}", show_alert=True)
-
-async def on_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理设置期望接单数量的命令"""
-    user_id = update.effective_user.id
-    
-    if not is_seller(user_id):
-        await update.message.reply_text("您不是卖家，无法使用此命令")
-        return
-    
-    # 检查是否有参数
-    if not context.args or len(context.args) != 1 or not context.args[0].isdigit():
-        await update.message.reply_text(
-            "请提供您期望的每小时接单数量，例如：\n/orders 5"
-        )
-        return
-    
-    # 获取期望接单数量
-    desired_orders = int(context.args[0])
-    
-    # 限制范围
-    if desired_orders < 0:
-        desired_orders = 0
-    elif desired_orders > 20:
-        desired_orders = 20
-    
-    # 更新数据库
-    update_seller_desired_orders(user_id, desired_orders)
-    
-    # 更新最后活跃时间
-    update_seller_last_active(user_id)
-    
-    # 回复确认
-    await update.message.reply_text(
-        f"✅ 您的期望接单数量已设置为: {desired_orders} 单/小时"
-    )
-    
-    logger.info(f"卖家 {user_id} 设置期望接单数量为 {desired_orders}")
-
-
 
 # ====== 自动修复：添加测试通知命令处理函数 ======
 async def on_test_notify(update: Update, context: ContextTypes.DEFAULT_TYPE):

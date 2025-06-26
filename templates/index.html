@@ -1866,7 +1866,6 @@
           </div>
           ${o.status === 'accepted' || o.status === 'submitted' ? `<button class="confirm-btn" onclick="confirmOrder(${o.id})">确认收货</button>` : ''}
           <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
-          ${o.status === 'accepted' && canRequestUpdate(o) ? `<button class="urge-btn" onclick="urgeOrder(${o.id})">催单</button>` : ''}
         </div>`;
       gridContainer.insertAdjacentHTML('beforeend', html);
     });
@@ -1903,7 +1902,6 @@
           <td>${o.completed_at || '-'}</td>
           <td>
             <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
-            ${o.status === 'accepted' && canRequestUpdate(o) ? `<button class="urge-btn" onclick="urgeOrder(${o.id})">催单</button>` : ''}
             ${(o.status === 'accepted' || o.status === 'submitted') ? `<button class="confirm-btn" onclick="confirmOrder(${o.id})">确认</button>` : ''}
           </td>
         </tr>
@@ -1974,21 +1972,6 @@
       .replace(/'/g, "&#039;");
   }
 
-  // 检查是否可以催单（接单超过20分钟）
-  function canRequestUpdate(order) {
-    if (!order.accepted_at) return false;
-    
-    // 解析接单时间
-    const acceptedTime = new Date(order.accepted_at);
-    const now = new Date();
-    
-    // 计算时间差（毫秒）
-    const timeDiff = now - acceptedTime;
-    
-    // 如果时间差大于20分钟（1200000毫秒），允许催单
-    return timeDiff > 1200000;
-  }
-
   // 质疑订单（当订单显示充值成功但实际未成功时）
   async function disputeOrder(orderId) {
     if (!confirm('您确定要质疑此订单吗？如果订单显示充值成功但实际未成功，请点击确定。')) return;
@@ -2007,25 +1990,6 @@
     } catch (e) {
       console.error('质疑订单失败', e);
       alert('质疑提交失败，请重试');
-    }
-  }
-
-  // 催单（当订单接单超过20分钟未完成时）
-  async function urgeOrder(orderId) {
-    if (!confirm('您确定要催促此订单吗？这将向卖家发送催单通知。')) return;
-    
-    try {
-      const resp = await fetch(`/orders/urge/${orderId}`, { method: 'POST' });
-      const result = await resp.json();
-      
-      if (result.success) {
-        showCustomAlert('催单通知已发送给卖家', 'success');
-      } else {
-        alert(result.error || '催单失败，请重试');
-      }
-    } catch (e) {
-      console.error('催单失败', e);
-      alert('催单失败，请重试');
     }
   }
 

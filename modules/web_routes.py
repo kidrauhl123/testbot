@@ -15,7 +15,7 @@ from flask import Flask, request, render_template, jsonify, session, redirect, u
 from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH, DATABASE_URL
 from modules.database import (
     execute_query, hash_password, get_all_sellers, add_seller, remove_seller, toggle_seller_status,
-    get_user_balance, get_user_credit_limit, set_user_credit_limit, refund_order, 
+    get_user_balance, get_user_credit_limit, set_user_credit_limit, set_user_balance, refund_order, 
     create_order_with_deduction_atomic, get_user_recharge_requests, create_recharge_request,
     get_pending_recharge_requests, approve_recharge_request, reject_recharge_request, toggle_seller_admin,
     get_balance_records, get_activation_code, mark_activation_code_used, create_activation_code,
@@ -624,62 +624,10 @@ def register_routes(app, notification_queue):
     @app.route('/orders/urge/<int:oid>', methods=['POST'])
     @login_required
     def urge_order(oid):
-        """催促已接单但未完成的订单（超过20分钟未处理）"""
-        user_id = session.get('user_id')
-        is_admin = session.get('is_admin', 0)
-        
-        # 获取订单信息
-        order = execute_query("""
-            SELECT id, user_id, status, package, accepted_by, accepted_at, account, password
-            FROM orders 
-            WHERE id=?
-        """, (oid,), fetch=True)
-        
-        if not order:
-            return jsonify({"error": "订单不存在"}), 404
-            
-        order_id, order_user_id, status, package, accepted_by, accepted_at, account, password = order[0]
-        
-        # 验证权限：只能催促自己的订单，或者管理员可以催促任何人的订单
-        if user_id != order_user_id and not is_admin:
-            return jsonify({"error": "权限不足"}), 403
-            
-        # 只能催促"已接单"状态的订单
-        if status != STATUS['ACCEPTED']:
-            return jsonify({"error": "只能催促已接单的订单"}), 400
-            
-        # 检查是否已经过了20分钟
-        if accepted_at:
-            accepted_time = datetime.strptime(accepted_at, "%Y-%m-%d %H:%M:%S")
-            # 将接单时间转换为aware datetime
-            if accepted_time.tzinfo is None:
-                accepted_time = CN_TIMEZONE.localize(accepted_time)
-            
-            # 获取当前中国时间
-            now = datetime.now(CN_TIMEZONE)
-            
-            # 如果接单时间不足20分钟，不允许催单
-            if now - accepted_time < timedelta(minutes=20):
-                return jsonify({"error": "接单未满20分钟，暂不能催单"}), 400
-        
-        logger.info(f"订单催促: ID={oid}, 用户ID={user_id}")
-        
-        # 如果有接单人，尝试通过Telegram通知接单人
-        if accepted_by:
-            logger.info(f"订单 {oid} 有接单人 {accepted_by}，准备发送催单通知。")
-            notification_queue.put({
-                'type': 'urge',
-                'order_id': oid,
-                'seller_id': accepted_by,
-                'account': account,
-                'password': password,
-                'package': package,
-                'accepted_at': accepted_at
-            })
-            logger.info(f"已将订单 {oid} 的催单通知任务放入队列。")
-            return jsonify({"success": True})
-        else:
-            return jsonify({"error": "该订单没有接单人信息，无法催单"}), 400
+        """催促已接单但未完成的订单（功能已下线）"""
+        return jsonify({"error": "催单功能已下线"}), 404
+        # 以下旧代码保留以防日后恢复
+        # user_id = session.get('user_id')
 
     # 添加一个测试路由
     @app.route('/test')
