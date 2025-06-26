@@ -14,15 +14,10 @@ import traceback
 import psycopg2
 from urllib.parse import urlparse
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder,
-    CallbackQueryHandler,
-    ContextTypes,
-    MessageHandler,
-    CommandHandler,
-    filters
-)
+from telegram import (Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup,
+                     ReplyKeyboardRemove, InputMediaPhoto)
+from telegram.ext import (Application, CommandHandler, MessageHandler, filters, ContextTypes,
+                         CallbackQueryHandler, ConversationHandler, ApplicationBuilder)
 
 from modules.constants import (
     BOT_TOKEN, STATUS, PLAN_LABELS_EN,
@@ -33,6 +28,20 @@ from modules.database import (
     get_unnotified_orders, get_active_seller_ids,
     update_seller_desired_orders, update_seller_last_active, get_active_sellers
 )
+
+# 定义bot_command_handler装饰器，用于处理命令
+def bot_command_handler(func):
+    """
+    命令处理器的装饰器，用于注册命令处理函数
+    """
+    @functools.wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            return await func(update, context)
+        except Exception as e:
+            logger.error(f"命令 {func.__name__} 处理出错: {str(e)}", exc_info=True)
+            await update.message.reply_text("处理命令时出错，请稍后重试")
+    return wrapper
 
 # 设置日志
 logging.basicConfig(
@@ -427,6 +436,12 @@ async def bot_main(queue):
         bot_application.add_handler(CommandHandler("start", on_start))
         bot_application.add_handler(CommandHandler("seller", on_seller_command))
         bot_application.add_handler(CommandHandler("orders", on_orders))  # 添加新命令
+        
+        # 添加我们新增的命令处理程序
+        bot_application.add_handler(CommandHandler("status", on_status_command))
+        bot_application.add_handler(CommandHandler("maxorders", on_maxorders_command))
+        bot_application.add_handler(CommandHandler("mystatus", on_mystatus_command))
+        bot_application.add_handler(CommandHandler("help", on_help_command))
         
         # 添加测试命令处理程序
         bot_application.add_handler(CommandHandler("test", on_test))
