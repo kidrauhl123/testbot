@@ -1315,7 +1315,7 @@
   }
 
   async function removeSeller(telegramId) {
-    if (!confirm(`确认要删除卖家 ${telegramId} 吗？此操作不可逆。`)) return;
+    if (!confirm(`确认要删除此卖家吗？此操作不可逆。`)) return;
 
     await fetch(`/admin/api/sellers/${telegramId}`, { method: 'DELETE' });
     loadSellers();
