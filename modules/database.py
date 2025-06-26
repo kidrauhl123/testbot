@@ -468,7 +468,9 @@ def get_all_sellers():
         return execute_query("""
             SELECT telegram_id, username, first_name, nickname, is_active, 
                    added_at, added_by, 
-                   COALESCE(is_admin, FALSE) as is_admin 
+                   COALESCE(is_admin, FALSE) as is_admin,
+                   COALESCE(max_orders, 10) as max_orders,
+                   COALESCE(current_orders, 0) as current_orders 
             FROM sellers 
             ORDER BY added_at DESC
         """, fetch=True)
@@ -477,7 +479,9 @@ def get_all_sellers():
         return execute_query("""
             SELECT telegram_id, username, first_name, nickname, is_active, 
                    added_at, added_by, 
-                   COALESCE(is_admin, 0) as is_admin 
+                   COALESCE(is_admin, 0) as is_admin,
+                   COALESCE(max_orders, 10) as max_orders,
+                   COALESCE(current_orders, 0) as current_orders
             FROM sellers 
             ORDER BY added_at DESC
         """, fetch=True)
