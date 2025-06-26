@@ -1142,17 +1142,16 @@
 
 <script>
   // 全局变量
-  let allOrders = [];
-  let displayedOrders = 10;
-  let orderPageSize = 10;
-  let searchKeyword = '';
-  let viewMode = 'grid';
+  let displayedOrders = 10; // 初始显示10个订单
+  let allOrders = []; // 存储所有订单
+  let searchKeyword = ''; // 搜索关键词
   let autoRefreshInterval = null;
-  let userId = '{{ session.user_id }}';
-  let isAdmin = {{ 'true' if session.is_admin else 'false' }};
-  let lastOrdersHash = '';
-  let page = 1;
-  let confirmedOrderIds = new Set();
+  let userId = '{{ session.user_id }}'; // 当前用户ID
+  let isAdmin = {{ 'true' if session.is_admin else 'false' }}; // 是否是管理员
+  let lastOrdersHash = ''; // 用于检测订单变化的哈希
+  let viewMode = 'table'; // 默认视图模式：grid 或 table
+  let page = 1; // 当前页码
+  let orderPageSize = 10; // 每次加载的订单数量
   
   // 默认价格，会被用户定制价格覆盖
   const WEB_PRICES = {
@@ -1766,58 +1765,57 @@
   }
 
   // 加载订单
-  async function loadOrders(silent = false) {
-    if (!silent) {
-      document.getElementById('refreshIndicator').classList.add('show');
-    }
-    
+  async function loadOrders(isAutoRefresh = false) {
     try {
-      const resp = await fetch('/orders/recent');
-      const data = await resp.json();
+      const indicator = document.getElementById('refreshIndicator');
+      if (!isAutoRefresh) {
+        indicator.textContent = "正在加载...";
+        indicator.classList.add('show');
+      }
       
-      if (Array.isArray(data)) {
-        // 计算新数据的哈希值，用于检测是否有变化
-        const newOrdersHash = JSON.stringify(data);
-        
-        // 如果数据没有变化，不更新UI
-        if (newOrdersHash === lastOrdersHash && silent) {
-          if (!silent) hideLoadingIndicator();
-          return;
-        }
-        
-        lastOrdersHash = newOrdersHash;
-        allOrders = data;
-        
-        // 检查已完成的订单，将它们添加到已确认集合中
-        allOrders.forEach(order => {
-          if (order.status === 'completed') {
-            confirmedOrderIds.add(order.id);
-          }
-        });
-        
-        // 根据搜索关键词过滤订单
-        const filteredOrders = searchKeyword ? 
-          allOrders.filter(order => 
-            order.id.toString().includes(searchKeyword) || 
-            order.account.toLowerCase().includes(searchKeyword.toLowerCase())
-          ) : allOrders;
-        
-        // 渲染订单
-        renderOrders(filteredOrders);
-        
-        // 更新今日总额
-        updateTodayTotal(filteredOrders);
-        
-        // 显示自动刷新提示
-        if (silent) {
-          hideLoadingIndicator();
-        }
-      } else {
-        showCustomAlert('加载订单失败', 'error');
+      const response = await fetch('/orders/recent');
+      const orders = await response.json();
+      
+      // 生成并比较哈希，检测是否有变化
+      const newHash = generateOrdersHash(orders);
+      const hasChanged = newHash !== lastOrdersHash;
+      lastOrdersHash = newHash;
+      
+      // 如果是自动刷新且无变化，则不更新UI
+      if (isAutoRefresh && !hasChanged) {
+        return;
+      }
+      
+      // 更新全局数据
+      allOrders = orders;
+      
+      // 应用搜索过滤（如果有）
+      let filteredOrders = orders;
+      if (searchKeyword) {
+        filteredOrders = orders.filter(order => 
+          order.id.toString().includes(searchKeyword) || 
+          order.account.toLowerCase().includes(searchKeyword.toLowerCase())
+        );
+      }
+      
+      // 渲染订单
+      renderOrders(filteredOrders);
+      
+      // 更新今日总额
+      updateTodayTotal(filteredOrders);
+      
+      // 显示自动刷新提示
+      if (isAutoRefresh) {
+        indicator.textContent = "数据已更新";
+        indicator.classList.add('show');
+        setTimeout(() => {
+          indicator.classList.remove('show');
+        }, 1500);
       }
     } catch (error) {
       console.error('加载订单失败:', error);
-      showCustomAlert('加载订单失败，请重试', 'error');
+    } finally {
+      hideLoadingIndicator();
     }
   }
 
@@ -1852,32 +1850,33 @@
   }
   
   // 渲染网格视图
-  function renderGridView(container, orders) {
-    let html = '';
+  function renderGridView(gridContainer, orders) {
+    gridContainer.innerHTML = '';
     
-    orders.slice(0, displayedOrders).forEach(o => {
+    // 如果没有订单，显示提示
+    if (orders.length === 0) {
+      gridContainer.innerHTML = '<div class="no-results">暂无订单</div>';
+      return;
+    }
+    
+    orders.forEach(o => {
       const cls = 'status-' + o.status.replace('已','').toLowerCase();
       
-      html += `<div class="order-card ${cls}">
-          <div class="order-header">
-            <span class="order-id">#${o.id}</span>
-            <span class="status-badge ${cls}">${o.status_text}</span>
-          </div>
-          <div class="order-content">
-            ${o.account.includes('uploads') ? `<a href="/${o.account}" target="_blank" class="qr-link">查看二维码</a>` : '未上传二维码'}
-            ${o.remark ? `<p class="remark">${escapeHtml(o.remark)}</p>` : ''}
+      const html = `
+        <div class="order-list-item" data-order-id="${o.id}">
+          <h4>订单 #${o.id} <span class="status-badge ${cls}">${o.status_text}</span></h4>
+          ${isAdmin && o.accepted_by ? `<p class="creator">接单者：${escapeHtml(o.accepted_by)}</p>` : ''}
+          <p class="account"><strong>YouTube：</strong>${o.account.includes('uploads') ? `<a href="/${o.account}" target="_blank">查看二维码</a>` : '未上传二维码'}</p>
+          ${o.remark ? `<p class="remark"><strong>备注：</strong><strong>${escapeHtml(o.remark)}</strong></p>` : '<p class="remark"><strong>备注：</strong><strong></strong></p>'}
+          <div class="time-info">
             <p class="time">提交时间：${o.created_at}</p>
             ${o.completed_at ? `<p class="time">完成时间：${o.completed_at}</p>` : ''}
           </div>
-          ${((o.status === 'accepted' || o.status === 'submitted' || o.status === 'completed') && o.status !== 'cancelled' && o.status !== 'failed') ? 
-            (confirmedOrderIds.has(o.id) ? 
-              `<button class="confirm-btn confirmed" disabled>已确认</button>` : 
-              `<button class="confirm-btn" onclick="confirmOrder(${o.id})">确认</button>`) : ''}
+          ${o.status === 'accepted' || o.status === 'submitted' ? `<button class="confirm-btn" onclick="confirmOrder(${o.id})">确认</button>` : ''}
           <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
         </div>`;
+      gridContainer.insertAdjacentHTML('beforeend', html);
     });
-    
-    container.innerHTML = html;
   }
   
   // 渲染表格视图
@@ -1911,10 +1910,7 @@
           <td>${o.completed_at || '-'}</td>
           <td>
             <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
-            ${((o.status === 'accepted' || o.status === 'submitted' || o.status === 'completed') && o.status !== 'cancelled' && o.status !== 'failed') ? 
-              (confirmedOrderIds.has(o.id) ? 
-                `<button class="confirm-btn confirmed" disabled>已确认</button>` : 
-                `<button class="confirm-btn" onclick="confirmOrder(${o.id})">确认</button>`) : ''}
+            ${(o.status === 'accepted' || o.status === 'submitted') ? `<button class="confirm-btn" onclick="confirmOrder(${o.id})">确认</button>` : ''}
           </td>
         </tr>
       `;
@@ -2011,7 +2007,7 @@
     autoRefreshInterval = setInterval(() => {
       // 如果没有搜索关键词，则自动刷新
       if (!searchKeyword) {
-        loadOrders(true); // 使用silent=true参数
+        loadOrders(true);
       }
     }, 5000); // 改为5秒刷新一次，减少频率
   }
@@ -2062,8 +2058,6 @@
           btn.disabled = true;
           btn.classList.add("confirmed");
         });
-        // 将订单ID添加到已确认集合中
-        confirmedOrderIds.add(orderId);
         // 更新订单状态，无需弹窗提示
         await loadOrders();
       } else {
@@ -2080,10 +2074,6 @@
     const indicator = document.getElementById('refreshIndicator');
     if (indicator) {
       indicator.classList.remove('show');
-      // 延迟一段时间后再隐藏，避免闪烁
-      setTimeout(() => {
-        indicator.textContent = '';
-      }, 500);
     }
   }
 </script>

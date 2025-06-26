@@ -1203,19 +1203,6 @@ def register_routes(app, notification_queue):
                 # 普通批量删除
                 order_ids_int = [int(oid) for oid in order_ids]
                 placeholders = ','.join(['?'] * len(order_ids_int))
-                
-                # 先删除关联的通知记录
-                try:
-                    execute_query(
-                        f"DELETE FROM order_notifications WHERE order_id IN ({placeholders})",
-                        order_ids_int,
-                        fetch=False
-                    )
-                    logger.info(f"已删除 {len(order_ids_int)} 个订单的通知记录")
-                except Exception as e:
-                    logger.warning(f"删除订单通知记录时出错: {e}")
-                
-                # 再删除订单记录
                 result = execute_query(
                     f"DELETE FROM orders WHERE id IN ({placeholders})",
                     order_ids_int,
@@ -2051,8 +2038,7 @@ def register_routes(app, notification_queue):
         # 允许确认已提交或已接单状态的订单，但已完成状态不需要再确认
         if status == STATUS['COMPLETED']:
             logger.info(f"订单 {oid} 已是完成状态，无需再次确认")
-            # 即使已经是完成状态，也返回成功，以便前端可以正确显示"已确认"按钮
-            return jsonify({"success": True, "message": "订单已是完成状态", "already_completed": True})
+            return jsonify({"success": True, "message": "订单已是完成状态"})
         
         # 只有已提交、已接单、正在质疑状态的订单可以确认收货
         if status not in [STATUS['SUBMITTED'], STATUS['ACCEPTED'], STATUS['DISPUTING']]:
