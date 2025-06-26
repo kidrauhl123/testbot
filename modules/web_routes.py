@@ -1188,7 +1188,7 @@ def register_routes(app, notification_queue):
                         port=url.port
                     )
                     cur = conn.cursor()
-                    cur.execute("TRUNCATE TABLE orders RESTART IDENTITY;")
+                    cur.execute("TRUNCATE orders, order_notifications RESTART IDENTITY CASCADE;")
                     conn.commit()
                     cur.close()
                     conn.close()
