@@ -1238,8 +1238,6 @@
         const row = `
           <tr data-id="${seller.telegram_id}">
             <td style="display:none;">${seller.telegram_id}</td>
-            <td>${escapeHtml(seller.username || '')}</td>
-            <td>${escapeHtml(seller.first_name || '')}</td>
             <td>${escapeHtml(seller.nickname || '')}</td>
             <td>${statusBadge}</td>
             <td>${seller.max_orders || 10}</td>
@@ -1248,7 +1246,7 @@
             <td>${seller.added_at}</td>
             <td>${escapeHtml(seller.added_by || '')}</td>
             <td class="actions">
-              <button class="btn btn-primary btn-sm" onclick="editSeller(${seller.telegram_id}, '${escapeHtml(seller.nickname || '')}', ${seller.max_orders || 10})">编辑</button>
+              <button class="btn btn-primary btn-sm" onclick="editSeller('${seller.telegram_id}', '${escapeHtml(seller.nickname || '')}', ${seller.max_orders || 10})">编辑</button>
               <button class="btn ${toggleButtonClass} btn-sm" onclick="toggleSeller(${seller.telegram_id})">${toggleButtonText}</button>
               <button class="btn ${adminButtonClass} btn-sm" onclick="toggleSellerAdmin(${seller.telegram_id})">${adminButtonText}</button>
               <button class="btn btn-danger btn-sm" onclick="removeSeller(${seller.telegram_id})">删除</button>
@@ -1977,7 +1975,7 @@
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary" onclick="document.getElementById('edit-seller-modal').remove()">取消</button>
-            <button class="btn btn-primary" onclick="saveSellerEdit(${telegramId})">保存</button>
+            <button class="btn btn-primary" onclick="saveSellerEdit('${telegramId}')">保存</button>
           </div>
         </div>
       </div>
@@ -1985,6 +1983,15 @@
     
     // 添加到页面
     document.body.insertAdjacentHTML('beforeend', dialogHtml);
+    
+    // 显示模态框
+    const modal = document.getElementById('edit-seller-modal');
+    if (modal) {
+      modal.style.display = 'flex';
+      setTimeout(() => {
+        modal.classList.add('show');
+      }, 10);
+    }
   }
   
   async function saveSellerEdit(telegramId) {
@@ -2008,7 +2015,13 @@
       }
       
       // 移除对话框
-      document.getElementById('edit-seller-modal').remove();
+      const modal = document.getElementById('edit-seller-modal');
+      if (modal) {
+        modal.classList.remove('show');
+        setTimeout(() => {
+          modal.remove();
+        }, 300);
+      }
       
       showToast('卖家信息已更新', 'success');
       await loadSellers();
