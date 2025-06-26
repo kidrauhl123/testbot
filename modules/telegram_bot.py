@@ -433,20 +433,7 @@ async def bot_main(queue):
         bot_application.add_handler(CommandHandler("test_notify", on_test_notify))  # 添加测试通知命令
         print("DEBUG: 已添加测试命令处理程序")
         
-        # 添加回调处理程序，确保正确处理各种回调
-        accept_handler = CallbackQueryHandler(on_accept, pattern="^accept$")
-        bot_application.add_handler(accept_handler)
-        print(f"DEBUG: 已添加接单回调处理程序: {accept_handler}")
-        
-        # 添加接单按钮回调处理程序
-        accept_button_handler = CallbackQueryHandler(on_accept_button, pattern="^accept_")
-        bot_application.add_handler(accept_button_handler)
-        print(f"DEBUG: 已添加接单按钮回调处理程序: {accept_button_handler}")
-        
-        feedback_handler = CallbackQueryHandler(on_feedback_button, pattern="^(done|fail|reason)_")
-        bot_application.add_handler(feedback_handler)
-        
-        # 添加充值请求回调处理程序
+        # 添加通用回调处理程序，处理所有回调查询
         recharge_handler = CallbackQueryHandler(on_callback_query)
         bot_application.add_handler(recharge_handler)
         print(f"DEBUG: 已添加通用回调处理程序: {recharge_handler}")
@@ -897,9 +884,98 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 处理不同类型的回调
     if data.startswith("accept:"):
-        await on_accept(update, context)
+        # 内联实现接单逻辑，替代 on_accept 函数
+        try:
+            # 解析订单ID
+            oid = int(data.split(':')[1])
+            
+            # 获取用户信息
+            user_info = await get_user_info(user_id)
+            username = user_info.get('username', '')
+            first_name = user_info.get('first_name', '')
+            
+            # 标记订单为已接单
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            timestamp = get_china_time()
+            
+            # 检查订单状态
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute("SELECT status FROM orders WHERE id = %s", (oid,))
+            else:
+                cursor.execute("SELECT status FROM orders WHERE id = ?", (oid,))
+            
+            order_status = cursor.fetchone()
+            
+            if not order_status:
+                conn.close()
+                await query.answer("订单不存在", show_alert=True)
+                return
+            
+            # 如果订单已被接单，则拒绝
+            if order_status[0] != STATUS['SUBMITTED']:
+                conn.close()
+                await query.answer("该订单已被接单", show_alert=True)
+                return
+            
+            # 更新订单状态
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute(
+                    """UPDATE orders SET status=%s, accepted_by=%s, accepted_by_username=%s, 
+                    accepted_by_first_name=%s, accepted_at=%s WHERE id=%s""",
+                    (STATUS['ACCEPTED'], str(user_id), username, first_name, timestamp, oid)
+                )
+            else:
+                cursor.execute(
+                    """UPDATE orders SET status=?, accepted_by=?, accepted_by_username=?, 
+                    accepted_by_first_name=?, accepted_at=? WHERE id=?""",
+                    (STATUS['ACCEPTED'], str(user_id), username, first_name, timestamp, oid)
+                )
+            conn.commit()
+            conn.close()
+            
+            # 更新按钮
+            keyboard = [
+                [
+                    InlineKeyboardButton("✅ Complete", callback_data=f"done_{oid}"),
+                    InlineKeyboardButton("❓ Any Problem", callback_data=f"problem_{oid}")
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_reply_markup(reply_markup=reply_markup)
+            await query.answer("订单已接单", show_alert=True)
+            logger.info(f"用户 {user_id} 已接单: {oid}")
+        except Exception as e:
+            logger.error(f"接单时出错: {str(e)}", exc_info=True)
+            await query.answer("接单失败，请稍后重试", show_alert=True)
     elif data.startswith("feedback:"):
-        await on_feedback_button(update, context)
+        # 内联实现反馈按钮逻辑，替代 on_feedback_button 函数
+        try:
+            parts = data.split(':')
+            if len(parts) < 3:
+                await query.answer("无效的反馈数据", show_alert=True)
+                return
+            
+            oid = int(parts[1])
+            action = parts[2]
+            
+            if action == "done":
+                # 重用 done_ 逻辑
+                new_data = f"done_{oid}"
+                query.data = new_data
+                # 递归调用自身处理 done_ 逻辑
+                return await on_callback_query(update, context)
+            elif action == "fail":
+                # 重用 fail_ 逻辑
+                new_data = f"fail_{oid}"
+                query.data = new_data
+                # 递归调用自身处理 fail_ 逻辑
+                return await on_callback_query(update, context)
+            else:
+                await query.answer("未知的反馈操作", show_alert=True)
+        except Exception as e:
+            logger.error(f"处理反馈按钮时出错: {str(e)}", exc_info=True)
+            await query.answer("处理反馈失败，请稍后重试", show_alert=True)
     elif data.startswith("problem_"):
         oid = int(data.split('_')[1])
         

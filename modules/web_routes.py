@@ -1188,12 +1188,15 @@ def register_routes(app, notification_queue):
                         port=url.port
                     )
                     cur = conn.cursor()
-                    cur.execute("TRUNCATE orders, order_notifications RESTART IDENTITY CASCADE;")
+                    # 先删除关联表数据，再删除主表数据
+                    cur.execute("TRUNCATE TABLE order_notifications RESTART IDENTITY;")
+                    cur.execute("TRUNCATE TABLE orders RESTART IDENTITY;")
                     conn.commit()
                     cur.close()
                     conn.close()
                 else:
                     # SQLite等其他数据库的处理
+                    execute_query("DELETE FROM order_notifications")
                     execute_query("DELETE FROM orders")
                 deleted_count = total_count
             else:
