@@ -2065,12 +2065,12 @@ def register_routes(app, notification_queue):
             if max_orders is not None:
                 if DATABASE_URL.startswith('postgres'):
                     execute_query(
-                        "UPDATE sellers SET max_orders = %s WHERE telegram_id = %s",
+                        "UPDATE sellers SET max_orders=%s WHERE telegram_id=%s",
                         (max_orders, str(telegram_id))
                     )
                 else:
                     execute_query(
-                        "UPDATE sellers SET max_orders = ? WHERE telegram_id = ?",
+                        "UPDATE sellers SET max_orders=? WHERE telegram_id=?",
                         (max_orders, str(telegram_id))
                     )
                 logger.info(f"已更新卖家 {telegram_id} 的最大接单数为 {max_orders}")
