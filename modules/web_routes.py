@@ -1203,6 +1203,19 @@ def register_routes(app, notification_queue):
                 # 普通批量删除
                 order_ids_int = [int(oid) for oid in order_ids]
                 placeholders = ','.join(['?'] * len(order_ids_int))
+                
+                # 先删除关联的通知记录
+                try:
+                    execute_query(
+                        f"DELETE FROM order_notifications WHERE order_id IN ({placeholders})",
+                        order_ids_int,
+                        fetch=False
+                    )
+                    logger.info(f"已删除 {len(order_ids_int)} 个订单的通知记录")
+                except Exception as e:
+                    logger.warning(f"删除订单通知记录时出错: {e}")
+                
+                # 再删除订单记录
                 result = execute_query(
                     f"DELETE FROM orders WHERE id IN ({placeholders})",
                     order_ids_int,

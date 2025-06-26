@@ -1775,9 +1775,9 @@
       const resp = await fetch('/orders/recent');
       const data = await resp.json();
       
-      if (data.success) {
+      if (Array.isArray(data)) {
         // 计算新数据的哈希值，用于检测是否有变化
-        const newOrdersHash = JSON.stringify(data.orders);
+        const newOrdersHash = JSON.stringify(data);
         
         // 如果数据没有变化，不更新UI
         if (newOrdersHash === lastOrdersHash && silent) {
@@ -1786,7 +1786,7 @@
         }
         
         lastOrdersHash = newOrdersHash;
-        allOrders = data.orders;
+        allOrders = data;
         
         // 检查已完成的订单，将它们添加到已确认集合中
         allOrders.forEach(order => {
