@@ -300,11 +300,50 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
     if is_seller(user_id):
+        # Get current seller status
+        if DATABASE_URL.startswith('postgres'):
+            seller = execute_query(
+                "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=%s", 
+                (str(user_id),), fetch=True
+            )
+        else:
+            seller = execute_query(
+                "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=?", 
+                (str(user_id),), fetch=True
+            )
+        
+        is_active = seller[0][0] if seller else False
+        max_orders = seller[0][1] if seller else 0
+        current_orders = seller[0][2] if seller else 0
+        
+        # Create interactive buttons
+        keyboard = [
+            [
+                InlineKeyboardButton("🟢 Set Active", callback_data="set_status_active"),
+                InlineKeyboardButton("🔴 Set Inactive", callback_data="set_status_inactive")
+            ],
+            [
+                InlineKeyboardButton("📊 My Status", callback_data="check_status")
+            ],
+            [
+                InlineKeyboardButton("➕ Set Max Orders: 5", callback_data="set_max_orders_5"),
+                InlineKeyboardButton("➕ Set Max Orders: 10", callback_data="set_max_orders_10")
+            ],
+            [
+                InlineKeyboardButton("📋 View Available Orders", callback_data="view_orders")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        status_text = "Active" if is_active else "Inactive"
+        
         await update.message.reply_text(
-            "🌟 *Welcome to the Premium Recharge System!* 🌟\n\n"
-            "As a verified seller, you have access to:\n"
-            "• `/seller` - View available orders and your active orders\n"
-            "Need assistance? Feel free to contact the administrator.",
+            f"🌟 *Welcome to the Seller Dashboard* 🌟\n\n"
+            f"Current Status: *{status_text}*\n"
+            f"Max Orders: *{max_orders}*\n"
+            f"Current Orders: *{current_orders}*\n\n"
+            f"Please use the buttons below to manage your status:",
+            reply_markup=reply_markup,
             parse_mode='Markdown'
         )
     else:
@@ -1269,16 +1308,342 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_seller_last_active(user_id)
         
         # 回复确认
-        await query.answer("感谢您的确认，您的在线状态已更新", show_alert=True)
+        await query.answer("Thank you for confirming. Your online status has been updated.", show_alert=True)
         
         # 更新消息，移除按钮
         await query.edit_message_text(
-            text=f"✅ *活跃度确认成功*\n\n您已确认在线。\n\n⏰ 确认时间: {get_china_time()}",
+            text=f"✅ *Activity Confirmation Successful*\n\nYou have confirmed you're online.\n\n⏰ Confirmation Time: {get_china_time()}",
             parse_mode='Markdown'
         )
         
         logger.info(f"卖家 {user_id} 已确认活跃状态")
         return
+    elif data == "set_status_active":
+        # 设置卖家状态为活跃
+        if DATABASE_URL.startswith('postgres'):
+            execute_query("UPDATE sellers SET is_active=%s WHERE telegram_id=%s", (True, str(user_id)))
+        else:
+            execute_query("UPDATE sellers SET is_active=? WHERE telegram_id=?", (1, str(user_id)))
+        
+        # 获取更新后的卖家信息
+        if DATABASE_URL.startswith('postgres'):
+            seller = execute_query(
+                "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=%s", 
+                (str(user_id),), fetch=True
+            )
+        else:
+            seller = execute_query(
+                "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=?", 
+                (str(user_id),), fetch=True
+            )
+        
+        max_orders = seller[0][1] if seller else 0
+        current_orders = seller[0][2] if seller else 0
+        
+        # 更新按钮和消息
+        keyboard = [
+            [
+                InlineKeyboardButton("🟢 Set Active", callback_data="set_status_active"),
+                InlineKeyboardButton("🔴 Set Inactive", callback_data="set_status_inactive")
+            ],
+            [
+                InlineKeyboardButton("📊 My Status", callback_data="check_status")
+            ],
+            [
+                InlineKeyboardButton("➕ Set Max Orders: 5", callback_data="set_max_orders_5"),
+                InlineKeyboardButton("➕ Set Max Orders: 10", callback_data="set_max_orders_10")
+            ],
+            [
+                InlineKeyboardButton("📋 View Available Orders", callback_data="view_orders")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text=f"🌟 *Seller Dashboard Updated* 🌟\n\n"
+                 f"Current Status: *Active* ✅\n"
+                 f"Max Orders: *{max_orders}*\n"
+                 f"Current Orders: *{current_orders}*\n\n"
+                 f"Status updated successfully!",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+        
+        await query.answer("Your status has been set to Active", show_alert=True)
+        logger.info(f"卖家 {user_id} 已将状态设置为活跃")
+        return
+        
+    elif data == "set_status_inactive":
+        # 设置卖家状态为非活跃
+        if DATABASE_URL.startswith('postgres'):
+            execute_query("UPDATE sellers SET is_active=%s WHERE telegram_id=%s", (False, str(user_id)))
+        else:
+            execute_query("UPDATE sellers SET is_active=? WHERE telegram_id=?", (0, str(user_id)))
+        
+        # 获取更新后的卖家信息
+        if DATABASE_URL.startswith('postgres'):
+            seller = execute_query(
+                "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=%s", 
+                (str(user_id),), fetch=True
+            )
+        else:
+            seller = execute_query(
+                "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=?", 
+                (str(user_id),), fetch=True
+            )
+        
+        max_orders = seller[0][1] if seller else 0
+        current_orders = seller[0][2] if seller else 0
+        
+        # 更新按钮和消息
+        keyboard = [
+            [
+                InlineKeyboardButton("🟢 Set Active", callback_data="set_status_active"),
+                InlineKeyboardButton("🔴 Set Inactive", callback_data="set_status_inactive")
+            ],
+            [
+                InlineKeyboardButton("📊 My Status", callback_data="check_status")
+            ],
+            [
+                InlineKeyboardButton("➕ Set Max Orders: 5", callback_data="set_max_orders_5"),
+                InlineKeyboardButton("➕ Set Max Orders: 10", callback_data="set_max_orders_10")
+            ],
+            [
+                InlineKeyboardButton("📋 View Available Orders", callback_data="view_orders")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text=f"🌟 *Seller Dashboard Updated* 🌟\n\n"
+                 f"Current Status: *Inactive* ❌\n"
+                 f"Max Orders: *{max_orders}*\n"
+                 f"Current Orders: *{current_orders}*\n\n"
+                 f"Status updated successfully!",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+        
+        await query.answer("Your status has been set to Inactive", show_alert=True)
+        logger.info(f"卖家 {user_id} 已将状态设置为非活跃")
+        return
+        
+    elif data == "check_status":
+        # 获取卖家信息
+        if DATABASE_URL.startswith('postgres'):
+            seller = execute_query(
+                "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=%s", 
+                (str(user_id),), fetch=True
+            )
+        else:
+            seller = execute_query(
+                "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=?", 
+                (str(user_id),), fetch=True
+            )
+        
+        if not seller:
+            await query.answer("Seller information not found", show_alert=True)
+            return
+            
+        is_active, max_orders, current_orders = seller[0]
+        status_text = "Active" if is_active else "Inactive"
+        status_icon = "✅" if is_active else "❌"
+        
+        # 更新按钮和消息
+        keyboard = [
+            [
+                InlineKeyboardButton("🟢 Set Active", callback_data="set_status_active"),
+                InlineKeyboardButton("🔴 Set Inactive", callback_data="set_status_inactive")
+            ],
+            [
+                InlineKeyboardButton("📊 My Status", callback_data="check_status")
+            ],
+            [
+                InlineKeyboardButton("➕ Set Max Orders: 5", callback_data="set_max_orders_5"),
+                InlineKeyboardButton("➕ Set Max Orders: 10", callback_data="set_max_orders_10")
+            ],
+            [
+                InlineKeyboardButton("📋 View Available Orders", callback_data="view_orders")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text=f"📊 *Seller Status Information* 📊\n\n"
+                 f"Current Status: *{status_text}* {status_icon}\n"
+                 f"Max Orders: *{max_orders}*\n"
+                 f"Current Orders: *{current_orders}*\n\n"
+                 f"Last Updated: {get_china_time()}",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+        
+        await query.answer("Status information updated", show_alert=True)
+        return
+        
+    elif data == "set_max_orders_5":
+        # 设置最大接单数为5
+        max_orders = 5
+        if DATABASE_URL.startswith('postgres'):
+            execute_query("UPDATE sellers SET max_orders=%s WHERE telegram_id=%s", (max_orders, str(user_id)))
+        else:
+            execute_query("UPDATE sellers SET max_orders=? WHERE telegram_id=?", (max_orders, str(user_id)))
+            
+        # 获取更新后的卖家信息
+        if DATABASE_URL.startswith('postgres'):
+            seller = execute_query(
+                "SELECT is_active, current_orders FROM sellers WHERE telegram_id=%s", 
+                (str(user_id),), fetch=True
+            )
+        else:
+            seller = execute_query(
+                "SELECT is_active, current_orders FROM sellers WHERE telegram_id=?", 
+                (str(user_id),), fetch=True
+            )
+            
+        is_active = seller[0][0] if seller else False
+        current_orders = seller[0][1] if seller else 0
+        status_text = "Active" if is_active else "Inactive"
+        status_icon = "✅" if is_active else "❌"
+        
+        # 更新按钮和消息
+        keyboard = [
+            [
+                InlineKeyboardButton("🟢 Set Active", callback_data="set_status_active"),
+                InlineKeyboardButton("🔴 Set Inactive", callback_data="set_status_inactive")
+            ],
+            [
+                InlineKeyboardButton("📊 My Status", callback_data="check_status")
+            ],
+            [
+                InlineKeyboardButton("➕ Set Max Orders: 5", callback_data="set_max_orders_5"),
+                InlineKeyboardButton("➕ Set Max Orders: 10", callback_data="set_max_orders_10")
+            ],
+            [
+                InlineKeyboardButton("📋 View Available Orders", callback_data="view_orders")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text=f"🌟 *Seller Dashboard Updated* 🌟\n\n"
+                 f"Current Status: *{status_text}* {status_icon}\n"
+                 f"Max Orders: *{max_orders}* ✅\n"
+                 f"Current Orders: *{current_orders}*\n\n"
+                 f"Max orders set to {max_orders} successfully!",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+        
+        await query.answer(f"Maximum orders set to {max_orders}", show_alert=True)
+        logger.info(f"卖家 {user_id} 已将最大接单数设置为 {max_orders}")
+        return
+        
+    elif data == "set_max_orders_10":
+        # 设置最大接单数为10
+        max_orders = 10
+        if DATABASE_URL.startswith('postgres'):
+            execute_query("UPDATE sellers SET max_orders=%s WHERE telegram_id=%s", (max_orders, str(user_id)))
+        else:
+            execute_query("UPDATE sellers SET max_orders=? WHERE telegram_id=?", (max_orders, str(user_id)))
+            
+        # 获取更新后的卖家信息
+        if DATABASE_URL.startswith('postgres'):
+            seller = execute_query(
+                "SELECT is_active, current_orders FROM sellers WHERE telegram_id=%s", 
+                (str(user_id),), fetch=True
+            )
+        else:
+            seller = execute_query(
+                "SELECT is_active, current_orders FROM sellers WHERE telegram_id=?", 
+                (str(user_id),), fetch=True
+            )
+            
+        is_active = seller[0][0] if seller else False
+        current_orders = seller[0][1] if seller else 0
+        status_text = "Active" if is_active else "Inactive"
+        status_icon = "✅" if is_active else "❌"
+        
+        # 更新按钮和消息
+        keyboard = [
+            [
+                InlineKeyboardButton("🟢 Set Active", callback_data="set_status_active"),
+                InlineKeyboardButton("🔴 Set Inactive", callback_data="set_status_inactive")
+            ],
+            [
+                InlineKeyboardButton("📊 My Status", callback_data="check_status")
+            ],
+            [
+                InlineKeyboardButton("➕ Set Max Orders: 5", callback_data="set_max_orders_5"),
+                InlineKeyboardButton("➕ Set Max Orders: 10", callback_data="set_max_orders_10")
+            ],
+            [
+                InlineKeyboardButton("📋 View Available Orders", callback_data="view_orders")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text=f"🌟 *Seller Dashboard Updated* 🌟\n\n"
+                 f"Current Status: *{status_text}* {status_icon}\n"
+                 f"Max Orders: *{max_orders}* ✅\n"
+                 f"Current Orders: *{current_orders}*\n\n"
+                 f"Max orders set to {max_orders} successfully!",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+        
+        await query.answer(f"Maximum orders set to {max_orders}", show_alert=True)
+        logger.info(f"卖家 {user_id} 已将最大接单数设置为 {max_orders}")
+        return
+        
+    elif data == "view_orders":
+        # 获取卖家自己的活动订单
+        active_orders = execute_query(
+            "SELECT id, package, created_at FROM orders WHERE accepted_by = ? AND status = ?",
+            (str(user_id), STATUS['ACCEPTED']),
+            fetch=True
+        )
+    
+        # 获取可用的新订单
+        available_orders = execute_query(
+            "SELECT id, package, created_at FROM orders WHERE status = ?",
+            (STATUS['SUBMITTED'],),
+            fetch=True
+        )
+                
+        message = f"📋 *Order Information* 📋\n\n"
+    
+        if active_orders:
+            message += "--- *Your Active Orders* ---\n"
+            for order in active_orders:
+                message += f"  - `Order #{order[0]}` ({order[1]} months), Created at {order[2]}\n"
+            message += "\n"
+        else:
+            message += "✅ You currently have no active orders.\n\n"
+    
+        if available_orders:
+            message += "--- *Available Orders* ---\n"
+            for order in available_orders:
+                message += f"  - `Order #{order[0]}` ({order[1]} months), Created at {order[2]}\n"
+        else:
+            message += "📭 No new orders available.\n"
+        
+        # 添加返回主菜单按钮
+        keyboard = [
+            [InlineKeyboardButton("🔙 Back to Status Menu", callback_data="check_status")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            text=message,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+        
+        await query.answer("Order information loaded", show_alert=True)
+        return
+    
     elif data.startswith("complete_"):
         oid = int(data.split('_')[1])
         
@@ -1666,35 +2031,41 @@ async def on_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 基础命令
     base_commands = [
-        "/start - 开始使用机器人",
-        "/help - 显示帮助信息"
+        "/start - Start the bot and access interactive menu",
+        "/help - Display this help information"
     ]
     
     # 卖家命令
     seller_commands = [
-        "/orders - 查看订单列表",
-        "/status active|inactive - 设置活跃状态",
-        "/maxorders [数量] - 设置最大接单数",
-        "/mystatus - 查看当前状态信息"
+        "/orders - View order list",
+        "/status active|inactive - Set activity status",
+        "/maxorders [number] - Set maximum orders",
+        "/mystatus - View current status information"
     ]
     
     # 管理员命令
     admin_commands = [
-        "/addseller [id] - 添加卖家",
-        "/removeseller [id] - 删除卖家",
-        "/listsellers - 查看所有卖家"
+        "/addseller [id] - Add seller",
+        "/removeseller [id] - Remove seller",
+        "/listsellers - List all sellers"
     ]
     
     # 生成帮助文本
-    help_text = ["📋 可用命令:"]
+    help_text = ["📋 Available Commands:"]
     help_text.extend(base_commands)
     
     if is_seller(user_id):
-        help_text.append("\n🔔 卖家命令:")
+        help_text.append("\n🔔 Seller Commands:")
         help_text.extend(seller_commands)
+        # 添加交互式菜单提示
+        help_text.append("\n💡 TIP: Use /start to access the interactive dashboard where you can:")
+        help_text.append("• Change your status with buttons")
+        help_text.append("• Set max orders with one click")
+        help_text.append("• View your current status")
+        help_text.append("• View available orders")
     
     if is_admin(user_id):
-        help_text.append("\n👑 管理员命令:")
+        help_text.append("\n👑 Admin Commands:")
         help_text.extend(admin_commands)
     
     await update.message.reply_text("\n".join(help_text))
