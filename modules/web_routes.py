@@ -961,10 +961,29 @@ def register_routes(app, notification_queue):
             # 格式化卖家信息
             seller_info = None
             if accepted_by:
+                # 查询卖家昵称
+                seller_nickname = None
+                try:
+                    if DATABASE_URL.startswith('postgres'):
+                        nickname_result = execute_query(
+                            "SELECT nickname FROM sellers WHERE telegram_id = %s",
+                            (accepted_by,), fetch=True
+                        )
+                    else:
+                        nickname_result = execute_query(
+                            "SELECT nickname FROM sellers WHERE telegram_id = ?",
+                            (accepted_by,), fetch=True
+                        )
+                    if nickname_result and nickname_result[0][0]:
+                        seller_nickname = nickname_result[0][0]
+                except Exception as e:
+                    logger.error(f"获取卖家昵称失败: {str(e)}", exc_info=True)
+                
                 seller_info = {
                     "telegram_id": accepted_by,
                     "username": accepted_by_username or str(accepted_by),
-                    "name": accepted_by_first_name or str(accepted_by)
+                    "first_name": accepted_by_first_name or str(accepted_by),
+                    "nickname": seller_nickname
                 }
             
             formatted_orders.append({
@@ -1041,6 +1060,7 @@ def register_routes(app, notification_queue):
         # 获取更新字段
         nickname = data.get('nickname')
         max_orders = data.get('max_orders')
+        is_active = data.get('is_active')
         
         try:
             if DATABASE_URL.startswith('postgres'):
@@ -1055,6 +1075,10 @@ def register_routes(app, notification_queue):
                 if max_orders is not None:
                     updates.append("max_orders = %s")
                     params.append(max_orders)
+                
+                if is_active is not None:
+                    updates.append("is_active = %s")
+                    params.append(is_active)
                 
                 if updates:  # 如果有需要更新的字段
                     query = f"UPDATE sellers SET {', '.join(updates)} WHERE telegram_id = %s"
@@ -1074,6 +1098,10 @@ def register_routes(app, notification_queue):
                     updates.append("max_orders = ?")
                     params.append(max_orders)
                 
+                if is_active is not None:
+                    updates.append("is_active = ?")
+                    params.append(1 if is_active else 0)  # 转换为SQLite的0/1
+                
                 if updates:  # 如果有需要更新的字段
                     query = f"UPDATE sellers SET {', '.join(updates)} WHERE telegram_id = ?"
                     params.append(str(telegram_id))
@@ -1082,6 +1110,26 @@ def register_routes(app, notification_queue):
             return jsonify({"success": True})
         except Exception as e:
             logger.error(f"更新卖家信息出错: {str(e)}", exc_info=True)
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/admin/api/sellers/<int:telegram_id>/status', methods=['GET'])
+    @login_required
+    @admin_required
+    def admin_api_get_seller_status(telegram_id):
+        """获取卖家活跃状态"""
+        try:
+            if DATABASE_URL.startswith('postgres'):
+                seller = execute_query("SELECT is_active FROM sellers WHERE telegram_id = %s", (str(telegram_id),), fetch=True)
+            else:
+                seller = execute_query("SELECT is_active FROM sellers WHERE telegram_id = ?", (str(telegram_id),), fetch=True)
+                
+            if not seller:
+                return jsonify({"error": "Seller not found"}), 404
+                
+            is_active = bool(seller[0][0])
+            return jsonify({"is_active": is_active})
+        except Exception as e:
+            logger.error(f"获取卖家活跃状态出错: {str(e)}", exc_info=True)
             return jsonify({"error": str(e)}), 500
 
     @app.route('/admin/api/sellers/<int:telegram_id>/toggle', methods=['POST'])
@@ -2049,38 +2097,7 @@ def register_routes(app, notification_queue):
             logger.error(f"导出激活码失败: {str(e)}", exc_info=True)
             return jsonify({"success": False, "message": f"导出失败: {str(e)}"}), 500 
 
-    @app.route('/admin/api/sellers/<int:telegram_id>', methods=['PUT'])
-    @login_required
-    @admin_required
-    def admin_api_update_seller(telegram_id):
-        """更新卖家信息，支持修改nickname和max_orders"""
-        data = request.get_json()
-        nickname = data.get('nickname')
-        max_orders = data.get('max_orders')
-        
-        try:
-            # 更新昵称
-            if nickname is not None:
-                update_seller_nickname(telegram_id, nickname)
-            
-            # 更新最大接单数
-            if max_orders is not None:
-                if DATABASE_URL.startswith('postgres'):
-                    execute_query(
-                        "UPDATE sellers SET max_orders=%s WHERE telegram_id=%s",
-                        (max_orders, str(telegram_id))
-                    )
-                else:
-                    execute_query(
-                        "UPDATE sellers SET max_orders=? WHERE telegram_id=?",
-                        (max_orders, str(telegram_id))
-                    )
-                logger.info(f"已更新卖家 {telegram_id} 的最大接单数为 {max_orders}")
-            
-            return jsonify({"success": True})
-        except Exception as e:
-            logger.error(f"更新卖家 {telegram_id} 信息失败: {e}")
-            return jsonify({"error": "Update failed"}), 500
+    # 该路由已合并到上面的相同路由中
 
     @app.route('/orders/confirm/<int:oid>', methods=['POST'])
     @login_required

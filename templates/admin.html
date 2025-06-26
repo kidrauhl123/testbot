@@ -1134,7 +1134,7 @@
           <td>${order.package}个月</td>
           <td><span class="badge ${statusClass}">${escapeHtml(order.status_text)}</span></td>
           <td>${escapeHtml(order.creator || 'N/A')}</td>
-          <td>${order.seller ? escapeHtml(order.seller.name || order.seller.username || order.seller.first_name || 'N/A') : 'N/A'}</td>
+          <td>${order.seller && order.seller.nickname ? escapeHtml(order.seller.nickname) : (order.seller ? escapeHtml(order.seller.first_name || '无昵称') : 'N/A')}</td>
           <td>${order.created_at}</td>
           <td><button class="btn btn-primary btn-sm" onclick="editOrder(${order.id})">编辑</button></td>
         `;
@@ -1971,6 +1971,13 @@
                 <label for="edit-seller-maxorders">最大接单数</label>
                 <input type="number" id="edit-seller-maxorders" class="form-control" min="1" value="${currentMaxOrders || 10}">
               </div>
+              <div class="form-group">
+                <label for="edit-seller-status">活跃状态</label>
+                <select id="edit-seller-status" class="form-control">
+                  <option value="1">活跃</option>
+                  <option value="0">非活跃</option>
+                </select>
+              </div>
             </form>
           </div>
           <div class="modal-footer">
@@ -1991,12 +1998,28 @@
       setTimeout(() => {
         modal.classList.add('show');
       }, 10);
+      
+      // 获取当前卖家状态并设置下拉框的值
+      const getSellerStatus = async () => {
+        try {
+          const response = await fetch(`/admin/api/sellers/${telegramId}/status`);
+          if (response.ok) {
+            const data = await response.json();
+            document.getElementById('edit-seller-status').value = data.is_active ? "1" : "0";
+          }
+        } catch (e) {
+          console.error('获取卖家状态失败:', e);
+        }
+      };
+      
+      getSellerStatus();
     }
   }
   
   async function saveSellerEdit(telegramId) {
     const nickname = document.getElementById('edit-seller-nickname').value;
     const maxOrders = document.getElementById('edit-seller-maxorders').value;
+    const isActive = document.getElementById('edit-seller-status').value === "1";
     
     try {
       const response = await fetch(`/admin/api/sellers/${telegramId}`, {
@@ -2006,7 +2029,8 @@
         },
         body: JSON.stringify({ 
           nickname: nickname,
-          max_orders: parseInt(maxOrders)
+          max_orders: parseInt(maxOrders),
+          is_active: isActive
         })
       });
       
