@@ -1001,7 +1001,9 @@ def register_routes(app, notification_queue):
             "is_active": bool(s[4]),
             "added_at": s[5],
             "added_by": s[6],
-            "is_admin": bool(s[7])
+            "is_admin": bool(s[7]),
+            "max_orders": s[8],
+            "current_orders": s[9]
         } for s in sellers])
 
     @app.route('/admin/api/sellers', methods=['POST'])
@@ -2060,7 +2062,7 @@ def register_routes(app, notification_queue):
             # 更新昵称
             if nickname is not None:
                 update_seller_nickname(telegram_id, nickname)
-                
+            
             # 更新最大接单数
             if max_orders is not None:
                 if DATABASE_URL.startswith('postgres'):
@@ -2074,7 +2076,7 @@ def register_routes(app, notification_queue):
                         (max_orders, str(telegram_id))
                     )
                 logger.info(f"已更新卖家 {telegram_id} 的最大接单数为 {max_orders}")
-                
+            
             return jsonify({"success": True})
         except Exception as e:
             logger.error(f"更新卖家 {telegram_id} 信息失败: {e}")
