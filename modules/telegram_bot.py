@@ -647,7 +647,7 @@ async def send_notification_from_queue(data):
                 seller_id = seller.get('id', seller.get('telegram_id'))
                 try:
                     # 使用备注作为标题，不再显示订单ID
-                    caption = f"*{remark}*" if remark else f"新订单 #{order_id}"
+                    caption = f"*{remark}*" if remark else ""
                     
                     # 创建按钮
                     keyboard = [

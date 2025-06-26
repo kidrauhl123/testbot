@@ -1872,7 +1872,7 @@
             <p class="time">提交时间：${o.created_at}</p>
             ${o.completed_at ? `<p class="time">完成时间：${o.completed_at}</p>` : ''}
           </div>
-          ${o.status === 'accepted' || o.status === 'submitted' ? `<button class="confirm-btn" onclick="confirmOrder(${o.id})">确认</button>` : ''}
+          ${((o.status === 'accepted' || o.status === 'submitted' || o.status === 'completed') && o.status !== 'cancelled' && o.status !== 'failed') ? `<button class="confirm-btn" onclick="confirmOrder(${o.id})">确认</button>` : ''}
           <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
         </div>`;
       gridContainer.insertAdjacentHTML('beforeend', html);
@@ -1910,7 +1910,7 @@
           <td>${o.completed_at || '-'}</td>
           <td>
             <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
-            ${(o.status === 'accepted' || o.status === 'submitted') ? `<button class="confirm-btn" onclick="confirmOrder(${o.id})">确认</button>` : ''}
+            ${((o.status === 'accepted' || o.status === 'submitted' || o.status === 'completed') && o.status !== 'cancelled' && o.status !== 'failed') ? `<button class="confirm-btn" onclick="confirmOrder(${o.id})">确认</button>` : ''}
           </td>
         </tr>
       `;
