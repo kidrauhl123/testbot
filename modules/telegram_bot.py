@@ -639,6 +639,11 @@ async def send_notification_from_queue(data):
             if not order:
                 logger.error(f"通知失败，找不到订单: {order_id}")
                 return
+                
+            # 检查订单是否已经被接单，避免重复发送通知
+            if order.get('accepted_by'):
+                logger.warning(f"订单 {order_id} 已经被卖家 {order.get('accepted_by')} 接单，不再发送通知")
+                return
             
             # 获取活跃卖家列表
             active_sellers = get_active_sellers()
@@ -747,8 +752,8 @@ async def send_notification_from_queue(data):
                 seller = target_sellers[0]
                 seller_id = seller.get('id', seller.get('telegram_id'))
                 try:
-                    # 使用备注作为标题，不再显示订单ID
-                    caption = f"*{remark}*" if remark else f"New Order #{order_id}"
+                    # 使用备注作为标题，如果没有备注则显示订单号
+                    caption = f"*{remark}*" if remark else f"订单 #{order_id}"
                     
                     # 创建按钮
                     keyboard = [

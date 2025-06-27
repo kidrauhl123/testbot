@@ -286,20 +286,8 @@ def register_routes(app, notification_queue):
                     "error": "该卖家已有3个未确认订单，请选择其他卖家或等待卖家完成现有订单"
                 }), 400
             
-            # 查询卖家昵称
-            seller_info = execute_query(
-                "SELECT nickname, first_name, username FROM sellers WHERE telegram_id = ?",
-                (preferred_seller,),
-                fetch=True
-            )
-            display_name = None
-            if seller_info:
-                nickname, first_name, username = seller_info[0]
-                display_name = nickname or first_name or username
-            if not display_name:
-                display_name = "指定卖家"
-            remark = f"[指定接单人:{display_name}] {remark}"
-            logger.info(f"用户指定接单人: {preferred_seller} ({display_name})")
+            # 记录日志但不再修改备注
+            logger.info(f"用户指定接单人: {preferred_seller}")
         
         logger.info(f"收到订单提交请求: 二维码={file_path}, 套餐={package}, 指定接单人={preferred_seller or '无'}")
         
