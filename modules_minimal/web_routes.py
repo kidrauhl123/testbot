@@ -7,7 +7,7 @@ from datetime import datetime
 import mimetypes
 
 from modules_minimal.database import execute_query, get_china_time
-from modules_minimal.constants import STATUS
+from modules_minimal.constants import STATUS, STATUS_TEXT_ZH
 
 # 设置日志
 logger = logging.getLogger(__name__)
@@ -122,6 +122,35 @@ def register_routes(app, notification_queue):
         except Exception as e:
             logger.error(f"查询订单状态失败: {str(e)}", exc_info=True)
             return jsonify({"success": False, "error": f"查询订单状态失败: {str(e)}"}), 500
+    
+    @app.route('/recent-orders')
+    def recent_orders():
+        """获取最近订单列表"""
+        try:
+            orders = execute_query(
+                "SELECT id, account, status, created_at, accepted_at, completed_at FROM orders ORDER BY created_at DESC LIMIT 10",
+                fetch=True
+            )
+            
+            order_list = []
+            for order in orders:
+                status_text = STATUS_TEXT_ZH.get(order[2], order[2])
+                order_data = {
+                    "id": order[0],
+                    "account": order[1],
+                    "status": order[2],
+                    "status_text": status_text,
+                    "created_at": order[3],
+                    "accepted_at": order[4],
+                    "completed_at": order[5]
+                }
+                order_list.append(order_data)
+            
+            return jsonify({"success": True, "orders": order_list})
+            
+        except Exception as e:
+            logger.error(f"获取最近订单失败: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": f"获取最近订单失败: {str(e)}"}), 500
 
 def allowed_file(filename):
     """检查文件类型是否允许上传"""

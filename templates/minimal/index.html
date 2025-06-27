@@ -13,15 +13,27 @@
             background-color: #f5f5f5;
             color: #333;
         }
-        .container {
-            max-width: 600px;
+        .main-container {
+            display: flex;
+            max-width: 1200px;
             margin: 0 auto;
+            gap: 20px;
+        }
+        .container {
+            flex: 1;
             background: #fff;
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        h1 {
+        .orders-container {
+            width: 350px;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
             text-align: center;
             color: #333;
             margin-bottom: 20px;
@@ -99,29 +111,121 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        .order-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .order-item {
+            border-bottom: 1px solid #eee;
+            padding: 10px 0;
+            position: relative;
+        }
+        .order-id {
+            font-weight: bold;
+            color: #333;
+            display: inline-block;
+            margin-right: 10px;
+        }
+        .order-status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status-submitted {
+            background-color: #e7f3fe;
+            color: #1976d2;
+        }
+        .status-accepted {
+            background-color: #fff8e1;
+            color: #ffa000;
+        }
+        .status-completed {
+            background-color: #e8f5e9;
+            color: #388e3c;
+        }
+        .status-failed {
+            background-color: #fbe9e7;
+            color: #d32f2f;
+        }
+        .order-time {
+            display: block;
+            font-size: 12px;
+            color: #777;
+            margin-top: 5px;
+        }
+        .orders-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .today-total {
+            font-weight: bold;
+            font-size: 16px;
+            color: #1976d2;
+        }
+        .refresh-btn {
+            background: none;
+            border: none;
+            color: #1976d2;
+            cursor: pointer;
+            font-size: 14px;
+            width: auto;
+            padding: 5px;
+        }
+        .refresh-btn:hover {
+            text-decoration: underline;
+            background: none;
+        }
+        .empty-orders {
+            text-align: center;
+            padding: 20px;
+            color: #777;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>二维码转发系统</h1>
-        
-        <form id="qrcodeForm">
-            <div class="form-group">
-                <label for="qrcode">上传二维码图片：</label>
-                <input type="file" id="qrcode" name="qrcode" accept="image/*" required>
+    <div class="main-container">
+        <div class="container">
+            <h1>二维码转发系统</h1>
+            
+            <form id="qrcodeForm">
+                <div class="form-group">
+                    <label for="qrcode">上传二维码图片：</label>
+                    <input type="file" id="qrcode" name="qrcode" accept="image/*" required>
+                </div>
+                
+                <button type="submit">提交</button>
+            </form>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>处理中，请稍候...</p>
             </div>
             
-            <button type="submit">提交</button>
-        </form>
-        
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <p>处理中，请稍候...</p>
+            <div class="result" id="result"></div>
+            
+            <div class="image-preview" id="imagePreview"></div>
         </div>
         
-        <div class="result" id="result"></div>
-        
-        <div class="image-preview" id="imagePreview"></div>
+        <div class="orders-container">
+            <div class="orders-header">
+                <h2>系统订单状态</h2>
+                <span class="today-total" id="todayTotal">今日总额: $7.00</span>
+            </div>
+            
+            <div class="orders-header">
+                <p>（显示全部最新订单，每5秒自动更新）</p>
+                <button class="refresh-btn" id="refreshOrders">刷新</button>
+            </div>
+            
+            <ul class="order-list" id="orderList">
+                <li class="empty-orders">加载中...</li>
+            </ul>
+        </div>
     </div>
 
     <script>
@@ -131,6 +235,8 @@
             const result = document.getElementById('result');
             const imagePreview = document.getElementById('imagePreview');
             const fileInput = document.getElementById('qrcode');
+            const refreshBtn = document.getElementById('refreshOrders');
+            const orderList = document.getElementById('orderList');
             
             // 显示图片预览
             fileInput.addEventListener('change', function() {
@@ -180,6 +286,9 @@
                         
                         // 启动轮询订单状态
                         pollOrderStatus(data.order_id);
+                        
+                        // 刷新订单列表
+                        fetchRecentOrders();
                     } else {
                         showResult(`错误: ${data.error}`, false);
                     }
@@ -242,6 +351,71 @@
                         });
                 }, 5000); // 每5秒检查一次
             }
+            
+            // 获取最近订单
+            function fetchRecentOrders() {
+                fetch('/recent-orders')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.orders) {
+                            renderOrders(data.orders);
+                        } else {
+                            orderList.innerHTML = '<li class="empty-orders">没有找到最近订单</li>';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('获取订单列表出错:', error);
+                        orderList.innerHTML = '<li class="empty-orders">加载订单时出错</li>';
+                    });
+            }
+            
+            // 渲染订单列表
+            function renderOrders(orders) {
+                if (!orders || orders.length === 0) {
+                    orderList.innerHTML = '<li class="empty-orders">没有找到最近订单</li>';
+                    return;
+                }
+                
+                let html = '';
+                orders.forEach(order => {
+                    let statusClass = '';
+                    switch(order.status) {
+                        case 'submitted':
+                            statusClass = 'status-submitted';
+                            break;
+                        case 'accepted':
+                            statusClass = 'status-accepted';
+                            break;
+                        case 'completed':
+                            statusClass = 'status-completed';
+                            break;
+                        case 'failed':
+                            statusClass = 'status-failed';
+                            break;
+                    }
+                    
+                    html += `
+                    <li class="order-item">
+                        <div class="order-id">ID ${order.id}</div>
+                        <span class="order-status ${statusClass}">${order.status_text}</span>
+                        <span class="order-time">提交时间: ${order.created_at}</span>
+                    </li>
+                    `;
+                });
+                
+                orderList.innerHTML = html;
+            }
+            
+            // 刷新按钮点击事件
+            refreshBtn.addEventListener('click', function() {
+                fetchRecentOrders();
+            });
+            
+            // 初始加载订单列表
+            fetchRecentOrders();
+            
+            // 定时刷新订单列表
+            setInterval(fetchRecentOrders, 5000);
         });
     </script>
 </body>
