@@ -961,22 +961,27 @@
     }
     
     .edit-remark-btn {
-      background-color: #f0f0f0;
-      border: 1px solid #ddd;
+      background-color: transparent;
+      border: none;
       border-radius: 3px;
       padding: 2px 8px;
       font-size: 12px;
       cursor: pointer;
       margin-left: 10px;
+      color: #666;
     }
     
     .edit-remark-btn:hover {
-      background-color: #e0e0e0;
+      color: #333;
     }
     
     .edit-remark-btn.small {
       padding: 1px 5px;
       font-size: 11px;
+    }
+
+    .remark-text {
+      font-weight: bold;
     }
   </style>
 </head>
@@ -1902,7 +1907,7 @@
           <p class="seller"><strong>接单人：</strong>${o.accepted_by_nickname || o.accepted_by || '-'}</p>
           <div class="remark-container">
             <p class="remark"><strong>备注：</strong><span class="remark-text" data-order-id="${o.id}">${escapeHtml(o.remark || '')}</span></p>
-            <button class="edit-remark-btn" onclick="editRemark(${o.id})">编辑</button>
+            <button class="edit-remark-btn" onclick="editRemark(${o.id})"><i class="fas fa-pencil-alt"></i></button>
           </div>
           <div class="time-info">
             <p class="time">提交时间：${o.created_at}</p>
@@ -1953,7 +1958,7 @@
           <td><span class="status-badge ${cls}">${o.status_text}</span></td>
           <td>
             <span class="remark-text" data-order-id="${o.id}">${escapeHtml(o.remark || '')}</span>
-            <button class="edit-remark-btn small" onclick="editRemark(${o.id})">编辑</button>
+            <button class="edit-remark-btn small" onclick="editRemark(${o.id})"><i class="fas fa-pencil-alt"></i></button>
           </td>
           <td>${o.created_at}</td>
           <td>${o.completed_at || '-'}</td>
