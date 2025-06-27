@@ -73,13 +73,13 @@ def add_balance_record(user_id, amount, type_name, reason, reference_id=None, ba
 def init_db():
     """初始化数据库"""
     try:
-    if DATABASE_URL.startswith('postgres'):
-        init_postgres_db()
-    else:
-        init_sqlite_db()
+        if DATABASE_URL.startswith('postgres'):
+            init_postgres_db()
+        else:
+            init_sqlite_db()
     
         # 创建充值相关表
-    create_recharge_tables()
+        create_recharge_tables()
         
         logger.info("数据库初始化完成")
     except Exception as e:
