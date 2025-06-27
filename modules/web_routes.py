@@ -1538,8 +1538,8 @@ def register_routes(app, notification_queue):
 
         try:
             # 更新buyer_confirmed字段，不改变订单状态
-            execute_query("UPDATE orders SET buyer_confirmed=1 WHERE id=?", (oid,))
-            logger.info(f"用户 {user_id} 确认订单 {oid} 成功，buyer_confirmed已设置为1")
+            execute_query("UPDATE orders SET buyer_confirmed=TRUE WHERE id=?", (oid,))
+            logger.info(f"用户 {user_id} 确认订单 {oid} 成功，buyer_confirmed已设置为TRUE")
 
             # 发送通知
             try:

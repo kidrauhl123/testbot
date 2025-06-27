@@ -2163,7 +2163,7 @@
         // 更新本地数据
         const order = allOrders.find(o => o.id === orderId);
         if (order) {
-          order.buyer_confirmed = 1;
+          order.buyer_confirmed = true;
         }
         
         showCustomAlert('订单已确认', 'success');
