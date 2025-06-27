@@ -179,6 +179,13 @@
       color: #667eea;
     }
     
+    /* 最大接单数输入框样式 */
+    .max-orders-input {
+      width: 80px;
+      display: inline-block;
+      text-align: center;
+    }
+    
     /* 模态框样式 */
     .modal-backdrop {
       display: none;
@@ -574,12 +581,12 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th style="display:none;">Telegram ID</th>
-                <th>TG昵称</th>
                 <th>显示昵称</th>
-                <th>当前最大接单数</th>
                 <th>状态</th>
                 <th>身份</th>
+                <th>当前最大接单数</th>
+                <th>当前完成单数</th>
+                <th>同时接单数</th>
                 <th>添加时间</th>
                 <th>添加人</th>
                 <th>操作</th>
@@ -587,7 +594,7 @@
             </thead>
             <tbody id="sellers-table-body">
               <tr>
-                <td colspan="8" class="loading">加载中...</td>
+                <td colspan="9" class="loading">加载中...</td>
               </tr>
             </tbody>
           </table>
@@ -831,34 +838,6 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" data-dismiss="modal">取消</button>
       <button class="btn btn-primary" onclick="addSeller()">添加</button>
-    </div>
-  </div>
-</div>
-
-<!-- 修改最大接单数模态框 -->
-<div class="modal-backdrop" id="editDesiredOrdersModal">
-  <div class="modal">
-    <div class="modal-header">
-      <h3>设置当前最大接单数</h3>
-      <button class="modal-close" data-dismiss="modal">&times;</button>
-    </div>
-    <div class="modal-body">
-      <form id="editDesiredOrdersForm">
-        <input type="hidden" id="edit-desired-orders-seller-id">
-        <div class="form-group">
-          <label for="edit-desired-orders-current">当前最大接单数</label>
-          <input type="number" id="edit-desired-orders-current" class="form-control" disabled>
-        </div>
-        <div class="form-group">
-          <label for="edit-desired-orders-new">新最大接单数</label>
-          <input type="number" id="edit-desired-orders-new" class="form-control" min="0" required>
-          <small class="text-muted">设置为0表示不限制接单数量。当卖家充值成功的订单数达到此值时，将自动停用该卖家。</small>
-        </div>
-      </form>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
-      <button class="btn btn-primary" id="saveDesiredOrdersBtn">保存</button>
     </div>
   </div>
 </div>
@@ -1229,12 +1208,12 @@
         return;
       }
       
-      tbody.innerHTML = '<tr><td colspan="8" class="loading">加载中...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="loading">加载中...</td></tr>';
       
       const response = await fetch('/admin/api/sellers');
       if (!response.ok) {
         console.error("加载卖家数据失败:", response.status, response.statusText);
-        tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="loading">加载失败，请刷新重试</td></tr>';
         return;
       }
       
@@ -1244,7 +1223,7 @@
       tbody.innerHTML = '';
       
       if (sellers.length === 0) {
-        const colCount = tbody.parentElement.querySelector('thead tr').childElementCount || 8;
+        const colCount = tbody.parentElement.querySelector('thead tr').childElementCount || 9;
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding: 40px;">暂无卖家</td></tr>`;
         return;
       }
@@ -1264,17 +1243,18 @@
         
         const row = `
           <tr data-id="${seller.telegram_id}">
-            <td style="display:none;">${seller.telegram_id}</td>
-            <td>${escapeHtml(seller.first_name || '')}</td>
             <td>${escapeHtml(seller.nickname || '')}</td>
-            <td>
-              <span class="desired-orders-value">${seller.desired_orders || 0}</span>
-              <button class="btn btn-sm btn-outline-primary edit-desired-orders" onclick="editDesiredOrders(${seller.telegram_id}, ${seller.desired_orders || 0})">
-                <i class="fas fa-edit"></i>
-              </button>
-            </td>
             <td>${statusBadge}</td>
             <td>${adminBadge}</td>
+            <td>
+              <input type="number" class="form-control form-control-sm max-orders-input" 
+                value="${seller.desired_orders || 0}" 
+                min="0" 
+                data-id="${seller.telegram_id}" 
+                onchange="updateSellerMaxOrders(${seller.telegram_id}, this.value)">
+            </td>
+            <td>${seller.completed_orders || 0}</td>
+            <td>${seller.pending_orders || 0}</td>
             <td>${seller.added_at}</td>
             <td>${escapeHtml(seller.added_by || '')}</td>
             <td class="actions">
@@ -1293,7 +1273,7 @@
       console.error('加载卖家失败', e);
       const tbody = document.getElementById('sellers-table-body');
       if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="loading">加载失败，请刷新重试</td></tr>';
       }
     }
   }
@@ -1380,6 +1360,31 @@
       showToast('操作成功', 'success');
     } catch (e) {
       console.error('切换卖家管理员状态失败:', e);
+      showToast('操作失败: ' + e.message, 'error');
+    }
+  }
+  
+  // 更新卖家最大接单数
+  async function updateSellerMaxOrders(telegramId, maxOrders) {
+    try {
+      const response = await fetch(`/admin/api/sellers/${telegramId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          desired_orders: parseInt(maxOrders) 
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('操作失败');
+      }
+      
+      showToast('最大接单数更新成功', 'success');
+      // 不刷新整个表格，只更新本地数据
+    } catch (e) {
+      console.error('更新卖家最大接单数失败:', e);
       showToast('操作失败: ' + e.message, 'error');
     }
   }
@@ -2007,57 +2012,6 @@
       showToast('更新失败: ' + e.message, 'error');
     }
   }
-
-  // 编辑最大接单数
-  function editDesiredOrders(telegramId, currentValue) {
-    document.getElementById('edit-desired-orders-seller-id').value = telegramId;
-    document.getElementById('edit-desired-orders-current').value = currentValue;
-    document.getElementById('edit-desired-orders-new').value = currentValue;
-    
-    openModal('editDesiredOrdersModal');
-  }
-
-  // 保存最大接单数
-  async function saveDesiredOrders() {
-    const telegramId = document.getElementById('edit-desired-orders-seller-id').value;
-    const newValue = document.getElementById('edit-desired-orders-new').value;
-    
-    try {
-      const response = await fetch(`/admin/api/sellers/${telegramId}/desired-orders`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ desired_orders: parseInt(newValue) })
-      });
-      
-      if (!response.ok) {
-        throw new Error('操作失败');
-      }
-      
-      // 关闭模态框
-      closeModal('editDesiredOrdersModal');
-      
-      // 重新加载卖家列表
-      await loadSellers();
-      
-      showToast('最大接单数设置成功', 'success');
-    } catch (e) {
-      console.error('设置最大接单数失败:', e);
-      showToast('操作失败: ' + e.message, 'error');
-    }
-  }
-
-  // 添加事件监听器
-  document.addEventListener('DOMContentLoaded', function() {
-    // ... existing code ...
-    
-    // 最大接单数保存按钮
-    const saveDesiredOrdersBtn = document.getElementById('saveDesiredOrdersBtn');
-    if (saveDesiredOrdersBtn) {
-      saveDesiredOrdersBtn.addEventListener('click', saveDesiredOrders);
-    }
-  });
 </script>
 </body>
 </html> 

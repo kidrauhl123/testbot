@@ -21,7 +21,8 @@ from modules.database import (
     create_order_with_deduction_atomic, create_recharge_request, get_user_recharge_requests,
     get_pending_recharge_requests, approve_recharge_request, reject_recharge_request,
     get_user_custom_prices, set_user_custom_price, delete_user_custom_price,
-    update_seller_nickname, update_seller_desired_orders, select_active_seller, check_seller_activity
+    update_seller_nickname, update_seller_desired_orders, select_active_seller, check_seller_activity,
+    get_seller_completed_orders, get_seller_pending_orders, check_seller_completed_orders
 )
 import modules.constants as constants
 
@@ -981,17 +982,37 @@ def register_routes(app, notification_queue):
     @login_required
     @admin_required
     def admin_api_get_sellers():
+        """获取所有卖家列表"""
         sellers = get_all_sellers()
-        return jsonify([{
-            "telegram_id": s[0],
-            "username": s[1],
-            "first_name": s[2],
-            "nickname": s[3],
-            "is_active": bool(s[4]),
-            "added_at": s[5],
-            "added_by": s[6],
-            "is_admin": bool(s[7])
-        } for s in sellers])
+        
+        # 增强卖家信息
+        enhanced_sellers = []
+        for s in sellers:
+            # 转换为字典
+            seller = {
+                "telegram_id": s[0],
+                "username": s[1],
+                "first_name": s[2],
+                "nickname": s[3],
+                "is_active": bool(s[4]),
+                "added_at": s[5],
+                "added_by": s[6],
+                "is_admin": bool(s[7]),
+                "desired_orders": s[8] if len(s) > 8 else 0
+            }
+            
+            # 获取已完成订单数和未完成订单数
+            telegram_id = seller["telegram_id"]
+            completed_orders = get_seller_completed_orders(telegram_id)
+            pending_orders = get_seller_pending_orders(telegram_id)
+            
+            # 添加到卖家信息中
+            seller['completed_orders'] = completed_orders
+            seller['pending_orders'] = pending_orders
+            
+            enhanced_sellers.append(seller)
+        
+        return jsonify(enhanced_sellers)
 
     @app.route('/admin/api/sellers', methods=['POST'])
     @login_required
@@ -1499,17 +1520,25 @@ def register_routes(app, notification_queue):
     @login_required
     @admin_required
     def admin_api_update_seller(telegram_id):
-        """更新卖家信息，目前仅支持修改nickname"""
+        """更新卖家信息"""
         data = request.get_json()
         nickname = data.get('nickname')
-        if nickname is None:
-            return jsonify({"error": "Missing nickname"}), 400
+        desired_orders = data.get('desired_orders')
+        max_concurrent_orders = data.get('max_concurrent_orders')
         
         try:
-            update_seller_nickname(telegram_id, nickname)
+            if nickname is not None:
+                update_seller_nickname(telegram_id, nickname)
+                
+            if desired_orders is not None:
+                update_seller_desired_orders(telegram_id, desired_orders)
+                
+            # 检查是否需要自动停用卖家
+            check_seller_completed_orders(telegram_id)
+                
             return jsonify({"success": True})
         except Exception as e:
-            logger.error(f"更新卖家 {telegram_id} 昵称失败: {e}")
+            logger.error(f"更新卖家 {telegram_id} 信息失败: {e}")
             return jsonify({"error": "Update failed"}), 500
 
     @app.route('/orders/confirm/<int:oid>', methods=['POST'])
@@ -1540,6 +1569,10 @@ def register_routes(app, notification_queue):
             # 更新buyer_confirmed字段，不改变订单状态
             execute_query("UPDATE orders SET buyer_confirmed=TRUE WHERE id=?", (oid,))
             logger.info(f"用户 {user_id} 确认订单 {oid} 成功，buyer_confirmed已设置为TRUE")
+
+            # 检查卖家是否达到最大接单数
+            if accepted_by:
+                check_seller_completed_orders(accepted_by)
 
             # 发送通知
             try:
@@ -1594,20 +1627,3 @@ def register_routes(app, notification_queue):
         except Exception as e:
             logger.error(f"更新订单 {oid} 备注时发生错误: {e}", exc_info=True)
             return jsonify({"error": "服务器错误，请稍后重试"}), 500
-
-    @app.route('/admin/api/sellers/<int:telegram_id>/desired-orders', methods=['POST'])
-    @login_required
-    @admin_required
-    def admin_api_update_seller_desired_orders(telegram_id):
-        """更新卖家当前最大接单数"""
-        data = request.get_json()
-        desired_orders = data.get('desired_orders')
-        if desired_orders is None:
-            return jsonify({"error": "Missing desired_orders"}), 400
-        
-        try:
-            update_seller_desired_orders(telegram_id, desired_orders)
-            return jsonify({"success": True})
-        except Exception as e:
-            logger.error(f"更新卖家 {telegram_id} 最大接单数失败: {e}")
-            return jsonify({"error": "Update failed"}), 500

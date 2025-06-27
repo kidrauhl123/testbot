@@ -73,13 +73,13 @@ def add_balance_record(user_id, amount, type_name, reason, reference_id=None, ba
 def init_db():
     """初始化数据库"""
     try:
-        if DATABASE_URL.startswith('postgres'):
-            init_postgres_db()
-        else:
-            init_sqlite_db()
+    if DATABASE_URL.startswith('postgres'):
+        init_postgres_db()
+    else:
+        init_sqlite_db()
     
         # 创建充值相关表
-        create_recharge_tables()
+    create_recharge_tables()
         
         logger.info("数据库初始化完成")
     except Exception as e:
@@ -1558,14 +1558,100 @@ def update_seller_last_active(telegram_id):
     execute_query(
         "UPDATE sellers SET last_active_at = ? WHERE telegram_id = ?",
         (timestamp, telegram_id)
-    )
+                    )
 
 def update_seller_desired_orders(telegram_id, desired_orders):
-    """更新卖家当前最大接单数量"""
+    """更新卖家最大接单数"""
     execute_query(
         "UPDATE sellers SET desired_orders = ? WHERE telegram_id = ?",
         (desired_orders, telegram_id)
     )
+    logger.info(f"已更新卖家 {telegram_id} 的最大接单数为 {desired_orders}")
+
+def get_seller_completed_orders(telegram_id):
+    """获取卖家已完成的订单数（以买家已确认为准）"""
+    if DATABASE_URL.startswith('postgres'):
+        result = execute_query(
+            "SELECT COUNT(*) FROM orders WHERE accepted_by = ? AND buyer_confirmed = TRUE",
+            (telegram_id,),
+            fetch=True
+        )
+    else:
+        result = execute_query(
+            "SELECT COUNT(*) FROM orders WHERE accepted_by = ? AND buyer_confirmed = 1",
+            (telegram_id,),
+            fetch=True
+        )
+    
+    if result and len(result) > 0:
+        return result[0][0]
+    return 0
+
+def get_seller_pending_orders(telegram_id):
+    """获取卖家当前未完成的订单数（已接单但未确认）"""
+    if DATABASE_URL.startswith('postgres'):
+        result = execute_query(
+            """
+            SELECT COUNT(*) FROM orders 
+            WHERE accepted_by = ? 
+            AND status != '已取消' 
+            AND (buyer_confirmed IS NULL OR buyer_confirmed = FALSE)
+            """,
+            (telegram_id,),
+            fetch=True
+        )
+    else:
+        result = execute_query(
+            """
+            SELECT COUNT(*) FROM orders 
+            WHERE accepted_by = ? 
+            AND status != '已取消' 
+            AND (buyer_confirmed IS NULL OR buyer_confirmed = 0)
+            """,
+            (telegram_id,),
+            fetch=True
+        )
+    
+    if result and len(result) > 0:
+        return result[0][0]
+    return 0
+
+def check_seller_completed_orders(telegram_id):
+    """检查卖家完成订单数，如果达到最大接单数则自动停用"""
+    # 获取卖家信息
+    seller = execute_query(
+        "SELECT desired_orders, is_active FROM sellers WHERE telegram_id = ?",
+        (telegram_id,),
+        fetch=True
+    )
+    
+    if not seller or not seller[0]:
+        logger.warning(f"检查卖家完成订单数失败：找不到卖家 {telegram_id}")
+        return
+    
+    desired_orders, is_active = seller[0]
+    
+    # 如果没有设置最大接单数或已经是非活跃状态，则不处理
+    if not desired_orders or desired_orders <= 0 or not is_active:
+        return
+    
+    # 获取已完成订单数
+    completed_orders = get_seller_completed_orders(telegram_id)
+    
+    # 如果已完成订单数达到或超过最大接单数，则自动停用
+    if completed_orders >= desired_orders:
+        logger.info(f"卖家 {telegram_id} 已完成 {completed_orders} 单，达到最大接单数 {desired_orders}，自动停用")
+        
+        if DATABASE_URL.startswith('postgres'):
+            execute_query(
+                "UPDATE sellers SET is_active = FALSE WHERE telegram_id = ?",
+                (telegram_id,)
+            )
+        else:
+            execute_query(
+                "UPDATE sellers SET is_active = 0 WHERE telegram_id = ?",
+                (telegram_id,)
+            )
 
 def select_active_seller():
     """
@@ -1626,7 +1712,7 @@ def check_seller_activity(telegram_id):
         "UPDATE sellers SET activity_check_at = ? WHERE telegram_id = ?",
         (timestamp, telegram_id)
     )
-    return True
+                return True
 
 # 用户定制价格函数
 def get_user_custom_prices(user_id):
