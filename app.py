@@ -6,22 +6,30 @@ import queue
 import sys
 import atexit
 import signal
+import json
 import traceback
-from flask import Flask, request, jsonify, render_template, send_file
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash, send_file
 import sqlite3
+import shutil
+
+# 根据环境变量确定是否为生产环境
+is_production = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('PRODUCTION')
 
 # 日志配置
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO if is_production else logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
 )
 logger = logging.getLogger(__name__)
 
 # 导入自定义模块
-from modules_minimal.database import init_db
-from modules_minimal.telegram_bot import run_bot, process_telegram_update
-from modules_minimal.web_routes import register_routes
+from modules.database import init_db, execute_query
+from modules.telegram_bot import run_bot, process_telegram_update
+from modules.web_routes import register_routes
+from modules.constants import sync_env_sellers_to_db
 
 # 创建一个线程安全的队列用于在Flask和Telegram机器人之间通信
 notification_queue = queue.Queue()
@@ -32,19 +40,21 @@ lock_dir = 'bot.lock'
 # 清理锁目录和数据库 journal 文件的函数
 def cleanup_resources():
     """清理应用锁目录和数据库 journal 文件。"""
+    # 清理应用锁目录
     if os.path.exists(lock_dir):
         try:
             if os.path.isdir(lock_dir):
                 os.rmdir(lock_dir)
                 logger.info(f"已清理锁目录: {lock_dir}")
             else:
-                os.remove(lock_dir)
+                os.remove(lock_dir) # 如果意外地成了文件
                 logger.info(f"已清理锁文件: {lock_dir}")
         except Exception as e:
             logger.error(f"清理锁目录时出错: {str(e)}", exc_info=True)
 
+    # 清理数据库 journal 文件
     try:
-        journal_path = "orders_minimal.db-journal"
+        journal_path = "orders.db-journal"
         if os.path.exists(journal_path):
             os.remove(journal_path)
             logger.info(f"已清理残留的 journal 文件: {journal_path}")
@@ -62,7 +72,7 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 atexit.register(cleanup_resources)
 
-# Flask 应用
+# ===== Flask 应用 =====
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET', 'secret_' + str(time.time()))
 app.config['DEBUG'] = False
@@ -78,7 +88,7 @@ if not os.path.exists(uploads_dir):
     except Exception as e:
         logger.error(f"创建上传目录失败: {str(e)}", exc_info=True)
 
-# 注册Web路由
+# 注册Web路由，并将队列传递给它
 register_routes(app, notification_queue)
 
 # 添加静态文件路由，确保图片URLs可以访问
@@ -92,6 +102,7 @@ def serve_file(filepath):
     """提供直接访问文件的路由，主要用于TG机器人访问图片"""
     if 'static/uploads' in filepath:
         try:
+            # 从完整路径中提取相对路径
             parts = filepath.split('static/uploads/')
             if len(parts) > 1:
                 filename = parts[1]
@@ -99,6 +110,7 @@ def serve_file(filepath):
         except Exception as e:
             logger.error(f"访问文件 {filepath} 时出错: {str(e)}")
     
+    # 如果不是上传文件路径，返回404
     return "File not found", 404
 
 # 添加一个专门的图片查看页面
@@ -109,6 +121,7 @@ def view_image(filepath):
         # 构建完整的文件路径
         full_path = filepath
         if not os.path.exists(full_path):
+            # 尝试添加static前缀
             if not full_path.startswith('static/'):
                 full_path = os.path.join('static', filepath)
         
@@ -170,6 +183,7 @@ def telegram_webhook():
         # 获取更新数据
         update_data = request.get_json()
         logger.info(f"收到Telegram webhook更新: {update_data}")
+        print(f"DEBUG: 收到Telegram webhook更新: {update_data}")
         
         # 在单独的线程中处理更新，避免阻塞Flask响应
         threading.Thread(
@@ -182,6 +196,7 @@ def telegram_webhook():
         return jsonify({"status": "success"}), 200
     except Exception as e:
         logger.error(f"处理Telegram webhook时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 处理Telegram webhook时出错: {str(e)}")
         traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -189,10 +204,11 @@ def telegram_webhook():
 def handle_exception(e):
     """处理所有未捕获的异常"""
     logger.error(f"未捕获的异常: {str(e)}", exc_info=True)
+    print(f"ERROR: 未捕获的异常: {str(e)}")
     traceback.print_exc()
     return jsonify({"error": str(e)}), 500
 
-# 主程序
+# ===== 主程序 =====
 if __name__ == "__main__":
     # 在启动前先尝试清理可能存在的锁文件和目录
     cleanup_resources()
@@ -212,6 +228,11 @@ if __name__ == "__main__":
     logger.info("正在初始化数据库...")
     init_db()
     logger.info("数据库初始化完成")
+    
+    # 同步环境变量中的卖家到数据库
+    logger.info("同步环境变量卖家到数据库...")
+    sync_env_sellers_to_db()
+    logger.info("环境变量卖家同步完成")
     
     # 启动 Bot 线程，并将队列传递给它
     logger.info("正在启动Telegram机器人...")

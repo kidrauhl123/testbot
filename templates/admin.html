@@ -576,10 +576,10 @@
             <thead>
               <tr>
                 <th style="display:none;">Telegram ID</th>
+                <th>用户名</th>
+                <th>TG昵称</th>
                 <th>显示昵称</th>
                 <th>状态</th>
-                <th>最大接单数</th>
-                <th>当前订单数</th>
                 <th>身份</th>
                 <th>添加时间</th>
                 <th>添加人</th>
@@ -1134,7 +1134,7 @@
           <td>${order.package}个月</td>
           <td><span class="badge ${statusClass}">${escapeHtml(order.status_text)}</span></td>
           <td>${escapeHtml(order.creator || 'N/A')}</td>
-          <td>${order.seller && order.seller.nickname ? escapeHtml(order.seller.nickname) : (order.seller ? escapeHtml(order.seller.first_name || '无昵称') : 'N/A')}</td>
+          <td>${order.seller ? escapeHtml(order.seller.name || order.seller.username || order.seller.first_name || 'N/A') : 'N/A'}</td>
           <td>${order.created_at}</td>
           <td><button class="btn btn-primary btn-sm" onclick="editOrder(${order.id})">编辑</button></td>
         `;
@@ -1238,15 +1238,15 @@
         const row = `
           <tr data-id="${seller.telegram_id}">
             <td style="display:none;">${seller.telegram_id}</td>
+            <td>${escapeHtml(seller.username || '')}</td>
+            <td>${escapeHtml(seller.first_name || '')}</td>
             <td>${escapeHtml(seller.nickname || '')}</td>
             <td>${statusBadge}</td>
-            <td>${seller.max_orders || 10}</td>
-            <td>${seller.current_orders || 0}</td>
             <td>${adminBadge}</td>
             <td>${seller.added_at}</td>
             <td>${escapeHtml(seller.added_by || '')}</td>
             <td class="actions">
-              <button class="btn btn-primary btn-sm" onclick="editSeller('${seller.telegram_id}', '${escapeHtml(seller.nickname || '')}', ${seller.max_orders || 10})">编辑</button>
+              <button class="btn btn-primary btn-sm" onclick="editSeller(${seller.telegram_id}, '${escapeHtml(seller.nickname || '')}')">编辑</button>
               <button class="btn ${toggleButtonClass} btn-sm" onclick="toggleSeller(${seller.telegram_id})">${toggleButtonText}</button>
               <button class="btn ${adminButtonClass} btn-sm" onclick="toggleSellerAdmin(${seller.telegram_id})">${adminButtonText}</button>
               <button class="btn btn-danger btn-sm" onclick="removeSeller(${seller.telegram_id})">删除</button>
@@ -1315,7 +1315,7 @@
   }
 
   async function removeSeller(telegramId) {
-    if (!confirm(`确认要删除此卖家吗？此操作不可逆。`)) return;
+    if (!confirm(`确认要删除卖家 ${telegramId} 吗？此操作不可逆。`)) return;
 
     await fetch(`/admin/api/sellers/${telegramId}`, { method: 'DELETE' });
     loadSellers();
@@ -1952,105 +1952,26 @@
     });
   }
 
-  async function editSeller(telegramId, currentNickname, currentMaxOrders) {
-    // 创建编辑对话框
-    const dialogHtml = `
-      <div class="modal-backdrop" id="edit-seller-modal">
-        <div class="modal">
-          <div class="modal-header">
-            <h3>编辑卖家信息</h3>
-            <button class="modal-close" onclick="document.getElementById('edit-seller-modal').remove()">&times;</button>
-          </div>
-          <div class="modal-body">
-            <form id="edit-seller-form">
-              <div class="form-group">
-                <label for="edit-seller-nickname">显示昵称</label>
-                <input type="text" id="edit-seller-nickname" class="form-control" value="${currentNickname || ''}">
-              </div>
-              <div class="form-group">
-                <label for="edit-seller-maxorders">最大接单数</label>
-                <input type="number" id="edit-seller-maxorders" class="form-control" min="1" value="${currentMaxOrders || 10}">
-              </div>
-              <div class="form-group">
-                <label for="edit-seller-status">活跃状态</label>
-                <select id="edit-seller-status" class="form-control">
-                  <option value="1">活跃</option>
-                  <option value="0">非活跃</option>
-                </select>
-              </div>
-            </form>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="document.getElementById('edit-seller-modal').remove()">取消</button>
-            <button class="btn btn-primary" onclick="saveSellerEdit('${telegramId}')">保存</button>
-          </div>
-        </div>
-      </div>
-    `;
-    
-    // 添加到页面
-    document.body.insertAdjacentHTML('beforeend', dialogHtml);
-    
-    // 显示模态框
-    const modal = document.getElementById('edit-seller-modal');
-    if (modal) {
-      modal.style.display = 'flex';
-      setTimeout(() => {
-        modal.classList.add('show');
-      }, 10);
-      
-      // 获取当前卖家状态并设置下拉框的值
-      const getSellerStatus = async () => {
-        try {
-          const response = await fetch(`/admin/api/sellers/${telegramId}/status`);
-          if (response.ok) {
-            const data = await response.json();
-            document.getElementById('edit-seller-status').value = data.is_active ? "1" : "0";
-          }
-        } catch (e) {
-          console.error('获取卖家状态失败:', e);
-        }
-      };
-      
-      getSellerStatus();
+  async function editSeller(telegramId, currentNickname) {
+    const newNickname = prompt('请输入新的显示昵称', currentNickname || '');
+    if (newNickname === null) {
+      return; // 用户取消
     }
-  }
-  
-  async function saveSellerEdit(telegramId) {
-    const nickname = document.getElementById('edit-seller-nickname').value;
-    const maxOrders = document.getElementById('edit-seller-maxorders').value;
-    const isActive = document.getElementById('edit-seller-status').value === "1";
-    
     try {
       const response = await fetch(`/admin/api/sellers/${telegramId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ 
-          nickname: nickname,
-          max_orders: parseInt(maxOrders),
-          is_active: isActive
-        })
+        body: JSON.stringify({ nickname: newNickname })
       });
-      
       if (!response.ok) {
         throw new Error('更新失败');
       }
-      
-      // 移除对话框
-      const modal = document.getElementById('edit-seller-modal');
-      if (modal) {
-        modal.classList.remove('show');
-        setTimeout(() => {
-          modal.remove();
-        }, 300);
-      }
-      
-      showToast('卖家信息已更新', 'success');
+      showToast('卖家昵称已更新', 'success');
       await loadSellers();
     } catch (e) {
-      console.error('更新卖家信息失败', e);
+      console.error('更新卖家昵称失败', e);
       showToast('更新失败: ' + e.message, 'error');
     }
   }

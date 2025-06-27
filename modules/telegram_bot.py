@@ -1,22 +1,38 @@
-import os
-import sys
-import logging
 import asyncio
-import functools
 import threading
-import queue
-import traceback
-from datetime import datetime
+import logging
+from datetime import datetime, timedelta
+from collections import defaultdict
+import time
+import os
+from functools import wraps
 import pytz
+import sys
+import functools
 import sqlite3
+import traceback
+import psycopg2
+from urllib.parse import urlparse
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (Application, CommandHandler, MessageHandler, filters,
-                         CallbackQueryHandler, ConversationHandler, ApplicationBuilder)
+from telegram.ext import (
+    ApplicationBuilder,
+    CallbackQueryHandler,
+    ContextTypes,
+    MessageHandler,
+    CommandHandler,
+    filters
+)
 
-from modules.constants import BOT_TOKEN, STATUS, STATUS_TEXT_ZH
-from modules.database import (get_unnotified_orders, execute_query, 
-                                     get_active_seller_ids, get_china_time)
+from modules.constants import (
+    BOT_TOKEN, STATUS, PLAN_LABELS_EN,
+    STATUS_TEXT_ZH, TG_PRICES, WEB_PRICES, SELLER_CHAT_IDS, DATABASE_URL
+)
+from modules.database import (
+    get_order_details, execute_query, 
+    get_unnotified_orders, get_active_seller_ids,
+    update_seller_desired_orders, update_seller_last_active, get_active_sellers
+)
 
 # 设置日志
 logging.basicConfig(
@@ -31,23 +47,51 @@ logger = logging.getLogger(__name__)
 # 中国时区
 CN_TIMEZONE = pytz.timezone('Asia/Shanghai')
 
-# 定义bot_command_handler装饰器，用于处理命令
-def bot_command_handler(func):
-    """命令处理器的装饰器，用于注册命令处理函数"""
-    @functools.wraps(func)
-    async def wrapper(update: Update, context):
-        try:
-            return await func(update, context)
-        except Exception as e:
-            logger.error(f"命令 {func.__name__} 处理出错: {str(e)}", exc_info=True)
-            await update.message.reply_text("处理命令时出错，请稍后重试")
-    return wrapper
+# 获取数据库连接
+def get_db_connection():
+    """获取数据库连接，根据环境变量决定使用SQLite或PostgreSQL"""
+    
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL连接
+            url = urlparse(DATABASE_URL)
+            dbname = url.path[1:]
+            user = url.username
+            password = url.password
+            host = url.hostname
+            port = url.port
+            
+            logger.info(f"连接PostgreSQL数据库: {host}:{port}/{dbname}")
+            
+            conn = psycopg2.connect(
+                dbname=dbname,
+                user=user,
+                password=password,
+                host=host,
+                port=port
+            )
+            return conn
+        else:
+            # SQLite连接
+            # 使用绝对路径访问数据库
+            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(current_dir, "orders.db")
+            logger.info(f"连接SQLite数据库: {db_path}")
+            print(f"DEBUG: 连接SQLite数据库: {db_path}")
+            
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row  # 使查询结果可以通过列名访问
+            return conn
+    except Exception as e:
+        logger.error(f"获取数据库连接时出错: {str(e)}", exc_info=True)
+        print(f"ERROR: 获取数据库连接时出错: {str(e)}")
+        return None
 
 # 错误处理装饰器
 def callback_error_handler(func):
     """装饰器：捕获并处理回调函数中的异常"""
     @functools.wraps(func)
-    async def wrapper(update: Update, context):
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             return await func(update, context)
         except Exception as e:
@@ -64,24 +108,30 @@ def callback_error_handler(func):
             error_msg += f"错误: {str(e)}"
             
             logger.error(error_msg, exc_info=True)
+            print(f"ERROR: {error_msg}")
             
             # 尝试通知用户
             try:
                 if update.callback_query:
-                    await update.callback_query.answer("操作失败，请稍后重试", show_alert=True)
+                    await update.callback_query.answer("Operation failed, please try again later", show_alert=True)
             except Exception as notify_err:
                 logger.error(f"无法通知用户错误: {str(notify_err)}")
+                print(f"ERROR: 无法通知用户错误: {str(notify_err)}")
             
             return None
     return wrapper
 
+# 获取中国时间的函数
+def get_china_time():
+    """获取当前中国时间（UTC+8）"""
+    utc_now = datetime.now(pytz.utc)
+    china_now = utc_now.astimezone(CN_TIMEZONE)
+    return china_now.strftime("%Y-%m-%d %H:%M:%S")
+
 # ===== 全局变量 =====
 bot_application = None
 BOT_LOOP = None
-notification_queue = None  # 将在run_bot函数中初始化
 
-# ===== TG 辅助函数 =====
-def is_seller(chat_id):
 # 跟踪等待额外反馈的订单
 feedback_waiting = {}
 
@@ -241,50 +291,11 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
     if is_seller(user_id):
-        # Get current seller status
-        if DATABASE_URL.startswith('postgres'):
-            seller = execute_query(
-                "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=%s", 
-                (str(user_id),), fetch=True
-            )
-        else:
-            seller = execute_query(
-                "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=?", 
-                (str(user_id),), fetch=True
-            )
-        
-        is_active = seller[0][0] if seller else False
-        max_orders = seller[0][1] if seller else 0
-        current_orders = seller[0][2] if seller else 0
-        
-        # Create interactive buttons
-        keyboard = [
-            [
-                InlineKeyboardButton("🟢 Set Active", callback_data="set_status_active"),
-                InlineKeyboardButton("🔴 Set Inactive", callback_data="set_status_inactive")
-            ],
-            [
-                InlineKeyboardButton("📊 My Status", callback_data="check_status")
-            ],
-            [
-                InlineKeyboardButton("➕ Set Max Orders: 5", callback_data="set_max_orders_5"),
-                InlineKeyboardButton("➕ Set Max Orders: 10", callback_data="set_max_orders_10")
-            ],
-            [
-                InlineKeyboardButton("📋 View Available Orders", callback_data="view_orders")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        status_text = "Active" if is_active else "Inactive"
-        
         await update.message.reply_text(
-            f"🌟 *Welcome to the Seller Dashboard* 🌟\n\n"
-            f"Current Status: *{status_text}*\n"
-            f"Max Orders: *{max_orders}*\n"
-            f"Current Orders: *{current_orders}*\n\n"
-            f"Please use the buttons below to manage your status:",
-            reply_markup=reply_markup,
+            "🌟 *Welcome to the Premium Recharge System!* 🌟\n\n"
+            "As a verified seller, you have access to:\n"
+            "• `/seller` - View available orders and your active orders\n"
+            "Need assistance? Feel free to contact the administrator.",
             parse_mode='Markdown'
         )
     else:
@@ -391,11 +402,6 @@ def run_bot(queue):
 async def bot_main(queue):
     """机器人的主异步函数"""
     global bot_application
-    global background_tasks  # 添加全局变量跟踪后台任务
-    
-    # 初始化任务跟踪集合
-    if 'background_tasks' not in globals():
-        globals()['background_tasks'] = set()
     
     logger.info("正在启动Telegram机器人...")
     print("DEBUG: 正在启动Telegram机器人...")
@@ -421,12 +427,6 @@ async def bot_main(queue):
         bot_application.add_handler(CommandHandler("start", on_start))
         bot_application.add_handler(CommandHandler("seller", on_seller_command))
         bot_application.add_handler(CommandHandler("orders", on_orders))  # 添加新命令
-        
-        # 添加我们新增的命令处理程序
-        bot_application.add_handler(CommandHandler("status", on_status_command))
-        bot_application.add_handler(CommandHandler("maxorders", on_maxorders_command))
-        bot_application.add_handler(CommandHandler("mystatus", on_mystatus_command))
-        bot_application.add_handler(CommandHandler("help", on_help_command))
         
         # 添加测试命令处理程序
         bot_application.add_handler(CommandHandler("test", on_test))
@@ -471,62 +471,21 @@ async def bot_main(queue):
         else:
             logger.warning("无法获取公开URL，未设置webhook。机器人可能无法接收更新。")
 
-        # 启动后台任务，确保每个任务只启动一次
+        # 启动后台任务
         logger.info("启动后台任务...")
+        asyncio.create_task(periodic_order_check())
+        asyncio.create_task(process_notification_queue(queue))
         
-        # 每个任务只创建一次
-        task1 = asyncio.create_task(periodic_order_check())
-        task1.set_name("periodic_order_check")
-        globals()['background_tasks'].add(task1)
-        
-        task2 = asyncio.create_task(process_notification_queue(queue))
-        task2.set_name("process_notification_queue")
-        globals()['background_tasks'].add(task2)
-        
-        task3 = asyncio.create_task(clean_notified_orders_periodically())
-        task3.set_name("clean_notified_orders")
-        globals()['background_tasks'].add(task3)
-        
-        # 监控任务完成并移除
-        for task in globals()['background_tasks']:
-            task.add_done_callback(lambda t: globals()['background_tasks'].discard(t))
-        
-        logger.info(f"后台任务已启动，当前运行中的任务: {len(globals()['background_tasks'])}")
         logger.info("Telegram机器人主循环已启动，等待更新...")
         print("DEBUG: Telegram机器人主循环已启动，等待更新...")
         
         # 保持此协程运行以使后台任务可以执行
         while True:
             await asyncio.sleep(3600) # 每小时唤醒一次，但主要目的是保持运行
-            
+
     except Exception as e:
         logger.critical(f"Telegram机器人主函数 `bot_main` 发生严重错误: {str(e)}", exc_info=True)
         print(f"CRITICAL: Telegram机器人主函数 `bot_main` 发生严重错误: {str(e)}")
-
-# ====== 添加清理notified_orders的函数 ======
-async def clean_notified_orders_periodically():
-    """定期清理已通知的订单记录，防止内存泄漏"""
-    global notified_orders, notified_orders_lock
-    
-    while True:
-        try:
-            await asyncio.sleep(3600)  # 每小时清理一次
-            
-            # 获取当前时间
-            current_time = time.time()
-            
-            # 安全地清理集合
-            with notified_orders_lock:
-                # 清空集合 - 一小时后重置所有状态
-                before_size = len(notified_orders)
-                notified_orders.clear()
-                after_size = len(notified_orders)
-                
-            logger.info(f"已清理notified_orders集合，从 {before_size} 项减少到 {after_size} 项")
-        except Exception as e:
-            logger.error(f"清理notified_orders时出错: {e}", exc_info=True)
-            # 等待一段时间后继续尝试
-            await asyncio.sleep(300)
 
 # 添加错误处理函数
 async def error_handler(update, context):
@@ -552,75 +511,30 @@ async def error_handler(update, context):
         print(f"ERROR: 尝试回复错误通知失败: {str(e)}")
 
 async def periodic_order_check():
-    """周期性检查未通知的订单"""
-    logger.info("启动周期性订单检查任务")
-    
-    # 初始化时间间隔，开始时较短(10秒)，逐渐增加到最大值(60秒)
-    check_interval = 10  # 初始检查间隔，单位秒
-    max_interval = 60    # 最大检查间隔，单位秒
-    
+    """定期检查新订单的任务"""
+    check_count = 0
     while True:
         try:
-            logger.debug(f"执行周期性订单检查，当前间隔: {check_interval}秒")
-            
-            # 在这里调用检查未通知订单的函数
+            logger.debug(f"执行第 {check_count + 1} 次订单检查")
             await check_and_push_orders()
-            
-            # 延长检查间隔，直到最大值
-            check_interval = min(check_interval * 1.2, max_interval)
-            
-            # 等待下一次检查
-            await asyncio.sleep(check_interval)
-        except asyncio.CancelledError:
-            logger.info("周期性订单检查任务被取消")
-            break
+            await cleanup_processing_accepts()
+            check_count += 1
         except Exception as e:
-            logger.error(f"周期性订单检查任务出错: {str(e)}", exc_info=True)
-            print(f"ERROR: 周期性订单检查任务出错: {str(e)}")
-            
-            # 出错后等待一段时间再继续
-            await asyncio.sleep(30)
+            logger.error(f"订单检查任务出错: {e}", exc_info=True)
+        
+        await asyncio.sleep(5) # 每5秒检查一次
 
 async def process_notification_queue(queue):
     """处理来自Flask的通知队列"""
-    global notified_orders_lock
-    global notified_orders
-    
-    # 用于跟踪已处理的通知
-    processed_notifications = set()
-    
     loop = asyncio.get_running_loop()
     while True:
         try:
             # 在执行器中运行阻塞的 queue.get()，这样不会阻塞事件循环
             data = await loop.run_in_executor(None, queue.get)
-            
-            # 生成通知的唯一标识符
-            notification_type = data.get('type')
-            notification_id = None
-            
-            if notification_type == 'new_order' or notification_type == 'order_status_change':
-                order_id = data.get('order_id')
-                notification_id = f"{notification_type}_{order_id}"
-                
-            # 检查是否已处理此通知
-            if notification_id and notification_id in processed_notifications:
-                logger.warning(f"通知 {notification_id} 已被处理过，跳过")
-                queue.task_done()
-                continue
-                
             logger.info(f"从队列中获取到通知任务: {data.get('type')}, 数据: {data}")
             
             # 确保调用send_notification_from_queue并等待其完成
             await send_notification_from_queue(data)
-            
-            # 标记通知为已处理
-            if notification_id:
-                processed_notifications.add(notification_id)
-                # 限制集合大小，防止内存泄漏
-                if len(processed_notifications) > 1000:
-                    # 只保留最近的500个
-                    processed_notifications = set(list(processed_notifications)[-500:])
             
             # 标记任务完成
             queue.task_done()
@@ -646,7 +560,6 @@ async def send_notification_from_queue(data):
             account = data.get('account')  # 这是二维码图片路径
             remark = data.get('remark', '')  # 获取备注信息
             preferred_seller = data.get('preferred_seller')
-            package = data.get('package', '')
             
             # 检查订单是否存在
             order = get_order_by_id(order_id)
@@ -672,10 +585,6 @@ async def send_notification_from_queue(data):
                 image_path.replace('/', '\\'),  # Windows 风格路径
                 os.path.join(os.getcwd(), image_path),  # 绝对路径
                 os.path.join(os.getcwd(), image_path.replace('/', '\\')),  # 绝对 Windows 路径
-                f"/app/{image_path}",  # Railway 部署路径
-                os.path.abspath(image_path),  # 绝对路径另一种写法
-                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), image_path),  # 基于模块位置的绝对路径
-                os.path.join(".", image_path)  # 相对当前目录
             ]
             
             logger.info(f"将尝试以下图片路径:")
@@ -702,7 +611,6 @@ async def send_notification_from_queue(data):
             print(f"DEBUG: 将发送图片: {image_path}")
             
             # 检查图片是否存在
-            image_exists = False
             if not os.path.exists(image_path):
                 logger.error(f"图片文件不存在: {image_path}")
                 print(f"ERROR: 图片文件不存在: {image_path}")
@@ -719,56 +627,27 @@ async def send_notification_from_queue(data):
                 except Exception as e:
                     logger.error(f"列出目录内容时出错: {str(e)}")
                     print(f"ERROR: 列出目录内容时出错: {str(e)}")
-            else:
-                image_exists = True
-            
-            # 筛选活跃且未达到订单上限的卖家
-            eligible_sellers = []
-            for seller in active_sellers:
-                seller_id = seller.get('id', seller.get('telegram_id'))
-                seller_info = None
-                
-                if DATABASE_URL.startswith('postgres'):
-                    seller_info = execute_query(
-                        "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=%s",
-                        (str(seller_id),), fetch=True
-                    )
-                else:
-                    seller_info = execute_query(
-                        "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=?",
-                        (str(seller_id),), fetch=True
-                    )
-                
-                if seller_info and seller_info[0][0]:  # 确认是活跃状态
-                    max_orders = seller_info[0][1] if seller_info[0][1] is not None else 10
-                    current_orders = seller_info[0][2] if seller_info[0][2] is not None else 0
-                    
-                    if current_orders < max_orders:
-                        eligible_sellers.append(seller)
-            
-            if not eligible_sellers:
-                logger.warning("没有可用的卖家（全部已达到订单上限或非活跃状态）")
                 return
                 
             # 发送消息给卖家（如果指定了特定卖家，则只发给他们）
             if preferred_seller:
-                target_sellers = [seller for seller in eligible_sellers if str(seller.get('id', seller.get('telegram_id'))) == str(preferred_seller)]
+                target_sellers = [seller for seller in active_sellers if str(seller.get('id', seller.get('telegram_id'))) == str(preferred_seller)]
                 if not target_sellers:
-                    logger.warning(f"指定的卖家不存在、非活跃或已达到订单上限: {preferred_seller}")
-                    # 发送给所有符合条件的卖家
-                    target_sellers = eligible_sellers
+                    logger.warning(f"指定的卖家不存在或不活跃: {preferred_seller}")
+                    # 发送给所有活跃卖家
+                    target_sellers = active_sellers
             else:
-                target_sellers = eligible_sellers
+                target_sellers = active_sellers
                 
             # 为订单添加状态标记
             await mark_order_as_processing(order_id)
             
-            # 发送通知给每个符合条件的卖家
+            # 发送通知给每个活跃卖家
             for seller in target_sellers:
                 seller_id = seller.get('id', seller.get('telegram_id'))
                 try:
                     # 使用备注作为标题，不再显示订单ID
-                    caption = f"*{remark}*" if remark else f"New Order #{order_id}"
+                    caption = f"*{remark}*" if remark else f"新订单 #{order_id}"
                     
                     # 创建按钮
                     keyboard = [
@@ -777,70 +656,18 @@ async def send_notification_from_queue(data):
                     ]
                     reply_markup = InlineKeyboardMarkup(keyboard)
                     
-                    if image_exists:
-                        # 发送图片和备注
-                        await bot_application.bot.send_photo(
-                            chat_id=seller_id,
-                            photo=open(image_path, 'rb'),
-                            caption=caption,
-                            parse_mode='Markdown',
-                            reply_markup=reply_markup
-                        )
-                    else:
-                        # 当图片不存在时，发送纯文本通知
-                        message_text = f"📋 *{caption}*\n\n" + \
-                                     f"⚠️ Image not available\n" + \
-                                     f"🆔 Order ID: #{order_id}\n"
-                        
-                        await bot_application.bot.send_message(
-                            chat_id=seller_id,
-                            text=message_text,
-                            parse_mode='Markdown',
-                            reply_markup=reply_markup
-                        )
-                        
+                    # 发送图片和备注
+                    await bot_application.bot.send_photo(
+                        chat_id=seller_id,
+                        photo=open(image_path, 'rb'),
+                        caption=caption,
+                        parse_mode='Markdown',
+                        reply_markup=reply_markup
+                    )
                     logger.info(f"已发送订单 #{order_id} 通知到卖家 {seller_id}")
                     
                     # 自动接单（标记该订单已被该卖家接受）
                     await auto_accept_order(order_id, seller_id)
-                    
-                    # 更新卖家的当前订单数
-                    if DATABASE_URL.startswith('postgres'):
-                        execute_query(
-                            "UPDATE sellers SET current_orders = current_orders + 1 WHERE telegram_id=%s",
-                            (str(seller_id),)
-                        )
-                    else:
-                        execute_query(
-                            "UPDATE sellers SET current_orders = current_orders + 1 WHERE telegram_id=?",
-                            (str(seller_id),)
-                        )
-                    
-                    # 检查是否达到最大订单数，如果是，则设置为非活跃
-                    if DATABASE_URL.startswith('postgres'):
-                        seller_info = execute_query(
-                            "SELECT current_orders, max_orders FROM sellers WHERE telegram_id=%s",
-                            (str(seller_id),), fetch=True
-                        )
-                    else:
-                        seller_info = execute_query(
-                            "SELECT current_orders, max_orders FROM sellers WHERE telegram_id=?",
-                            (str(seller_id),), fetch=True
-                        )
-                    
-                    if seller_info and seller_info[0][0] >= seller_info[0][1]:
-                        # 达到最大订单数，设为非活跃
-                        if DATABASE_URL.startswith('postgres'):
-                            execute_query(
-                                "UPDATE sellers SET is_active=FALSE WHERE telegram_id=%s",
-                                (str(seller_id),)
-                            )
-                        else:
-                            execute_query(
-                                "UPDATE sellers SET is_active=0 WHERE telegram_id=?",
-                                (str(seller_id),)
-                            )
-                        logger.info(f"卖家 {seller_id} 已达到最大订单数，已设置为非活跃状态")
                     
                 except Exception as e:
                     logger.error(f"向卖家 {seller_id} 发送订单通知时出错: {str(e)}", exc_info=True)
@@ -1217,36 +1044,9 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 自动接单并标记为完成（与 complete_ 逻辑一致）
         try:
-            # 使用notified_orders_lock来避免重复处理
-            with notified_orders_lock:
-                # 检查订单是否已经被处理过
-                notification_key = f"done_{oid}_{user_id}"
-                if notification_key in notified_orders:
-                    await query.answer("订单状态已更新，请勿重复操作", show_alert=True)
-                    return
-                
-                # 标记为已处理
-                notified_orders.add(notification_key)
-            
             timestamp = get_china_time()
             conn = get_db_connection()
             cursor = conn.cursor()
-            
-            # 首先获取订单信息，包括接单人
-            if DATABASE_URL.startswith('postgres'):
-                cursor.execute("SELECT accepted_by FROM orders WHERE id = %s", (oid,))
-            else:
-                cursor.execute("SELECT accepted_by FROM orders WHERE id = ?", (oid,))
-            order_info = cursor.fetchone()
-            
-            if not order_info:
-                await query.answer("订单信息未找到", show_alert=True)
-                conn.close()
-                return
-                
-            accepted_by = order_info[0]
-            
-            # 更新订单状态为已完成
             if DATABASE_URL.startswith('postgres'):
                 cursor.execute(
                     "UPDATE orders SET status=%s, completed_at=%s WHERE id=%s",
@@ -1259,7 +1059,6 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             conn.commit()
             conn.close()
-            
             # 向通知队列推送状态变更，供网页端更新
             if notification_queue:
                 notification_queue.put({
@@ -1269,17 +1068,12 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     'handler_id': user_id
                 })
                 logger.info(f"已将订单 #{oid} 状态变更(完成)添加到通知队列")
-            
             # 更新按钮显示
             keyboard = [[InlineKeyboardButton("✅ Completed", callback_data="noop")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_reply_markup(reply_markup=reply_markup)
             await query.answer("订单已标记为完成", show_alert=True)
             logger.info(f"用户 {user_id} 已将订单 {oid} 标记为完成 (done_)")
-            
-            # 更新卖家当前订单数
-            await update_seller_order_count(accepted_by)
-            
         except Exception as e:
             logger.error(f"处理订单完成(done_)时出错: {str(e)}", exc_info=True)
             await query.answer("处理订单时出错，请稍后重试", show_alert=True)
@@ -1289,17 +1083,6 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 将订单标记为失败
         try:
-            # 使用notified_orders_lock来避免重复处理
-            with notified_orders_lock:
-                # 检查订单是否已经被处理过
-                notification_key = f"problem_{oid}_{user_id}"
-                if notification_key in notified_orders:
-                    await query.answer("订单状态已更新，请勿重复操作", show_alert=True)
-                    return
-                
-                # 标记为已处理
-                notified_orders.add(notification_key)
-                
             timestamp = get_china_time()
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -1342,17 +1125,6 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("fail_"):
         oid = int(data.split('_')[1])
         try:
-            # 使用notified_orders_lock来避免重复处理
-            with notified_orders_lock:
-                # 检查订单是否已经被处理过
-                notification_key = f"fail_{oid}_{user_id}"
-                if notification_key in notified_orders:
-                    await query.answer("订单状态已更新，请勿重复操作", show_alert=True)
-                    return
-                
-                # 标记为已处理
-                notified_orders.add(notification_key)
-            
             timestamp = get_china_time()
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -1393,379 +1165,38 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_seller_last_active(user_id)
         
         # 回复确认
-        await query.answer("Thank you for confirming. Your online status has been updated.", show_alert=True)
+        await query.answer("感谢您的确认，您的在线状态已更新", show_alert=True)
         
         # 更新消息，移除按钮
         await query.edit_message_text(
-            text=f"✅ *Activity Confirmation Successful*\n\nYou have confirmed you're online.\n\n⏰ Confirmation Time: {get_china_time()}",
+            text=f"✅ *活跃度确认成功*\n\n您已确认在线。\n\n⏰ 确认时间: {get_china_time()}",
             parse_mode='Markdown'
         )
         
         logger.info(f"卖家 {user_id} 已确认活跃状态")
         return
-    elif data == "set_status_active":
-        # 设置卖家状态为活跃
-        if DATABASE_URL.startswith('postgres'):
-            execute_query("UPDATE sellers SET is_active=%s WHERE telegram_id=%s", (True, str(user_id)))
-        else:
-            execute_query("UPDATE sellers SET is_active=? WHERE telegram_id=?", (1, str(user_id)))
-        
-        # 获取更新后的卖家信息
-        if DATABASE_URL.startswith('postgres'):
-            seller = execute_query(
-                "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=%s", 
-                (str(user_id),), fetch=True
-            )
-        else:
-            seller = execute_query(
-                "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=?", 
-                (str(user_id),), fetch=True
-            )
-        
-        max_orders = seller[0][1] if seller else 0
-        current_orders = seller[0][2] if seller else 0
-        
-        # 更新按钮和消息
-        keyboard = [
-            [
-                InlineKeyboardButton("🟢 Set Active", callback_data="set_status_active"),
-                InlineKeyboardButton("🔴 Set Inactive", callback_data="set_status_inactive")
-            ],
-            [
-                InlineKeyboardButton("📊 My Status", callback_data="check_status")
-            ],
-            [
-                InlineKeyboardButton("➕ Set Max Orders: 5", callback_data="set_max_orders_5"),
-                InlineKeyboardButton("➕ Set Max Orders: 10", callback_data="set_max_orders_10")
-            ],
-            [
-                InlineKeyboardButton("📋 View Available Orders", callback_data="view_orders")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            text=f"🌟 *Seller Dashboard Updated* 🌟\n\n"
-                 f"Current Status: *Active* ✅\n"
-                 f"Max Orders: *{max_orders}*\n"
-                 f"Current Orders: *{current_orders}*\n\n"
-                 f"Status updated successfully!",
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
-        
-        await query.answer("Your status has been set to Active", show_alert=True)
-        logger.info(f"卖家 {user_id} 已将状态设置为活跃")
-        return
-        
-    elif data == "set_status_inactive":
-        # 设置卖家状态为非活跃
-        if DATABASE_URL.startswith('postgres'):
-            execute_query("UPDATE sellers SET is_active=%s WHERE telegram_id=%s", (False, str(user_id)))
-        else:
-            execute_query("UPDATE sellers SET is_active=? WHERE telegram_id=?", (0, str(user_id)))
-        
-        # 获取更新后的卖家信息
-        if DATABASE_URL.startswith('postgres'):
-            seller = execute_query(
-                "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=%s", 
-                (str(user_id),), fetch=True
-            )
-        else:
-            seller = execute_query(
-                "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=?", 
-                (str(user_id),), fetch=True
-            )
-        
-        max_orders = seller[0][1] if seller else 0
-        current_orders = seller[0][2] if seller else 0
-        
-        # 更新按钮和消息
-        keyboard = [
-            [
-                InlineKeyboardButton("🟢 Set Active", callback_data="set_status_active"),
-                InlineKeyboardButton("🔴 Set Inactive", callback_data="set_status_inactive")
-            ],
-            [
-                InlineKeyboardButton("📊 My Status", callback_data="check_status")
-            ],
-            [
-                InlineKeyboardButton("➕ Set Max Orders: 5", callback_data="set_max_orders_5"),
-                InlineKeyboardButton("➕ Set Max Orders: 10", callback_data="set_max_orders_10")
-            ],
-            [
-                InlineKeyboardButton("📋 View Available Orders", callback_data="view_orders")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            text=f"🌟 *Seller Dashboard Updated* 🌟\n\n"
-                 f"Current Status: *Inactive* ❌\n"
-                 f"Max Orders: *{max_orders}*\n"
-                 f"Current Orders: *{current_orders}*\n\n"
-                 f"Status updated successfully!",
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
-        
-        await query.answer("Your status has been set to Inactive", show_alert=True)
-        logger.info(f"卖家 {user_id} 已将状态设置为非活跃")
-        return
-        
-    elif data == "check_status":
-        # 获取卖家信息
-        if DATABASE_URL.startswith('postgres'):
-            seller = execute_query(
-                "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=%s", 
-                (str(user_id),), fetch=True
-            )
-        else:
-            seller = execute_query(
-                "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=?", 
-                (str(user_id),), fetch=True
-            )
-        
-        if not seller:
-            await query.answer("Seller information not found", show_alert=True)
-            return
-            
-        is_active, max_orders, current_orders = seller[0]
-        status_text = "Active" if is_active else "Inactive"
-        status_icon = "✅" if is_active else "❌"
-        
-        # 更新按钮和消息
-        keyboard = [
-            [
-                InlineKeyboardButton("🟢 Set Active", callback_data="set_status_active"),
-                InlineKeyboardButton("🔴 Set Inactive", callback_data="set_status_inactive")
-            ],
-            [
-                InlineKeyboardButton("📊 My Status", callback_data="check_status")
-            ],
-            [
-                InlineKeyboardButton("➕ Set Max Orders: 5", callback_data="set_max_orders_5"),
-                InlineKeyboardButton("➕ Set Max Orders: 10", callback_data="set_max_orders_10")
-            ],
-            [
-                InlineKeyboardButton("📋 View Available Orders", callback_data="view_orders")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            text=f"📊 *Seller Status Information* 📊\n\n"
-                 f"Current Status: *{status_text}* {status_icon}\n"
-                 f"Max Orders: *{max_orders}*\n"
-                 f"Current Orders: *{current_orders}*\n\n"
-                 f"Last Updated: {get_china_time()}",
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
-        
-        await query.answer("Status information updated", show_alert=True)
-        return
-        
-    elif data == "set_max_orders_5":
-        # 设置最大接单数为5
-        max_orders = 5
-        if DATABASE_URL.startswith('postgres'):
-            execute_query("UPDATE sellers SET max_orders=%s WHERE telegram_id=%s", (max_orders, str(user_id)))
-        else:
-            execute_query("UPDATE sellers SET max_orders=? WHERE telegram_id=?", (max_orders, str(user_id)))
-            
-        # 获取更新后的卖家信息
-        if DATABASE_URL.startswith('postgres'):
-            seller = execute_query(
-                "SELECT is_active, current_orders FROM sellers WHERE telegram_id=%s", 
-                (str(user_id),), fetch=True
-            )
-        else:
-            seller = execute_query(
-                "SELECT is_active, current_orders FROM sellers WHERE telegram_id=?", 
-                (str(user_id),), fetch=True
-            )
-            
-        is_active = seller[0][0] if seller else False
-        current_orders = seller[0][1] if seller else 0
-        status_text = "Active" if is_active else "Inactive"
-        status_icon = "✅" if is_active else "❌"
-        
-        # 更新按钮和消息
-        keyboard = [
-            [
-                InlineKeyboardButton("🟢 Set Active", callback_data="set_status_active"),
-                InlineKeyboardButton("🔴 Set Inactive", callback_data="set_status_inactive")
-            ],
-            [
-                InlineKeyboardButton("📊 My Status", callback_data="check_status")
-            ],
-            [
-                InlineKeyboardButton("➕ Set Max Orders: 5", callback_data="set_max_orders_5"),
-                InlineKeyboardButton("➕ Set Max Orders: 10", callback_data="set_max_orders_10")
-            ],
-            [
-                InlineKeyboardButton("📋 View Available Orders", callback_data="view_orders")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            text=f"🌟 *Seller Dashboard Updated* 🌟\n\n"
-                 f"Current Status: *{status_text}* {status_icon}\n"
-                 f"Max Orders: *{max_orders}* ✅\n"
-                 f"Current Orders: *{current_orders}*\n\n"
-                 f"Max orders set to {max_orders} successfully!",
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
-        
-        await query.answer(f"Maximum orders set to {max_orders}", show_alert=True)
-        logger.info(f"卖家 {user_id} 已将最大接单数设置为 {max_orders}")
-        return
-        
-    elif data == "set_max_orders_10":
-        # 设置最大接单数为10
-        max_orders = 10
-        if DATABASE_URL.startswith('postgres'):
-            execute_query("UPDATE sellers SET max_orders=%s WHERE telegram_id=%s", (max_orders, str(user_id)))
-        else:
-            execute_query("UPDATE sellers SET max_orders=? WHERE telegram_id=?", (max_orders, str(user_id)))
-            
-        # 获取更新后的卖家信息
-        if DATABASE_URL.startswith('postgres'):
-            seller = execute_query(
-                "SELECT is_active, current_orders FROM sellers WHERE telegram_id=%s", 
-                (str(user_id),), fetch=True
-            )
-        else:
-            seller = execute_query(
-                "SELECT is_active, current_orders FROM sellers WHERE telegram_id=?", 
-                (str(user_id),), fetch=True
-            )
-            
-        is_active = seller[0][0] if seller else False
-        current_orders = seller[0][1] if seller else 0
-        status_text = "Active" if is_active else "Inactive"
-        status_icon = "✅" if is_active else "❌"
-        
-        # 更新按钮和消息
-        keyboard = [
-            [
-                InlineKeyboardButton("🟢 Set Active", callback_data="set_status_active"),
-                InlineKeyboardButton("🔴 Set Inactive", callback_data="set_status_inactive")
-            ],
-            [
-                InlineKeyboardButton("📊 My Status", callback_data="check_status")
-            ],
-            [
-                InlineKeyboardButton("➕ Set Max Orders: 5", callback_data="set_max_orders_5"),
-                InlineKeyboardButton("➕ Set Max Orders: 10", callback_data="set_max_orders_10")
-            ],
-            [
-                InlineKeyboardButton("📋 View Available Orders", callback_data="view_orders")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            text=f"🌟 *Seller Dashboard Updated* 🌟\n\n"
-                 f"Current Status: *{status_text}* {status_icon}\n"
-                 f"Max Orders: *{max_orders}* ✅\n"
-                 f"Current Orders: *{current_orders}*\n\n"
-                 f"Max orders set to {max_orders} successfully!",
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
-        
-        await query.answer(f"Maximum orders set to {max_orders}", show_alert=True)
-        logger.info(f"卖家 {user_id} 已将最大接单数设置为 {max_orders}")
-        return
-        
-    elif data == "view_orders":
-        # 获取卖家自己的活动订单
-        active_orders = execute_query(
-            "SELECT id, package, created_at FROM orders WHERE accepted_by = ? AND status = ?",
-            (str(user_id), STATUS['ACCEPTED']),
-            fetch=True
-        )
-    
-        # 获取可用的新订单
-        available_orders = execute_query(
-            "SELECT id, package, created_at FROM orders WHERE status = ?",
-            (STATUS['SUBMITTED'],),
-            fetch=True
-        )
-                
-        message = f"📋 *Order Information* 📋\n\n"
-    
-        if active_orders:
-            message += "--- *Your Active Orders* ---\n"
-            for order in active_orders:
-                message += f"  - `Order #{order[0]}` ({order[1]} months), Created at {order[2]}\n"
-            message += "\n"
-        else:
-            message += "✅ You currently have no active orders.\n\n"
-    
-        if available_orders:
-            message += "--- *Available Orders* ---\n"
-            for order in available_orders:
-                message += f"  - `Order #{order[0]}` ({order[1]} months), Created at {order[2]}\n"
-        else:
-            message += "📭 No new orders available.\n"
-        
-        # 添加返回主菜单按钮
-        keyboard = [
-            [InlineKeyboardButton("🔙 Back to Status Menu", callback_data="check_status")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(
-            text=message,
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
-        
-        await query.answer("Order information loaded", show_alert=True)
-        return
-    
     elif data.startswith("complete_"):
         oid = int(data.split('_')[1])
-        
-        # 处理订单完成
+
+        # 与 done_ 分支相同的处理逻辑
         try:
-            # 使用notified_orders_lock来避免重复处理
-            with notified_orders_lock:
-                # 检查订单是否已经被处理过
-                notification_key = f"complete_{oid}_{user_id}"
-                if notification_key in notified_orders:
-                    await query.answer("订单状态已更新，请勿重复操作", show_alert=True)
-                    return
-                
-                # 标记为已处理
-                notified_orders.add(notification_key)
-            
             timestamp = get_china_time()
-            
-            # 获取订单信息以便通知
-            order = get_order_by_id(oid)
-            if not order:
-                await query.answer("订单不存在", show_alert=True)
-                return
-            
-            # 更新订单状态
+            conn = get_db_connection()
+            cursor = conn.cursor()
             if DATABASE_URL.startswith('postgres'):
-                execute_query(
-                    "UPDATE orders SET status=%s, completed_at=%s WHERE id=%s", 
+                cursor.execute(
+                    "UPDATE orders SET status=%s, completed_at=%s WHERE id=%s",
                     (STATUS['COMPLETED'], timestamp, oid)
                 )
             else:
-                execute_query(
-                    "UPDATE orders SET status=?, completed_at=? WHERE id=?", 
+                cursor.execute(
+                    "UPDATE orders SET status=?, completed_at=? WHERE id=?",
                     (STATUS['COMPLETED'], timestamp, oid)
                 )
-            
-            # 向通知队列推送状态变更，供网页端更新
+            conn.commit()
+            conn.close()
+
+            # 推送通知给网页端
             if notification_queue:
                 notification_queue.put({
                     'type': 'order_status_change',
@@ -1773,96 +1204,16 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     'status': STATUS['COMPLETED'],
                     'handler_id': user_id
                 })
-                logger.info(f"已将订单 {oid} 状态变更(完成)添加到通知队列")
-                
-            # 如果有账户名和密码，通知用户
-            account = order.get("account", "")
-            remark = order.get("remark", "")
-            
-            # 更新按钮状态
+                logger.info(f"已将订单 #{oid} 状态变更(完成)添加到通知队列 (complete_)")
+
+            # 更新按钮显示
             keyboard = [[InlineKeyboardButton("✅ Completed", callback_data="noop")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_reply_markup(reply_markup=reply_markup)
-            
             await query.answer("订单已标记为完成", show_alert=True)
-            logger.info(f"用户 {user_id} 已将订单 {oid} 标记为完成")
-            
-            # 更新卖家当前订单数
-            accepted_by = order.get("accepted_by")
-            if accepted_by:
-                await update_seller_order_count(accepted_by)
-            
+            logger.info(f"用户 {user_id} 已将订单 {oid} 标记为完成 (complete_)")
         except Exception as e:
-            logger.error(f"标记订单完成时出错: {str(e)}", exc_info=True)
-            await query.answer("处理订单时出错，请稍后重试", show_alert=True)
-        return
-    elif data.startswith("fail_save_"):
-        parts = data.split('_')
-        oid = int(parts[2])
-        reason_code = parts[3] if len(parts) > 3 else "Unknown reason"
-
-        # 从feedback_waiting获取原因
-        reason = feedback_waiting.get(f"fail_{oid}", reason_code)
-        
-        try:
-            # 使用notified_orders_lock来避免重复处理
-            with notified_orders_lock:
-                # 检查订单是否已经被处理过
-                notification_key = f"fail_save_{oid}_{user_id}"
-                if notification_key in notified_orders:
-                    await query.answer("订单状态已更新，请勿重复操作", show_alert=True)
-                    return
-                
-                # 标记为已处理
-                notified_orders.add(notification_key)
-            
-            timestamp = get_china_time()
-            
-            # 更新订单状态
-            if DATABASE_URL.startswith('postgres'):
-                execute_query(
-                    "UPDATE orders SET status=%s, completed_at=%s, remark=%s WHERE id=%s", 
-                    (STATUS['FAILED'], timestamp, reason, oid)
-                )
-            else:
-                execute_query(
-                    "UPDATE orders SET status=?, completed_at=?, remark=? WHERE id=?", 
-                    (STATUS['FAILED'], timestamp, reason, oid)
-                )
-                
-            # 向通知队列推送状态变更，供网页端更新
-            if notification_queue:
-                notification_queue.put({
-                    'type': 'order_status_change',
-                    'order_id': oid,
-                    'status': STATUS['FAILED'],
-                    'reason': reason,
-                    'handler_id': user_id
-                })
-                logger.info(f"已将订单 {oid} 状态变更(失败)添加到通知队列")
-                
-            # 清理等待反馈
-            if f"fail_{oid}" in feedback_waiting:
-                del feedback_waiting[f"fail_{oid}"]
-                
-            # 更新按钮显示
-            keyboard = [[InlineKeyboardButton("❌ Failed", callback_data="noop")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.edit_message_reply_markup(reply_markup=reply_markup)
-            
-            await query.answer("订单已标记为失败", show_alert=True)
-            logger.info(f"用户 {user_id} 已将订单 {oid} 标记为失败，原因: {reason}")
-            
-            # 获取订单信息
-            order = get_order_by_id(oid)
-            if order:
-                # 更新卖家当前订单数
-                accepted_by = order.get("accepted_by")
-                if accepted_by:
-                    await update_seller_order_count(accepted_by)
-            
-        except Exception as e:
-            logger.error(f"标记订单失败时出错: {str(e)}", exc_info=True)
+            logger.error(f"处理订单完成(complete_)时出错: {str(e)}", exc_info=True)
             await query.answer("处理订单时出错，请稍后重试", show_alert=True)
         return
     else:
@@ -1935,46 +1286,19 @@ async def check_and_push_orders():
     """检查新订单并推送通知"""
     try:
         # 导入必要的函数
-        from modules.database import get_unnotified_orders, execute_query
+        from modules.database import get_unnotified_orders
         
-        # 获取未通知的订单，使用FOR UPDATE锁定这些行避免竞争条件
-        if DATABASE_URL.startswith('postgres'):
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT id, account, password, package, created_at, web_user_id, remark 
-                FROM orders 
-                WHERE notified = FALSE AND status = %s
-                FOR UPDATE
-            """, (STATUS['SUBMITTED'],))
-            unnotified_orders = cursor.fetchall()
-        else:
-            unnotified_orders = get_unnotified_orders()
+        # 获取未通知的订单
+        unnotified_orders = get_unnotified_orders()
         
         if unnotified_orders:
             logger.info(f"发现 {len(unnotified_orders)} 个未通知的订单")
             print(f"DEBUG: 发现 {len(unnotified_orders)} 个未通知的订单")
             
-            # 立即标记这些订单为已通知，防止其他进程重复处理
-            order_ids = [order[0] for order in unnotified_orders]
-            
-            if DATABASE_URL.startswith('postgres'):
-                # PostgreSQL支持批量更新
-                placeholders = ','.join(['%s'] * len(order_ids))
-                cursor.execute(f"UPDATE orders SET notified = TRUE WHERE id IN ({placeholders})", order_ids)
-                conn.commit()
-                conn.close()
-            else:
-                # SQLite需要逐个更新
-                for order_id in order_ids:
-                    execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (order_id,))
-            
-            logger.info(f"已将订单 {order_ids} 标记为已通知")
-            
-            # 现在安全地处理这些订单
+            # 处理每个未通知的订单
             for order in unnotified_orders:
                 # 注意：order是一个元组，不是字典
-                # 根据查询，元素顺序为:
+                # 根据get_unnotified_orders的SQL查询，元素顺序为:
                 # id, account, password, package, created_at, web_user_id, remark
                 order_id = order[0]
                 account = order[1]  # 图片路径
@@ -1983,26 +1307,16 @@ async def check_and_push_orders():
                 # 使用全局通知队列
                 global notification_queue
                 if notification_queue:
-                    # 检查队列中是否已经有此订单的通知
-                    queue_items = list(notification_queue.queue)
-                    existing_notification = False
-                    for item in queue_items:
-                        if item.get('type') == 'new_order' and item.get('order_id') == order_id:
-                            existing_notification = True
-                            logger.warning(f"订单 #{order_id} 已在通知队列中，跳过")
-                            break
-                            
-                    if not existing_notification:
-                        # 添加到通知队列
-                        notification_queue.put({
-                            'type': 'new_order',
-                            'order_id': order_id,
-                            'account': account,
-                            'remark': remark,
-                            'preferred_seller': None  # 不指定特定卖家
-                        })
-                        logger.info(f"已将订单 #{order_id} 添加到通知队列")
-                        print(f"DEBUG: 已将订单 #{order_id} 添加到通知队列")
+                    # 添加到通知队列
+                    notification_queue.put({
+                        'type': 'new_order',
+                        'order_id': order_id,
+                        'account': account,
+                        'remark': remark,
+                        'preferred_seller': None  # 不指定特定卖家
+                    })
+                    logger.info(f"已将订单 #{order_id} 添加到通知队列")
+                    print(f"DEBUG: 已将订单 #{order_id} 添加到通知队列")
                 else:
                     logger.error("通知队列未初始化")
                     print("ERROR: 通知队列未初始化")
@@ -2033,183 +1347,3 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "/test - 测试机器人状态"
             )
             context.user_data['welcomed'] = True
-
-# 添加新的命令处理函数
-@bot_command_handler
-async def on_status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理卖家设置活跃状态的命令: /status active|inactive"""
-    user_id = update.effective_user.id
-    
-    # 验证是否为卖家
-    if not is_seller(user_id):
-        await update.message.reply_text("你不是授权卖家，无法使用此命令")
-        return
-    
-    # 获取参数
-    args = context.args
-    if not args or args[0].lower() not in ['active', 'inactive']:
-        await update.message.reply_text("用法: /status active|inactive")
-        return
-        
-    status = True if args[0].lower() == 'active' else False
-    
-    # 更新数据库
-    if DATABASE_URL.startswith('postgres'):
-        execute_query("UPDATE sellers SET is_active=%s WHERE telegram_id=%s", (status, str(user_id)))
-    else:
-        execute_query("UPDATE sellers SET is_active=? WHERE telegram_id=?", (1 if status else 0, str(user_id)))
-    
-    status_text = "活跃" if status else "非活跃"
-    await update.message.reply_text(f"你的状态已更新为: {status_text}")
-
-@bot_command_handler
-async def on_maxorders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理卖家设置最大接单数的命令: /maxorders 数量"""
-    user_id = update.effective_user.id
-    
-    # 验证是否为卖家
-    if not is_seller(user_id):
-        await update.message.reply_text("你不是授权卖家，无法使用此命令")
-        return
-    
-    # 获取参数
-    args = context.args
-    if not args or not args[0].isdigit() or int(args[0]) < 0:
-        await update.message.reply_text("用法: /maxorders [正整数]")
-        return
-        
-    max_orders = int(args[0])
-    
-    # 更新数据库
-    if DATABASE_URL.startswith('postgres'):
-        execute_query("UPDATE sellers SET max_orders=%s WHERE telegram_id=%s", (max_orders, str(user_id)))
-    else:
-        execute_query("UPDATE sellers SET max_orders=? WHERE telegram_id=?", (max_orders, str(user_id)))
-    
-    await update.message.reply_text(f"你的最大接单数已更新为: {max_orders}")
-
-@bot_command_handler
-async def on_mystatus_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理卖家查看自己状态的命令: /mystatus"""
-    user_id = update.effective_user.id
-    
-    # 验证是否为卖家
-    if not is_seller(user_id):
-        await update.message.reply_text("你不是授权卖家，无法使用此命令")
-        return
-    
-    # 获取卖家信息
-    if DATABASE_URL.startswith('postgres'):
-        seller = execute_query(
-            "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=%s", 
-            (str(user_id),), fetch=True
-        )
-    else:
-        seller = execute_query(
-            "SELECT is_active, max_orders, current_orders FROM sellers WHERE telegram_id=?", 
-            (str(user_id),), fetch=True
-        )
-    
-    if not seller:
-        await update.message.reply_text("未找到你的卖家信息")
-        return
-    
-    is_active, max_orders, current_orders = seller[0]
-    status_text = "活跃" if is_active else "非活跃"
-    
-    await update.message.reply_text(
-        f"当前状态：{status_text}\n"
-        f"最大接单数：{max_orders}\n"
-        f"当前处理单数：{current_orders}"
-    )
-
-async def update_seller_order_count(seller_id, change=-1):
-    """更新卖家当前订单数"""
-    try:
-        # 更新卖家当前订单数
-        if DATABASE_URL.startswith('postgres'):
-            execute_query(
-                "UPDATE sellers SET current_orders = GREATEST(0, current_orders + %s) WHERE telegram_id=%s",
-                (change, str(seller_id))
-            )
-            
-            # 检查是否需要重新激活卖家
-            seller_info = execute_query(
-                "SELECT current_orders, max_orders FROM sellers WHERE telegram_id=%s",
-                (str(seller_id),), fetch=True
-            )
-        else:
-            execute_query(
-                "UPDATE sellers SET current_orders = MAX(0, current_orders + ?) WHERE telegram_id=?",
-                (change, str(seller_id))
-            )
-            
-            # 检查是否需要重新激活卖家
-            seller_info = execute_query(
-                "SELECT current_orders, max_orders FROM sellers WHERE telegram_id=?",
-                (str(seller_id),), fetch=True
-            )
-        
-        if seller_info:
-            current_orders, max_orders = seller_info[0]
-            # 如果当前订单数低于最大值，确保卖家状态为活跃
-            if current_orders < max_orders:
-                if DATABASE_URL.startswith('postgres'):
-                    execute_query(
-                        "UPDATE sellers SET is_active=TRUE WHERE telegram_id=%s AND current_orders < max_orders",
-                        (str(seller_id),)
-                    )
-                else:
-                    execute_query(
-                        "UPDATE sellers SET is_active=1 WHERE telegram_id=? AND current_orders < max_orders",
-                        (str(seller_id),)
-                    )
-                
-    except Exception as e:
-        logger.error(f"更新卖家订单计数时出错: {str(e)}")
-
-@bot_command_handler
-async def on_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理/help命令，显示帮助信息"""
-    user_id = update.effective_user.id
-    
-    # 基础命令
-    base_commands = [
-        "/start - Start the bot and access interactive menu",
-        "/help - Display this help information"
-    ]
-    
-    # 卖家命令
-    seller_commands = [
-        "/orders - View order list",
-        "/status active|inactive - Set activity status",
-        "/maxorders [number] - Set maximum orders",
-        "/mystatus - View current status information"
-    ]
-    
-    # 管理员命令
-    admin_commands = [
-        "/addseller [id] - Add seller",
-        "/removeseller [id] - Remove seller",
-        "/listsellers - List all sellers"
-    ]
-    
-    # 生成帮助文本
-    help_text = ["📋 Available Commands:"]
-    help_text.extend(base_commands)
-    
-    if is_seller(user_id):
-        help_text.append("\n🔔 Seller Commands:")
-        help_text.extend(seller_commands)
-        # 添加交互式菜单提示
-        help_text.append("\n💡 TIP: Use /start to access the interactive dashboard where you can:")
-        help_text.append("• Change your status with buttons")
-        help_text.append("• Set max orders with one click")
-        help_text.append("• View your current status")
-        help_text.append("• View available orders")
-    
-    if is_admin(user_id):
-        help_text.append("\n👑 Admin Commands:")
-        help_text.extend(admin_commands)
-    
-    await update.message.reply_text("\n".join(help_text))
