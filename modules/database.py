@@ -378,6 +378,21 @@ def init_postgres_db():
         cur.execute("ALTER TABLE sellers ADD COLUMN is_admin BOOLEAN DEFAULT FALSE")
         conn.commit()
     
+    # 创建用户自定义价格表
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS user_custom_prices (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        package TEXT NOT NULL,
+        price REAL NOT NULL,
+        created_at TEXT NOT NULL,
+        created_by INTEGER,
+        FOREIGN KEY (user_id) REFERENCES users (id),
+        FOREIGN KEY (created_by) REFERENCES users (id),
+        UNIQUE(user_id, package)
+    )
+    ''')
+    
     # 创建超级管理员账号（如果不存在）
     admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
     cur.execute("SELECT id FROM users WHERE username = %s", (ADMIN_USERNAME,))
@@ -1612,3 +1627,128 @@ def check_seller_activity(telegram_id):
         (timestamp, telegram_id)
     )
     return True 
+
+# 用户定制价格函数
+def get_user_custom_prices(user_id):
+    """
+    获取用户的定制价格
+    
+    参数:
+    - user_id: 用户ID
+    
+    返回:
+    - 用户定制价格的字典，键为套餐（如'1'），值为价格
+    """
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            results = execute_query("""
+                SELECT package, price FROM user_custom_prices
+                WHERE user_id = %s
+            """, (user_id,), fetch=True)
+        else:
+            results = execute_query("""
+                SELECT package, price FROM user_custom_prices
+                WHERE user_id = ?
+            """, (user_id,), fetch=True)
+        
+        if not results:
+            return {}
+            
+        custom_prices = {}
+        for package, price in results:
+            custom_prices[package] = price
+            
+        return custom_prices
+    except Exception as e:
+        logger.error(f"获取用户定制价格失败: {str(e)}", exc_info=True)
+        return {}
+
+def set_user_custom_price(user_id, package, price, admin_id):
+    """
+    设置用户的定制价格
+    
+    参数:
+    - user_id: 用户ID
+    - package: 套餐（如'1'，'2'等）
+    - price: 价格
+    - admin_id: 设置价格的管理员ID
+    
+    返回:
+    - 成功返回True，失败返回False
+    """
+    try:
+        now = get_china_time()
+        
+        # 检查是否已存在该用户的该套餐定制价格
+        if DATABASE_URL.startswith('postgres'):
+            existing = execute_query("""
+                SELECT id FROM user_custom_prices
+                WHERE user_id = %s AND package = %s
+            """, (user_id, package), fetch=True)
+            
+            if existing:
+                # 更新已有价格
+                execute_query("""
+                    UPDATE user_custom_prices
+                    SET price = %s, created_at = %s, created_by = %s
+                    WHERE user_id = %s AND package = %s
+                """, (price, now, admin_id, user_id, package))
+            else:
+                # 添加新价格
+                execute_query("""
+                    INSERT INTO user_custom_prices
+                    (user_id, package, price, created_at, created_by)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (user_id, package, price, now, admin_id))
+        else:
+            existing = execute_query("""
+                SELECT id FROM user_custom_prices
+                WHERE user_id = ? AND package = ?
+            """, (user_id, package), fetch=True)
+            
+            if existing:
+                # 更新已有价格
+                execute_query("""
+                    UPDATE user_custom_prices
+                    SET price = ?, created_at = ?, created_by = ?
+                    WHERE user_id = ? AND package = ?
+                """, (price, now, admin_id, user_id, package))
+            else:
+                # 添加新价格
+                execute_query("""
+                    INSERT INTO user_custom_prices
+                    (user_id, package, price, created_at, created_by)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (user_id, package, price, now, admin_id))
+            
+        return True
+    except Exception as e:
+        logger.error(f"设置用户定制价格失败: {str(e)}", exc_info=True)
+        return False
+
+def delete_user_custom_price(user_id, package):
+    """
+    删除用户的定制价格
+    
+    参数:
+    - user_id: 用户ID
+    - package: 套餐（如'1'，'2'等）
+    
+    返回:
+    - 成功返回True，失败返回False
+    """
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            execute_query("""
+                DELETE FROM user_custom_prices
+                WHERE user_id = %s AND package = %s
+            """, (user_id, package))
+        else:
+            execute_query("""
+                DELETE FROM user_custom_prices
+                WHERE user_id = ? AND package = ?
+            """, (user_id, package))
+        return True
+    except Exception as e:
+        logger.error(f"删除用户定制价格失败: {str(e)}", exc_info=True)
+        return False 
