@@ -955,6 +955,10 @@
       margin: 5px 0;
     }
     
+    td .remark-container {
+      margin: 0;
+    }
+    
     .remark {
       margin: 0;
       flex-grow: 1;
@@ -969,6 +973,12 @@
       cursor: pointer;
       margin-left: 10px;
       color: #666;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    
+    .remark-container:hover .edit-remark-btn {
+      opacity: 1;
     }
     
     .edit-remark-btn:hover {
@@ -1957,8 +1967,10 @@
           <td>${o.account.includes('uploads') ? `<a href="/${o.account}" target="_blank">查看二维码</a>` : '未上传二维码'}</td>
           <td><span class="status-badge ${cls}">${o.status_text}</span></td>
           <td>
-            <span class="remark-text" data-order-id="${o.id}">${escapeHtml(o.remark || '')}</span>
-            <button class="edit-remark-btn small" onclick="editRemark(${o.id})"><i class="fas fa-pencil-alt"></i></button>
+            <div class="remark-container">
+              <span class="remark-text" data-order-id="${o.id}">${escapeHtml(o.remark || '')}</span>
+              <button class="edit-remark-btn small" onclick="editRemark(${o.id})"><i class="fas fa-pencil-alt"></i></button>
+            </div>
           </td>
           <td>${o.created_at}</td>
           <td>${o.completed_at || '-'}</td>
