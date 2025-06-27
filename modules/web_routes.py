@@ -75,27 +75,10 @@ def register_routes(app, notification_queue):
                 
                 logger.info(f"用户 {username} 登录成功")
                 
-                # 检查是否有待处理的激活码
-                if 'pending_activation_code' in session:
-                    code = session.pop('pending_activation_code')
-                    
-                    # 如果同时有账号密码，直接跳转到激活码页面
-                    if 'pending_account' in session and 'pending_password' in session:
-                        account = session.pop('pending_account')
-                        password = session.pop('pending_password')
-                        return redirect(url_for('redeem_page', code=code))
-                    
-                    return redirect(url_for('redeem_page', code=code))
-                
                 return redirect(url_for('index'))
             else:
                 logger.warning(f"用户 {username} 登录失败 - 密码错误")
                 return render_template('login.html', error='用户名或密码错误')
-        
-        # 检查是否有激活码参数
-        code = request.args.get('code')
-        if code:
-            session['pending_activation_code'] = code
         
         return render_template('login.html')
 
