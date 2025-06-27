@@ -1558,7 +1558,7 @@ def update_seller_last_active(telegram_id):
     execute_query(
         "UPDATE sellers SET last_active_at = ? WHERE telegram_id = ?",
         (timestamp, telegram_id)
-                    )
+    )
 
 def update_seller_desired_orders(telegram_id, desired_orders):
     """更新卖家当前最大接单数量"""
@@ -1626,7 +1626,7 @@ def check_seller_activity(telegram_id):
         "UPDATE sellers SET activity_check_at = ? WHERE telegram_id = ?",
         (timestamp, telegram_id)
     )
-                return True
+    return True
 
 # 用户定制价格函数
 def get_user_custom_prices(user_id):
