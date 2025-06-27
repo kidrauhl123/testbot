@@ -73,13 +73,13 @@ def add_balance_record(user_id, amount, type_name, reason, reference_id=None, ba
 def init_db():
     """初始化数据库"""
     try:
-        if DATABASE_URL.startswith('postgres'):
-            init_postgres_db()
-        else:
-            init_sqlite_db()
-            
+    if DATABASE_URL.startswith('postgres'):
+        init_postgres_db()
+    else:
+        init_sqlite_db()
+    
         # 创建充值相关表
-        create_recharge_tables()
+    create_recharge_tables()
         
         logger.info("数据库初始化完成")
     except Exception as e:
@@ -527,8 +527,7 @@ def get_all_sellers():
         return execute_query("""
             SELECT telegram_id, username, first_name, nickname, is_active, 
                    added_at, added_by, 
-                   COALESCE(is_admin, FALSE) as is_admin,
-                   desired_orders
+                   COALESCE(is_admin, FALSE) as is_admin 
             FROM sellers 
             ORDER BY added_at DESC
         """, fetch=True)
@@ -537,8 +536,7 @@ def get_all_sellers():
         return execute_query("""
             SELECT telegram_id, username, first_name, nickname, is_active, 
                    added_at, added_by, 
-                   COALESCE(is_admin, 0) as is_admin,
-                   desired_orders
+                   COALESCE(is_admin, 0) as is_admin 
             FROM sellers 
             ORDER BY added_at DESC
         """, fetch=True)
@@ -1560,7 +1558,7 @@ def update_seller_last_active(telegram_id):
     execute_query(
         "UPDATE sellers SET last_active_at = ? WHERE telegram_id = ?",
         (timestamp, telegram_id)
-    )
+                    )
 
 def update_seller_desired_orders(telegram_id, desired_orders):
     """更新卖家当前最大接单数量"""
@@ -1628,7 +1626,7 @@ def check_seller_activity(telegram_id):
         "UPDATE sellers SET activity_check_at = ? WHERE telegram_id = ?",
         (timestamp, telegram_id)
     )
-    return True 
+                return True
 
 # 用户定制价格函数
 def get_user_custom_prices(user_id):
@@ -1753,4 +1751,4 @@ def delete_user_custom_price(user_id, package):
         return True
     except Exception as e:
         logger.error(f"删除用户定制价格失败: {str(e)}", exc_info=True)
-        return False 
+        return False
