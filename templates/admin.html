@@ -441,6 +441,22 @@
         font-size: 12px;
       }
     }
+    
+    .max-orders-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .max-orders-value {
+      margin-right: 10px;
+      font-weight: bold;
+    }
+    
+    .edit-max-orders {
+      padding: 2px 6px;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
@@ -575,11 +591,10 @@
             <thead>
               <tr>
                 <th style="display:none;">Telegram ID</th>
-                <th>用户名</th>
-                <th>TG昵称</th>
                 <th>显示昵称</th>
                 <th>状态</th>
                 <th>身份</th>
+                <th>当前最大接单数</th>
                 <th>添加时间</th>
                 <th>添加人</th>
                 <th>操作</th>
@@ -587,7 +602,7 @@
             </thead>
             <tbody id="sellers-table-body">
               <tr>
-                <td colspan="8" class="loading">加载中...</td>
+                <td colspan="7" class="loading">加载中...</td>
               </tr>
             </tbody>
           </table>
@@ -1201,12 +1216,12 @@
         return;
       }
       
-      tbody.innerHTML = '<tr><td colspan="8" class="loading">加载中...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
       
       const response = await fetch('/admin/api/sellers');
       if (!response.ok) {
         console.error("加载卖家数据失败:", response.status, response.statusText);
-        tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
         return;
       }
       
@@ -1216,7 +1231,7 @@
       tbody.innerHTML = '';
       
       if (sellers.length === 0) {
-        const colCount = tbody.parentElement.querySelector('thead tr').childElementCount || 8;
+        const colCount = tbody.parentElement.querySelector('thead tr').childElementCount || 7;
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding: 40px;">暂无卖家</td></tr>`;
         return;
       }
@@ -1237,11 +1252,17 @@
         const row = `
           <tr data-id="${seller.telegram_id}">
             <td style="display:none;">${seller.telegram_id}</td>
-            <td>${escapeHtml(seller.username || '')}</td>
-            <td>${escapeHtml(seller.first_name || '')}</td>
             <td>${escapeHtml(seller.nickname || '')}</td>
             <td>${statusBadge}</td>
             <td>${adminBadge}</td>
+            <td>
+              <div class="max-orders-container">
+                <span class="max-orders-value">${seller.desired_orders || 0}</span>
+                <button class="btn btn-sm btn-outline-primary edit-max-orders" onclick="editMaxOrders(${seller.telegram_id}, ${seller.desired_orders || 0})">
+                  <i class="fas fa-edit"></i>
+                </button>
+              </div>
+            </td>
             <td>${seller.added_at}</td>
             <td>${escapeHtml(seller.added_by || '')}</td>
             <td class="actions">
@@ -1260,7 +1281,7 @@
       console.error('加载卖家失败', e);
       const tbody = document.getElementById('sellers-table-body');
       if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
       }
     }
   }
@@ -1971,6 +1992,40 @@
       await loadSellers();
     } catch (e) {
       console.error('更新卖家昵称失败', e);
+      showToast('更新失败: ' + e.message, 'error');
+    }
+  }
+
+  async function editMaxOrders(telegramId, currentValue) {
+    const newValue = prompt('请输入新的当前最大接单数\n(设置为40以上时，从该值开始充值成功的订单数达到该值时自动停用)', currentValue || 0);
+    if (newValue === null) {
+      return; // 用户取消
+    }
+    
+    // 验证输入是否为数字
+    const numValue = parseInt(newValue);
+    if (isNaN(numValue) || numValue < 0) {
+      showToast('请输入有效的数字（大于等于0）', 'error');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/admin/api/sellers/${telegramId}/max-orders`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ desired_orders: numValue })
+      });
+      
+      if (!response.ok) {
+        throw new Error('更新失败');
+      }
+      
+      showToast('最大接单数已更新', 'success');
+      await loadSellers();
+    } catch (e) {
+      console.error('更新最大接单数失败', e);
       showToast('更新失败: ' + e.message, 'error');
     }
   }

@@ -1127,6 +1127,66 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     (STATUS['COMPLETED'], timestamp, oid)
                 )
             conn.commit()
+            
+            # 检查卖家是否达到最大接单数
+            try:
+                # 获取卖家当前最大接单数设置
+                if DATABASE_URL.startswith('postgres'):
+                    cursor.execute(
+                        "SELECT desired_orders FROM sellers WHERE telegram_id = %s",
+                        (user_id,)
+                    )
+                else:
+                    cursor.execute(
+                        "SELECT desired_orders FROM sellers WHERE telegram_id = ?",
+                        (user_id,)
+                    )
+                seller_result = cursor.fetchone()
+                
+                if seller_result and seller_result[0] is not None:
+                    desired_orders = int(seller_result[0])
+                    
+                    # 如果设置了大于40的最大接单数，检查已完成订单数
+                    if desired_orders >= 40:
+                        # 获取该卖家已完成订单数
+                        if DATABASE_URL.startswith('postgres'):
+                            cursor.execute(
+                                """SELECT COUNT(*) FROM orders 
+                                WHERE accepted_by = %s AND status = %s AND completed_at IS NOT NULL""",
+                                (user_id, STATUS['COMPLETED'])
+                            )
+                        else:
+                            cursor.execute(
+                                """SELECT COUNT(*) FROM orders 
+                                WHERE accepted_by = ? AND status = ? AND completed_at IS NOT NULL""",
+                                (user_id, STATUS['COMPLETED'])
+                            )
+                        count_result = cursor.fetchone()
+                        
+                        if count_result and count_result[0] >= desired_orders:
+                            # 达到最大接单数，自动停用卖家
+                            logger.info(f"卖家 {user_id} 已达到最大接单数 {desired_orders}，自动停用")
+                            if DATABASE_URL.startswith('postgres'):
+                                cursor.execute(
+                                    "UPDATE sellers SET is_active = FALSE WHERE telegram_id = %s",
+                                    (user_id,)
+                                )
+                            else:
+                                cursor.execute(
+                                    "UPDATE sellers SET is_active = 0 WHERE telegram_id = ?",
+                                    (user_id,)
+                                )
+                            conn.commit()
+                            
+                            # 通知卖家
+                            await context.bot.send_message(
+                                chat_id=user_id,
+                                text=f"⚠️ *Automatic Deactivation*\n\nYou have reached your maximum order capacity ({desired_orders}). Your seller status has been automatically set to inactive. Please contact admin to reactivate when you're ready to take more orders.",
+                                parse_mode='Markdown'
+                            )
+            except Exception as e:
+                logger.error(f"检查卖家最大接单数时出错: {str(e)}", exc_info=True)
+            
             conn.close()
 
             # 推送通知给网页端
@@ -1295,6 +1355,66 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     (STATUS['COMPLETED'], timestamp, oid)
                 )
             conn.commit()
+            
+            # 检查卖家是否达到最大接单数
+            try:
+                # 获取卖家当前最大接单数设置
+                if DATABASE_URL.startswith('postgres'):
+                    cursor.execute(
+                        "SELECT desired_orders FROM sellers WHERE telegram_id = %s",
+                        (user_id,)
+                    )
+                else:
+                    cursor.execute(
+                        "SELECT desired_orders FROM sellers WHERE telegram_id = ?",
+                        (user_id,)
+                    )
+                seller_result = cursor.fetchone()
+                
+                if seller_result and seller_result[0] is not None:
+                    desired_orders = int(seller_result[0])
+                    
+                    # 如果设置了大于40的最大接单数，检查已完成订单数
+                    if desired_orders >= 40:
+                        # 获取该卖家已完成订单数
+                        if DATABASE_URL.startswith('postgres'):
+                            cursor.execute(
+                                """SELECT COUNT(*) FROM orders 
+                                WHERE accepted_by = %s AND status = %s AND completed_at IS NOT NULL""",
+                                (user_id, STATUS['COMPLETED'])
+                            )
+                        else:
+                            cursor.execute(
+                                """SELECT COUNT(*) FROM orders 
+                                WHERE accepted_by = ? AND status = ? AND completed_at IS NOT NULL""",
+                                (user_id, STATUS['COMPLETED'])
+                            )
+                        count_result = cursor.fetchone()
+                        
+                        if count_result and count_result[0] >= desired_orders:
+                            # 达到最大接单数，自动停用卖家
+                            logger.info(f"卖家 {user_id} 已达到最大接单数 {desired_orders}，自动停用")
+                            if DATABASE_URL.startswith('postgres'):
+                                cursor.execute(
+                                    "UPDATE sellers SET is_active = FALSE WHERE telegram_id = %s",
+                                    (user_id,)
+                                )
+                            else:
+                                cursor.execute(
+                                    "UPDATE sellers SET is_active = 0 WHERE telegram_id = ?",
+                                    (user_id,)
+                                )
+                            conn.commit()
+                            
+                            # 通知卖家
+                            await context.bot.send_message(
+                                chat_id=user_id,
+                                text=f"⚠️ *Automatic Deactivation*\n\nYou have reached your maximum order capacity ({desired_orders}). Your seller status has been automatically set to inactive. Please contact admin to reactivate when you're ready to take more orders.",
+                                parse_mode='Markdown'
+                            )
+            except Exception as e:
+                logger.error(f"检查卖家最大接单数时出错: {str(e)}", exc_info=True)
+            
             conn.close()
 
             # 推送通知给网页端

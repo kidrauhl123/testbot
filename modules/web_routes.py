@@ -990,7 +990,8 @@ def register_routes(app, notification_queue):
             "is_active": bool(s[4]),
             "added_at": s[5],
             "added_by": s[6],
-            "is_admin": bool(s[7])
+            "is_admin": bool(s[7]),
+            "desired_orders": s[8] if len(s) > 8 else 0
         } for s in sellers])
 
     @app.route('/admin/api/sellers', methods=['POST'])
@@ -1594,3 +1595,20 @@ def register_routes(app, notification_queue):
         except Exception as e:
             logger.error(f"更新订单 {oid} 备注时发生错误: {e}", exc_info=True)
             return jsonify({"error": "服务器错误，请稍后重试"}), 500
+
+    @app.route('/admin/api/sellers/<int:telegram_id>/max-orders', methods=['PUT'])
+    @login_required
+    @admin_required
+    def admin_api_update_seller_max_orders(telegram_id):
+        """更新卖家最大接单数"""
+        data = request.get_json()
+        desired_orders = data.get('desired_orders')
+        if desired_orders is None:
+            return jsonify({"error": "Missing desired_orders"}), 400
+        
+        try:
+            update_seller_desired_orders(telegram_id, desired_orders)
+            return jsonify({"success": True})
+        except Exception as e:
+            logger.error(f"更新卖家 {telegram_id} 最大接单数失败: {e}")
+            return jsonify({"error": "Update failed"}), 500
