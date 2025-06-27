@@ -20,7 +20,6 @@ from modules.database import (
     get_balance_records, update_user_balance, set_user_balance, check_balance_for_package, refund_order,
     create_order_with_deduction_atomic, create_recharge_request, get_user_recharge_requests,
     get_pending_recharge_requests, approve_recharge_request, reject_recharge_request,
-    get_user_custom_prices, set_user_custom_price, delete_user_custom_price,
     update_seller_nickname, update_seller_desired_orders, select_active_seller, check_seller_activity
 )
 import modules.constants as constants
@@ -767,124 +766,30 @@ def register_routes(app, notification_queue):
     @login_required
     @admin_required
     def admin_update_user_credit(user_id):
-        """更新用户透支额度（仅限管理员）"""
-        data = request.json
-        
-        if not data or 'credit_limit' not in data:
-            return jsonify({"error": "缺少透支额度参数"}), 400
-        
+        """更新用户信用额度"""
         try:
-            credit_limit = float(data['credit_limit'])
-        except (ValueError, TypeError):
-            return jsonify({"error": "透支额度必须是数字"}), 400
-        
-        # 不允许设置负透支额度
-        if credit_limit < 0:
-            credit_limit = 0
-        
-        success = set_user_credit_limit(user_id, credit_limit)
-        
-        if success:
-            logger.info(f"管理员设置用户ID={user_id}的透支额度为{credit_limit}")
-            return jsonify({"success": True, "credit_limit": credit_limit})
-        else:
-            return jsonify({"error": "更新透支额度失败"}), 500
+            data = request.json
+            credit_limit = float(data.get('credit_limit', 0))
             
-    @app.route('/admin/api/users/<int:user_id>/custom-prices', methods=['GET'])
-    @login_required
-    @admin_required
-    def admin_get_user_custom_prices(user_id):
-        """获取用户定制价格（仅限管理员）"""
-        try:
-            # 获取用户信息
-            user = execute_query("SELECT username FROM users WHERE id=?", (user_id,), fetch=True)
-            if not user:
-                return jsonify({"error": "用户不存在"}), 404
-                
-            username = user[0][0]
-            
-            # 获取用户定制价格
-            custom_prices = get_user_custom_prices(user_id)
-            
-            # 准备返回数据
-            return jsonify({
-                "success": True,
-                "user_id": user_id,
-                "username": username,
-                "custom_prices": custom_prices,
-                "default_prices": WEB_PRICES
-            })
-        except Exception as e:
-            logger.error(f"获取用户定制价格失败: {str(e)}", exc_info=True)
-            return jsonify({"error": f"获取失败: {str(e)}"}), 500
-            
-    @app.route('/admin/api/users/<int:user_id>/custom-prices', methods=['POST'])
-    @login_required
-    @admin_required
-    def admin_set_user_custom_price(user_id):
-        """设置用户定制价格（仅限管理员）"""
-        if not request.is_json:
-            return jsonify({"error": "请求必须为JSON格式"}), 400
-            
-        data = request.get_json()
-        package = data.get('package')
-        price = data.get('price')
-        
-        if not package:
-            return jsonify({"error": "缺少package字段"}), 400
-            
-        if price is None:
-            return jsonify({"error": "缺少price字段"}), 400
-            
-        try:
-            price = float(price)
-        except ValueError:
-            return jsonify({"error": "price必须为数字"}), 400
-            
-        # 价格验证
-        if price <= 0:
-            return jsonify({"error": "价格必须大于0"}), 400
-            
-        # 检查套餐是否有效
-        if package not in WEB_PRICES:
-            return jsonify({"error": f"无效的套餐: {package}"}), 400
-            
-        # 检查用户是否存在
-        user = execute_query("SELECT username FROM users WHERE id=?", (user_id,), fetch=True)
-        if not user:
-            return jsonify({"error": "用户不存在"}), 404
-            
-        admin_id = session.get('user_id')
-        
-        try:
-            # 如果价格为0，则删除定制价格，使用默认价格
-            if price == 0:
-                success = delete_user_custom_price(user_id, package)
-                message = "已删除定制价格，将使用默认价格"
-            else:
-                success = set_user_custom_price(user_id, package, price, admin_id)
-                message = "定制价格设置成功"
-                
-            if not success:
-                return jsonify({"error": "设置定制价格失败"}), 500
-                
-            # 获取更新后的用户定制价格
-            custom_prices = get_user_custom_prices(user_id)
+            # 设置信用额度
+            set_user_credit_limit(user_id, credit_limit)
             
             return jsonify({
                 "success": True,
-                "message": message,
-                "custom_prices": custom_prices
+                "message": f"已更新用户 #{user_id} 的信用额度为 {credit_limit} 元"
             })
         except Exception as e:
-            logger.error(f"设置用户定制价格失败: {str(e)}", exc_info=True)
-            return jsonify({"error": f"设置失败: {str(e)}"}), 500
+            logger.error(f"更新用户信用额度失败: {str(e)}", exc_info=True)
+            return jsonify({
+                "success": False,
+                "error": f"更新用户信用额度失败: {str(e)}"
+            }), 500
 
     @app.route('/admin/api/orders')
     @login_required
     @admin_required
     def admin_api_orders():
-        """获取所有订单"""
+        """获取所有订单列表"""
         # 获取查询参数
         limit = int(request.args.get('limit', 1000))  # 增加默认值以支持加载更多订单
         offset = int(request.args.get('offset', 0))
@@ -1470,25 +1375,20 @@ def register_routes(app, notification_queue):
     @app.route('/api/user-prices')
     @login_required
     def api_get_user_prices():
-        """获取用户的定制价格"""
+        """获取用户的价格"""
         try:
             user_id = session.get('user_id')
             
             if not user_id:
                 return jsonify({"success": False, "error": "未登录"})
                 
-            # 导入get_user_package_price函数
-            from modules.constants import WEB_PRICES, get_user_package_price
+            # 导入价格常量
+            from modules.constants import WEB_PRICES
             
-            # 获取用户所有套餐的价格
-            custom_prices = {}
-            for package in WEB_PRICES.keys():
-                custom_prices[package] = get_user_package_price(user_id, package)
-                
             return jsonify({
                 "success": True, 
                 "user_id": user_id, 
-                "prices": custom_prices,
+                "prices": WEB_PRICES,
                 "default_prices": WEB_PRICES
             })
         except Exception as e:
