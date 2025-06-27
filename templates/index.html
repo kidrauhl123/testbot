@@ -1898,8 +1898,8 @@
       const html = `
         <div class="order-list-item" data-order-id="${o.id}">
           <h4>订单 #${o.id} <span class="status-badge ${cls}">${o.status_text}</span></h4>
-          ${isAdmin && o.accepted_by ? `<p class="creator">接单者：${escapeHtml(o.accepted_by)}</p>` : ''}
           <p class="account"><strong>YouTube：</strong>${o.account.includes('uploads') ? `<a href="/${o.account}" target="_blank">查看二维码</a>` : '未上传二维码'}</p>
+          <p class="seller"><strong>接单人：</strong>${o.accepted_by_nickname || o.accepted_by || '-'}</p>
           <div class="remark-container">
             <p class="remark"><strong>备注：</strong><span class="remark-text" data-order-id="${o.id}">${escapeHtml(o.remark || '')}</span></p>
             <button class="edit-remark-btn" onclick="editRemark(${o.id})">编辑</button>
@@ -1936,6 +1936,7 @@
             <th>备注</th>
             <th>提交时间</th>
             <th>完成时间</th>
+            <th>接单人</th>
             <th>操作</th>
           </tr>
         </thead>
@@ -1956,6 +1957,7 @@
           </td>
           <td>${o.created_at}</td>
           <td>${o.completed_at || '-'}</td>
+          <td>${o.accepted_by_nickname || o.accepted_by || '-'}</td>
           <td>
             <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
             <button class="confirm-btn" onclick="confirmOrder(${o.id})">${o.buyer_confirmed ? '已确认' : '确认'}</button>
@@ -2020,10 +2022,8 @@
       detailMessage += `备注: ${order.remark}\n`;
     }
     
-    // 只有管理员可以看到接单人
-    if (isAdmin && order.accepted_by) {
-      detailMessage += `接单人: ${order.accepted_by}\n`;
-    }
+    // 显示接单人
+    detailMessage += `接单人: ${order.accepted_by_nickname || order.accepted_by || '-'}\n`;
     
     alert(detailMessage);
   }
