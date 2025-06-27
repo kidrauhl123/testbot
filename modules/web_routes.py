@@ -473,62 +473,75 @@ def register_routes(app, notification_queue):
     @app.route('/orders/recent')
     @login_required
     def orders_recent():
-        """获取用户最近的订单"""
-        # 获取查询参数
-        limit = int(request.args.get('limit', 1000))  # 增加默认值以支持加载更多订单
-        offset = int(request.args.get('offset', 0))
-        user_filter = ""
-        params = []
-        
-        # 非管理员只能看到自己的订单
-        if not session.get('is_admin'):
-            user_filter = "WHERE user_id = ?"
-            params.append(session.get('user_id'))
-        
-        # 查询订单
-        orders = execute_query(f"""
-            SELECT id, account, password, package, status, created_at, accepted_at, completed_at,
-                   remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name
-            FROM orders 
-            {user_filter}
-            ORDER BY id DESC LIMIT ? OFFSET ?
-        """, params + [limit, offset], fetch=True)
-        
-        logger.info(f"查询到 {len(orders)} 条订单记录")
-        
-        # 格式化数据
-        formatted_orders = []
-        for order in orders:
-            oid, account, password, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name = order
+        """获取最近订单的API接口"""
+        try:
+            # 获取参数
+            limit = int(request.args.get('limit', 20))
+            offset = int(request.args.get('offset', 0))
             
-            # 优先使用昵称，其次是用户名，最后是ID
-            seller_display = accepted_by_first_name or accepted_by_username or accepted_by
-            if seller_display and not isinstance(seller_display, str):
-                seller_display = str(seller_display)
+            # 限制最大获取数量
+            limit = min(limit, 100)
             
-            # 如果是失败状态，翻译失败原因
-            translated_remark = remark
-            if status == STATUS['FAILED'] and remark:
-                translated_remark = REASON_TEXT_ZH.get(remark, remark)
+            # 根据用户权限，决定查询所有订单还是仅当前用户的订单
+            is_admin = session.get('is_admin')
+            user_id = session.get('user_id')
             
-            order_data = {
-                "id": oid,
-                "account": account,
-                "password": password,
-                "package": package,
-                "status": status,
-                "status_text": STATUS_TEXT_ZH.get(status, status),
-                "created_at": created_at,
-                "accepted_at": accepted_at or "",
-                "completed_at": completed_at or "",
-                "remark": translated_remark or "",
-                "accepted_by": seller_display or "",
-                "can_cancel": status == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == user_id)
-            }
-            formatted_orders.append(order_data)
-        
-        # 直接返回订单列表，而不是嵌套在orders字段中
-        return jsonify(formatted_orders)
+            if is_admin:
+                # 管理员可查看所有订单
+                orders = execute_query("""
+                    SELECT id, account, password, package, status, created_at, 
+                    accepted_at, completed_at, remark, web_user_id, user_id, 
+                    accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname
+                    FROM orders 
+                    ORDER BY id DESC LIMIT ? OFFSET ?
+                """, (limit, offset), fetch=True)
+            else:
+                # 普通用户只能查看自己的订单
+                orders = execute_query("""
+                    SELECT id, account, password, package, status, created_at, 
+                    accepted_at, completed_at, remark, web_user_id, user_id, 
+                    accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname
+                    FROM orders 
+                    WHERE user_id = ? 
+                    ORDER BY id DESC LIMIT ? OFFSET ?
+                """, (user_id, limit, offset), fetch=True)
+            
+            # 格式化订单数据
+            formatted_orders = []
+            for order in orders:
+                oid, account, password, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname = order
+                
+                # 优先使用自定义昵称，其次是用户名称，最后是ID
+                seller_display = accepted_by_nickname or accepted_by_first_name or accepted_by_username or accepted_by
+                if seller_display and not isinstance(seller_display, str):
+                    seller_display = str(seller_display)
+                
+                # 如果是失败状态，翻译失败原因
+                translated_remark = remark
+                if status == STATUS['FAILED'] and remark:
+                    translated_remark = REASON_TEXT_ZH.get(remark, remark)
+                
+                order_data = {
+                    "id": oid,
+                    "account": account,
+                    "password": password,
+                    "package": package,
+                    "status": status,
+                    "status_text": STATUS_TEXT_ZH.get(status, status),
+                    "created_at": created_at,
+                    "accepted_at": accepted_at or "",
+                    "completed_at": completed_at or "",
+                    "remark": translated_remark or "",
+                    "accepted_by": seller_display or "",
+                    "can_cancel": status == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == user_id)
+                }
+                formatted_orders.append(order_data)
+            
+            # 直接返回订单列表，而不是嵌套在orders字段中
+            return jsonify(formatted_orders)
+        except Exception as e:
+            logger.error(f"获取最近订单失败: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": "服务器内部错误"}), 500
 
     @app.route('/orders/cancel/<int:oid>', methods=['POST'])
     @login_required
@@ -925,7 +938,7 @@ def register_routes(app, notification_queue):
             # PostgreSQL查询，使用COALESCE获取web_user_id或从users表联查username
             orders = execute_query(f"""
                 SELECT o.id, o.account, o.password, o.package, o.status, o.remark, o.created_at, o.accepted_at, o.completed_at, 
-                       COALESCE(o.web_user_id, u.username) as creator, o.accepted_by, o.accepted_by_username, o.accepted_by_first_name, o.refunded
+                       COALESCE(o.web_user_id, u.username) as creator, o.accepted_by, o.accepted_by_username, o.accepted_by_first_name, o.accepted_by_nickname, o.refunded
                 FROM orders o
                 LEFT JOIN users u ON o.user_id = u.id
                 {where_clause}
@@ -941,7 +954,7 @@ def register_routes(app, notification_queue):
             # SQLite查询
             orders = execute_query(f"""
                 SELECT id, account, password, package, status, remark, created_at, accepted_at, completed_at, 
-                       web_user_id as creator, accepted_by, accepted_by_username, accepted_by_first_name, refunded
+                       web_user_id as creator, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, refunded
                 FROM orders
                 {where_clause}
                 ORDER BY id DESC
@@ -956,15 +969,17 @@ def register_routes(app, notification_queue):
         # 格式化订单数据
         formatted_orders = []
         for order in orders:
-            order_id, account, password, package, status, remark, created_at, accepted_at, completed_at, creator, accepted_by, accepted_by_username, accepted_by_first_name, refunded = order
+            order_id, account, password, package, status, remark, created_at, accepted_at, completed_at, creator, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, refunded = order
             
             # 格式化卖家信息
             seller_info = None
             if accepted_by:
+                # 优先使用自定义昵称，其次是TG名称，最后是ID
+                display_name = accepted_by_nickname or accepted_by_first_name or accepted_by_username or str(accepted_by)
                 seller_info = {
                     "telegram_id": accepted_by,
                     "username": accepted_by_username or str(accepted_by),
-                    "name": accepted_by_first_name or str(accepted_by)
+                    "name": display_name
                 }
             
             formatted_orders.append({
@@ -1067,7 +1082,7 @@ def register_routes(app, notification_queue):
             order = execute_query("""
                 SELECT o.id, o.account, o.password, o.package, o.status, o.remark, o.created_at, 
                        o.accepted_at, o.completed_at, o.accepted_by, o.web_user_id, o.user_id,
-                       o.accepted_by_username, o.accepted_by_first_name, u.username as creator_name
+                       o.accepted_by_username, o.accepted_by_first_name, o.accepted_by_nickname, u.username as creator_name
                 FROM orders o
                 LEFT JOIN users u ON o.user_id = u.id
                 WHERE o.id = %s
@@ -1077,7 +1092,7 @@ def register_routes(app, notification_queue):
             order = execute_query("""
                 SELECT id, account, password, package, status, remark, created_at, 
                        accepted_at, completed_at, accepted_by, web_user_id, user_id,
-                       accepted_by_username, accepted_by_first_name
+                       accepted_by_username, accepted_by_first_name, accepted_by_nickname
                 FROM orders 
                 WHERE id = ?
             """, (order_id,), fetch=True)
@@ -1087,8 +1102,10 @@ def register_routes(app, notification_queue):
             
         o = order[0]
         
-        # 根据不同数据库处理返回格式
+        # 根据不同数据库处理返回格式，优先使用卖家昵称
         if DATABASE_URL.startswith('postgres'):
+            # 如果是PostgreSQL，o[14]是creator_name，其他字段索引不变
+            seller_name = o[14] or o[13] or o[12] or o[9]  # 优先使用昵称，然后first_name，然后username，最后用id
             return jsonify({
                 "id": o[0],
                 "account": o[1],
@@ -1100,11 +1117,13 @@ def register_routes(app, notification_queue):
                 "created_at": o[6],
                 "accepted_at": o[7],
                 "completed_at": o[8],
-                "accepted_by": o[12] or o[13] or "",  # 优先使用昵称，其次是用户名
-                "creator": o[10] or o[14] or "N/A",   # web_user_id或creator_name
-                "user_id": o[11]
+                "accepted_by": o[9],
+                "accepted_by_name": seller_name,
+                "creator": o[10] or o[15] or "未知"  # web_user_id或creator_name
             })
         else:
+            # SQLite情况
+            seller_name = o[14] or o[13] or o[12] or o[9]  # 优先使用昵称，然后first_name，然后username，最后用id
             return jsonify({
                 "id": o[0],
                 "account": o[1],
@@ -1116,9 +1135,9 @@ def register_routes(app, notification_queue):
                 "created_at": o[6],
                 "accepted_at": o[7],
                 "completed_at": o[8],
-                "accepted_by": o[12] or o[13] or "",  # 优先使用昵称，其次是用户名
-                "creator": o[10] or "N/A",           # web_user_id
-                "user_id": o[11]
+                "accepted_by": o[9],
+                "accepted_by_name": seller_name,
+                "creator": o[10] or "未知"  # web_user_id
             })
     
     # 编辑订单的API

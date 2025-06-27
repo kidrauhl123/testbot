@@ -115,9 +115,22 @@ def init_sqlite_db():
         accepted_by TEXT,
         accepted_at TEXT,
         completed_at TEXT,
-        notified INTEGER DEFAULT 0
+        notified INTEGER DEFAULT 0,
+        accepted_by_username TEXT,
+        accepted_by_first_name TEXT,
+        accepted_by_nickname TEXT,
+        failed_at TEXT,
+        fail_reason TEXT
     )
     ''')
+    
+    # 检查orders表是否需要添加accepted_by_nickname列
+    try:
+        c.execute("SELECT accepted_by_nickname FROM orders LIMIT 1")
+    except sqlite3.OperationalError:
+        logger.info("为orders表添加accepted_by_nickname列")
+        c.execute("ALTER TABLE orders ADD COLUMN accepted_by_nickname TEXT")
+        conn.commit()
     
     # 创建用户表
     c.execute('''
@@ -233,6 +246,9 @@ def init_postgres_db():
     host = url.hostname
     port = url.port
     
+    logger.info(f"使用PostgreSQL数据库: {host}:{port}/{dbname}")
+    logger.info(f"连接PostgreSQL数据库: {host}:{port}/{dbname}")
+    
     conn = psycopg2.connect(
         dbname=dbname,
         user=user,
@@ -240,11 +256,13 @@ def init_postgres_db():
         host=host,
         port=port
     )
+    
+    # 使用自动提交模式，避免事务问题
     conn.autocommit = True
-    c = conn.cursor()
+    cur = conn.cursor()
     
     # 创建订单表
-    c.execute('''
+    cur.execute('''
     CREATE TABLE IF NOT EXISTS orders (
         id SERIAL PRIMARY KEY,
         account TEXT,
@@ -252,19 +270,32 @@ def init_postgres_db():
         package TEXT,
         remark TEXT,
         status TEXT DEFAULT 'submitted',
-        created_at TEXT,
-        updated_at TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP,
         user_id INTEGER,
         username TEXT,
         accepted_by TEXT,
-        accepted_at TEXT,
-        completed_at TEXT,
-        notified INTEGER DEFAULT 0
+        accepted_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        notified INTEGER DEFAULT 0,
+        accepted_by_username TEXT,
+        accepted_by_first_name TEXT,
+        accepted_by_nickname TEXT,
+        failed_at TIMESTAMP,
+        fail_reason TEXT
     )
     ''')
     
+    # 检查orders表是否需要添加accepted_by_nickname列
+    try:
+        cur.execute("SELECT accepted_by_nickname FROM orders LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为orders表添加accepted_by_nickname列")
+        cur.execute("ALTER TABLE orders ADD COLUMN accepted_by_nickname TEXT")
+        conn.commit()
+    
     # 创建用户表
-    c.execute('''
+    cur.execute('''
     CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         username TEXT UNIQUE,
@@ -278,7 +309,7 @@ def init_postgres_db():
     ''')
     
     # 创建卖家表
-    c.execute('''
+    cur.execute('''
     CREATE TABLE IF NOT EXISTS sellers (
         telegram_id TEXT PRIMARY KEY,
         username TEXT,
@@ -296,47 +327,47 @@ def init_postgres_db():
     
     # 检查sellers表是否需要添加新字段
     try:
-        c.execute("SELECT last_active_at FROM sellers LIMIT 1")
+        cur.execute("SELECT last_active_at FROM sellers LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
         logger.info("为sellers表添加last_active_at列")
-        c.execute("ALTER TABLE sellers ADD COLUMN last_active_at TEXT")
+        cur.execute("ALTER TABLE sellers ADD COLUMN last_active_at TEXT")
         conn.commit()
     
     try:
-        c.execute("SELECT desired_orders FROM sellers LIMIT 1")
+        cur.execute("SELECT desired_orders FROM sellers LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
         logger.info("为sellers表添加desired_orders列")
-        c.execute("ALTER TABLE sellers ADD COLUMN desired_orders INTEGER DEFAULT 0")
+        cur.execute("ALTER TABLE sellers ADD COLUMN desired_orders INTEGER DEFAULT 0")
         conn.commit()
     
     try:
-        c.execute("SELECT activity_check_at FROM sellers LIMIT 1")
+        cur.execute("SELECT activity_check_at FROM sellers LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
         logger.info("为sellers表添加activity_check_at列")
-        c.execute("ALTER TABLE sellers ADD COLUMN activity_check_at TEXT")
+        cur.execute("ALTER TABLE sellers ADD COLUMN activity_check_at TEXT")
         conn.commit()
     
     # 检查sellers表是否需要添加nickname列
     try:
-        c.execute("SELECT nickname FROM sellers LIMIT 1")
+        cur.execute("SELECT nickname FROM sellers LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
         logger.info("为sellers表添加nickname列")
-        c.execute("ALTER TABLE sellers ADD COLUMN nickname TEXT")
+        cur.execute("ALTER TABLE sellers ADD COLUMN nickname TEXT")
         conn.commit()
     
     # 检查sellers表是否需要添加is_admin列
     try:
-        c.execute("SELECT is_admin FROM sellers LIMIT 1")
+        cur.execute("SELECT is_admin FROM sellers LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
         logger.info("为sellers表添加is_admin列")
-        c.execute("ALTER TABLE sellers ADD COLUMN is_admin BOOLEAN DEFAULT FALSE")
+        cur.execute("ALTER TABLE sellers ADD COLUMN is_admin BOOLEAN DEFAULT FALSE")
         conn.commit()
     
     # 创建超级管理员账号（如果不存在）
     admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
-    c.execute("SELECT id FROM users WHERE username = %s", (ADMIN_USERNAME,))
-    if not c.fetchone():
-        c.execute("""
+    cur.execute("SELECT id FROM users WHERE username = %s", (ADMIN_USERNAME,))
+    if not cur.fetchone():
+        cur.execute("""
             INSERT INTO users (username, password_hash, is_admin, created_at) 
             VALUES (%s, %s, 1, %s)
         """, (ADMIN_USERNAME, admin_hash, get_china_time()))
@@ -481,12 +512,59 @@ def get_all_sellers():
         """, fetch=True)
 
 def get_active_seller_ids():
-    """获取所有活跃的卖家Telegram ID"""
+    """获取所有活跃的卖家ID"""
     if DATABASE_URL.startswith('postgres'):
         sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = TRUE", fetch=True)
     else:
         sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = 1", fetch=True)
-    return [seller[0] for seller in sellers]
+    
+    return [seller[0] for seller in sellers] if sellers else []
+
+def get_seller_info(telegram_id):
+    """
+    获取指定卖家的信息
+    
+    参数:
+    - telegram_id: 卖家的Telegram ID
+    
+    返回:
+    - 包含卖家信息的字典，如果卖家不存在则返回None
+    """
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            result = execute_query("""
+                SELECT telegram_id, nickname, username, first_name, is_active
+                FROM sellers
+                WHERE telegram_id = %s
+            """, (telegram_id,), fetch=True)
+        else:
+            result = execute_query("""
+                SELECT telegram_id, nickname, username, first_name, is_active
+                FROM sellers
+                WHERE telegram_id = ?
+            """, (telegram_id,), fetch=True)
+        
+        if not result:
+            logger.warning(f"卖家 {telegram_id} 不存在")
+            return None
+            
+        seller = result[0]
+        telegram_id, nickname, username, first_name, is_active = seller
+        
+        # 如果没有设置昵称，则使用first_name或username作为默认昵称
+        display_name = nickname or first_name or f"Seller {telegram_id}"
+        
+        return {
+            "telegram_id": telegram_id,
+            "nickname": nickname,
+            "username": username,
+            "first_name": first_name, 
+            "display_name": display_name,
+            "is_active": bool(is_active)
+        }
+    except Exception as e:
+        logger.error(f"获取卖家 {telegram_id} 信息失败: {str(e)}", exc_info=True)
+        return None
 
 def get_active_sellers():
     """获取所有活跃的卖家的ID和昵称"""

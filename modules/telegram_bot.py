@@ -32,7 +32,7 @@ from modules.database import (
     get_order_details, execute_query, 
     get_unnotified_orders, get_active_seller_ids,
     update_seller_desired_orders, update_seller_last_active, get_active_sellers,
-    select_active_seller
+    select_active_seller, get_seller_info
 )
 
 # 设置日志
@@ -795,17 +795,30 @@ async def auto_accept_order(order_id, seller_id):
     """自动接单处理"""
     try:
         # 获取卖家信息
-        user_info = await get_user_info(seller_id)
-        username = user_info.get('username', '')
-        first_name = user_info.get('first_name', '')
+        # 优先使用数据库中的卖家信息，包括管理员设置的昵称
+        seller_info = get_seller_info(seller_id)
+        
+        if seller_info:
+            # 使用从数据库获取的信息，包含管理员设置的昵称
+            username = seller_info.get('username', '')
+            first_name = seller_info.get('first_name', '')
+            nickname = seller_info.get('nickname', '')
+            display_name = seller_info.get('display_name', '')  # 优先使用昵称
+        else:
+            # 作为备用，使用Telegram API获取卖家信息
+            user_info = await get_user_info(seller_id)
+            username = user_info.get('username', '')
+            first_name = user_info.get('first_name', '')
+            nickname = ''
+            display_name = first_name or username or str(seller_id)
         
         # 更新订单为已接受状态
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         execute_query(
-            "UPDATE orders SET status=?, accepted_by=?, accepted_at=?, accepted_by_username=?, accepted_by_first_name=? WHERE id=?",
-            (STATUS['ACCEPTED'], str(seller_id), timestamp, username, first_name, order_id)
+            "UPDATE orders SET status=?, accepted_by=?, accepted_at=?, accepted_by_username=?, accepted_by_first_name=?, accepted_by_nickname=? WHERE id=?",
+            (STATUS['ACCEPTED'], str(seller_id), timestamp, username, first_name, nickname, order_id)
         )
-        logger.info(f"卖家 {seller_id} 已自动接受订单 #{order_id}")
+        logger.info(f"卖家 {display_name} ({seller_id}) 已自动接受订单 #{order_id}")
     except Exception as e:
         logger.error(f"自动接单过程中出错: {str(e)}")
     
