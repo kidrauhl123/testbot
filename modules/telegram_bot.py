@@ -31,7 +31,8 @@ from modules.constants import (
 from modules.database import (
     get_order_details, execute_query, 
     get_unnotified_orders, get_active_seller_ids,
-    update_seller_desired_orders, update_seller_last_active, get_active_sellers
+    update_seller_desired_orders, update_seller_last_active, get_active_sellers,
+    select_active_seller
 )
 
 # 设置日志
@@ -287,23 +288,50 @@ async def on_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"用户 {user_id} 执行了测试命令")
 
 async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """开始命令处理"""
+    """处理 /start 命令"""
     user_id = update.effective_user.id
+    username = update.effective_user.username
+    first_name = update.effective_user.first_name
+    
+    logger.info(f"收到 /start 命令 用户: {user_id}, 用户名: {username}, 名字: {first_name}")
+    print(f"DEBUG: 收到 /start 命令 用户: {user_id}, 用户名: {username}, 名字: {first_name}")
     
     if is_seller(user_id):
+        # 更新卖家的活跃时间
+        update_seller_last_active(user_id)
+        
+        # 获取卖家状态
+        if DATABASE_URL.startswith('postgres'):
+            result = execute_query(
+                "SELECT is_active, desired_orders FROM sellers WHERE telegram_id = %s", 
+                (str(user_id),), 
+                fetch=True
+            )
+        else:
+            result = execute_query(
+                "SELECT is_active, desired_orders FROM sellers WHERE telegram_id = ?", 
+                (str(user_id),), 
+                fetch=True
+            )
+        
+        is_active = "活跃" if result and result[0][0] else "不活跃"
+        desired_orders = result[0][1] if result and result[0][1] is not None else 0
+        
         await update.message.reply_text(
-            "🌟 *Welcome to the Premium Recharge System!* 🌟\n\n"
-            "As a verified seller, you have access to:\n"
-            "• `/seller` - View available orders and your active orders\n"
-            "Need assistance? Feel free to contact the administrator.",
-            parse_mode='Markdown'
+            f"👋 您好，{first_name}！您是本系统的卖家。\n\n"
+            f"🔹 当前状态: {is_active}\n"
+            f"🔹 期望接单: {desired_orders} 单/小时\n\n"
+            f"可用命令:\n"
+            f"/seller - 查看可接订单和活动订单\n"
+            f"/orders <数量> - 设置期望接单数量\n"
+            f"/active - 切换活跃状态（是否接单）\n"
+            f"/test - 测试机器人状态\n"
+            f"/test_notify - 测试通知功能"
         )
     else:
         await update.message.reply_text(
-            "⚠️ *Access Restricted* ⚠️\n\n"
-            "This bot is exclusively available to authorized sellers.\n"
-            "For account inquiries, please contact the administrator.",
-            parse_mode='Markdown'
+            f"👋 您好，{first_name}！\n\n"
+            "您不是本系统的卖家。如需使用，请联系管理员添加您为卖家。"
         )
 
 async def on_seller_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -373,6 +401,50 @@ async def on_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     logger.info(f"卖家 {user_id} 设置期望接单数量为 {desired_orders}")
 
+async def on_active_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理切换卖家活跃状态的命令"""
+    user_id = update.effective_user.id
+    
+    if not is_seller(user_id):
+        await update.message.reply_text("您不是卖家，无法使用此命令")
+        return
+    
+    # 获取当前卖家状态
+    if DATABASE_URL.startswith('postgres'):
+        result = execute_query(
+            "SELECT is_active FROM sellers WHERE telegram_id = %s", 
+            (str(user_id),), 
+            fetch=True
+        )
+    else:
+        result = execute_query(
+            "SELECT is_active FROM sellers WHERE telegram_id = ?", 
+            (str(user_id),), 
+            fetch=True
+        )
+    
+    if not result:
+        await update.message.reply_text("无法获取您的卖家状态，请联系管理员")
+        return
+    
+    current_status = result[0][0]
+    new_status = not bool(current_status)
+    
+    # 切换状态
+    toggle_seller_status(str(user_id))
+    
+    # 更新最后活跃时间
+    update_seller_last_active(user_id)
+    
+    status_text = "活跃" if new_status else "不活跃"
+    emoji = "✅" if new_status else "❌"
+    
+    await update.message.reply_text(
+        f"{emoji} 您的状态已切换为: {status_text}\n\n"
+        f"{'您现在可以接收订单通知' if new_status else '您将不再接收订单通知'}"
+    )
+    logger.info(f"卖家 {user_id} 将状态切换为: {status_text}")
+
 # ===== 主函数 =====
 def run_bot(queue):
     """在单独的线程中运行机器人"""
@@ -427,6 +499,7 @@ async def bot_main(queue):
         bot_application.add_handler(CommandHandler("start", on_start))
         bot_application.add_handler(CommandHandler("seller", on_seller_command))
         bot_application.add_handler(CommandHandler("orders", on_orders))  # 添加新命令
+        bot_application.add_handler(CommandHandler("active", on_active_command))  # 添加活跃状态切换命令
         
         # 添加测试命令处理程序
         bot_application.add_handler(CommandHandler("test", on_test))
@@ -629,21 +702,49 @@ async def send_notification_from_queue(data):
                     print(f"ERROR: 列出目录内容时出错: {str(e)}")
                 return
                 
-            # 发送消息给卖家（如果指定了特定卖家，则只发给他们）
+            # 确定目标卖家（从活跃卖家中选择一个）
             if preferred_seller:
+                # 如果指定了特定卖家，检查该卖家是否活跃
                 target_sellers = [seller for seller in active_sellers if str(seller.get('id', seller.get('telegram_id'))) == str(preferred_seller)]
                 if not target_sellers:
-                    logger.warning(f"指定的卖家不存在或不活跃: {preferred_seller}")
-                    # 发送给所有活跃卖家
-                    target_sellers = active_sellers
+                    logger.warning(f"指定的卖家不存在或不活跃: {preferred_seller}，将选择一位活跃卖家")
+                    # 选择一位活跃卖家
+                    selected_seller_id = select_active_seller()
+                    if selected_seller_id:
+                        target_sellers = [seller for seller in active_sellers if str(seller.get('id', seller.get('telegram_id'))) == str(selected_seller_id)]
+                    else:
+                        # 如果没有选出合适的卖家，使用所有活跃卖家
+                        logger.warning(f"未能选择合适的卖家，使用随机卖家")
+                        import random
+                        if active_sellers:
+                            random_seller = random.choice(active_sellers)
+                            target_sellers = [random_seller]
+                        else:
+                            logger.error("没有活跃卖家可用")
+                            return
             else:
-                target_sellers = active_sellers
+                # 使用分流逻辑选择一个卖家
+                selected_seller_id = select_active_seller()
+                if selected_seller_id:
+                    logger.info(f"已选择卖家 {selected_seller_id} 处理订单 {order_id}")
+                    target_sellers = [seller for seller in active_sellers if str(seller.get('id', seller.get('telegram_id'))) == str(selected_seller_id)]
+                else:
+                    # 如果没有选出合适的卖家，使用所有活跃卖家中的一个
+                    logger.warning(f"未能选择合适的卖家，使用随机卖家")
+                    import random
+                    if active_sellers:
+                        random_seller = random.choice(active_sellers)
+                        target_sellers = [random_seller]
+                    else:
+                        logger.error("没有活跃卖家可用")
+                        return
                 
             # 为订单添加状态标记
             await mark_order_as_processing(order_id)
             
-            # 发送通知给每个活跃卖家
-            for seller in target_sellers:
+            # 发送通知给选中的卖家
+            if target_sellers:
+                seller = target_sellers[0]
                 seller_id = seller.get('id', seller.get('telegram_id'))
                 try:
                     # 使用备注作为标题，不再显示订单ID
@@ -671,6 +772,8 @@ async def send_notification_from_queue(data):
                     
                 except Exception as e:
                     logger.error(f"向卖家 {seller_id} 发送订单通知时出错: {str(e)}", exc_info=True)
+            else:
+                logger.error(f"没有选中任何卖家来处理订单 {order_id}")
                     
     except Exception as e:
         logger.error(f"处理通知数据失败: {str(e)}", exc_info=True)
@@ -1343,7 +1446,9 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 "👋 您好！如需使用机器人功能，请使用以下命令：\n"
                 "/seller - 查看可接订单和活动订单\n"
-                "/test_notify - 测试通知功能\n"
-                "/test - 测试机器人状态"
+                "/orders <数量> - 设置期望接单数量\n"
+                "/active - 切换活跃状态（是否接单）\n"
+                "/test - 测试机器人状态\n"
+                "/test_notify - 测试通知功能"
             )
             context.user_data['welcomed'] = True

@@ -1842,6 +1842,57 @@ def update_seller_desired_orders(telegram_id, desired_orders):
         (desired_orders, telegram_id)
     )
 
+def select_active_seller():
+    """
+    从所有活跃卖家中选择一个卖家接单
+    
+    选择逻辑：
+    1. 获取所有活跃的卖家
+    2. 优先考虑期望接单数量较高的卖家
+    3. 如果多个卖家期望接单数量相同，优先考虑最近活跃的卖家
+    
+    返回:
+    - 卖家ID，如果没有活跃卖家则返回None
+    """
+    try:
+        active_sellers = get_active_sellers()
+        
+        if not active_sellers:
+            logger.warning("没有活跃的卖家可用于选择")
+            return None
+            
+        # 按期望接单数量降序排序
+        active_sellers.sort(key=lambda x: x.get("desired_orders", 0), reverse=True)
+        
+        # 选择期望接单数量最高的卖家
+        max_desired_orders = active_sellers[0].get("desired_orders", 0)
+        
+        # 如果期望接单数为0，说明没有卖家想接单
+        if max_desired_orders <= 0:
+            # 随机选择一个活跃卖家
+            import random
+            selected_seller = random.choice(active_sellers)
+            logger.info(f"没有卖家设置期望接单数，随机选择卖家: {selected_seller['id']}")
+            return selected_seller["id"]
+            
+        # 找出所有期望接单数量最高的卖家
+        top_sellers = [s for s in active_sellers if s.get("desired_orders", 0) == max_desired_orders]
+        
+        if len(top_sellers) == 1:
+            # 只有一个最高期望值的卖家
+            logger.info(f"选择期望接单数最高的卖家: {top_sellers[0]['id']}, 期望数: {max_desired_orders}")
+            return top_sellers[0]["id"]
+        else:
+            # 有多个相同期望值的卖家，选择最近活跃的
+            top_sellers.sort(key=lambda x: x.get("last_active_at", ""), reverse=True)
+            selected_seller = top_sellers[0]
+            logger.info(f"从多个期望接单数相同的卖家中选择最近活跃的: {selected_seller['id']}")
+            return selected_seller["id"]
+    
+    except Exception as e:
+        logger.error(f"选择活跃卖家失败: {str(e)}", exc_info=True)
+        return None
+
 def check_seller_activity(telegram_id):
     """向卖家发送活跃度检查请求"""
     # 记录检查请求时间
