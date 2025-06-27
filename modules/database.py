@@ -120,7 +120,8 @@ def init_sqlite_db():
         accepted_by_first_name TEXT,
         accepted_by_nickname TEXT,
         failed_at TEXT,
-        fail_reason TEXT
+        fail_reason TEXT,
+        buyer_confirmed INTEGER DEFAULT 0
     )
     ''')
     
@@ -130,6 +131,14 @@ def init_sqlite_db():
     except sqlite3.OperationalError:
         logger.info("为orders表添加accepted_by_nickname列")
         c.execute("ALTER TABLE orders ADD COLUMN accepted_by_nickname TEXT")
+        conn.commit()
+    
+    # 检查orders表是否需要添加buyer_confirmed列
+    try:
+        c.execute("SELECT buyer_confirmed FROM orders LIMIT 1")
+    except sqlite3.OperationalError:
+        logger.info("为orders表添加buyer_confirmed列")
+        c.execute("ALTER TABLE orders ADD COLUMN buyer_confirmed INTEGER DEFAULT 0")
         conn.commit()
     
     # 创建用户表
@@ -282,7 +291,8 @@ def init_postgres_db():
         accepted_by_first_name TEXT,
         accepted_by_nickname TEXT,
         failed_at TIMESTAMP,
-        fail_reason TEXT
+        fail_reason TEXT,
+        buyer_confirmed BOOLEAN DEFAULT FALSE
     )
     ''')
     
@@ -292,6 +302,14 @@ def init_postgres_db():
     except psycopg2.errors.UndefinedColumn:
         logger.info("为orders表添加accepted_by_nickname列")
         cur.execute("ALTER TABLE orders ADD COLUMN accepted_by_nickname TEXT")
+        conn.commit()
+    
+    # 检查orders表是否需要添加buyer_confirmed列
+    try:
+        cur.execute("SELECT buyer_confirmed FROM orders LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为orders表添加buyer_confirmed列")
+        cur.execute("ALTER TABLE orders ADD COLUMN buyer_confirmed BOOLEAN DEFAULT FALSE")
         conn.commit()
     
     # 创建用户表

@@ -491,7 +491,7 @@ def register_routes(app, notification_queue):
                 orders = execute_query("""
                     SELECT id, account, password, package, status, created_at, 
                     accepted_at, completed_at, remark, web_user_id, user_id, 
-                    accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname
+                    accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
                     FROM orders 
                     ORDER BY id DESC LIMIT ? OFFSET ?
                 """, (limit, offset), fetch=True)
@@ -500,7 +500,7 @@ def register_routes(app, notification_queue):
                 orders = execute_query("""
                     SELECT id, account, password, package, status, created_at, 
                     accepted_at, completed_at, remark, web_user_id, user_id, 
-                    accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname
+                    accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
                     FROM orders 
                     WHERE user_id = ? 
                     ORDER BY id DESC LIMIT ? OFFSET ?
@@ -509,7 +509,7 @@ def register_routes(app, notification_queue):
             # 格式化订单数据
             formatted_orders = []
             for order in orders:
-                oid, account, password, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname = order
+                oid, account, password, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed = order
                 
                 # 优先使用自定义昵称，其次是用户名称，最后是ID
                 seller_display = accepted_by_nickname or accepted_by_first_name or accepted_by_username or accepted_by
@@ -533,6 +533,7 @@ def register_routes(app, notification_queue):
                     "completed_at": completed_at or "",
                     "remark": translated_remark or "",
                     "accepted_by": seller_display or "",
+                    "buyer_confirmed": bool(buyer_confirmed),
                     "can_cancel": status == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == user_id)
                 }
                 formatted_orders.append(order_data)
@@ -938,7 +939,7 @@ def register_routes(app, notification_queue):
             # PostgreSQL查询，使用COALESCE获取web_user_id或从users表联查username
             orders = execute_query(f"""
                 SELECT o.id, o.account, o.password, o.package, o.status, o.remark, o.created_at, o.accepted_at, o.completed_at, 
-                       COALESCE(o.web_user_id, u.username) as creator, o.accepted_by, o.accepted_by_username, o.accepted_by_first_name, o.accepted_by_nickname, o.refunded
+                       COALESCE(o.web_user_id, u.username) as creator, o.accepted_by, o.accepted_by_username, o.accepted_by_first_name, o.accepted_by_nickname, o.refunded, o.buyer_confirmed
                 FROM orders o
                 LEFT JOIN users u ON o.user_id = u.id
                 {where_clause}
@@ -954,7 +955,7 @@ def register_routes(app, notification_queue):
             # SQLite查询
             orders = execute_query(f"""
                 SELECT id, account, password, package, status, remark, created_at, accepted_at, completed_at, 
-                       web_user_id as creator, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, refunded
+                       web_user_id as creator, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, refunded, buyer_confirmed
                 FROM orders
                 {where_clause}
                 ORDER BY id DESC
@@ -969,7 +970,7 @@ def register_routes(app, notification_queue):
         # 格式化订单数据
         formatted_orders = []
         for order in orders:
-            order_id, account, password, package, status, remark, created_at, accepted_at, completed_at, creator, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, refunded = order
+            order_id, account, password, package, status, remark, created_at, accepted_at, completed_at, creator, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, refunded, buyer_confirmed = order
             
             # 格式化卖家信息
             seller_info = None
@@ -995,7 +996,8 @@ def register_routes(app, notification_queue):
                 "completed_at": completed_at,
                 "creator": creator or "N/A",
                 "seller": seller_info,
-                "refunded": bool(refunded)
+                "refunded": bool(refunded),
+                "buyer_confirmed": bool(buyer_confirmed)
             })
         
         return jsonify({
@@ -2033,7 +2035,7 @@ def register_routes(app, notification_queue):
     @app.route('/orders/confirm/<int:oid>', methods=['POST'])
     @login_required
     def confirm_order(oid):
-        """用户确认收货，强制将订单状态置为已完成"""
+        """用户确认订单，设置buyer_confirmed字段为1，不改变订单状态"""
         user_id = session.get('user_id')
         is_admin = session.get('is_admin', 0)
 
@@ -2044,7 +2046,7 @@ def register_routes(app, notification_queue):
         """, (oid,), fetch=True)
 
         if not order:
-            logger.error(f"确认收货失败: 订单 {oid} 不存在")
+            logger.error(f"确认订单失败: 订单 {oid} 不存在")
             return jsonify({"error": "订单不存在"}), 404
 
         order_id, order_user_id, status, accepted_by = order[0]
@@ -2054,38 +2056,61 @@ def register_routes(app, notification_queue):
             logger.warning(f"用户 {user_id} 尝试确认不属于自己的订单 {oid}")
             return jsonify({"error": "权限不足"}), 403
 
-        # 允许确认已提交或已接单状态的订单，但已完成状态不需要再确认
-        if status == STATUS['COMPLETED']:
-            logger.info(f"订单 {oid} 已是完成状态，无需再次确认")
-            return jsonify({"success": True, "message": "订单已是完成状态"})
-        
-        # 只有已提交、已接单、正在质疑状态的订单可以确认收货
-        if status not in [STATUS['SUBMITTED'], STATUS['ACCEPTED'], STATUS['DISPUTING']]:
-            logger.warning(f"订单 {oid} 状态为 {status}，不允许确认收货")
-            return jsonify({"error": "订单状态不允许确认收货"}), 400
-
         try:
-            # 更新状态
-            timestamp = get_china_time()
-            execute_query("UPDATE orders SET status=?, completed_at=? WHERE id= ?", 
-                         (STATUS['COMPLETED'], timestamp, oid))
-            logger.info(f"用户 {user_id} 确认订单 {oid} 收货成功，状态已更新为已完成")
+            # 更新buyer_confirmed字段，不改变订单状态
+            execute_query("UPDATE orders SET buyer_confirmed=1 WHERE id=?", (oid,))
+            logger.info(f"用户 {user_id} 确认订单 {oid} 成功，buyer_confirmed已设置为1")
 
-            # 只发送一个通知，直接更新原始订单消息
+            # 发送通知
             try:
-                # 使用 order_status_change 类型，这会在 TG 中更新原始消息
                 notification_queue.put({
-                    'type': 'order_status_change',
+                    'type': 'buyer_confirmed',
                     'order_id': oid,
-                    'status': STATUS['COMPLETED'],
-                    'handler_id': user_id,
-                    'update_original': True  # 标记需要更新原始消息
+                    'handler_id': user_id
                 })
-                logger.info(f"已将订单 {oid} 确认收货通知添加到队列")
+                logger.info(f"已将订单 {oid} 买家确认通知添加到队列")
             except Exception as e:
-                logger.error(f"添加订单状态变更通知到队列失败: {e}", exc_info=True)
+                logger.error(f"添加买家确认通知到队列失败: {e}", exc_info=True)
 
             return jsonify({"success": True})
         except Exception as e:
-            logger.error(f"确认订单 {oid} 收货时发生错误: {e}", exc_info=True)
+            logger.error(f"确认订单 {oid} 时发生错误: {e}", exc_info=True)
+            return jsonify({"error": "服务器错误，请稍后重试"}), 500
+            
+    @app.route('/orders/update-remark/<int:oid>', methods=['POST'])
+    @login_required
+    def update_order_remark(oid):
+        """更新订单备注"""
+        user_id = session.get('user_id')
+        is_admin = session.get('is_admin', 0)
+        
+        # 获取新备注
+        data = request.json
+        new_remark = data.get('remark', '')
+        
+        # 查询订单
+        order = execute_query("""
+            SELECT id, user_id
+            FROM orders WHERE id=?
+        """, (oid,), fetch=True)
+        
+        if not order:
+            logger.error(f"更新备注失败: 订单 {oid} 不存在")
+            return jsonify({"error": "订单不存在"}), 404
+            
+        order_id, order_user_id = order[0]
+        
+        # 权限：只能更新自己的订单备注，或管理员
+        if user_id != order_user_id and not is_admin:
+            logger.warning(f"用户 {user_id} 尝试更新不属于自己的订单 {oid} 的备注")
+            return jsonify({"error": "权限不足"}), 403
+            
+        try:
+            # 更新备注
+            execute_query("UPDATE orders SET remark=? WHERE id=?", (new_remark, oid))
+            logger.info(f"用户 {user_id} 更新订单 {oid} 的备注成功")
+            
+            return jsonify({"success": True})
+        except Exception as e:
+            logger.error(f"更新订单 {oid} 备注时发生错误: {e}", exc_info=True)
             return jsonify({"error": "服务器错误，请稍后重试"}), 500

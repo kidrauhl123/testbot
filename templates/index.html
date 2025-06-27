@@ -9,10 +9,12 @@
   <style>
     * { box-sizing: border-box; }
     body { 
-      font-family: 'Microsoft YaHei', Arial, sans-serif; 
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-      margin: 0; padding: 0; min-height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f5f5;
       color: #333;
+      min-height: 100vh;
       font-size: 14px;
       overflow-y: auto;
     }
@@ -945,6 +947,37 @@
       border-color: #c3e6cb;
       cursor: default;
     }
+    
+    /* 备注编辑相关样式 */
+    .remark-container {
+      display: flex;
+      align-items: center;
+      margin: 5px 0;
+    }
+    
+    .remark {
+      margin: 0;
+      flex-grow: 1;
+    }
+    
+    .edit-remark-btn {
+      background-color: #f0f0f0;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      padding: 2px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      margin-left: 10px;
+    }
+    
+    .edit-remark-btn:hover {
+      background-color: #e0e0e0;
+    }
+    
+    .edit-remark-btn.small {
+      padding: 1px 5px;
+      font-size: 11px;
+    }
   </style>
 </head>
 <body>
@@ -1867,15 +1900,27 @@
           <h4>订单 #${o.id} <span class="status-badge ${cls}">${o.status_text}</span></h4>
           ${isAdmin && o.accepted_by ? `<p class="creator">接单者：${escapeHtml(o.accepted_by)}</p>` : ''}
           <p class="account"><strong>YouTube：</strong>${o.account.includes('uploads') ? `<a href="/${o.account}" target="_blank">查看二维码</a>` : '未上传二维码'}</p>
-          ${o.remark ? `<p class="remark"><strong>备注：</strong><strong>${escapeHtml(o.remark)}</strong></p>` : '<p class="remark"><strong>备注：</strong><strong></strong></p>'}
+          <div class="remark-container">
+            <p class="remark"><strong>备注：</strong><span class="remark-text" data-order-id="${o.id}">${escapeHtml(o.remark || '')}</span></p>
+            <button class="edit-remark-btn" onclick="editRemark(${o.id})">编辑</button>
+          </div>
           <div class="time-info">
             <p class="time">提交时间：${o.created_at}</p>
             ${o.completed_at ? `<p class="time">完成时间：${o.completed_at}</p>` : ''}
           </div>
-          ${o.status === 'accepted' || o.status === 'submitted' ? `<button class="confirm-btn" onclick="confirmOrder(${o.id})">确认</button>` : ''}
+          <button class="confirm-btn" onclick="confirmOrder(${o.id})">${o.buyer_confirmed ? '已确认' : '确认'}</button>
           <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
         </div>`;
       gridContainer.insertAdjacentHTML('beforeend', html);
+      
+      // 如果已确认，禁用按钮
+      if (o.buyer_confirmed) {
+        const confirmBtn = gridContainer.querySelector(`.order-list-item[data-order-id="${o.id}"] .confirm-btn`);
+        if (confirmBtn) {
+          confirmBtn.disabled = true;
+          confirmBtn.classList.add("confirmed");
+        }
+      }
     });
   }
   
@@ -1905,12 +1950,15 @@
           <td>${o.id}</td>
           <td>${o.account.includes('uploads') ? `<a href="/${o.account}" target="_blank">查看二维码</a>` : '未上传二维码'}</td>
           <td><span class="status-badge ${cls}">${o.status_text}</span></td>
-          <td><strong>${escapeHtml(o.remark || '')}</strong></td>
+          <td>
+            <span class="remark-text" data-order-id="${o.id}">${escapeHtml(o.remark || '')}</span>
+            <button class="edit-remark-btn small" onclick="editRemark(${o.id})">编辑</button>
+          </td>
           <td>${o.created_at}</td>
           <td>${o.completed_at || '-'}</td>
           <td>
             <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
-            ${(o.status === 'accepted' || o.status === 'submitted') ? `<button class="confirm-btn" onclick="confirmOrder(${o.id})">确认</button>` : ''}
+            <button class="confirm-btn" onclick="confirmOrder(${o.id})">${o.buyer_confirmed ? '已确认' : '确认'}</button>
           </td>
         </tr>
       `;
@@ -1922,6 +1970,17 @@
     `;
     
     container.innerHTML = html;
+    
+    // 如果已确认，禁用按钮
+    orders.forEach(o => {
+      if (o.buyer_confirmed) {
+        const confirmBtn = container.querySelector(`tr[data-order-id="${o.id}"] .confirm-btn`);
+        if (confirmBtn) {
+          confirmBtn.disabled = true;
+          confirmBtn.classList.add("confirmed");
+        }
+      }
+    });
   }
 
   // 加载更多订单
@@ -2045,21 +2104,64 @@
     stopAutoRefresh();
   });
 
-  // 确认收货
+  // 编辑备注
+  async function editRemark(orderId) {
+    const order = allOrders.find(o => o.id === orderId);
+    if (!order) return;
+    
+    const newRemark = prompt('请输入新的备注', order.remark || '');
+    if (newRemark === null) return; // 用户取消
+    
+    try {
+      const resp = await fetch(`/orders/update-remark/${orderId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ remark: newRemark })
+      });
+      
+      const result = await resp.json();
+      if (result.success) {
+        // 更新本地数据和显示
+        order.remark = newRemark;
+        
+        // 更新所有显示备注的元素
+        document.querySelectorAll(`.remark-text[data-order-id="${orderId}"]`).forEach(el => {
+          el.textContent = newRemark;
+        });
+        
+        showCustomAlert('备注已更新', 'success');
+      } else {
+        alert(result.error || '更新备注失败');
+      }
+    } catch (e) {
+      console.error('更新备注失败', e);
+      alert('更新备注失败，请重试');
+    }
+  }
+
+  // 确认订单
   async function confirmOrder(orderId) {
     try {
       const resp = await fetch(`/orders/confirm/${orderId}`, { method: 'POST' });
       const result = await resp.json();
       if (result.success) {
-        // 直接更新按钮文本为"已确认"
+        // 更新按钮文本为"已确认"并禁用
         const buttons = document.querySelectorAll(`button.confirm-btn[onclick="confirmOrder(${orderId})"]`);
         buttons.forEach(btn => {
           btn.textContent = "已确认";
           btn.disabled = true;
           btn.classList.add("confirmed");
         });
-        // 更新订单状态，无需弹窗提示
-        await loadOrders();
+        
+        // 更新本地数据
+        const order = allOrders.find(o => o.id === orderId);
+        if (order) {
+          order.buyer_confirmed = 1;
+        }
+        
+        showCustomAlert('订单已确认', 'success');
       } else {
         alert(result.error || '确认失败');
       }
