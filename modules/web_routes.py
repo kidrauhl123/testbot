@@ -14,7 +14,7 @@ from flask import Flask, request, render_template, jsonify, session, redirect, u
 
 from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH, DATABASE_URL
 from modules.database import (
-    get_db_connection, execute_query, hash_password, get_unnotified_orders,
+    execute_query, hash_password, get_unnotified_orders,
     get_order_details, get_all_sellers, get_active_sellers, toggle_seller_status, 
     remove_seller, toggle_seller_admin, get_user_balance, get_user_credit_limit, set_user_credit_limit,
     get_balance_records, update_user_balance, set_user_balance, check_balance_for_package, refund_order,
