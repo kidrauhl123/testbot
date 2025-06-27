@@ -80,7 +80,7 @@ def init_db():
         
         # 创建充值相关表
         create_recharge_tables()
-            
+        
         logger.info("数据库初始化完成")
     except Exception as e:
         logger.error(f"数据库初始化失败: {str(e)}", exc_info=True)
