@@ -71,19 +71,64 @@ def add_balance_record(user_id, amount, type_name, reason, reference_id=None, ba
 
 # ===== 数据库 =====
 def init_db():
-    """初始化数据库"""
+    """初始化数据库，包括创建表和迁移"""
+    logger.info("正在初始化数据库...")
+    if DATABASE_URL.startswith('postgres'):
+        init_postgres_db()
+    else:
+        init_sqlite_db()
+
+    # 执行数据库迁移，确保表结构最新
+    logger.info("正在执行数据库迁移...")
     try:
         if DATABASE_URL.startswith('postgres'):
-            init_postgres_db()
-        else:
-            init_sqlite_db()
-        
-        # 创建充值相关表
-        create_recharge_tables()
-        
-        logger.info("数据库初始化完成")
+            conn = psycopg2.connect(DATABASE_URL)
+            cur = conn.cursor()
+            
+            # 检查 sellers 表列
+            cur.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='sellers'
+            """)
+            columns = [row[0] for row in cur.fetchall()]
+            
+            if 'pending_orders' not in columns:
+                cur.execute("ALTER TABLE sellers ADD COLUMN pending_orders INTEGER DEFAULT 0;")
+                logger.info("已向 sellers 表添加 pending_orders 字段。")
+            
+            if 'max_concurrent_orders' not in columns:
+                cur.execute("ALTER TABLE sellers ADD COLUMN max_concurrent_orders INTEGER DEFAULT 1;")
+                logger.info("已向 sellers 表添加 max_concurrent_orders 字段。")
+                
+            conn.commit()
+            cur.close()
+            conn.close()
+            
+        else: # SQLite
+            db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db")
+            conn = sqlite3.connect(db_path)
+            cur = conn.cursor()
+            
+            # 检查 sellers 表列
+            cur.execute("PRAGMA table_info(sellers);")
+            columns = [row[1] for row in cur.fetchall()]
+            
+            if 'pending_orders' not in columns:
+                cur.execute("ALTER TABLE sellers ADD COLUMN pending_orders INTEGER DEFAULT 0;")
+                logger.info("已向 sellers 表添加 pending_orders 字段。")
+
+            if 'max_concurrent_orders' not in columns:
+                cur.execute("ALTER TABLE sellers ADD COLUMN max_concurrent_orders INTEGER DEFAULT 1;")
+                logger.info("已向 sellers 表添加 max_concurrent_orders 字段。")
+            
+            conn.commit()
+            cur.close()
+            conn.close()
+            
+        logger.info("数据库迁移完成。")
     except Exception as e:
-        logger.error(f"数据库初始化失败: {str(e)}", exc_info=True)
+        logger.error(f"数据库迁移失败: {e}", exc_info=True)
 
 def init_sqlite_db():
     """初始化SQLite数据库"""
@@ -1563,12 +1608,12 @@ def update_seller_last_active(telegram_id):
     )
 
 def update_seller_desired_orders(telegram_id, desired_orders):
-    """更新卖家最大接单数"""
+    """更新卖家最大接单数，并清零当前未完成订单数"""
     execute_query(
-        "UPDATE sellers SET desired_orders = ? WHERE telegram_id = ?",
+        "UPDATE sellers SET desired_orders = ?, pending_orders = 0 WHERE telegram_id = ?",
         (desired_orders, telegram_id)
     )
-    logger.info(f"已更新卖家 {telegram_id} 的最大接单数为 {desired_orders}")
+    logger.info(f"已更新卖家 {telegram_id} 的最大接单数为 {desired_orders}，并清零当前未完成订单数")
 
 def get_seller_completed_orders(telegram_id):
     """获取卖家已完成的订单数（以买家已确认为准）"""
