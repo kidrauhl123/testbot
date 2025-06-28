@@ -1425,6 +1425,7 @@ async def check_and_push_orders():
                 order_id = order[0]
                 account = order[1]  # 图片路径
                 remark = order[6] if len(order) > 6 else ""
+                web_user_id = order[5] if len(order) > 5 else "未知用户"
                 
                 # 使用全局通知队列
                 global notification_queue
@@ -1435,7 +1436,8 @@ async def check_and_push_orders():
                         'order_id': order_id,
                         'account': account,
                         'remark': remark,
-                        'preferred_seller': None  # 不指定特定卖家
+                        'preferred_seller': None,  # 不指定特定卖家
+                        'creator': web_user_id # 添加创建者
                     })
                     logger.info(f"已将订单 #{order_id} 添加到通知队列")
                     print(f"DEBUG: 已将订单 #{order_id} 添加到通知队列")
