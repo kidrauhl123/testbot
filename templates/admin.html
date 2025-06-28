@@ -1254,7 +1254,13 @@
                 onchange="updateSellerMaxOrders(${seller.telegram_id}, this.value)">
             </td>
             <td>${seller.completed_orders || 0}</td>
-            <td>${seller.pending_orders || 0}</td>
+            <td>
+              <input type="number" class="form-control form-control-sm concurrent-orders-input" 
+                value="${seller.max_concurrent_orders || 0}" 
+                min="0" 
+                data-id="${seller.telegram_id}" 
+                onchange="updateSellerConcurrentOrders(${seller.telegram_id}, this.value)">
+            </td>
             <td>${seller.added_at}</td>
             <td>${escapeHtml(seller.added_by || '')}</td>
             <td class="actions">
@@ -2010,6 +2016,29 @@
     } catch (e) {
       console.error('更新卖家昵称失败', e);
       showToast('更新失败: ' + e.message, 'error');
+    }
+  }
+
+  // 在loadSellers函数后添加如下JS方法：
+  async function updateSellerConcurrentOrders(telegramId, concurrentOrders) {
+    try {
+      const response = await fetch(`/admin/api/sellers/${telegramId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          max_concurrent_orders: parseInt(concurrentOrders) 
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('操作失败');
+      }
+      showToast('同时接单数更新成功', 'success');
+    } catch (e) {
+      console.error('更新卖家同时接单数失败:', e);
+      showToast('操作失败: ' + e.message, 'error');
     }
   }
 </script>
