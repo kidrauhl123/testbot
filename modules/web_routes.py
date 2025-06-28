@@ -9,6 +9,8 @@ import sqlite3
 import json
 import random
 import string
+import psycopg2
+from urllib.parse import urlparse
 
 from flask import Flask, request, render_template, jsonify, session, redirect, url_for, flash, send_file, send_from_directory
 
@@ -1191,8 +1193,6 @@ def register_routes(app, notification_queue):
             if len(order_ids) == total_count:
                 # 全部删除，直接truncate并重置自增ID
                 if DATABASE_URL.startswith('postgres'):
-                    import psycopg2
-                    from urllib.parse import urlparse
                     url = urlparse(DATABASE_URL)
                     conn = psycopg2.connect(
                         dbname=url.path[1:],
@@ -1539,18 +1539,12 @@ def register_routes(app, notification_queue):
                 
             if desired_orders is not None:
                 update_seller_desired_orders(telegram_id, desired_orders)
-                # 每次最大接单数变更时，尝试清零当前未完成订单数
-                try:
-                    execute_query("UPDATE sellers SET pending_orders = 0 WHERE telegram_id = ?", (telegram_id,))
-                except Exception as e:
-                    logger.warning(f"清零当前未完成订单数失败，可能是字段不存在: {str(e)}")
+                # 每次最大接单数变更时，清零当前未完成订单数
+                execute_query("UPDATE sellers SET pending_orders = 0 WHERE telegram_id = ?", (telegram_id,))
             
             if max_concurrent_orders is not None:
-                try:
-                    execute_query("UPDATE sellers SET max_concurrent_orders = ? WHERE telegram_id = ?", (max_concurrent_orders, telegram_id))
-                except Exception as e:
-                    logger.warning(f"更新最大同时接单数失败，可能是字段不存在: {str(e)}")
-            
+                execute_query("UPDATE sellers SET max_concurrent_orders = ? WHERE telegram_id = ?", (max_concurrent_orders, telegram_id))
+                
             # 检查是否需要自动停用卖家
             check_seller_completed_orders(str(telegram_id))
                 
@@ -1649,3 +1643,40 @@ def register_routes(app, notification_queue):
     @app.route('/static/uploads/<path:filename>')
     def serve_uploads(filename):
         return send_from_directory('static/uploads', filename)
+
+def ensure_sellers_columns():
+    """确保PostgreSQL sellers表有pending_orders和max_concurrent_orders字段"""
+    if DATABASE_URL.startswith('postgres'):
+        url = urlparse(DATABASE_URL)
+        conn = psycopg2.connect(
+            dbname=url.path[1:],
+            user=url.username,
+            password=url.password,
+            host=url.hostname,
+            port=url.port
+        )
+        cur = conn.cursor()
+        # 检查并添加pending_orders字段
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sellers' AND column_name='pending_orders') THEN
+                    ALTER TABLE sellers ADD COLUMN pending_orders INTEGER DEFAULT 0;
+                END IF;
+            END$$;
+        """)
+        # 检查并添加max_concurrent_orders字段
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sellers' AND column_name='max_concurrent_orders') THEN
+                    ALTER TABLE sellers ADD COLUMN max_concurrent_orders INTEGER DEFAULT 1;
+                END IF;
+            END$$;
+        """)
+        conn.commit()
+        cur.close()
+        conn.close()
+
+# 在模块加载时自动执行
+ensure_sellers_columns()
