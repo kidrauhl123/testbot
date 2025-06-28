@@ -795,9 +795,9 @@ async def auto_accept_order(order_id, seller_id):
             display_name = seller_info.get('display_name', '')  # 优先使用昵称
         else:
             # 作为备用，使用Telegram API获取卖家信息
-        user_info = await get_user_info(seller_id)
-        username = user_info.get('username', '')
-        first_name = user_info.get('first_name', '')
+            user_info = await get_user_info(seller_id)
+            username = user_info.get('username', '')
+            first_name = user_info.get('first_name', '')
             nickname = ''
             display_name = first_name or username or str(seller_id)
         
