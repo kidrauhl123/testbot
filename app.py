@@ -91,11 +91,6 @@ if not os.path.exists(uploads_dir):
 # 注册Web路由，并将队列传递给它
 register_routes(app, notification_queue)
 
-# 添加静态文件路由，确保图片URLs可以访问
-@app.route('/static/uploads/<path:filename>')
-def serve_uploads(filename):
-    return app.send_static_file(f'uploads/{filename}')
-
 # 添加一个直接访问图片的路由，支持完整路径
 @app.route('/<path:filepath>')
 def serve_file(filepath):
