@@ -718,31 +718,15 @@ async def send_notification_from_queue(data):
                     if selected_seller_id:
                         target_sellers = [seller for seller in active_sellers if str(seller.get('id', seller.get('telegram_id'))) == str(selected_seller_id)]
             else:
-                        # 如果没有选出合适的卖家，使用所有活跃卖家
-                        logger.warning(f"未能选择合适的卖家，使用随机卖家")
-                        import random
-                        if active_sellers:
-                            random_seller = random.choice(active_sellers)
-                            target_sellers = [random_seller]
-                        else:
-                            logger.error("没有活跃卖家可用")
-                            return
-            else:
-                # 使用分流逻辑选择一个卖家
-                selected_seller_id = select_active_seller()
-                if selected_seller_id:
-                    logger.info(f"已选择卖家 {selected_seller_id} 处理订单 {order_id}")
-                    target_sellers = [seller for seller in active_sellers if str(seller.get('id', seller.get('telegram_id'))) == str(selected_seller_id)]
+                # 如果没有选出合适的卖家，使用所有活跃卖家
+                logger.warning(f"未能选择合适的卖家，使用随机卖家")
+                import random
+                if active_sellers:
+                    random_seller = random.choice(active_sellers)
+                    target_sellers = [random_seller]
                 else:
-                    # 如果没有选出合适的卖家，使用所有活跃卖家中的一个
-                    logger.warning(f"未能选择合适的卖家，使用随机卖家")
-                    import random
-                    if active_sellers:
-                        random_seller = random.choice(active_sellers)
-                        target_sellers = [random_seller]
-                    else:
-                        logger.error("没有活跃卖家可用")
-                        return
+                    logger.error("没有活跃卖家可用")
+                    return
                 
             # 为订单添加状态标记
             await mark_order_as_processing(order_id)
@@ -811,9 +795,9 @@ async def auto_accept_order(order_id, seller_id):
             display_name = seller_info.get('display_name', '')  # 优先使用昵称
         else:
             # 作为备用，使用Telegram API获取卖家信息
-        user_info = await get_user_info(seller_id)
-        username = user_info.get('username', '')
-        first_name = user_info.get('first_name', '')
+            user_info = await get_user_info(seller_id)
+            username = user_info.get('username', '')
+            first_name = user_info.get('first_name', '')
             nickname = ''
             display_name = first_name or username or str(seller_id)
         
@@ -840,7 +824,9 @@ def restricted(func):
         if not is_seller(user_id):
             logger.warning(f"未经授权的访问: {user_id}")
             await update.message.reply_text("Sorry, you are not authorized to use this bot.")
-    return wrapped 
+            return
+        return await func(update, context, *args, **kwargs)
+    return wrapped
 
 def get_order_by_id(order_id):
     """根据ID获取订单信息"""
