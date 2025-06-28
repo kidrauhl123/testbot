@@ -1164,7 +1164,7 @@
                       <button id="gridViewBtn" class="view-btn" title="网格视图"><i class="fas fa-th"></i></button>
                       <button id="tableViewBtn" class="view-btn active" title="表格视图"><i class="fas fa-list"></i></button>
                     </div>
-                    <div id="today-total" class="today-total"></div>
+                    <div id="today-stats" class="today-total"></div>
                   </div>
                 </div>
                 <div class="search-container">
@@ -1653,78 +1653,33 @@
   
   // 生成订单数据的简单哈希
   function generateOrdersHash(orders) {
-    const relevant = orders.map(o => `${o.id}-${o.status}-${o.accepted_at || ''}-${o.completed_at || ''}`).join('|');
+    const relevant = orders.map(o => `${o.id}-${o.status}-${o.accepted_at || ''}-${o.completed_at || ''}-${o.buyer_confirmed}`).join('|');
     return btoa(relevant).substring(0, 16); // 简化的哈希
   }
 
-  // 计算今日总金额
-  function calculateTodayTotal(orders) {
-    const today = new Date().toISOString().split('T')[0]; // 获取今天的日期 YYYY-MM-DD
-    
-    // 筛选今天的订单
-    const todayOrders = orders.filter(order => {
-      return order.created_at && order.created_at.startsWith(today);
-    });
-    
-    // 计算金额总和
-    let totalAmount = 0;
-    let totalCount = 0;
-    
-    // 为管理员统计每个用户的金额
-    const userAmounts = {};
-    
-    // 计算全站总额（用于超级管理员）
-    let globalTotalAmount = 0;
-    
-    todayOrders.forEach(order => {
-      totalCount++;
-      // 计算订单价格（不管状态）
-      const price = USER_PRICES[order.package] || 0;
-      
-      // 只有已完成订单才计入用户消费
-      if (order.status === 'completed') {
-        totalAmount += price;
-        
-        // 同时累计全站总额
-        globalTotalAmount += price;
-        
-        // 如果是管理员，记录每个用户的金额
-        if (isAdmin && order.creator) {
-          if (!userAmounts[order.creator]) {
-            userAmounts[order.creator] = {
-              username: order.creator,
-              amount: 0
-            };
-          }
-          userAmounts[order.creator].amount += price;
+  // 更新今日确认订单统计
+  async function updateTodayConfirmedStats() {
+    const todayStatsEl = document.getElementById('today-stats');
+    if (!todayStatsEl) return;
+
+    try {
+        const response = await fetch('/api/today-stats');
+        const stats = await response.json();
+
+        if (stats.success) {
+            let statsHtml = '';
+            if (isAdmin) {
+                statsHtml = `<i class="fas fa-check-circle"></i> 今日已确认: ${stats.user_today_confirmed} (全站: ${stats.all_today_confirmed})`;
+            } else {
+                statsHtml = `<i class="fas fa-check-circle"></i> 今日已确认: ${stats.user_today_confirmed}`;
+            }
+            todayStatsEl.innerHTML = statsHtml;
         }
-      }
-      
-      // 如果订单状态不是已完成，但是管理员查看全站总额时也要计入
-      else if (isAdmin) {
-        globalTotalAmount += price;
-      }
-    });
-    
-    return { totalAmount, totalCount, userAmounts, globalTotalAmount };
-  }
-  
-  // 显示今日总金额
-  function updateTodayTotal(orders) {
-    const { totalAmount, totalCount, userAmounts, globalTotalAmount } = calculateTodayTotal(orders);
-    const todayTotalElement = document.getElementById('today-total');
-    
-    if (todayTotalElement) {
-      if (isAdmin) {
-        // 超级管理员显示全站总额
-        todayTotalElement.innerHTML = `今日总额: $${globalTotalAmount.toFixed(2)}`;
-      } else {
-        // 普通用户只显示自己的总金额
-        todayTotalElement.innerHTML = `今日总额: $${totalAmount.toFixed(2)}`;
-      }
+    } catch (e) {
+        console.error('获取今日确认订单数失败:', e);
     }
   }
-    
+
   // 提交订单
   document.getElementById('orderForm').addEventListener('submit', async e => {
     e.preventDefault();
@@ -1849,8 +1804,8 @@
       // 渲染订单
       renderOrders(filteredOrders);
       
-      // 更新今日总额
-      updateTodayTotal(filteredOrders);
+      // 更新今日统计
+      updateTodayConfirmedStats();
       
       // 显示自动刷新提示
       if (isAutoRefresh) {

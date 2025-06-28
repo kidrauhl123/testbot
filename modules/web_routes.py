@@ -24,7 +24,9 @@ from modules.database import (
     get_pending_recharge_requests, approve_recharge_request, reject_recharge_request,
     get_user_custom_prices, set_user_custom_price, delete_user_custom_price,
     update_seller_nickname, update_seller_desired_orders, select_active_seller, check_seller_activity,
-    get_seller_completed_orders, get_seller_pending_orders, check_seller_completed_orders
+    get_seller_completed_orders, get_seller_pending_orders, check_seller_completed_orders,
+    get_seller_today_confirmed_orders_by_user, get_admin_sellers,
+    get_user_today_confirmed_count, get_all_today_confirmed_count
 )
 import modules.constants as constants
 
@@ -1656,6 +1658,28 @@ def register_routes(app, notification_queue):
     @app.route('/static/uploads/<path:filename>')
     def serve_uploads(filename):
         return send_from_directory('static/uploads', filename)
+
+    @app.route('/api/today-stats')
+    @login_required
+    def today_stats():
+        try:
+            user_id = session['user_id']
+            is_admin = session.get('is_admin', False)
+            user_count = get_user_today_confirmed_count(user_id)
+            
+            stats = {
+                "success": True,
+                "user_today_confirmed": user_count
+            }
+
+            if is_admin:
+                all_count = get_all_today_confirmed_count()
+                stats["all_today_confirmed"] = all_count
+
+            return jsonify(stats)
+        except Exception as e:
+            logger.error(f"获取今日统计失败: {e}", exc_info=True)
+            return jsonify({"success": False, "error": "Failed to retrieve stats"}), 500
 
 def ensure_sellers_columns():
     """确保PostgreSQL sellers表有pending_orders和max_concurrent_orders字段"""
