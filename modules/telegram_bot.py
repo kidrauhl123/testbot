@@ -35,7 +35,7 @@ from modules.database import (
     select_active_seller, get_seller_info,
     get_user_custom_prices, set_user_custom_price, delete_user_custom_price,
     update_seller_nickname, get_seller_completed_orders, get_seller_pending_orders,
-    check_seller_completed_orders, get_seller_today_confirmed_orders, get_admin_sellers
+    check_seller_completed_orders, get_seller_today_confirmed_orders_by_user, get_admin_sellers
 )
 
 # 设置日志
@@ -406,7 +406,7 @@ async def on_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"卖家 {user_id} 设置最大接单数量为 {desired_orders}")
 
 async def on_active_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle command to toggle seller active status"""
+    """切换卖家激活状态 (on/off)"""
     user_id = update.effective_user.id
     
     if not is_seller(user_id):
@@ -502,13 +502,11 @@ async def bot_main(queue):
         # 添加处理程序
         bot_application.add_handler(CommandHandler("start", on_start))
         bot_application.add_handler(CommandHandler("seller", on_seller_command))
-        bot_application.add_handler(CommandHandler("orders", on_orders))  # 添加新命令
-        bot_application.add_handler(CommandHandler("active", on_active_command))  # 添加活跃状态切换命令
-        
-        # 添加测试命令处理程序
+        bot_application.add_handler(CommandHandler("orders", on_orders))
+        bot_application.add_handler(CommandHandler("active", on_active_command))
         bot_application.add_handler(CommandHandler("test", on_test))
-        bot_application.add_handler(CommandHandler("test_notify", on_test_notify))  # 添加测试通知命令
-        bot_application.add_handler(CommandHandler("stats", on_stats))  # 添加统计命令
+        bot_application.add_handler(CommandHandler("test_notify", on_test_notify))
+        bot_application.add_handler(CommandHandler("stats", on_stats))
         print("DEBUG: 已添加测试命令处理程序")
         
         # 添加通用回调处理程序，处理所有回调查询
@@ -1483,8 +1481,21 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        completed_count = get_seller_today_confirmed_orders(user_id)
-        await update.message.reply_text(f"You have completed {completed_count} orders today.")
+        stats_by_user = get_seller_today_confirmed_orders_by_user(user_id)
+        
+        total_completed = sum(count for _, count in stats_by_user)
+        
+        message_parts = [f"You have completed {total_completed} order{'s' if total_completed != 1 else ''} today."]
+        
+        if stats_by_user:
+            message_parts.append("\nBreakdown by user:")
+            for user, count in stats_by_user:
+                user_display = user if user else "Unknown"
+                message_parts.append(f"- {user_display}: {count} order{'s' if count != 1 else ''}")
+        
+        message = "\n".join(message_parts)
+        await update.message.reply_text(message)
+
     except Exception as e:
         logger.error(f"获取卖家 {user_id} 统计信息时出错: {e}", exc_info=True)
         await update.message.reply_text("Failed to retrieve your stats. Please try again later.")

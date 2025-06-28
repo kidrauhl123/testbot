@@ -1589,29 +1589,36 @@ def get_seller_completed_orders(telegram_id):
         return result[0][0]
     return 0
 
-def get_seller_today_confirmed_orders(telegram_id):
-    """获取卖家今天已确认的订单数"""
-    # 获取中国时区的今天日期
+def get_seller_today_confirmed_orders_by_user(telegram_id):
+    """获取卖家今天已确认的订单数，并按用户分组"""
     from datetime import datetime
     import pytz
     today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
     
     if DATABASE_URL.startswith('postgres'):
-        result = execute_query(
-            "SELECT COUNT(*) FROM orders WHERE accepted_by = %s AND buyer_confirmed = TRUE AND completed_at LIKE %s",
+        results = execute_query(
+            """
+            SELECT web_user_id, COUNT(*) 
+            FROM orders 
+            WHERE accepted_by = %s AND buyer_confirmed = TRUE AND completed_at LIKE %s
+            GROUP BY web_user_id
+            """,
             (str(telegram_id), f"{today}%"),
             fetch=True
         )
     else:
-        result = execute_query(
-            "SELECT COUNT(*) FROM orders WHERE accepted_by = ? AND buyer_confirmed = 1 AND completed_at LIKE ?",
+        results = execute_query(
+            """
+            SELECT web_user_id, COUNT(*) 
+            FROM orders 
+            WHERE accepted_by = ? AND buyer_confirmed = 1 AND completed_at LIKE ?
+            GROUP BY web_user_id
+            """,
             (str(telegram_id), f"{today}%"),
             fetch=True
         )
     
-    if result and len(result) > 0:
-        return result[0][0]
-    return 0
+    return results if results else []
 
 def get_seller_pending_orders(telegram_id):
     """获取卖家当前未完成的订单数（已接单但未确认）"""
