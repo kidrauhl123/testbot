@@ -71,58 +71,27 @@ def add_balance_record(user_id, amount, type_name, reason, reference_id=None, ba
 
 # ===== 数据库 =====
 def init_db():
-    """初始化数据库，包括创建表和迁移"""
-    logger.info("正在初始化数据库...")
+    """初始化数据库"""
+    logger.info("使用%s数据库", "PostgreSQL" if DATABASE_URL.startswith('postgres') else "SQLite")
+    
     if DATABASE_URL.startswith('postgres'):
+        logger.info("初始化PostgreSQL数据库")
         init_postgres_db()
+        # 确保PostgreSQL中的sellers表有必要的字段
+        ensure_sellers_fields_postgres()
     else:
+        db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db")
+        logger.info(f"初始化数据库: {db_path}")
         init_sqlite_db()
-
-    # 执行数据库迁移，确保表结构最新
-    logger.info("正在执行数据库迁移...")
-    try:
-        if DATABASE_URL.startswith('postgres'):
-            # For PostgreSQL
-            conn = psycopg2.connect(DATABASE_URL)
-            cur = conn.cursor()
-            cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='sellers'")
-            columns = [row[0] for row in cur.fetchall()]
-            
-            if 'pending_orders' not in columns:
-                cur.execute("ALTER TABLE sellers ADD COLUMN pending_orders INTEGER DEFAULT 0;")
-                logger.info("已向 sellers 表添加 pending_orders 字段。")
-            
-            if 'max_concurrent_orders' not in columns:
-                cur.execute("ALTER TABLE sellers ADD COLUMN max_concurrent_orders INTEGER DEFAULT 1;")
-                logger.info("已向 sellers 表添加 max_concurrent_orders 字段。")
-                
-            conn.commit()
-            cur.close()
-            conn.close()
-            
-        else: 
-            # For SQLite
-            db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db")
-            conn = sqlite3.connect(db_path)
-            cur = conn.cursor()
-            cur.execute("PRAGMA table_info(sellers);")
-            columns = [row[1] for row in cur.fetchall()]
-            
-            if 'pending_orders' not in columns:
-                cur.execute("ALTER TABLE sellers ADD COLUMN pending_orders INTEGER DEFAULT 0;")
-                logger.info("已向 sellers 表添加 pending_orders 字段（SQLite）。")
-
-            if 'max_concurrent_orders' not in columns:
-                cur.execute("ALTER TABLE sellers ADD COLUMN max_concurrent_orders INTEGER DEFAULT 1;")
-                logger.info("已向 sellers 表添加 max_concurrent_orders 字段（SQLite）。")
-            
-            conn.commit()
-            cur.close()
-            conn.close()
-            
-        logger.info("数据库迁移完成。")
+        # 确保SQLite中的sellers表有必要的字段
+        ensure_sellers_fields_sqlite()
+        
+        # 创建充值相关表
+        create_recharge_tables()
+        
+        logger.info("数据库初始化完成")
     except Exception as e:
-        logger.error(f"数据库迁移失败: {e}", exc_info=True)
+        logger.error(f"数据库初始化失败: {str(e)}", exc_info=True)
 
 def init_sqlite_db():
     """初始化SQLite数据库"""
@@ -442,6 +411,58 @@ def init_postgres_db():
         """, (ADMIN_USERNAME, admin_hash, get_china_time()))
     
     conn.close()
+
+# 确保PostgreSQL数据库中的sellers表有必要的字段
+def ensure_sellers_fields_postgres():
+    """确保PostgreSQL数据库中的sellers表有必要的字段"""
+    try:
+        # 检查pending_orders字段
+        check_pending = execute_query("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'sellers' AND column_name = 'pending_orders'
+        """, fetch=True)
+        
+        if not check_pending:
+            logger.info("为PostgreSQL的sellers表添加pending_orders列")
+            execute_query("ALTER TABLE sellers ADD COLUMN pending_orders INTEGER DEFAULT 0")
+        
+        # 检查max_concurrent_orders字段
+        check_concurrent = execute_query("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'sellers' AND column_name = 'max_concurrent_orders'
+        """, fetch=True)
+        
+        if not check_concurrent:
+            logger.info("为PostgreSQL的sellers表添加max_concurrent_orders列")
+            execute_query("ALTER TABLE sellers ADD COLUMN max_concurrent_orders INTEGER DEFAULT 1")
+            
+        logger.info("PostgreSQL sellers表字段检查完成")
+    except Exception as e:
+        logger.error(f"确保PostgreSQL sellers表字段时出错: {str(e)}", exc_info=True)
+
+# 确保SQLite数据库中的sellers表有必要的字段
+def ensure_sellers_fields_sqlite():
+    """确保SQLite数据库中的sellers表有必要的字段"""
+    try:
+        # 检查pending_orders字段
+        check_pending = execute_query("PRAGMA table_info(sellers)", fetch=True)
+        has_pending = any(col[1] == 'pending_orders' for col in check_pending)
+        
+        if not has_pending:
+            logger.info("为SQLite的sellers表添加pending_orders列")
+            execute_query("ALTER TABLE sellers ADD COLUMN pending_orders INTEGER DEFAULT 0")
+        
+        # 检查max_concurrent_orders字段
+        check_concurrent = execute_query("PRAGMA table_info(sellers)", fetch=True)
+        has_concurrent = any(col[1] == 'max_concurrent_orders' for col in check_concurrent)
+        
+        if not has_concurrent:
+            logger.info("为SQLite的sellers表添加max_concurrent_orders列")
+            execute_query("ALTER TABLE sellers ADD COLUMN max_concurrent_orders INTEGER DEFAULT 1")
+            
+        logger.info("SQLite sellers表字段检查完成")
+    except Exception as e:
+        logger.error(f"确保SQLite sellers表字段时出错: {str(e)}", exc_info=True)
 
 # 数据库执行函数
 def execute_query(query, params=(), fetch=False, return_cursor=False):

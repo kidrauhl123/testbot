@@ -1990,126 +1990,28 @@
   }
 
   async function editSeller(telegramId, currentNickname) {
-    try {
-      // 加载卖家详细信息
-      const response = await fetch(`/admin/api/sellers/${telegramId}`);
-      if (!response.ok) {
-        throw new Error('加载卖家信息失败');
-      }
-      
-      const seller = await response.json();
-      
-      // 填充表单
-      document.getElementById('edit-seller-id').value = telegramId;
-      document.getElementById('edit-seller-nickname').value = seller.nickname || '';
-      document.getElementById('edit-seller-max-orders').value = seller.desired_orders || 0;
-      document.getElementById('edit-seller-concurrent-orders').value = seller.max_concurrent_orders || 5;
-      
-      // 显示模态框
-      document.getElementById('editSellerModal').style.display = 'flex';
-    } catch (e) {
-      console.error('加载卖家信息失败', e);
-      showToast('加载卖家信息失败: ' + e.message, 'error');
+    const newNickname = prompt('请输入新的显示昵称', currentNickname || '');
+    if (newNickname === null) {
+      return; // 用户取消
     }
-  }
-  
-  // 保存卖家信息
-  async function saveSellerInfo() {
     try {
-      const telegramId = document.getElementById('edit-seller-id').value;
-      const nickname = document.getElementById('edit-seller-nickname').value;
-      const maxOrders = parseInt(document.getElementById('edit-seller-max-orders').value);
-      const concurrentOrders = parseInt(document.getElementById('edit-seller-concurrent-orders').value);
-      
-      if (!telegramId) {
-        throw new Error('卖家ID无效');
-      }
-      
-      // 验证输入
-      if (maxOrders < 0) {
-        throw new Error('最大接单数不能为负数');
-      }
-      
-      if (concurrentOrders < 1) {
-        throw new Error('同时接单数必须大于等于1');
-      }
-      
-      // 发送更新请求
       const response = await fetch(`/admin/api/sellers/${telegramId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          nickname: nickname,
-          desired_orders: maxOrders,
-          max_concurrent_orders: concurrentOrders
-        })
+        body: JSON.stringify({ nickname: newNickname })
       });
-      
       if (!response.ok) {
         throw new Error('更新失败');
       }
-      
-      // 关闭模态框
-      document.getElementById('editSellerModal').style.display = 'none';
-      
-      showToast('卖家信息已更新', 'success');
+      showToast('卖家昵称已更新', 'success');
       await loadSellers();
     } catch (e) {
-      console.error('更新卖家信息失败', e);
+      console.error('更新卖家昵称失败', e);
       showToast('更新失败: ' + e.message, 'error');
     }
   }
-  
-  // 为保存按钮添加事件监听
-  document.addEventListener('DOMContentLoaded', function() {
-    // 初始化卖家编辑模态框关闭按钮
-    const modal = document.getElementById('editSellerModal');
-    if (modal) {
-      const closeButtons = modal.querySelectorAll('[data-dismiss="modal"]');
-      closeButtons.forEach(btn => {
-        btn.addEventListener('click', function() {
-          modal.style.display = 'none';
-        });
-      });
-      
-      // 保存按钮事件
-      document.getElementById('saveSellerBtn').addEventListener('click', saveSellerInfo);
-    }
-  });
 </script>
-
-<!-- 卖家编辑模态框 -->
-<div class="modal-backdrop" id="editSellerModal">
-  <div class="modal">
-    <div class="modal-header">
-      <h3>编辑卖家信息</h3>
-      <button class="modal-close" data-dismiss="modal">&times;</button>
-    </div>
-    <div class="modal-body">
-      <form id="editSellerForm">
-        <input type="hidden" id="edit-seller-id">
-        <div class="form-group">
-          <label for="edit-seller-nickname">显示昵称</label>
-          <input type="text" id="edit-seller-nickname" class="form-control" required>
-        </div>
-        <div class="form-group">
-          <label for="edit-seller-max-orders">当前最大接单数</label>
-          <input type="number" id="edit-seller-max-orders" class="form-control" min="0" required>
-        </div>
-        <div class="form-group">
-          <label for="edit-seller-concurrent-orders">同时接单数</label>
-          <input type="number" id="edit-seller-concurrent-orders" class="form-control" min="1" required>
-          <small class="text-muted">卖家最多可同时接多少个未完成的订单</small>
-        </div>
-      </form>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
-      <button class="btn btn-primary" id="saveSellerBtn">保存</button>
-    </div>
-  </div>
-</div>
 </body>
 </html> 
