@@ -1242,7 +1242,7 @@
         const adminButtonClass = seller.is_admin ? 'btn-warning' : 'btn-info';
         
         const row = `
-          <tr data-id="${seller.telegram_id}">
+          <tr data-id="${seller.telegram_id}" data-nickname="${escapeHtml(seller.nickname || 'N/A')}">
             <td>${escapeHtml(seller.nickname || '')}</td>
             <td>${statusBadge}</td>
             <td>${adminBadge}</td>
@@ -1333,7 +1333,10 @@
   }
 
   async function removeSeller(telegramId) {
-    if (!confirm(`确认要删除卖家 ${telegramId} 吗？此操作不可逆。`)) return;
+    const sellerRow = document.querySelector(`tr[data-id='${telegramId}']`);
+    const nickname = sellerRow ? sellerRow.dataset.nickname : `ID ${telegramId}`;
+    
+    if (!confirm(`确认要删除卖家 ${nickname} 吗？此操作不可逆。`)) return;
 
     await fetch(`/admin/api/sellers/${telegramId}`, { method: 'DELETE' });
     loadSellers();
