@@ -750,12 +750,10 @@ async def send_notification_from_queue(data):
                     caption_parts.append(f"From user: {creator}")
                     caption = "\n".join(caption_parts)
                     
-                    # 构建键盘
+                    # 创建按钮
                     keyboard = [
-                        [
-                            InlineKeyboardButton("🔚 Complete", callback_data=f"complete_{order_id}"),
-                            InlineKeyboardButton("Failed", callback_data=f"fail2_{order_id}")
-                        ]
+                        [InlineKeyboardButton("✅ Complete", callback_data=f"done_{order_id}"),
+                         InlineKeyboardButton("❓ Any Problem", callback_data=f"fail_{order_id}")]
                     ]
                     reply_markup = InlineKeyboardMarkup(keyboard)
                     
@@ -1226,12 +1224,13 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("Error processing order, please try again later", show_alert=True)
         return
     
-    elif data.startswith("fail2_"):
-        oid = int(data.split('_')[1])
+    elif data.startswith("fail_"):
+        # 直接将订单标记为失败而不显示选择按钮
+        oid = data.split("_")[1]
         try:
             # 更新订单状态
+            reason = "Failed"
             timestamp = get_china_time()
-            reason = "Manually marked as failed"
             conn = get_db_connection()
             cursor = conn.cursor()
             if DATABASE_URL.startswith('postgres'):
@@ -1246,7 +1245,7 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             conn.commit()
             conn.close()
-
+            
             # 推送通知给网页端
             if notification_queue:
                 notification_queue.put({
@@ -1257,6 +1256,46 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     'handler_id': user_id
                 })
                 logger.info(f"已将订单 #{oid} 状态变更(失败)添加到通知队列")
+            
+            # 更新按钮显示
+            keyboard = [[InlineKeyboardButton("❌ Failed", callback_data="noop")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_reply_markup(reply_markup=reply_markup)
+            await query.answer(f"Order marked as failed", show_alert=True)
+        except Exception as e:
+            logger.error(f"处理订单失败(fail_)时出错: {str(e)}", exc_info=True)
+            await query.answer("Error processing order, please try again later", show_alert=True)
+        return
+        
+    elif data.startswith("fail2_"):
+        oid = int(data.split('_')[1])
+        try:
+            # 更新订单状态
+            timestamp = get_china_time()
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            if DATABASE_URL.startswith('postgres'):
+                cursor.execute(
+                    "UPDATE orders SET status=%s, failed_at=%s WHERE id=%s",
+                    (STATUS['FAILED'], timestamp, oid)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE orders SET status=?, failed_at=? WHERE id=?",
+                    (STATUS['FAILED'], timestamp, oid)
+                )
+            conn.commit()
+            conn.close()
+
+            # 推送通知给网页端
+            if notification_queue:
+                notification_queue.put({
+                    'type': 'order_status_change',
+                    'order_id': oid,
+                    'status': STATUS['FAILED'],
+                    'handler_id': user_id
+                })
+                logger.info(f"已将订单 #{oid} 状态变更(失败)添加到通知队列")
 
             # 更新按钮显示
             keyboard = [[InlineKeyboardButton("❌ Failed", callback_data="noop")]]
@@ -1264,7 +1303,7 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_reply_markup(reply_markup=reply_markup)
             await query.answer("Order marked as failed", show_alert=True)
         except Exception as e:
-            logger.error(f"处理订单失败(fail2_)时出错: {str(e)}", exc_info=True)
+            logger.error(f"处理订单失败(fail_)时出错: {str(e)}", exc_info=True)
             await query.answer("Error processing order, please try again later", show_alert=True)
         return
     elif data == "activity_confirm":
