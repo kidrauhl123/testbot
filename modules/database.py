@@ -1658,6 +1658,37 @@ def get_seller_today_confirmed_orders_by_user(telegram_id):
     
     return results if results else []
 
+def get_seller_today_completed_orders_by_user(telegram_id):
+    """获取卖家今天成功充值的订单数，并按用户分组"""
+    from datetime import datetime
+    import pytz
+    today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
+    
+    if DATABASE_URL.startswith('postgres'):
+        results = execute_query(
+            """
+            SELECT web_user_id, COUNT(*) 
+            FROM orders 
+            WHERE accepted_by = %s AND status = 'completed' AND completed_at LIKE %s
+            GROUP BY web_user_id
+            """,
+            (str(telegram_id), f"{today}%"),
+            fetch=True
+        )
+    else:
+        results = execute_query(
+            """
+            SELECT web_user_id, COUNT(*) 
+            FROM orders 
+            WHERE accepted_by = ? AND status = 'completed' AND completed_at LIKE ?
+            GROUP BY web_user_id
+            """,
+            (str(telegram_id), f"{today}%"),
+            fetch=True
+        )
+    
+    return results if results else []
+
 def get_seller_pending_orders(telegram_id):
     """获取卖家当前未完成的订单数（已接单但未确认）"""
     if DATABASE_URL.startswith('postgres'):
