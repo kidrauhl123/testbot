@@ -633,6 +633,7 @@ async def send_notification_from_queue(data):
             account = data.get('account')  # 这是二维码图片路径
             remark = data.get('remark', '')  # 获取备注信息
             preferred_seller = data.get('preferred_seller')
+            creator = data.get('creator', '未知用户')  # 获取创建者用户名
             
             # 检查订单是否存在
             order = get_order_by_id(order_id)
@@ -737,7 +738,14 @@ async def send_notification_from_queue(data):
                 seller_id = seller.get('id', seller.get('telegram_id'))
                 try:
                     # 使用备注作为标题，如果没有备注则显示订单号
-                    caption = f"*{remark}*" if remark else f"订单 #{order_id}"
+                    caption_parts = []
+                    if remark:
+                        caption_parts.append(f"*{remark}*")
+                    else:
+                        caption_parts.append(f"订单 #{order_id}")
+                    
+                    caption_parts.append(f"来自用户: {creator}")
+                    caption = "\n".join(caption_parts)
                     
                     # 创建按钮
                     keyboard = [

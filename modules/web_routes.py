@@ -345,7 +345,8 @@ def register_routes(app, notification_queue):
                     'password': '',  # 不再使用密码
                     'package': package,
                     'preferred_seller': preferred_seller,
-                    'remark': remark  # 添加备注信息
+                    'remark': remark,  # 添加备注信息
+                    'creator': username  # 添加创建者用户名
                 })
                 logger.info(f"已将订单 #{new_order_id} 加入通知队列")
                 print(f"DEBUG: 已将订单 #{new_order_id} 加入通知队列")
