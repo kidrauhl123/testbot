@@ -1504,15 +1504,52 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        stats_by_user = get_seller_today_confirmed_orders_by_user(user_id)
+        # 原来的代码是用get_seller_today_confirmed_orders_by_user统计买家确认的订单
+        # 修改为统计充值成功的订单（即已完成状态的订单）
+        conn = get_db_connection()
+        cursor = conn.cursor()
         
-        total_completed = sum(count for _, count in stats_by_user)
+        # 获取今日日期（中国时间）
+        from datetime import datetime
+        import pytz
+        today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
+        
+        # 查询卖家今日已完成的订单，按用户分组
+        if DATABASE_URL.startswith('postgres'):
+            query = """
+                SELECT web_user_id, COUNT(*) 
+                FROM orders 
+                WHERE accepted_by = %s 
+                AND status = 'completed'
+                AND completed_at LIKE %s
+                GROUP BY web_user_id
+            """
+            cursor.execute(query, (str(user_id), f"{today}%"))
+        else:
+            query = """
+                SELECT web_user_id, COUNT(*) 
+                FROM orders 
+                WHERE accepted_by = ? 
+                AND status = 'completed'
+                AND completed_at LIKE ?
+                GROUP BY web_user_id
+            """
+            cursor.execute(query, (str(user_id), f"{today}%"))
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        if not results:
+            await update.message.reply_text("You haven't completed any orders today.")
+            return
+        
+        total_completed = sum(count for _, count in results)
         
         message_parts = [f"You have completed {total_completed} order{'s' if total_completed != 1 else ''} today."]
         
-        if stats_by_user:
+        if results:
             message_parts.append("\nBreakdown by user:")
-            for user, count in stats_by_user:
+            for user, count in results:
                 user_display = user if user else "Unknown"
                 message_parts.append(f"- {user_display}: {count} order{'s' if count != 1 else ''}")
         
