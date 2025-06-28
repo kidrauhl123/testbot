@@ -1060,14 +1060,26 @@ def register_routes(app, notification_queue):
         if not telegram_id:
             return jsonify({"error": "Missing telegram_id"}), 400
             
-        # 不允许修改超级管理员的身份
-        if str(telegram_id) == "1878943383":
-            return jsonify({"error": "Cannot modify superadmin status"}), 403
-            
-        if toggle_seller_admin(telegram_id):
-            return jsonify({"success": True})
+        # 切换 is_admin 状态
+        if DATABASE_URL.startswith('postgres'):
+            # 对于PostgreSQL，使用is_admin IS NOT TRUE来判断非管理员
+            new_status_query = "UPDATE sellers SET is_admin = (is_admin IS NOT TRUE) WHERE telegram_id = %s RETURNING is_admin"
+            params = (telegram_id,)
         else:
-            return jsonify({"error": "Operation failed"}), 500
+            # 对于SQLite
+            new_status_query = "UPDATE sellers SET is_admin = (1 - is_admin) WHERE telegram_id = ?"
+            params = (telegram_id,)
+
+        # 执行更新
+        result = execute_query(new_status_query, params, fetch=True)
+        
+        if not result:
+            return jsonify({"error": "Failed to toggle admin status or user not found"}), 404
+
+        new_status = result[0][0]
+        action = "promoted to admin" if new_status else "demoted to regular seller"
+        logger.info(f"Successfully {action} for seller {telegram_id}")
+        return jsonify({"success": True, "is_admin": new_status})
 
     # 获取单个订单详情的API
     @app.route('/admin/api/orders/<int:order_id>')
