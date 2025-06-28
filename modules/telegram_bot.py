@@ -1085,7 +1085,7 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     feedback_waiting[oid] = {"user_id": user_id, "action": "fail"}
                 else:
                     await query.answer("Unknown feedback action", show_alert=True)
-        except Exception as e:
+            except Exception as e:
                 logger.error(f"处理反馈时出错: {str(e)}", exc_info=True)
                 await query.answer("Failed to process feedback, please try again later", show_alert=True)
     
