@@ -1229,19 +1229,17 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         oid = data.split("_")[1]
         try:
             # 更新订单状态
-            reason = "Failed"
-            timestamp = get_china_time()
             conn = get_db_connection()
             cursor = conn.cursor()
             if DATABASE_URL.startswith('postgres'):
                 cursor.execute(
-                    "UPDATE orders SET status=%s, failed_at=%s, fail_reason=%s WHERE id=%s",
-                    (STATUS['FAILED'], timestamp, reason, oid)
+                    "UPDATE orders SET status=%s WHERE id=%s",
+                    (STATUS['FAILED'], oid)
                 )
             else:
                 cursor.execute(
-                    "UPDATE orders SET status=?, failed_at=?, fail_reason=? WHERE id=?",
-                    (STATUS['FAILED'], timestamp, reason, oid)
+                    "UPDATE orders SET status=? WHERE id=?",
+                    (STATUS['FAILED'], oid)
                 )
             conn.commit()
             conn.close()
@@ -1252,7 +1250,6 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     'type': 'order_status_change',
                     'order_id': oid,
                     'status': STATUS['FAILED'],
-                    'reason': reason,
                     'handler_id': user_id
                 })
                 logger.info(f"已将订单 #{oid} 状态变更(失败)添加到通知队列")
