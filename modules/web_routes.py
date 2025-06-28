@@ -10,7 +10,7 @@ import json
 import random
 import string
 
-from flask import Flask, request, render_template, jsonify, session, redirect, url_for, flash, send_file
+from flask import Flask, request, render_template, jsonify, session, redirect, url_for, flash, send_file, send_from_directory
 
 from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH, DATABASE_URL
 from modules.database import (
@@ -1203,8 +1203,7 @@ def register_routes(app, notification_queue):
                     )
                     cur = conn.cursor()
                     # 先删除关联表数据，再删除主表数据
-                    cur.execute("TRUNCATE TABLE order_notifications RESTART IDENTITY;")
-                    cur.execute("TRUNCATE TABLE orders RESTART IDENTITY;")
+                    cur.execute("TRUNCATE TABLE order_notifications, orders RESTART IDENTITY CASCADE;")
                     conn.commit()
                     cur.close()
                     conn.close()
@@ -1635,3 +1634,7 @@ def register_routes(app, notification_queue):
         except Exception as e:
             logger.error(f"更新订单 {oid} 备注时发生错误: {e}", exc_info=True)
             return jsonify({"error": "服务器错误，请稍后重试"}), 500
+
+    @app.route('/static/uploads/<path:filename>')
+    def serve_uploads(filename):
+        return send_from_directory('static/uploads', filename)
