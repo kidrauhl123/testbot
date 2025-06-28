@@ -1563,12 +1563,12 @@ def update_seller_last_active(telegram_id):
     )
 
 def update_seller_desired_orders(telegram_id, desired_orders):
-    """更新卖家最大接单数"""
+    """更新卖家最大接单数，并清零当前未完成订单数"""
     execute_query(
-        "UPDATE sellers SET desired_orders = ? WHERE telegram_id = ?",
+        "UPDATE sellers SET desired_orders = ?, current_orders = 0 WHERE telegram_id = ?",
         (desired_orders, telegram_id)
     )
-    logger.info(f"已更新卖家 {telegram_id} 的最大接单数为 {desired_orders}")
+    logger.info(f"已更新卖家 {telegram_id} 的最大接单数为 {desired_orders}，并清零当前接单数")
 
 def get_seller_completed_orders(telegram_id):
     """获取卖家已完成的订单数（以买家已确认为准）"""

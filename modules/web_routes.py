@@ -1538,7 +1538,7 @@ def register_routes(app, notification_queue):
                 update_seller_nickname(telegram_id, nickname)
                 
             if desired_orders is not None:
-                update_seller_desired_orders(telegram_id, desired_orders)
+                update_seller_desired_orders(telegram_id, desired_orders, max_concurrent_orders)
                 
             # 检查是否需要自动停用卖家
             check_seller_completed_orders(str(telegram_id))
