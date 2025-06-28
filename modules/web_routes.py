@@ -1223,14 +1223,14 @@ def register_routes(app, notification_queue):
                         return_cursor=True
                     )
                 else:
-                placeholders = ','.join(['?'] * len(order_ids_int))
-                result = execute_query(
-                    f"DELETE FROM orders WHERE id IN ({placeholders})",
-                    order_ids_int,
-                    fetch=False,
-                    return_cursor=True
-                )
-                deleted_count = result.rowcount if result else 0
+                    placeholders = ','.join(['?'] * len(order_ids_int))
+                    result = execute_query(
+                        f"DELETE FROM orders WHERE id IN ({placeholders})",
+                        order_ids_int,
+                        fetch=False,
+                        return_cursor=True
+                    )
+                    deleted_count = result.rowcount if result else 0
 
             logger.info(f"管理员 {session.get('username')} 删除了 {deleted_count} 个订单: {order_ids}")
             return jsonify({"success": True, "deleted_count": deleted_count})
