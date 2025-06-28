@@ -1538,8 +1538,13 @@ def register_routes(app, notification_queue):
                 update_seller_nickname(telegram_id, nickname)
                 
             if desired_orders is not None:
-                update_seller_desired_orders(telegram_id, desired_orders, max_concurrent_orders)
-                
+                update_seller_desired_orders(telegram_id, desired_orders)
+                # 每次最大接单数变更时，清零当前未完成订单数
+                execute_query("UPDATE sellers SET pending_orders = 0 WHERE telegram_id = ?", (telegram_id,))
+            
+            if max_concurrent_orders is not None:
+                execute_query("UPDATE sellers SET max_concurrent_orders = ? WHERE telegram_id = ?", (max_concurrent_orders, telegram_id))
+            
             # 检查是否需要自动停用卖家
             check_seller_completed_orders(str(telegram_id))
                 
