@@ -26,7 +26,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 导入自定义模块
-from modules.database import init_db, execute_query
+from modules.database import init_db, execute_query, check_db_connection
 from modules.telegram_bot import run_bot, process_telegram_update
 from modules.web_routes import register_routes, ensure_sellers_columns, ensure_orders_columns
 from modules.constants import sync_env_sellers_to_db
@@ -210,7 +210,6 @@ if __name__ == "__main__":
     ensure_orders_columns()
     
     # 启动时检查数据库连接
-    from modules.web_routes import check_db_connection
     check_db_connection()
 
     # 在启动前先尝试清理可能存在的锁文件和目录

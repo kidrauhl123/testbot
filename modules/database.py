@@ -1923,3 +1923,15 @@ def get_admin_sellers():
             fetch=True
         )
     return [admin[0] for admin in admins] if admins else []
+
+def check_db_connection():
+    """检查并确认数据库连接正常"""
+    try:
+        conn = get_db_connection()
+        conn.cursor()
+        conn.close()
+        logger.info("数据库连接成功。")
+    except Exception as e:
+        logger.error(f"数据库连接失败: {e}", exc_info=True)
+        # 根据需要，这里可以决定是否退出程序
+        # exit(1)
