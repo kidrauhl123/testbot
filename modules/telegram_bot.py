@@ -32,7 +32,10 @@ from modules.database import (
     get_order_details, execute_query, 
     get_unnotified_orders, get_active_seller_ids,
     update_seller_desired_orders, update_seller_last_active, get_active_sellers,
-    select_active_seller, get_seller_info
+    select_active_seller, get_seller_info,
+    get_user_custom_prices, set_user_custom_price, delete_user_custom_price,
+    update_seller_nickname, get_seller_completed_orders, get_seller_pending_orders,
+    check_seller_completed_orders, get_seller_today_confirmed_orders
 )
 
 # 设置日志
@@ -326,7 +329,8 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"/orders <number> - Set your maximum order capacity\n"
             f"/active - Toggle your active status\n"
             f"/test - Test bot status\n"
-            f"/test_notify - Test notification feature"
+            f"/test_notify - Test notification feature\n"
+            f"/stats - View today's completed orders"
         )
     else:
         await update.message.reply_text(
@@ -504,6 +508,7 @@ async def bot_main(queue):
         # 添加测试命令处理程序
         bot_application.add_handler(CommandHandler("test", on_test))
         bot_application.add_handler(CommandHandler("test_notify", on_test_notify))  # 添加测试通知命令
+        bot_application.add_handler(CommandHandler("stats", on_stats))  # 添加统计命令
         print("DEBUG: 已添加测试命令处理程序")
         
         # 添加通用回调处理程序，处理所有回调查询
@@ -742,9 +747,9 @@ async def send_notification_from_queue(data):
                     if remark:
                         caption_parts.append(f"*{remark}*")
                     else:
-                        caption_parts.append(f"订单 #{order_id}")
+                        caption_parts.append(f"Order #{order_id}")
                     
-                    caption_parts.append(f"来自用户: {creator}")
+                    caption_parts.append(f"From user: {creator}")
                     caption = "\n".join(caption_parts)
                     
                     # 创建按钮
@@ -1440,6 +1445,21 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "/orders <number> - Set your maximum order capacity\n"
                 "/active - Toggle your active status\n"
                 "/test - Test bot status\n"
-                "/test_notify - Test notification feature"
+                "/test_notify - Test notification feature\n"
+                "/stats - View today's completed orders"
             )
             context.user_data['welcomed'] = True
+
+async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """显示卖家今日完成的订单数"""
+    user_id = update.effective_user.id
+    if not is_seller(user_id):
+        await update.message.reply_text("You are not a seller and cannot use this command.")
+        return
+
+    try:
+        completed_count = get_seller_today_confirmed_orders(user_id)
+        await update.message.reply_text(f"You have completed {completed_count} orders today.")
+    except Exception as e:
+        logger.error(f"获取卖家 {user_id} 统计信息时出错: {e}", exc_info=True)
+        await update.message.reply_text("Failed to retrieve your stats. Please try again later.")
