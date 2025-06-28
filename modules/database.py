@@ -1864,3 +1864,17 @@ def delete_user_custom_price(user_id, package):
     except Exception as e:
         logger.error(f"删除用户定制价格失败: {str(e)}", exc_info=True)
         return False
+
+def get_admin_sellers():
+    """获取所有管理员卖家的Telegram ID"""
+    if DATABASE_URL.startswith('postgres'):
+        admins = execute_query(
+            "SELECT telegram_id FROM sellers WHERE is_admin = TRUE",
+            fetch=True
+        )
+    else:
+        admins = execute_query(
+            "SELECT telegram_id FROM sellers WHERE is_admin = 1",
+            fetch=True
+        )
+    return [admin[0] for admin in admins] if admins else []

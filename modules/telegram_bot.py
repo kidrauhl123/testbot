@@ -35,7 +35,7 @@ from modules.database import (
     select_active_seller, get_seller_info,
     get_user_custom_prices, set_user_custom_price, delete_user_custom_price,
     update_seller_nickname, get_seller_completed_orders, get_seller_pending_orders,
-    check_seller_completed_orders, get_seller_today_confirmed_orders
+    check_seller_completed_orders, get_seller_today_confirmed_orders, get_admin_sellers
 )
 
 # 设置日志
@@ -760,14 +760,39 @@ async def send_notification_from_queue(data):
                     reply_markup = InlineKeyboardMarkup(keyboard)
                     
                     # 发送图片和备注
-                    await bot_application.bot.send_photo(
-                        chat_id=seller_id,
-                        photo=open(image_path, 'rb'),
-                        caption=caption,
-                        parse_mode='Markdown',
-                        reply_markup=reply_markup
-                    )
+                    with open(image_path, 'rb') as photo_file:
+                        await bot_application.bot.send_photo(
+                            chat_id=seller_id,
+                            photo=photo_file,
+                            caption=caption,
+                            parse_mode='Markdown',
+                            reply_markup=reply_markup
+                        )
                     logger.info(f"已发送订单 #{order_id} 通知到卖家 {seller_id}")
+
+                    # 向管理员发送通知
+                    try:
+                        admin_ids = get_admin_sellers()
+                        if admin_ids:
+                            seller_info = get_seller_info(seller_id)
+                            seller_display_name = seller_info.get('nickname') or seller_info.get('first_name') or seller_info.get('username') or f"ID: {seller_id}"
+
+                            admin_caption = f"Notification for Order #{order_id} sent to seller: *{seller_display_name}*.\n\n---\n*Original message:*\n{caption}"
+
+                            for admin_id in admin_ids:
+                                if str(admin_id) == str(seller_id):
+                                    continue
+                                
+                                with open(image_path, 'rb') as photo_file_admin:
+                                    await bot_application.bot.send_photo(
+                                        chat_id=admin_id,
+                                        photo=photo_file_admin,
+                                        caption=admin_caption,
+                                        parse_mode='Markdown'
+                                    )
+                                logger.info(f"Sent admin notification for order #{order_id} to admin {admin_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to send admin notification for order #{order_id}: {e}", exc_info=True)
                     
                     # 自动接单（标记该订单已被该卖家接受）
                     await auto_accept_order(order_id, seller_id)
