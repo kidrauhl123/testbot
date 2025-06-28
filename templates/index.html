@@ -1010,6 +1010,11 @@
       display: flex;
       align-items: center;
       transition: all 0.2s;
+      font-weight: bold;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      width: 100%;
+      justify-content: center;
+      margin-bottom: 5px;
     }
     
     .filter-toggle-btn i {
@@ -1019,6 +1024,13 @@
     .filter-toggle-btn:hover {
       background: #eef2ff;
       border-color: #667eea;
+      transform: translateY(-1px);
+      box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+    }
+    
+    .filter-toggle-btn.active {
+      background: #667eea;
+      color: white;
     }
     
     .filter-options {
@@ -1263,10 +1275,11 @@
                           <select id="statusFilter" class="filter-select">
                             <option value="">全部状态</option>
                             <option value="submitted">已提交</option>
-                            <option value="processing">处理中</option>
+                            <option value="accepted">处理中</option>
                             <option value="completed">已完成</option>
                             <option value="cancelled">已取消</option>
                             <option value="failed">充值失败</option>
+                            <option value="disputing">正在质疑</option>
                           </select>
                         </div>
                       </div>
@@ -1651,17 +1664,24 @@
     filterToggleBtn.addEventListener('click', function() {
       if (filterOptions.style.display === 'none') {
         filterOptions.style.display = 'block';
+        filterToggleBtn.classList.add('active');
+        filterToggleBtn.innerHTML = '<i class="fas fa-filter"></i> 收起筛选';
       } else {
         filterOptions.style.display = 'none';
+        filterToggleBtn.classList.remove('active');
+        filterToggleBtn.innerHTML = '<i class="fas fa-filter"></i> 筛选';
       }
     });
     
     // 应用筛选按钮点击事件
     applyFiltersBtn.addEventListener('click', function() {
-      filterOptions.seller = sellerFilter.value;
-      filterOptions.status = statusFilter.value;
-      filterOptions.startDate = startDateFilter.value;
-      filterOptions.endDate = endDateFilter.value;
+      // 正确更新filterOptions对象
+      filterOptions = {
+        seller: sellerFilter.value,
+        status: statusFilter.value,
+        startDate: startDateFilter.value,
+        endDate: endDateFilter.value
+      };
       
       // 重置显示数量
       displayedOrders = 10;
@@ -2184,7 +2204,11 @@
   function filterOrders(orders) {
     if (!orders || !orders.length) return [];
     
-    return orders.filter(order => {
+    // 添加调试信息
+    console.log('开始筛选订单，筛选条件:', JSON.stringify(filterOptions));
+    console.log('筛选前订单数量:', orders.length);
+    
+    const filtered = orders.filter(order => {
       // 应用关键词搜索
       if (searchKeyword && 
           !(order.id.toString().includes(searchKeyword) || 
@@ -2199,6 +2223,8 @@
       
       // 应用状态筛选
       if (filterOptions.status && order.status !== filterOptions.status) {
+        // 添加调试信息，帮助排查问题
+        console.log('状态筛选不匹配:', order.id, '订单状态:', order.status, '筛选条件:', filterOptions.status);
         return false;
       }
       
@@ -2220,6 +2246,19 @@
       
       return true;
     });
+    
+    // 添加筛选后的统计信息
+    console.log('筛选后订单数量:', filtered.length);
+    if (filtered.length === 0 && orders.length > 0) {
+      console.log('警告：筛选后没有匹配的订单，可能是筛选条件设置有误');
+      
+      // 检查所有订单的状态值，帮助调试
+      const statusValues = new Set();
+      orders.forEach(order => statusValues.add(order.status));
+      console.log('订单中存在的状态值:', Array.from(statusValues));
+    }
+    
+    return filtered;
   }
 
   // 显示订单详情
