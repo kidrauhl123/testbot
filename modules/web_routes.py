@@ -1003,8 +1003,8 @@ def register_routes(app, notification_queue):
             
             # 获取已完成订单数和未完成订单数
             telegram_id = seller["telegram_id"]
-            completed_orders = get_seller_completed_orders(telegram_id)
-            pending_orders = get_seller_pending_orders(telegram_id)
+            completed_orders = get_seller_completed_orders(str(telegram_id))
+            pending_orders = get_seller_pending_orders(str(telegram_id))
             
             # 添加到卖家信息中
             seller['completed_orders'] = completed_orders
@@ -1472,7 +1472,7 @@ def register_routes(app, notification_queue):
                 return jsonify({"success": False, "message": "卖家不存在或未激活"}), 404
             
             # 记录检查请求
-            check_seller_activity(seller_id)
+            check_seller_activity(str(seller_id))
             
             # 发送通知
             notification_queue.put({
@@ -1534,7 +1534,7 @@ def register_routes(app, notification_queue):
                 update_seller_desired_orders(telegram_id, desired_orders)
                 
             # 检查是否需要自动停用卖家
-            check_seller_completed_orders(telegram_id)
+            check_seller_completed_orders(str(telegram_id))
                 
             return jsonify({"success": True})
         except Exception as e:
@@ -1572,7 +1572,7 @@ def register_routes(app, notification_queue):
 
             # 检查卖家是否达到最大接单数
             if accepted_by:
-                check_seller_completed_orders(accepted_by)
+                check_seller_completed_orders(str(accepted_by))
 
             # 发送通知
             try:
