@@ -718,15 +718,15 @@ async def send_notification_from_queue(data):
                     if selected_seller_id:
                         target_sellers = [seller for seller in active_sellers if str(seller.get('id', seller.get('telegram_id'))) == str(selected_seller_id)]
             else:
-                # 如果没有选出合适的卖家，使用所有活跃卖家
-                logger.warning(f"未能选择合适的卖家，使用随机卖家")
-                import random
-                if active_sellers:
-                    random_seller = random.choice(active_sellers)
-                    target_sellers = [random_seller]
-                else:
-                    logger.error("没有活跃卖家可用")
-                    return
+                        # 如果没有选出合适的卖家，使用所有活跃卖家
+                        logger.warning(f"未能选择合适的卖家，使用随机卖家")
+                        import random
+                        if active_sellers:
+                            random_seller = random.choice(active_sellers)
+                            target_sellers = [random_seller]
+                        else:
+                            logger.error("没有活跃卖家可用")
+                            return
                 
             # 为订单添加状态标记
             await mark_order_as_processing(order_id)
@@ -795,9 +795,9 @@ async def auto_accept_order(order_id, seller_id):
             display_name = seller_info.get('display_name', '')  # 优先使用昵称
         else:
             # 作为备用，使用Telegram API获取卖家信息
-            user_info = await get_user_info(seller_id)
-            username = user_info.get('username', '')
-            first_name = user_info.get('first_name', '')
+        user_info = await get_user_info(seller_id)
+        username = user_info.get('username', '')
+        first_name = user_info.get('first_name', '')
             nickname = ''
             display_name = first_name or username or str(seller_id)
         
@@ -826,7 +826,7 @@ def restricted(func):
             await update.message.reply_text("Sorry, you are not authorized to use this bot.")
             return
         return await func(update, context, *args, **kwargs)
-    return wrapped
+    return wrapped 
 
 def get_order_by_id(order_id):
     """根据ID获取订单信息"""
@@ -1085,7 +1085,7 @@ async def on_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     feedback_waiting[oid] = {"user_id": user_id, "action": "fail"}
                 else:
                     await query.answer("Unknown feedback action", show_alert=True)
-            except Exception as e:
+        except Exception as e:
                 logger.error(f"处理反馈时出错: {str(e)}", exc_info=True)
                 await query.answer("Failed to process feedback, please try again later", show_alert=True)
     

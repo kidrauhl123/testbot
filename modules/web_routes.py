@@ -1066,6 +1066,56 @@ def register_routes(app, notification_queue):
         else:
             return jsonify({"error": "Operation failed"}), 500
 
+    @app.route('/admin/api/sellers/<int:telegram_id>', methods=['GET'])
+    @login_required
+    @admin_required
+    def admin_api_get_seller(telegram_id):
+        """获取单个卖家的详细信息"""
+        try:
+            if DATABASE_URL.startswith('postgres'):
+                seller = execute_query("""
+                    SELECT 
+                        telegram_id, username, first_name, nickname, 
+                        is_active, is_admin, added_at, added_by, 
+                        last_active_at, desired_orders, completed_orders, 
+                        pending_orders, max_concurrent_orders
+                    FROM sellers 
+                    WHERE telegram_id = %s
+                """, (telegram_id,), fetch=True)
+            else:
+                seller = execute_query("""
+                    SELECT 
+                        telegram_id, username, first_name, nickname, 
+                        is_active, is_admin, added_at, added_by, 
+                        last_active_at, desired_orders, completed_orders, 
+                        pending_orders, max_concurrent_orders
+                    FROM sellers 
+                    WHERE telegram_id = ?
+                """, (telegram_id,), fetch=True)
+            
+            if not seller:
+                return jsonify({"error": "卖家不存在"}), 404
+            
+            s = seller[0]
+            return jsonify({
+                "telegram_id": s[0],
+                "username": s[1],
+                "first_name": s[2],
+                "nickname": s[3],
+                "is_active": s[4],
+                "is_admin": s[5],
+                "added_at": s[6],
+                "added_by": s[7],
+                "last_active_at": s[8],
+                "desired_orders": s[9] or 0,
+                "completed_orders": s[10] or 0,
+                "pending_orders": s[11] or 0,
+                "max_concurrent_orders": s[12] or 5
+            })
+        except Exception as e:
+            logger.error(f"获取卖家 {telegram_id} 信息失败: {e}")
+            return jsonify({"error": f"获取失败: {str(e)}"}), 500
+
     # 获取单个订单详情的API
     @app.route('/admin/api/orders/<int:order_id>')
     @login_required
@@ -1223,13 +1273,13 @@ def register_routes(app, notification_queue):
                         return_cursor=True
                     )
                 else:
-                    placeholders = ','.join(['?'] * len(order_ids_int))
-                    result = execute_query(
-                        f"DELETE FROM orders WHERE id IN ({placeholders})",
-                        order_ids_int,
-                        fetch=False,
-                        return_cursor=True
-                    )
+                placeholders = ','.join(['?'] * len(order_ids_int))
+                result = execute_query(
+                    f"DELETE FROM orders WHERE id IN ({placeholders})",
+                    order_ids_int,
+                    fetch=False,
+                    return_cursor=True
+                )
                 deleted_count = result.rowcount if result else 0
 
             logger.info(f"管理员 {session.get('username')} 删除了 {deleted_count} 个订单: {order_ids}")
@@ -1544,7 +1594,8 @@ def register_routes(app, notification_queue):
             
             if max_concurrent_orders is not None:
                 execute_query("UPDATE sellers SET max_concurrent_orders = ? WHERE telegram_id = ?", (max_concurrent_orders, telegram_id))
-            
+                logger.info(f"已更新卖家 {telegram_id} 的同时接单数为 {max_concurrent_orders}")
+                
             # 检查是否需要自动停用卖家
             check_seller_completed_orders(str(telegram_id))
                 

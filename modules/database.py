@@ -82,15 +82,10 @@ def init_db():
     logger.info("正在执行数据库迁移...")
     try:
         if DATABASE_URL.startswith('postgres'):
+            # For PostgreSQL
             conn = psycopg2.connect(DATABASE_URL)
             cur = conn.cursor()
-            
-            # 检查 sellers 表列
-            cur.execute("""
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name='sellers'
-            """)
+            cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='sellers'")
             columns = [row[0] for row in cur.fetchall()]
             
             if 'pending_orders' not in columns:
@@ -105,22 +100,21 @@ def init_db():
             cur.close()
             conn.close()
             
-        else: # SQLite
+        else: 
+            # For SQLite
             db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db")
             conn = sqlite3.connect(db_path)
             cur = conn.cursor()
-            
-            # 检查 sellers 表列
             cur.execute("PRAGMA table_info(sellers);")
             columns = [row[1] for row in cur.fetchall()]
             
             if 'pending_orders' not in columns:
                 cur.execute("ALTER TABLE sellers ADD COLUMN pending_orders INTEGER DEFAULT 0;")
-                logger.info("已向 sellers 表添加 pending_orders 字段。")
+                logger.info("已向 sellers 表添加 pending_orders 字段（SQLite）。")
 
             if 'max_concurrent_orders' not in columns:
                 cur.execute("ALTER TABLE sellers ADD COLUMN max_concurrent_orders INTEGER DEFAULT 1;")
-                logger.info("已向 sellers 表添加 max_concurrent_orders 字段。")
+                logger.info("已向 sellers 表添加 max_concurrent_orders 字段（SQLite）。")
             
             conn.commit()
             cur.close()
