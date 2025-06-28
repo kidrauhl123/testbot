@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # 导入自定义模块
 from modules.database import init_db, execute_query
 from modules.telegram_bot import run_bot, process_telegram_update
-from modules.web_routes import register_routes
+from modules.web_routes import register_routes, ensure_sellers_columns, ensure_orders_columns
 from modules.constants import sync_env_sellers_to_db
 
 # 创建一个线程安全的队列用于在Flask和Telegram机器人之间通信
@@ -205,6 +205,14 @@ def handle_exception(e):
 
 # ===== 主程序 =====
 if __name__ == "__main__":
+    # 确保数据库列存在
+    ensure_sellers_columns()
+    ensure_orders_columns()
+    
+    # 启动时检查数据库连接
+    from modules.web_routes import check_db_connection
+    check_db_connection()
+
     # 在启动前先尝试清理可能存在的锁文件和目录
     cleanup_resources()
             

@@ -1600,10 +1600,10 @@ def get_user_today_confirmed_count(user_id):
     
     # 根据数据库类型选择不同查询语句
     if DATABASE_URL.startswith('postgres'):
-        query = "SELECT COUNT(*) FROM orders WHERE user_id = %s AND buyer_confirmed = TRUE AND completed_at LIKE %s"
+        query = "SELECT COUNT(*) FROM orders WHERE user_id = %s AND buyer_confirmed = TRUE AND buyer_confirmed_at LIKE %s"
         params = (user_id, f"{today}%")
     else:
-        query = "SELECT COUNT(*) FROM orders WHERE user_id = ? AND buyer_confirmed = 1 AND completed_at LIKE ?"
+        query = "SELECT COUNT(*) FROM orders WHERE user_id = ? AND buyer_confirmed = 1 AND buyer_confirmed_at LIKE ?"
         params = (user_id, f"{today}%")
         
     result = execute_query(query, params, fetch=True)
@@ -1620,9 +1620,9 @@ def get_all_today_confirmed_count():
     
     # 根据数据库类型选择不同查询语句
     if DATABASE_URL.startswith('postgres'):
-        query = "SELECT COUNT(*) FROM orders WHERE buyer_confirmed = TRUE AND completed_at LIKE %s"
+        query = "SELECT COUNT(*) FROM orders WHERE buyer_confirmed = TRUE AND buyer_confirmed_at LIKE %s"
     else:
-        query = "SELECT COUNT(*) FROM orders WHERE buyer_confirmed = 1 AND completed_at LIKE ?"
+        query = "SELECT COUNT(*) FROM orders WHERE buyer_confirmed = 1 AND buyer_confirmed_at LIKE ?"
         
     result = execute_query(query, params, fetch=True)
     return result[0][0] if result and result[0] else 0
@@ -1638,7 +1638,7 @@ def get_seller_today_confirmed_orders_by_user(telegram_id):
             """
             SELECT web_user_id, COUNT(*) 
             FROM orders 
-            WHERE accepted_by = %s AND buyer_confirmed = TRUE AND completed_at LIKE %s
+            WHERE accepted_by = %s AND buyer_confirmed = TRUE AND buyer_confirmed_at LIKE %s
             GROUP BY web_user_id
             """,
             (str(telegram_id), f"{today}%"),
@@ -1649,7 +1649,7 @@ def get_seller_today_confirmed_orders_by_user(telegram_id):
             """
             SELECT web_user_id, COUNT(*) 
             FROM orders 
-            WHERE accepted_by = ? AND buyer_confirmed = 1 AND completed_at LIKE ?
+            WHERE accepted_by = ? AND buyer_confirmed = 1 AND buyer_confirmed_at LIKE ?
             GROUP BY web_user_id
             """,
             (str(telegram_id), f"{today}%"),

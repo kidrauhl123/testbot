@@ -1593,9 +1593,10 @@ def register_routes(app, notification_queue):
             return jsonify({"error": "权限不足"}), 403
 
         try:
-            # 更新buyer_confirmed字段，不改变订单状态
-            execute_query("UPDATE orders SET buyer_confirmed=TRUE WHERE id=?", (oid,))
-            logger.info(f"用户 {user_id} 确认订单 {oid} 成功，buyer_confirmed已设置为TRUE")
+            # 更新buyer_confirmed字段和时间戳
+            timestamp = get_china_time()
+            execute_query("UPDATE orders SET buyer_confirmed=TRUE, buyer_confirmed_at=? WHERE id=?", (timestamp, oid))
+            logger.info(f"用户 {user_id} 确认订单 {oid} 成功，buyer_confirmed已设置为TRUE，时间: {timestamp}")
 
             # 检查卖家是否达到最大接单数
             if accepted_by:
@@ -1681,6 +1682,31 @@ def register_routes(app, notification_queue):
             logger.error(f"获取今日统计失败: {e}", exc_info=True)
             return jsonify({"success": False, "error": "Failed to retrieve stats"}), 500
 
+def ensure_orders_columns():
+    """确保orders表包含所有必需的列，比如buyer_confirmed_at"""
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL的检查和添加列的逻辑
+            execute_query("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='buyer_confirmed_at') THEN
+                        ALTER TABLE orders ADD COLUMN buyer_confirmed_at TEXT;
+                    END IF;
+                END$$;
+            """)
+        else:
+            # SQLite的检查和添加列的逻辑
+            # 获取表信息
+            cursor = execute_query("PRAGMA table_info(orders)", fetch=True, return_cursor=True)
+            columns = [row[1] for row in cursor.fetchall()]
+            # 检查列是否存在
+            if 'buyer_confirmed_at' not in columns:
+                execute_query("ALTER TABLE orders ADD COLUMN buyer_confirmed_at TEXT")
+        logger.info("Checked and ensured 'buyer_confirmed_at' column exists in 'orders' table.")
+    except Exception as e:
+        logger.error(f"检查或添加 'buyer_confirmed_at' 列时出错: {e}", exc_info=True)
+
 def ensure_sellers_columns():
     """确保PostgreSQL sellers表有pending_orders和max_concurrent_orders字段"""
     if DATABASE_URL.startswith('postgres'):
@@ -1716,4 +1742,5 @@ def ensure_sellers_columns():
         conn.close()
 
 # 在模块加载时自动执行
+ensure_orders_columns()
 ensure_sellers_columns()
