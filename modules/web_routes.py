@@ -540,10 +540,12 @@ def register_routes(app, notification_queue):
                 formatted_orders.append(order_data)
             
             # 直接返回订单列表，而不是嵌套在orders字段中
+            logger.info(f"返回订单数据: {len(formatted_orders)}条")
             return jsonify(formatted_orders)
         except Exception as e:
             logger.error(f"获取最近订单失败: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "error": "服务器内部错误"}), 500
+            # 返回空数组而不是错误，以确保前端可以正常处理
+            return jsonify([]), 200
 
     @app.route('/orders/cancel/<int:oid>', methods=['POST'])
     @login_required

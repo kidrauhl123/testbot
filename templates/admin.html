@@ -541,6 +541,7 @@
           <table class="data-table">
             <thead>
               <tr>
+                <th><input type="checkbox" id="select-all-orders"></th>
                 <th>ID</th>
                 <th><b>备注</b></th>
                 <th>二维码</th>
@@ -1096,6 +1097,7 @@
           accountCell = escapeHtml(order.account);
         }
         row.innerHTML = `
+          <td><input type="checkbox" class="order-checkbox" value="${order.id}"></td>
           <td>${order.id}</td>
           <td>${order.remark || '-'}</td>
           <td>${accountCell}</td>

@@ -1962,13 +1962,27 @@
   async function loadOrders(isAutoRefresh = false) {
     try {
       const indicator = document.getElementById('refreshIndicator');
+      const ordersContainer = document.getElementById('orders-container');
+      
       if (!isAutoRefresh) {
         indicator.textContent = "正在加载...";
         indicator.classList.add('show');
+        if (ordersContainer) {
+          ordersContainer.innerHTML = '<div style="text-align:center;padding:20px;">加载中...</div>';
+        }
       }
       
       const response = await fetch('/orders/recent');
+      if (!response.ok) {
+        throw new Error(`请求失败: ${response.status}`);
+      }
+      
       const orders = await response.json();
+      
+             // 检查是否有有效的订单数据
+       if (!orders || !Array.isArray(orders)) {
+         throw new Error('服务器返回的数据格式不正确');
+       }
       
       // 生成并比较哈希，检测是否有变化
       const newHash = generateOrdersHash(orders);
@@ -1979,6 +1993,8 @@
       if (isAutoRefresh && !hasChanged) {
         return;
       }
+      
+      console.log(`已加载 ${orders.length} 条订单数据`);
       
       // 更新全局数据
       allOrders = orders;
@@ -2005,6 +2021,11 @@
       }
     } catch (error) {
       console.error('加载订单失败:', error);
+      // 显示错误信息
+      const ordersContainer = document.getElementById('orders-container');
+      if (ordersContainer) {
+        ordersContainer.innerHTML = '<div class="error-message" style="text-align:center;padding:20px;color:#f44336;">加载订单失败，请刷新页面重试</div>';
+      }
     } finally {
       hideLoadingIndicator();
     }
