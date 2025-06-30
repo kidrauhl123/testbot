@@ -1959,14 +1959,16 @@
   }
 
   // 加载订单
-  async function loadOrders(isAutoRefresh = false) {
+    async function loadOrders(isAutoRefresh = false) {
     try {
       const indicator = document.getElementById('refreshIndicator');
       const ordersContainer = document.getElementById('orders-container');
       
       if (!isAutoRefresh) {
-        indicator.textContent = "正在加载...";
-        indicator.classList.add('show');
+        if (indicator) {
+          indicator.textContent = "正在加载...";
+          indicator.classList.add('show');
+        }
         if (ordersContainer) {
           ordersContainer.innerHTML = '<div style="text-align:center;padding:20px;">加载中...</div>';
         }
@@ -1977,12 +1979,24 @@
         throw new Error(`请求失败: ${response.status}`);
       }
       
-      const orders = await response.json();
+      let orders;
+      try {
+        orders = await response.json();
+      } catch (parseError) {
+        console.error('解析返回数据失败:', parseError);
+        throw new Error('解析返回数据失败');
+      }
       
-             // 检查是否有有效的订单数据
-       if (!orders || !Array.isArray(orders)) {
-         throw new Error('服务器返回的数据格式不正确');
-       }
+      // 检查是否有有效的订单数据
+      if (!orders) {
+        console.warn('服务器返回空数据');
+        orders = [];
+      }
+      
+      if (!Array.isArray(orders)) {
+        console.error('服务器返回的数据格式不正确:', orders);
+        orders = [];
+      }
       
       // 生成并比较哈希，检测是否有变化
       const newHash = generateOrdersHash(orders);
@@ -2070,10 +2084,18 @@
     const container = document.getElementById('orders-container');
     if (!container) return;
     
+    // 更改加载提示
+    if (container.innerHTML === '<div style="text-align:center;padding:20px;">加载中...</div>') {
+      console.log('清除加载提示');
+    }
+    
     // 显示订单区域
-    if (!orders.length) {
+    if (!orders || !orders.length) {
       container.innerHTML = '<div class="no-results">暂无订单</div>';
-      document.getElementById('load-more-container').style.display = 'none';
+      const loadMoreContainer = document.getElementById('load-more-container');
+      if (loadMoreContainer) {
+        loadMoreContainer.style.display = 'none';
+      }
       return;
     }
     

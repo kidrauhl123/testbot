@@ -473,8 +473,8 @@ def register_routes(app, notification_queue):
                         accepted_at, completed_at, remark, web_user_id, user_id, 
                         accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
                         FROM orders 
-                        WHERE created_at::date = CURRENT_DATE
                         ORDER BY id DESC
+                        LIMIT 100
                     """, (), fetch=True)
                 else:
                     # SQLite用法
@@ -483,8 +483,8 @@ def register_routes(app, notification_queue):
                         accepted_at, completed_at, remark, web_user_id, user_id, 
                         accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
                         FROM orders 
-                        WHERE date(created_at) = date('now', 'localtime')
                         ORDER BY id DESC
+                        LIMIT 100
                     """, (), fetch=True)
             else:
                 # 普通用户只能查看自己的订单
@@ -494,8 +494,9 @@ def register_routes(app, notification_queue):
                         accepted_at, completed_at, remark, web_user_id, user_id, 
                         accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
                         FROM orders 
-                        WHERE user_id = %s AND created_at::date = CURRENT_DATE
+                        WHERE user_id = %s
                         ORDER BY id DESC
+                        LIMIT 100
                     """, (user_id,), fetch=True)
                 else:
                     orders = execute_query("""
@@ -503,8 +504,9 @@ def register_routes(app, notification_queue):
                         accepted_at, completed_at, remark, web_user_id, user_id, 
                         accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
                         FROM orders 
-                        WHERE user_id = ? AND date(created_at) = date('now', 'localtime')
+                        WHERE user_id = ?
                         ORDER BY id DESC
+                        LIMIT 100
                     """, (user_id,), fetch=True)
             
             # 格式化订单数据
