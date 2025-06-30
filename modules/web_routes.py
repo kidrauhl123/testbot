@@ -305,7 +305,7 @@ def register_routes(app, notification_queue):
             logger.info(f"订单提交成功: 用户={username}, 套餐={package}, 新余额={new_balance}")
             
             # 获取最新订单列表并格式化
-            orders_raw = execute_query("SELECT id, account, password, package, status, created_at, user_id FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
+            orders_raw = execute_query("SELECT id, account, password, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             orders = []
             
             # 获取新创建的订单ID
@@ -466,23 +466,46 @@ def register_routes(app, notification_queue):
             
             if is_admin:
                 # 管理员可查看所有订单
-                orders = execute_query("""
-                    SELECT id, account, password, package, status, created_at, 
-                    accepted_at, completed_at, remark, web_user_id, user_id, 
-                    accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
-                    FROM orders 
-                    ORDER BY id DESC LIMIT ? OFFSET ?
-                """, (limit, offset), fetch=True)
+                if DATABASE_URL.startswith('postgres'):
+                    # Postgres用法
+                    orders = execute_query("""
+                        SELECT id, account, password, package, status, created_at, 
+                        accepted_at, completed_at, remark, web_user_id, user_id, 
+                        accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
+                        FROM orders 
+                        WHERE created_at::date = CURRENT_DATE
+                        ORDER BY id DESC
+                    """, (), fetch=True)
+                else:
+                    # SQLite用法
+                    orders = execute_query("""
+                        SELECT id, account, password, package, status, created_at, 
+                        accepted_at, completed_at, remark, web_user_id, user_id, 
+                        accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
+                        FROM orders 
+                        WHERE date(created_at) = date('now', 'localtime')
+                        ORDER BY id DESC
+                    """, (), fetch=True)
             else:
                 # 普通用户只能查看自己的订单
-                orders = execute_query("""
-                    SELECT id, account, password, package, status, created_at, 
-                    accepted_at, completed_at, remark, web_user_id, user_id, 
-                    accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
-                    FROM orders 
-                    WHERE user_id = ? 
-                    ORDER BY id DESC LIMIT ? OFFSET ?
-                """, (user_id, limit, offset), fetch=True)
+                if DATABASE_URL.startswith('postgres'):
+                    orders = execute_query("""
+                        SELECT id, account, password, package, status, created_at, 
+                        accepted_at, completed_at, remark, web_user_id, user_id, 
+                        accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
+                        FROM orders 
+                        WHERE user_id = %s AND created_at::date = CURRENT_DATE
+                        ORDER BY id DESC
+                    """, (user_id,), fetch=True)
+                else:
+                    orders = execute_query("""
+                        SELECT id, account, password, package, status, created_at, 
+                        accepted_at, completed_at, remark, web_user_id, user_id, 
+                        accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
+                        FROM orders 
+                        WHERE user_id = ? AND date(created_at) = date('now', 'localtime')
+                        ORDER BY id DESC
+                    """, (user_id,), fetch=True)
             
             # 格式化订单数据
             formatted_orders = []
