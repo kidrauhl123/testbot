@@ -542,59 +542,15 @@
     <div class="sidebar">
       <ul class="sidebar-menu">
         <li><a href="#orders" class="active"><i class="fas fa-shopping-cart"></i> 订单管理</a></li>
-        <li><a href="#balance"><i class="fas fa-dollar-sign"></i> 余额明细</a></li>
       </ul>
     </div>
     <div class="content">
       <div class="tab-content active" id="orders">
         <div class="content-header">
           <h2>我的所有订单</h2>
-          <div class="header-actions">
-            <button class="btn btn-primary">导出订单</button>
-          </div>
         </div>
         <div id="orders-container" class="orders-table-container">
           <div class="loading">加载中...</div>
-        </div>
-      </div>
-      <div class="tab-content" id="balance">
-        <div class="content-header">
-          <h2>余额明细</h2>
-          <div class="header-actions">
-            <button class="btn btn-primary">充值</button>
-          </div>
-        </div>
-        <div class="balance-summary">
-          <div class="balance-info">
-            <div class="balance-label">当前余额</div>
-            <div class="balance-value">{{ balance|default(0.00, true) }}元</div>
-          </div>
-          {% if credit_limit is defined and credit_limit > 0 %}
-          <div class="balance-info">
-            <div class="balance-label">透支额度</div>
-            <div class="balance-value">{{ credit_limit }}元</div>
-          </div>
-          {% endif %}
-        </div>
-        <div class="transaction-container">
-          <h3>交易记录</h3>
-          <table class="orders-table transaction-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>类型</th>
-                <th>金额</th>
-                <th>余额</th>
-                <th>时间</th>
-                <th>描述</th>
-              </tr>
-            </thead>
-            <tbody id="transaction-tbody">
-              <tr>
-                <td colspan="6" class="loading">加载中...</td>
-              </tr>
-            </tbody>
-          </table>
         </div>
       </div>
     </div>
@@ -723,15 +679,11 @@
         <thead>
           <tr>
             <th>ID</th>
-            <th>YouTube</th>
-            <th>二维码</th>
-            <th>套餐</th>
-            <th>价格</th>
-            <th>状态</th>
-            <th>提交时间</th>
-            <th>完成时间</th>
             <th>备注</th>
-            <th>操作</th>
+            <th>二维码</th>
+            <th>状态</th>
+            <th>接单人</th>
+            <th>时间</th>
           </tr>
         </thead>
         <tbody>
@@ -744,21 +696,11 @@
       tableHtml += `
         <tr>
           <td data-label="ID">${order.id}</td>
-          <td data-label="YouTube">YouTube账号</td>
+          <td data-label="备注">${escapeHtml(order.remark || '未提供')}</td>
           <td data-label="二维码">${order.account.includes('uploads') ? `<a href="/${order.account}" target="_blank">查看二维码</a>` : '未上传二维码'}</td>
-          <td data-label="套餐">一年个人会员</td>
-          <td data-label="价格">$${price} USDT</td>
           <td data-label="状态"><span class="status-badge ${statusClass}">${order.status_text}</span></td>
-          <td data-label="提交时间">${order.created_at}</td>
-          <td data-label="完成时间">${order.completed_at || '-'}</td>
-          <td data-label="备注">${order.status === 'failed' ? 
-            `<span style="color: #e74c3c;">${escapeHtml(order.remark || '未提供')}</span>` : 
-            escapeHtml(order.remark || '-')}
-          </td>
-          <td>
-            <button class="btn btn-sm btn-info" onclick="showOrderDetail(${order.id})">详情</button>
-            ${order.status === 'completed' ? `<button class="btn btn-sm btn-danger" onclick="disputeOrder(${order.id})">质疑</button>` : ''}
-          </td>
+          <td data-label="接单人">${order.accepted_at ? order.accepted_at : '-'}</td>
+          <td data-label="时间">${order.created_at} - ${order.completed_at || '-'}</td>
         </tr>
       `;
     }
@@ -771,34 +713,6 @@
     container.innerHTML = tableHtml;
   }
   
-  // 显示订单详情
-  function showOrderDetail(orderId) {
-    const order = allOrders.find(o => o.id === orderId);
-    if (!order) return;
-    
-    // 构建详细信息
-    let detailMessage = `订单 #${orderId} 详情\n\n`;
-    detailMessage += `账号: ${order.account}\n`;
-    detailMessage += `密码: ${order.password || '未提供'}\n`;
-    detailMessage += `套餐: ${order.package}个月\n`;
-    detailMessage += `状态: ${order.status_text}\n`;
-    detailMessage += `提交时间: ${order.created_at}\n`;
-    
-    if (order.accepted_at) {
-      detailMessage += `接单时间: ${order.accepted_at}\n`;
-    }
-    
-    if (order.completed_at) {
-      detailMessage += `完成时间: ${order.completed_at}\n`;
-    }
-    
-    if (order.remark) {
-      detailMessage += `备注: ${order.remark}\n`;
-    }
-    
-    alert(detailMessage);
-  }
-  
   // HTML转义函数
   function escapeHtml(unsafe) {
     return unsafe
@@ -807,33 +721,6 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
-  }
-  
-  // 质疑订单（当订单显示充值成功但实际未成功时）
-  async function disputeOrder(orderId) {
-    if (!confirm('您确定要质疑此订单吗？如果订单显示充值成功但实际未成功，请点击确定。')) return;
-    
-    try {
-      const response = await fetch(`/orders/dispute/${orderId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        alert('质疑已提交，订单状态已更新，卖家将收到通知处理此问题');
-        // 重新加载订单列表
-        loadOrdersAndStats();
-      } else {
-        alert(result.error || '质疑提交失败，请重试');
-      }
-    } catch (e) {
-      console.error('质疑订单失败', e);
-      alert('质疑提交失败，请重试');
-    }
   }
   
   // 页面加载完成后执行

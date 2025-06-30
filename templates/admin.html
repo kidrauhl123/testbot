@@ -495,8 +495,6 @@
         <li><a href="#users" class="active" onclick="showTab('users'); return false;"><i class="fas fa-users"></i> 用户管理</a></li>
         <li><a href="#orders" onclick="showTab('orders'); return false;"><i class="fas fa-file-invoice-dollar"></i> 订单管理</a></li>
         <li><a href="#sellers" onclick="showTab('sellers'); return false;"><i class="fas fa-user-tie"></i> 卖家管理</a></li>
-        <li><a href="#balance" onclick="showTab('balance'); return false;"><i class="fas fa-money-bill-wave"></i> 余额明细</a></li>
-        <li><a href="/admin/recharge-requests"><i class="fas fa-credit-card"></i> 充值管理</a></li>
       </ul>
     </div>
     
@@ -543,24 +541,22 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th><input type="checkbox" id="select-all-orders"></th>
                 <th>ID</th>
-                <th>账号</th>
-                <th>套餐</th>
+                <th><b>备注</b></th>
+                <th>二维码</th>
                 <th>状态</th>
                 <th>创建者</th>
                 <th>接单人</th>
-                <th>创建时间</th>
-                <th>操作</th>
+                <th>提交时间<br>完成时间</th>
+                <th>编辑</th>
               </tr>
             </thead>
             <tbody id="orders-table-body">
               <tr>
-                <td colspan="9" class="loading">加载中...</td>
+                <td colspan="8" class="loading">加载中...</td>
               </tr>
             </tbody>
           </table>
-          <!-- 加载更多区域 -->
           <div id="load-more-area" style="text-align:center; margin-top: 20px; display:none;">
             <button id="load-more-orders-btn" class="btn btn-primary" onclick="loadMoreOrders()">
               加载更多订单 (<span id="loaded-count">0</span>/<span id="total-count">0</span>)
@@ -595,40 +591,6 @@
             <tbody id="sellers-table-body">
               <tr>
                 <td colspan="9" class="loading">加载中...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-      
-      <!-- 余额明细管理 -->
-      <div id="balance" class="tab-content">
-        <div class="content-header">
-          <h2><i class="fas fa-money-bill-wave"></i> 余额明细</h2>
-          <div class="header-actions">
-            <select id="balance-user-filter" class="form-control" style="width: 200px;">
-              <option value="">所有用户</option>
-              <!-- 用户列表会通过JS动态加载 -->
-            </select>
-          </div>
-        </div>
-        <div class="balance-container">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>用户</th>
-                <th>类型</th>
-                <th>金额</th>
-                <th>变动后余额</th>
-                <th>原因</th>
-                <th>参考ID</th>
-                <th>时间</th>
-              </tr>
-            </thead>
-            <tbody id="balance-records-tbody">
-              <tr>
-                <td colspan="8" class="loading">加载中...</td>
               </tr>
             </tbody>
           </table>
@@ -1134,10 +1096,9 @@
           accountCell = escapeHtml(order.account);
         }
         row.innerHTML = `
-          <td><input type="checkbox" class="order-checkbox" value="${order.id}"></td>
           <td>${order.id}</td>
+          <td>${order.remark || '-'}</td>
           <td>${accountCell}</td>
-          <td>${order.package}个月</td>
           <td><span class="badge ${statusClass}">${escapeHtml(order.status_text)}</span></td>
           <td>${escapeHtml(order.creator || 'N/A')}</td>
           <td>${order.seller ? escapeHtml(order.seller.name || order.seller.username || order.seller.first_name || 'N/A') : 'N/A'}</td>
