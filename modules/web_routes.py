@@ -457,8 +457,8 @@ def register_routes(app, notification_queue):
             limit = int(request.args.get('limit', 20))
             offset = int(request.args.get('offset', 0))
             
-            # 限制最大获取数量
-            limit = min(limit, 100)
+            # 限制最大获取数量，但允许设置更大的值以支持加载所有订单
+            limit = min(limit, 1000)
             
             # 根据用户权限，决定查询所有订单还是仅当前用户的订单
             is_admin = session.get('is_admin')
@@ -517,7 +517,7 @@ def register_routes(app, notification_queue):
                 formatted_orders.append(order_data)
             
             # 直接返回订单列表，而不是嵌套在orders字段中
-            return jsonify(formatted_orders)
+            return jsonify({"success": True, "orders": formatted_orders})
         except Exception as e:
             logger.error(f"获取最近订单失败: {str(e)}", exc_info=True)
             return jsonify({"success": False, "error": "服务器内部错误"}), 500

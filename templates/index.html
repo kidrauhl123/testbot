@@ -306,6 +306,151 @@
       gap: 15px;
     }
 
+    /* 筛选功能样式 */
+    .filter-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 10px 0;
+    }
+    
+    .filter-toggle-btn {
+      background: #f0f3ff;
+      color: #667eea;
+      border: 1px solid #dde3fb;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .filter-toggle-btn:hover {
+      background: #e6ebff;
+      box-shadow: 0 2px 5px rgba(102,126,234,0.15);
+    }
+    
+    .filter-toggle-btn.active {
+      background: #667eea;
+      color: white;
+      border-color: #5a6fd6;
+    }
+    
+    .filter-panel {
+      background: #f8f9ff;
+      border: 1px solid #e1e5f5;
+      border-radius: 8px;
+      padding: 15px;
+      margin: 10px 0;
+      box-shadow: 0 3px 8px rgba(102,126,234,0.1);
+    }
+    
+    .filter-section {
+      margin-bottom: 12px;
+    }
+    
+    .filter-section h4 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      color: #555;
+    }
+    
+    .filter-select {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid #dde3fb;
+      font-size: 14px;
+      background-color: white;
+    }
+    
+    .date-range {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .filter-date {
+      flex: 1;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid #dde3fb;
+      font-size: 14px;
+      background-color: white;
+    }
+    
+    .date-separator {
+      color: #888;
+      font-size: 13px;
+    }
+    
+    .filter-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    
+    .filter-btn {
+      padding: 7px 15px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+    }
+    
+    .filter-apply {
+      background: #667eea;
+      color: white;
+    }
+    
+    .filter-apply:hover {
+      background: #5a6fd6;
+      box-shadow: 0 2px 5px rgba(102,126,234,0.3);
+    }
+    
+    .filter-reset {
+      background: #f1f2f6;
+      color: #666;
+    }
+    
+    .filter-reset:hover {
+      background: #e5e7f0;
+    }
+    
+    .active-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      flex-grow: 1;
+      margin-left: 10px;
+    }
+    
+    .filter-tag {
+      background: #e6ebff;
+      color: #667eea;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .filter-tag .remove-filter {
+      cursor: pointer;
+      font-size: 10px;
+      color: #5a6fd6;
+    }
+    
+    .filter-tag .remove-filter:hover {
+      color: #4356c3;
+    }
+
     .order-list-item {
       background: #fff; 
       padding: 16px; 
@@ -993,6 +1138,115 @@
     .remark-text {
       font-weight: bold;
     }
+
+    /* 加载指示器样式 */
+    .loading-indicator {
+      text-align: center;
+      padding: 20px;
+      color: #667eea;
+      font-size: 14px;
+      font-style: italic;
+    }
+    
+    .no-results {
+      text-align: center;
+      padding: 30px;
+      color: #888;
+      font-size: 15px;
+      font-style: italic;
+    }
+    
+    /* 模态框和加载指示器样式 */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+      overflow: auto;
+    }
+    
+    .modal-content {
+      background-color: #fff;
+      margin: 15% auto;
+      padding: 20px;
+      width: 90%;
+      max-width: 500px;
+      border-radius: 10px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+      position: relative;
+    }
+    
+    .close-modal {
+      position: absolute;
+      right: 15px;
+      top: 10px;
+      font-size: 24px;
+      cursor: pointer;
+      color: #aaa;
+    }
+    
+    .close-modal:hover {
+      color: #333;
+    }
+    
+    .modal h2 {
+      margin-top: 0;
+      color: #333;
+    }
+    
+    .modal-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    
+    .btn-secondary {
+      background: #f1f2f6;
+      color: #666;
+    }
+    
+    .btn-secondary:hover {
+      background: #e5e7f0;
+    }
+    
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(255,255,255,0.8);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 2000;
+    }
+    
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    .loading-text {
+      margin-top: 15px;
+      color: #667eea;
+      font-weight: 600;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
@@ -1173,6 +1427,41 @@
                     <button id="searchBtn" class="search-btn"><i class="fas fa-search"></i></button>
                     <button id="clearSearchBtn" class="clear-search-btn"><i class="fas fa-times"></i></button>
                   </div>
+                  <div class="filter-controls">
+                    <button id="filterToggleBtn" class="filter-toggle-btn"><i class="fas fa-filter"></i> 筛选</button>
+                    <div id="activeFilters" class="active-filters"></div>
+                  </div>
+                  <div id="filterPanel" class="filter-panel" style="display:none;">
+                    <div class="filter-section">
+                      <h4>卖家筛选</h4>
+                      <select id="sellerFilter" class="filter-select">
+                        <option value="">全部卖家</option>
+                        <!-- 卖家选项将由JavaScript加载 -->
+                      </select>
+                    </div>
+                    <div class="filter-section">
+                      <h4>订单状态</h4>
+                      <select id="statusFilter" class="filter-select">
+                        <option value="">全部状态</option>
+                        <option value="submitted">已提交</option>
+                        <option value="accepted">已接单</option>
+                        <option value="completed">已完成</option>
+                        <option value="failed">已失败</option>
+                      </select>
+                    </div>
+                    <div class="filter-section">
+                      <h4>日期筛选</h4>
+                      <div class="date-range">
+                        <input type="date" id="startDateFilter" class="filter-date" placeholder="开始日期">
+                        <span class="date-separator">至</span>
+                        <input type="date" id="endDateFilter" class="filter-date" placeholder="结束日期">
+                      </div>
+                    </div>
+                    <div class="filter-actions">
+                      <button id="applyFiltersBtn" class="filter-btn filter-apply">应用筛选</button>
+                      <button id="resetFiltersBtn" class="filter-btn filter-reset">重置筛选</button>
+                    </div>
+                  </div>
                   <div class="refresh-hint">(显示全部最新订单，每5秒自动更新)</div>
                 </div>
                 <div id="orders-container">加载中...</div>
@@ -1188,6 +1477,25 @@
   当前余额：{{ balance }} USDT  {% if credit_limit is defined and credit_limit > 0 %}&nbsp;&nbsp;可透支额度：{{ credit_limit }} USDT{% endif %}
 </div>
 
+<!-- 确认订单对话框模板 -->
+<div id="confirmOrderModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <span class="close-modal">&times;</span>
+    <h2>确认订单</h2>
+    <p>您确定要确认该订单已经完成充值吗？</p>
+    <div class="modal-buttons">
+      <button id="confirmOrderYes" class="btn btn-primary">确认</button>
+      <button id="confirmOrderNo" class="btn btn-secondary">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 加载指示器模板 -->
+<div class="loading-overlay" id="loadingOverlay" style="display:none;">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">处理中...</div>
+</div>
+
 <script>
   // 全局变量
   let displayedOrders = 10; // 初始显示10个订单
@@ -1200,6 +1508,12 @@
   let viewMode = 'table'; // 默认视图模式：grid 或 table
   let page = 1; // 当前页码
   let orderPageSize = 10; // 每次加载的订单数量
+  let filters = {
+    seller: '',
+    status: '',
+    startDate: '',
+    endDate: ''
+  };
   
   // 默认价格，会被用户定制价格覆盖
   const WEB_PRICES = {
@@ -1515,6 +1829,9 @@
     // 加载活跃卖家列表
     loadActiveSellers();
     
+    // 初始化筛选功能
+    initFilterControls();
+    
     // 搜索功能初始化
     const searchInput = document.getElementById('searchInput');
     const searchBtn = document.getElementById('searchBtn');
@@ -1769,40 +2086,55 @@
 
   // 加载订单
   async function loadOrders(isAutoRefresh = false) {
+    const indicator = document.getElementById('refreshIndicator');
+    if (indicator && isAutoRefresh) {
+      indicator.textContent = "正在刷新...";
+      indicator.classList.add('show');
+    }
+    
+    showLoadingIndicator();
+    
     try {
-      const indicator = document.getElementById('refreshIndicator');
-      if (!isAutoRefresh) {
-        indicator.textContent = "正在加载...";
-        indicator.classList.add('show');
-      }
-      
-      const response = await fetch('/orders/recent');
-      const orders = await response.json();
-      
-      // 生成并比较哈希，检测是否有变化
-      const newHash = generateOrdersHash(orders);
-      const hasChanged = newHash !== lastOrdersHash;
-      lastOrdersHash = newHash;
-      
-      // 如果是自动刷新且无变化，则不更新UI
-      if (isAutoRefresh && !hasChanged) {
+      // 请求所有订单
+      const response = await fetch('/orders/recent?limit=1000');
+      if (!response.ok) {
+        console.error('加载订单失败:', response.status);
         return;
       }
       
-      // 更新全局数据
-      allOrders = orders;
+      const result = await response.json();
       
-      // 应用搜索过滤（如果有）
-      let filteredOrders = orders;
-      if (searchKeyword) {
-        filteredOrders = orders.filter(order => 
-          order.id.toString().includes(searchKeyword) || 
-          order.account.toLowerCase().includes(searchKeyword.toLowerCase())
-        );
+      if (result.success && result.orders) {
+        // 检查订单数据是否有变化
+        const newOrdersHash = generateOrdersHash(result.orders);
+        if (newOrdersHash === lastOrdersHash && isAutoRefresh) {
+          console.log('订单无变化，跳过更新');
+          return;
+        }
+        
+        // 更新订单哈希值
+        lastOrdersHash = newOrdersHash;
+        
+        // 更新全局订单数据
+        allOrders = result.orders;
+        
+        // 应用搜索关键词和筛选条件
+        let filteredOrders = allOrders;
+        
+        // 应用搜索
+        if (searchKeyword) {
+          filteredOrders = filteredOrders.filter(order => 
+            order.id.toString().includes(searchKeyword) || 
+            order.account.toLowerCase().includes(searchKeyword.toLowerCase())
+          );
+        }
+        
+        // 应用筛选
+        filteredOrders = filterOrders(filteredOrders);
       }
       
       // 渲染订单
-      renderOrders(filteredOrders);
+      renderOrders(filterOrders(allOrders));
       
       // 更新今日统计
       updateTodayConfirmedStats();
@@ -1961,11 +2293,22 @@
   function loadMoreOrders() {
     // 每次多显示orderPageSize个，不再有总数限制
     displayedOrders += orderPageSize; 
-    const filteredOrders = searchKeyword ? 
-      allOrders.filter(order => 
+    
+    // 应用搜索和筛选
+    let filteredOrders = allOrders;
+    
+    // 应用搜索
+    if (searchKeyword) {
+      filteredOrders = filteredOrders.filter(order => 
         order.id.toString().includes(searchKeyword) || 
         order.account.toLowerCase().includes(searchKeyword.toLowerCase())
-      ) : allOrders;
+      );
+    }
+    
+    // 应用筛选
+    filteredOrders = filterOrders(filteredOrders);
+    
+    // 渲染订单
     renderOrders(filteredOrders);
     
     // 如果当前显示数量小于总数，保持"显示更多"按钮可见
@@ -2049,6 +2392,29 @@
       autoRefreshInterval = null;
     }
   }
+  
+  // 显示加载指示器
+  function showLoadingIndicator() {
+    const container = document.getElementById('orders-container');
+    if (container && container.innerHTML === '') {
+      container.innerHTML = '<div class="loading-indicator">加载中...</div>';
+    }
+  }
+  
+  // 隐藏加载指示器
+  function hideLoadingIndicator() {
+    const indicator = document.getElementById('refreshIndicator');
+    if (indicator) {
+      setTimeout(() => {
+        indicator.classList.remove('show');
+      }, 1000);
+    }
+    
+    const container = document.getElementById('orders-container');
+    if (container && container.innerHTML === '<div class="loading-indicator">加载中...</div>') {
+      container.innerHTML = '<div class="no-results">暂无订单</div>';
+    }
+  }
 
   // 页面可见性改变时的处理
   document.addEventListener('visibilitychange', function() {
@@ -2115,40 +2481,332 @@
 
   // 确认订单
   async function confirmOrder(orderId) {
-    try {
-      const resp = await fetch(`/orders/confirm/${orderId}`, { method: 'POST' });
-      const result = await resp.json();
-      if (result.success) {
-        // 更新按钮文本为"已确认"并禁用
-        const buttons = document.querySelectorAll(`button.confirm-btn[onclick="confirmOrder(${orderId})"]`);
-        buttons.forEach(btn => {
-          btn.textContent = "已确认";
-          btn.disabled = true;
-          btn.classList.add("confirmed");
-        });
-        
-        // 更新本地数据
-        const order = allOrders.find(o => o.id === orderId);
-        if (order) {
-          order.buyer_confirmed = true;
-        }
-        
-        showCustomAlert('订单已确认', 'success');
-      } else {
-        alert(result.error || '确认失败');
-      }
-    } catch (e) {
-      console.error('确认订单失败', e);
-      alert('确认失败，请重试');
+    const modal = document.getElementById('confirmOrderModal');
+    const confirmBtn = document.getElementById('confirmOrderYes');
+    const cancelBtn = document.getElementById('confirmOrderNo');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    
+    // 显示确认对话框
+    modal.style.display = 'block';
+    
+    // 清除之前的事件
+    const newConfirmBtn = confirmBtn.cloneNode(true);
+    const newCancelBtn = cancelBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+    cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+    
+    // 关闭对话框
+    function closeModal() {
+      modal.style.display = 'none';
     }
+    
+    // 关闭按钮事件
+    document.querySelector('.close-modal').onclick = closeModal;
+    newCancelBtn.onclick = closeModal;
+    
+    // 确认按钮事件
+    newConfirmBtn.onclick = async function() {
+      modal.style.display = 'none';
+      loadingOverlay.style.display = 'flex';
+      
+      try {
+        const resp = await fetch(`/orders/confirm/${orderId}`, { method: 'POST' });
+        const result = await resp.json();
+        
+        if (result.success) {
+          showCustomAlert('订单确认成功', 'success');
+          
+          // 更新订单状态
+          const orderElem = document.querySelector(`.order-list-item[data-order-id="${orderId}"]`) || 
+                           document.querySelector(`tr[data-order-id="${orderId}"]`);
+          
+          if (orderElem) {
+            const confirmBtn = orderElem.querySelector('.confirm-btn');
+            if (confirmBtn) {
+              confirmBtn.textContent = '已确认';
+              confirmBtn.disabled = true;
+              confirmBtn.classList.add('confirmed');
+            }
+          }
+          
+          // 重新加载订单列表，确保所有数据都是最新的
+          await loadOrders();
+        } else {
+          showCustomAlert(result.error || '确认失败，请重试', 'error');
+        }
+      } catch (error) {
+        console.error('确认订单失败:', error);
+        showCustomAlert('网络错误，确认失败', 'error');
+      } finally {
+        loadingOverlay.style.display = 'none';
+      }
+    };
   }
 
-  // 隐藏加载指示器
-  function hideLoadingIndicator() {
-    const indicator = document.getElementById('refreshIndicator');
-    if (indicator) {
-      indicator.classList.remove('show');
+  // 初始化筛选功能
+  function initFilterControls() {
+    // 筛选面板展开/收起
+    const filterToggleBtn = document.getElementById('filterToggleBtn');
+    const filterPanel = document.getElementById('filterPanel');
+    
+    if (filterToggleBtn && filterPanel) {
+      filterToggleBtn.addEventListener('click', () => {
+        const isVisible = filterPanel.style.display !== 'none';
+        filterPanel.style.display = isVisible ? 'none' : 'block';
+        filterToggleBtn.classList.toggle('active', !isVisible);
+      });
     }
+    
+    // 加载卖家筛选选项
+    populateSellerFilter();
+    
+    // 应用筛选按钮
+    const applyFiltersBtn = document.getElementById('applyFiltersBtn');
+    if (applyFiltersBtn) {
+      applyFiltersBtn.addEventListener('click', applyFilters);
+    }
+    
+    // 重置筛选按钮
+    const resetFiltersBtn = document.getElementById('resetFiltersBtn');
+    if (resetFiltersBtn) {
+      resetFiltersBtn.addEventListener('click', resetFilters);
+    }
+  }
+  
+  // 填充卖家筛选下拉框
+  async function populateSellerFilter() {
+    try {
+      const response = await fetch('/api/active-sellers');
+      if (!response.ok) {
+        console.error('获取卖家列表失败:', response.status);
+        return;
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.sellers && data.sellers.length > 0) {
+        const sellerFilter = document.getElementById('sellerFilter');
+        
+        // 保留默认选项
+        const defaultOption = sellerFilter.options[0];
+        sellerFilter.innerHTML = '';
+        sellerFilter.appendChild(defaultOption);
+        
+        // 添加卖家选项
+        data.sellers.forEach(seller => {
+          const option = document.createElement('option');
+          option.value = seller.id;
+          option.textContent = seller.name;
+          sellerFilter.appendChild(option);
+        });
+      }
+    } catch (error) {
+      console.error('获取卖家列表失败:', error);
+    }
+  }
+  
+  // 应用筛选
+  function applyFilters() {
+    const sellerFilter = document.getElementById('sellerFilter');
+    const statusFilter = document.getElementById('statusFilter');
+    const startDateFilter = document.getElementById('startDateFilter');
+    const endDateFilter = document.getElementById('endDateFilter');
+    
+    // 更新筛选条件
+    filters = {
+      seller: sellerFilter ? sellerFilter.value : '',
+      status: statusFilter ? statusFilter.value : '',
+      startDate: startDateFilter ? startDateFilter.value : '',
+      endDate: endDateFilter ? endDateFilter.value : ''
+    };
+    
+    // 更新活动筛选标签
+    updateActiveFilters();
+    
+    // 重置显示的订单数量
+    displayedOrders = orderPageSize;
+    
+    // 应用筛选并渲染
+    const filteredOrders = filterOrders(allOrders);
+    renderOrders(filteredOrders);
+    
+    // 关闭筛选面板
+    const filterPanel = document.getElementById('filterPanel');
+    if (filterPanel) {
+      filterPanel.style.display = 'none';
+    }
+    
+    // 更新筛选按钮状态
+    const filterToggleBtn = document.getElementById('filterToggleBtn');
+    if (filterToggleBtn) {
+      // 如果有筛选条件，保持按钮高亮
+      const hasActiveFilters = Object.values(filters).some(val => val !== '');
+      filterToggleBtn.classList.toggle('active', hasActiveFilters);
+    }
+  }
+  
+  // 更新活动筛选标签
+  function updateActiveFilters() {
+    const activeFilters = document.getElementById('activeFilters');
+    if (!activeFilters) return;
+    
+    activeFilters.innerHTML = '';
+    
+    // 添加卖家筛选标签
+    if (filters.seller) {
+      const sellerFilter = document.getElementById('sellerFilter');
+      const sellerName = sellerFilter ? sellerFilter.options[sellerFilter.selectedIndex].text : '';
+      
+      if (sellerName) {
+        const tag = createFilterTag('卖家: ' + sellerName, () => {
+          filters.seller = '';
+          document.getElementById('sellerFilter').value = '';
+          updateActiveFilters();
+          const filteredOrders = filterOrders(allOrders);
+          renderOrders(filteredOrders);
+        });
+        activeFilters.appendChild(tag);
+      }
+    }
+    
+    // 添加状态筛选标签
+    if (filters.status) {
+      const statusFilter = document.getElementById('statusFilter');
+      const statusName = statusFilter ? statusFilter.options[statusFilter.selectedIndex].text : '';
+      
+      if (statusName) {
+        const tag = createFilterTag('状态: ' + statusName, () => {
+          filters.status = '';
+          document.getElementById('statusFilter').value = '';
+          updateActiveFilters();
+          const filteredOrders = filterOrders(allOrders);
+          renderOrders(filteredOrders);
+        });
+        activeFilters.appendChild(tag);
+      }
+    }
+    
+    // 添加日期筛选标签
+    if (filters.startDate || filters.endDate) {
+      let dateText = '日期: ';
+      
+      if (filters.startDate && filters.endDate) {
+        dateText += `${filters.startDate} 至 ${filters.endDate}`;
+      } else if (filters.startDate) {
+        dateText += `${filters.startDate} 起`;
+      } else if (filters.endDate) {
+        dateText += `截至 ${filters.endDate}`;
+      }
+      
+      const tag = createFilterTag(dateText, () => {
+        filters.startDate = '';
+        filters.endDate = '';
+        document.getElementById('startDateFilter').value = '';
+        document.getElementById('endDateFilter').value = '';
+        updateActiveFilters();
+        const filteredOrders = filterOrders(allOrders);
+        renderOrders(filteredOrders);
+      });
+      activeFilters.appendChild(tag);
+    }
+  }
+  
+  // 创建筛选标签元素
+  function createFilterTag(text, removeCallback) {
+    const tag = document.createElement('div');
+    tag.className = 'filter-tag';
+    tag.innerHTML = `
+      <span>${text}</span>
+      <span class="remove-filter">×</span>
+    `;
+    
+    tag.querySelector('.remove-filter').addEventListener('click', removeCallback);
+    
+    return tag;
+  }
+  
+  // 重置筛选
+  function resetFilters() {
+    // 重置所有筛选控件
+    const sellerFilter = document.getElementById('sellerFilter');
+    const statusFilter = document.getElementById('statusFilter');
+    const startDateFilter = document.getElementById('startDateFilter');
+    const endDateFilter = document.getElementById('endDateFilter');
+    
+    if (sellerFilter) sellerFilter.value = '';
+    if (statusFilter) statusFilter.value = '';
+    if (startDateFilter) startDateFilter.value = '';
+    if (endDateFilter) endDateFilter.value = '';
+    
+    // 重置筛选条件
+    filters = {
+      seller: '',
+      status: '',
+      startDate: '',
+      endDate: ''
+    };
+    
+    // 清空活动筛选标签
+    const activeFilters = document.getElementById('activeFilters');
+    if (activeFilters) activeFilters.innerHTML = '';
+    
+    // 重置显示的订单数量
+    displayedOrders = orderPageSize;
+    
+    // 重新渲染原始订单列表
+    renderOrders(allOrders);
+    
+    // 更新筛选按钮状态
+    const filterToggleBtn = document.getElementById('filterToggleBtn');
+    if (filterToggleBtn) {
+      filterToggleBtn.classList.remove('active');
+    }
+  }
+  
+  // 筛选订单
+  function filterOrders(orders) {
+    // 先应用搜索关键词筛选
+    let result = searchKeyword ? 
+      orders.filter(order => 
+        order.id.toString().includes(searchKeyword) || 
+        order.account.toLowerCase().includes(searchKeyword.toLowerCase())
+      ) : orders;
+    
+    // 应用筛选条件
+    if (filters.seller) {
+      result = result.filter(order => order.accepted_by === filters.seller);
+    }
+    
+    if (filters.status) {
+      const statusMap = {
+        'submitted': '已提交',
+        'accepted': '已接单',
+        'completed': '已完成',
+        'failed': '已失败'
+      };
+      const statusText = statusMap[filters.status];
+      result = result.filter(order => order.status_text === statusText);
+    }
+    
+    if (filters.startDate) {
+      const startDate = new Date(filters.startDate);
+      startDate.setHours(0, 0, 0, 0);
+      result = result.filter(order => {
+        const orderDate = new Date(order.created_at.replace(' ', 'T') + 'Z');
+        return orderDate >= startDate;
+      });
+    }
+    
+    if (filters.endDate) {
+      const endDate = new Date(filters.endDate);
+      endDate.setHours(23, 59, 59, 999);
+      result = result.filter(order => {
+        const orderDate = new Date(order.created_at.replace(' ', 'T') + 'Z');
+        return orderDate <= endDate;
+      });
+    }
+    
+    return result;
   }
 </script>
 
