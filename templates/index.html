@@ -1433,9 +1433,9 @@
                   </div>
                   <div id="filterPanel" class="filter-panel" style="display:none;">
                     <div class="filter-section">
-                      <h4>卖家筛选</h4>
+                      <h4>接单人筛选</h4>
                       <select id="sellerFilter" class="filter-select">
-                        <option value="">全部卖家</option>
+                        <option value="">全部接单人</option>
                         <!-- 卖家选项将由JavaScript加载 -->
                       </select>
                     </div>
@@ -2652,13 +2652,13 @@
     
     activeFilters.innerHTML = '';
     
-    // 添加卖家筛选标签
+    // 添加接单人筛选标签
     if (filters.seller) {
       const sellerFilter = document.getElementById('sellerFilter');
       const sellerName = sellerFilter ? sellerFilter.options[sellerFilter.selectedIndex].text : '';
       
       if (sellerName) {
-        const tag = createFilterTag('卖家: ' + sellerName, () => {
+        const tag = createFilterTag('接单人: ' + sellerName, () => {
           filters.seller = '';
           document.getElementById('sellerFilter').value = '';
           updateActiveFilters();
@@ -2774,7 +2774,10 @@
     
     // 应用筛选条件
     if (filters.seller) {
-      result = result.filter(order => order.accepted_by === filters.seller);
+      result = result.filter(order => {
+        // 使用accepted_by字段进行筛选
+        return order.accepted_by === filters.seller;
+      });
     }
     
     if (filters.status) {
