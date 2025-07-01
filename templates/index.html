@@ -2083,7 +2083,7 @@
   // 加载订单
   async function loadOrders(isAutoRefresh = false) {
     // 只在手动刷新时显示加载指示器
-    if (!isAutoRefresh) {
+      if (!isAutoRefresh) {
       showLoadingIndicator();
     }
     
@@ -2102,9 +2102,9 @@
         const newOrdersHash = generateOrdersHash(result.orders);
         if (newOrdersHash === lastOrdersHash && isAutoRefresh) {
           console.log('订单无变化，跳过更新');
-          return;
-        }
-        
+        return;
+      }
+      
         // 更新订单哈希值
         lastOrdersHash = newOrdersHash;
         
@@ -2115,18 +2115,18 @@
         let filteredOrders = allOrders;
         
         // 应用搜索
-        if (searchKeyword) {
+      if (searchKeyword) {
           filteredOrders = filteredOrders.filter(order => 
-            order.id.toString().includes(searchKeyword) || 
-            order.account.toLowerCase().includes(searchKeyword.toLowerCase())
-          );
-        }
+          order.id.toString().includes(searchKeyword) || 
+          order.account.toLowerCase().includes(searchKeyword.toLowerCase())
+        );
+      }
         
         // 应用筛选
         filteredOrders = filterOrders(filteredOrders);
-        
-        // 渲染订单
-        renderOrders(filteredOrders);
+      
+      // 渲染订单
+      renderOrders(filteredOrders);
       }
       
       // 更新今日统计
@@ -2137,7 +2137,7 @@
     } finally {
       // 只在手动刷新时隐藏加载指示器
       if (!isAutoRefresh) {
-        hideLoadingIndicator();
+      hideLoadingIndicator();
       }
     }
   }
@@ -2215,19 +2215,10 @@
             <p class="time">提交时间：${o.created_at}</p>
             ${o.completed_at ? `<p class="time">完成时间：${o.completed_at}</p>` : ''}
           </div>
-          <button class="confirm-btn" onclick="confirmOrder(${o.id})">${o.buyer_confirmed ? '已确认' : '确认'}</button>
+          <button class="confirm-btn ${o.buyer_confirmed ? 'confirmed' : ''}" onclick="confirmOrder(${o.id})">${o.buyer_confirmed ? '已确认' : '确认'}</button>
           <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
         </div>`;
       gridContainer.insertAdjacentHTML('beforeend', html);
-      
-      // 如果已确认，禁用按钮
-      if (o.buyer_confirmed) {
-        const confirmBtn = gridContainer.querySelector(`.order-list-item[data-order-id="${o.id}"] .confirm-btn`);
-        if (confirmBtn) {
-          confirmBtn.disabled = true;
-          confirmBtn.classList.add("confirmed");
-        }
-      }
     });
   }
   
@@ -2269,7 +2260,7 @@
           <td>${o.accepted_by_nickname || o.accepted_by || '-'}</td>
           <td>
             <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
-            <button class="confirm-btn" onclick="confirmOrder(${o.id})">${o.buyer_confirmed ? '已确认' : '确认'}</button>
+            <button class="confirm-btn ${o.buyer_confirmed ? 'confirmed' : ''}" onclick="confirmOrder(${o.id})">${o.buyer_confirmed ? '已确认' : '确认'}</button>
           </td>
         </tr>
       `;
@@ -2281,17 +2272,6 @@
     `;
     
     container.innerHTML = html;
-    
-    // 如果已确认，禁用按钮
-    orders.forEach(o => {
-      if (o.buyer_confirmed) {
-        const confirmBtn = container.querySelector(`tr[data-order-id="${o.id}"] .confirm-btn`);
-        if (confirmBtn) {
-          confirmBtn.disabled = true;
-          confirmBtn.classList.add("confirmed");
-        }
-      }
-    });
   }
 
   // 加载更多订单
@@ -2385,7 +2365,7 @@
     stopAutoRefresh(); // 先停止现有的
     autoRefreshInterval = setInterval(() => {
       // 自动刷新，不考虑搜索关键词
-      loadOrders(true);
+        loadOrders(true);
     }, 5000); // 5秒刷新一次
     console.log('自动刷新已启动');
   }
@@ -2479,66 +2459,60 @@
 
   // 确认订单
   async function confirmOrder(orderId) {
-    const modal = document.getElementById('confirmOrderModal');
-    const confirmBtn = document.getElementById('confirmOrderYes');
-    const cancelBtn = document.getElementById('confirmOrderNo');
     const loadingOverlay = document.getElementById('loadingOverlay');
+    loadingOverlay.style.display = 'flex';
     
-    // 显示确认对话框
-    modal.style.display = 'block';
-    
-    // 清除之前的事件
-    const newConfirmBtn = confirmBtn.cloneNode(true);
-    const newCancelBtn = cancelBtn.cloneNode(true);
-    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-    cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
-    
-    // 关闭对话框
-    function closeModal() {
-      modal.style.display = 'none';
-    }
-    
-    // 关闭按钮事件
-    document.querySelector('.close-modal').onclick = closeModal;
-    newCancelBtn.onclick = closeModal;
-    
-    // 确认按钮事件
-    newConfirmBtn.onclick = async function() {
-      modal.style.display = 'none';
-      loadingOverlay.style.display = 'flex';
-      
     try {
-      const resp = await fetch(`/orders/confirm/${orderId}`, { method: 'POST' });
+      // 查找订单
+      const order = allOrders.find(o => o.id === orderId);
+      if (!order) {
+        showCustomAlert('找不到该订单', 'error');
+        return;
+      }
+      
+      // 根据当前状态决定操作（确认或取消确认）
+      const isConfirmed = order.buyer_confirmed;
+      const action = isConfirmed ? 'cancel' : 'confirm';
+      
+      // 发送请求
+      const endpoint = `/orders/${action}/${orderId}`;
+      const resp = await fetch(endpoint, { method: 'POST' });
       const result = await resp.json();
-        
+      
       if (result.success) {
-          showCustomAlert('订单确认成功', 'success');
-          
-          // 更新订单状态
-          const orderElem = document.querySelector(`.order-list-item[data-order-id="${orderId}"]`) || 
-                           document.querySelector(`tr[data-order-id="${orderId}"]`);
-          
-          if (orderElem) {
-            const confirmBtn = orderElem.querySelector('.confirm-btn');
-            if (confirmBtn) {
+        // 更新本地订单状态
+        order.buyer_confirmed = !isConfirmed;
+        
+        // 更新UI
+        const orderElem = document.querySelector(`.order-list-item[data-order-id="${orderId}"]`) || 
+                         document.querySelector(`tr[data-order-id="${orderId}"]`);
+        
+        if (orderElem) {
+          const confirmBtn = orderElem.querySelector('.confirm-btn');
+          if (confirmBtn) {
+            if (order.buyer_confirmed) {
               confirmBtn.textContent = '已确认';
-              confirmBtn.disabled = true;
               confirmBtn.classList.add('confirmed');
+            } else {
+              confirmBtn.textContent = '确认';
+              confirmBtn.classList.remove('confirmed');
             }
           }
-          
-          // 重新加载订单列表，确保所有数据都是最新的
-          await loadOrders();
-      } else {
-          showCustomAlert(result.error || '确认失败，请重试', 'error');
         }
-      } catch (error) {
-        console.error('确认订单失败:', error);
-        showCustomAlert('网络错误，确认失败', 'error');
-      } finally {
-        loadingOverlay.style.display = 'none';
+        
+        showCustomAlert(order.buyer_confirmed ? '订单已确认' : '已取消确认', 'success');
+        
+        // 更新今日统计
+        updateTodayConfirmedStats();
+      } else {
+        showCustomAlert(result.error || '操作失败，请重试', 'error');
       }
-    };
+    } catch (error) {
+      console.error('操作订单失败:', error);
+      showCustomAlert('网络错误，操作失败', 'error');
+    } finally {
+      loadingOverlay.style.display = 'none';
+    }
   }
 
   // 初始化筛选功能
