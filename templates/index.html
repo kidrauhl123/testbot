@@ -596,26 +596,7 @@
       color: #e74c3c;
     }
     
-    /* 刷新指示器样式 */
-    #refreshIndicator {
-      position: fixed;
-      top: 60px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.7);
-      color: white;
-      padding: 8px 15px;
-      border-radius: 20px;
-      font-size: 13px;
-      z-index: 1000;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-      pointer-events: none;
-    }
-    
-    #refreshIndicator.show {
-      opacity: 1;
-    }
+
     
     @media (max-width: 992px) {
       .container {
@@ -1313,9 +1294,6 @@
     {% endif %}
   </div>
 </div>
-
-<!-- 刷新指示器 -->
-<div id="refreshIndicator">正在刷新...</div>
 
 <div class="main-container">
     <div class="container">
@@ -2104,12 +2082,7 @@
 
   // 加载订单
   async function loadOrders(isAutoRefresh = false) {
-      const indicator = document.getElementById('refreshIndicator');
-    if (indicator && isAutoRefresh) {
-      indicator.textContent = "正在刷新...";
-        indicator.classList.add('show');
-      }
-      
+    // 移除刷新指示器相关代码
     showLoadingIndicator();
     
     try {
@@ -2127,9 +2100,9 @@
         const newOrdersHash = generateOrdersHash(result.orders);
         if (newOrdersHash === lastOrdersHash && isAutoRefresh) {
           console.log('订单无变化，跳过更新');
-        return;
-      }
-      
+          return;
+        }
+        
         // 更新订单哈希值
         lastOrdersHash = newOrdersHash;
         
@@ -2140,11 +2113,11 @@
         let filteredOrders = allOrders;
         
         // 应用搜索
-      if (searchKeyword) {
+        if (searchKeyword) {
           filteredOrders = filteredOrders.filter(order => 
-          order.id.toString().includes(searchKeyword) || 
-          order.account.toLowerCase().includes(searchKeyword.toLowerCase())
-        );
+            order.id.toString().includes(searchKeyword) || 
+            order.account.toLowerCase().includes(searchKeyword.toLowerCase())
+          );
         }
         
         // 应用筛选
@@ -2156,15 +2129,6 @@
       
       // 更新今日统计
       updateTodayConfirmedStats();
-      
-      // 显示自动刷新提示
-      if (isAutoRefresh) {
-        indicator.textContent = "数据已更新";
-        indicator.classList.add('show');
-        setTimeout(() => {
-          indicator.classList.remove('show');
-        }, 1500);
-      }
     } catch (error) {
       console.error('加载订单失败:', error);
     } finally {
@@ -2438,13 +2402,7 @@
   
   // 隐藏加载指示器
   function hideLoadingIndicator() {
-    const indicator = document.getElementById('refreshIndicator');
-    if (indicator) {
-      setTimeout(() => {
-        indicator.classList.remove('show');
-      }, 1000);
-    }
-    
+    // 移除对刷新指示器的引用
     const container = document.getElementById('orders-container');
     if (container && container.innerHTML === '<div class="loading-indicator">加载中...</div>') {
       container.innerHTML = '<div class="no-results">暂无订单</div>';
