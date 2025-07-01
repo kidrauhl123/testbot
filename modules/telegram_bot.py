@@ -35,8 +35,7 @@ from modules.database import (
     select_active_seller, get_seller_info,
     get_user_custom_prices, set_user_custom_price, delete_user_custom_price,
     update_seller_nickname, get_seller_completed_orders, get_seller_pending_orders,
-    check_seller_completed_orders, get_seller_today_confirmed_orders_by_user, get_admin_sellers,
-    get_seller_today_completed_orders_by_user
+    check_seller_completed_orders, get_seller_today_confirmed_orders_by_user, get_admin_sellers
 )
 
 # 设置日志
@@ -1505,8 +1504,7 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        # 使用已充值成功的订单而非买家确认的订单
-        stats_by_user = get_seller_today_completed_orders_by_user(user_id)
+        stats_by_user = get_seller_today_confirmed_orders_by_user(user_id)
         
         total_completed = sum(count for _, count in stats_by_user)
         

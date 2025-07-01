@@ -26,7 +26,7 @@ from modules.database import (
     update_seller_nickname, update_seller_desired_orders, select_active_seller, check_seller_activity,
     get_seller_completed_orders, get_seller_pending_orders, check_seller_completed_orders,
     get_seller_today_confirmed_orders_by_user, get_admin_sellers,
-    get_user_today_confirmed_count, get_all_today_confirmed_count, add_seller
+    get_user_today_confirmed_count, get_all_today_confirmed_count
 )
 import modules.constants as constants
 
@@ -305,7 +305,7 @@ def register_routes(app, notification_queue):
             logger.info(f"订单提交成功: 用户={username}, 套餐={package}, 新余额={new_balance}")
             
             # 获取最新订单列表并格式化
-            orders_raw = execute_query("SELECT id, account, password, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
+            orders_raw = execute_query("SELECT id, account, password, package, status, created_at, user_id FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             orders = []
             
             # 获取新创建的订单ID
@@ -466,48 +466,23 @@ def register_routes(app, notification_queue):
             
             if is_admin:
                 # 管理员可查看所有订单
-                if DATABASE_URL.startswith('postgres'):
-                    # Postgres用法
-                    orders = execute_query("""
-                        SELECT id, account, password, package, status, created_at, 
-                        accepted_at, completed_at, remark, web_user_id, user_id, 
-                        accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
-                        FROM orders 
-                        ORDER BY id DESC
-                        LIMIT 100
-                    """, (), fetch=True)
-                else:
-                    # SQLite用法
-                    orders = execute_query("""
-                        SELECT id, account, password, package, status, created_at, 
-                        accepted_at, completed_at, remark, web_user_id, user_id, 
-                        accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
-                        FROM orders 
-                        ORDER BY id DESC
-                        LIMIT 100
-                    """, (), fetch=True)
+                orders = execute_query("""
+                    SELECT id, account, password, package, status, created_at, 
+                    accepted_at, completed_at, remark, web_user_id, user_id, 
+                    accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
+                    FROM orders 
+                    ORDER BY id DESC LIMIT ? OFFSET ?
+                """, (limit, offset), fetch=True)
             else:
                 # 普通用户只能查看自己的订单
-                if DATABASE_URL.startswith('postgres'):
-                    orders = execute_query("""
-                        SELECT id, account, password, package, status, created_at, 
-                        accepted_at, completed_at, remark, web_user_id, user_id, 
-                        accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
-                        FROM orders 
-                        WHERE user_id = %s
-                        ORDER BY id DESC
-                        LIMIT 100
-                    """, (user_id,), fetch=True)
-                else:
-                    orders = execute_query("""
-                        SELECT id, account, password, package, status, created_at, 
-                        accepted_at, completed_at, remark, web_user_id, user_id, 
-                        accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
-                        FROM orders 
-                        WHERE user_id = ?
-                        ORDER BY id DESC
-                        LIMIT 100
-                    """, (user_id,), fetch=True)
+                orders = execute_query("""
+                    SELECT id, account, password, package, status, created_at, 
+                    accepted_at, completed_at, remark, web_user_id, user_id, 
+                    accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
+                    FROM orders 
+                    WHERE user_id = ? 
+                    ORDER BY id DESC LIMIT ? OFFSET ?
+                """, (user_id, limit, offset), fetch=True)
             
             # 格式化订单数据
             formatted_orders = []
@@ -541,26 +516,11 @@ def register_routes(app, notification_queue):
                 }
                 formatted_orders.append(order_data)
             
-            # 返回订单列表
-            result_count = len(formatted_orders)
-            logger.info(f"返回订单数据: {result_count}条")
-            
-            # 确保返回有效的JSON数组
-            response = jsonify(formatted_orders)
-            response.headers['Content-Type'] = 'application/json; charset=utf-8'
-            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-            response.headers['Pragma'] = 'no-cache'
-            response.headers['Expires'] = '0'
-            logger.info(f"响应内容类型: {response.content_type}")
-            
-            return response
+            # 直接返回订单列表，而不是嵌套在orders字段中
+            return jsonify(formatted_orders)
         except Exception as e:
             logger.error(f"获取最近订单失败: {str(e)}", exc_info=True)
-            # 返回空数组而不是错误，以确保前端可以正常处理
-            response = jsonify([])
-            response.headers['Content-Type'] = 'application/json; charset=utf-8'
-            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-            return response
+            return jsonify({"success": False, "error": "服务器内部错误"}), 500
 
     @app.route('/orders/cancel/<int:oid>', methods=['POST'])
     @login_required
