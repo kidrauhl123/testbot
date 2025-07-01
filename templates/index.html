@@ -326,6 +326,13 @@
       display: flex;
       align-items: center;
       gap: 5px;
+      position: absolute;
+      right: 80px;
+      top: 0;
+      height: 100%;
+      background: transparent;
+      border: none;
+      padding: 0 12px;
     }
     
     .filter-toggle-btn:hover {
@@ -1009,7 +1016,7 @@
     .search-input {
       flex: 1;
       padding: 10px 15px;
-      padding-right: 80px;
+      padding-right: 120px;
       border: 1px solid #e1e5e9;
       border-radius: 8px;
       font-size: 14px;
@@ -1426,9 +1433,9 @@
                     <input type="text" id="searchInput" placeholder="搜索订单号或账号..." class="search-input">
                     <button id="searchBtn" class="search-btn"><i class="fas fa-search"></i></button>
                     <button id="clearSearchBtn" class="clear-search-btn"><i class="fas fa-times"></i></button>
+                    <button id="filterToggleBtn" class="filter-toggle-btn"><i class="fas fa-filter"></i> 筛选</button>
                   </div>
                   <div class="filter-controls">
-                    <button id="filterToggleBtn" class="filter-toggle-btn"><i class="fas fa-filter"></i> 筛选</button>
                     <div id="activeFilters" class="active-filters"></div>
                   </div>
                   <div id="filterPanel" class="filter-panel" style="display:none;">
