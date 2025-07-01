@@ -305,7 +305,7 @@ def register_routes(app, notification_queue):
             logger.info(f"订单提交成功: 用户={username}, 套餐={package}, 新余额={new_balance}")
             
             # 获取最新订单列表并格式化
-            orders_raw = execute_query("SELECT id, account, password, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
+            orders_raw = execute_query("SELECT id, account, password, package, status, created_at, user_id FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             orders = []
             
             # 获取新创建的订单ID
@@ -329,7 +329,7 @@ def register_routes(app, notification_queue):
                     "remark": "",
                     "creator": username, # Simplification, actual creator might differ if admin creates for others
                     "accepted_by": "",
-                    "can_cancel": o[4] == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == o[0])
+                    "can_cancel": o[4] == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == o[6])
                 })
             
             # 触发立即通知卖家 - 获取新创建的订单ID并加入通知队列
@@ -467,31 +467,27 @@ def register_routes(app, notification_queue):
             if is_admin:
                 # 管理员可查看所有订单
                 orders = execute_query("""
-                    SELECT o.id, o.account, o.password, o.package, o.status, o.created_at, 
-                    o.accepted_at, o.completed_at, o.remark, o.web_user_id, o.user_id, 
-                    o.accepted_by, o.accepted_by_username, o.accepted_by_first_name, o.accepted_by_nickname, o.buyer_confirmed,
-                    u.username
-                    FROM orders o
-                    LEFT JOIN users u ON o.web_user_id = u.id
-                    ORDER BY o.id DESC LIMIT ? OFFSET ?
+                    SELECT id, account, password, package, status, created_at, 
+                    accepted_at, completed_at, remark, web_user_id, user_id, 
+                    accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
+                    FROM orders 
+                    ORDER BY id DESC LIMIT ? OFFSET ?
                 """, (limit, offset), fetch=True)
             else:
                 # 普通用户只能查看自己的订单
                 orders = execute_query("""
-                    SELECT o.id, o.account, o.password, o.package, o.status, o.created_at, 
-                    o.accepted_at, o.completed_at, o.remark, o.web_user_id, o.user_id, 
-                    o.accepted_by, o.accepted_by_username, o.accepted_by_first_name, o.accepted_by_nickname, o.buyer_confirmed,
-                    u.username
-                    FROM orders o
-                    LEFT JOIN users u ON o.web_user_id = u.id
-                    WHERE o.user_id = ? 
-                    ORDER BY o.id DESC LIMIT ? OFFSET ?
+                    SELECT id, account, password, package, status, created_at, 
+                    accepted_at, completed_at, remark, web_user_id, user_id, 
+                    accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
+                    FROM orders 
+                    WHERE user_id = ? 
+                    ORDER BY id DESC LIMIT ? OFFSET ?
                 """, (user_id, limit, offset), fetch=True)
             
             # 格式化订单数据
             formatted_orders = []
             for order in orders:
-                oid, account, password, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed, username = order
+                oid, account, password, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed = order
                 
                 # 优先使用自定义昵称，其次是用户名称，最后是ID
                 seller_display = accepted_by_nickname or accepted_by_first_name or accepted_by_username or accepted_by
@@ -516,7 +512,6 @@ def register_routes(app, notification_queue):
                     "remark": translated_remark or "",
                     "accepted_by": seller_display or "",
                     "buyer_confirmed": bool(buyer_confirmed),
-                    "username": username or "",
                     "can_cancel": status == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == user_id)
                 }
                 formatted_orders.append(order_data)
