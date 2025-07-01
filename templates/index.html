@@ -2113,12 +2113,12 @@
 
   // 加载订单
   async function loadOrders(isAutoRefresh = false) {
-    const indicator = document.getElementById('refreshIndicator');
+      const indicator = document.getElementById('refreshIndicator');
     if (indicator && isAutoRefresh) {
       indicator.textContent = "正在刷新...";
-      indicator.classList.add('show');
-    }
-    
+        indicator.classList.add('show');
+      }
+      
     showLoadingIndicator();
     
     try {
@@ -2136,24 +2136,24 @@
         const newOrdersHash = generateOrdersHash(result.orders);
         if (newOrdersHash === lastOrdersHash && isAutoRefresh) {
           console.log('订单无变化，跳过更新');
-          return;
-        }
-        
+        return;
+      }
+      
         // 更新订单哈希值
         lastOrdersHash = newOrdersHash;
         
         // 更新全局订单数据
         allOrders = result.orders;
-        
+      
         // 应用搜索关键词和筛选条件
         let filteredOrders = allOrders;
         
         // 应用搜索
-        if (searchKeyword) {
+      if (searchKeyword) {
           filteredOrders = filteredOrders.filter(order => 
-            order.id.toString().includes(searchKeyword) || 
-            order.account.toLowerCase().includes(searchKeyword.toLowerCase())
-          );
+          order.id.toString().includes(searchKeyword) || 
+          order.account.toLowerCase().includes(searchKeyword.toLowerCase())
+        );
         }
         
         // 应用筛选
@@ -2558,11 +2558,11 @@
       modal.style.display = 'none';
       loadingOverlay.style.display = 'flex';
       
-      try {
-        const resp = await fetch(`/orders/confirm/${orderId}`, { method: 'POST' });
-        const result = await resp.json();
+    try {
+      const resp = await fetch(`/orders/confirm/${orderId}`, { method: 'POST' });
+      const result = await resp.json();
         
-        if (result.success) {
+      if (result.success) {
           showCustomAlert('订单确认成功', 'success');
           
           // 更新订单状态
@@ -2580,9 +2580,9 @@
           
           // 重新加载订单列表，确保所有数据都是最新的
           await loadOrders();
-        } else {
+      } else {
           showCustomAlert(result.error || '确认失败，请重试', 'error');
-        }
+      }
       } catch (error) {
         console.error('确认订单失败:', error);
         showCustomAlert('网络错误，确认失败', 'error');
@@ -2626,7 +2626,7 @@
       resetFiltersBtn.addEventListener('click', resetFilters);
     }
   }
-  
+
   // 填充卖家筛选下拉框
   async function populateSellerFilter() {
     try {
