@@ -1571,75 +1571,53 @@ def register_routes(app, notification_queue):
     @app.route('/orders/confirm/<int:oid>', methods=['POST'])
     @login_required
     def confirm_order(oid):
-        """用户确认订单已完成充值"""
+        """用户确认订单，设置buyer_confirmed字段为1，不改变订单状态"""
         user_id = session.get('user_id')
         is_admin = session.get('is_admin', 0)
 
-        # 获取订单信息
+        # 查询订单
         order = execute_query("""
-            SELECT id, user_id, status, package, buyer_confirmed
-            FROM orders
-            WHERE id=?
+            SELECT id, user_id, status, accepted_by
+            FROM orders WHERE id=?
         """, (oid,), fetch=True)
 
         if not order:
-            logger.warning(f"确认订单失败: 找不到ID为{oid}的订单")
-            return jsonify({"success": False, "error": "订单不存在"}), 404
+            logger.error(f"确认订单失败: 订单 {oid} 不存在")
+            return jsonify({"error": "订单不存在"}), 404
 
-        order_id, order_user_id, status, package, buyer_confirmed = order[0]
+        order_id, order_user_id, status, accepted_by = order[0]
 
-        # 验证权限：只能确认自己的订单，或者管理员可以确认任何人的订单
+        # 权限：只能确认自己的订单，或管理员
         if user_id != order_user_id and not is_admin:
-            logger.warning(f"确认订单失败: 用户{user_id}尝试确认用户{order_user_id}的订单{oid}")
-            return jsonify({"success": False, "error": "权限不足"}), 403
+            logger.warning(f"用户 {user_id} 尝试确认不属于自己的订单 {oid}")
+            return jsonify({"error": "权限不足"}), 403
 
-        # 如果已经确认过，返回成功
-        if buyer_confirmed:
-            logger.info(f"订单{oid}已经被确认过")
+        try:
+            # 更新buyer_confirmed字段和时间戳
+            timestamp = get_china_time()
+            execute_query("UPDATE orders SET buyer_confirmed=TRUE, buyer_confirmed_at=? WHERE id=?", (timestamp, oid))
+            logger.info(f"用户 {user_id} 确认订单 {oid} 成功，buyer_confirmed已设置为TRUE，时间: {timestamp}")
+
+            # 检查卖家是否达到最大接单数
+            if accepted_by:
+                check_seller_completed_orders(str(accepted_by))
+
+            # 发送通知
+            try:
+                notification_queue.put({
+                    'type': 'buyer_confirmed',
+                    'order_id': oid,
+                    'handler_id': user_id
+                })
+                logger.info(f"已将订单 {oid} 买家确认通知添加到队列")
+            except Exception as e:
+                logger.error(f"添加买家确认通知到队列失败: {e}", exc_info=True)
+
             return jsonify({"success": True})
-
-        # 更新订单确认状态
-        execute_query("UPDATE orders SET buyer_confirmed=1 WHERE id=?", (oid,))
-        logger.info(f"订单已确认: ID={oid}, 用户ID={user_id}")
-
-        return jsonify({"success": True})
-
-    @app.route('/orders/cancel/<int:oid>', methods=['POST'])
-    @login_required
-    def cancel_confirmation(oid):
-        """取消订单确认状态"""
-        user_id = session.get('user_id')
-        is_admin = session.get('is_admin', 0)
-
-        # 获取订单信息
-        order = execute_query("""
-            SELECT id, user_id, status, package, buyer_confirmed
-            FROM orders
-            WHERE id=?
-        """, (oid,), fetch=True)
-
-        if not order:
-            logger.warning(f"取消确认失败: 找不到ID为{oid}的订单")
-            return jsonify({"success": False, "error": "订单不存在"}), 404
-
-        order_id, order_user_id, status, package, buyer_confirmed = order[0]
-
-        # 验证权限：只能操作自己的订单，或者管理员可以操作任何人的订单
-        if user_id != order_user_id and not is_admin:
-            logger.warning(f"取消确认失败: 用户{user_id}尝试操作用户{order_user_id}的订单{oid}")
-            return jsonify({"success": False, "error": "权限不足"}), 403
-
-        # 如果订单没有被确认，返回成功
-        if not buyer_confirmed:
-            logger.info(f"订单{oid}本来就没有被确认")
-            return jsonify({"success": True})
-
-        # 更新订单确认状态
-        execute_query("UPDATE orders SET buyer_confirmed=0 WHERE id=?", (oid,))
-        logger.info(f"已取消订单确认状态: ID={oid}, 用户ID={user_id}")
-
-        return jsonify({"success": True})
-
+        except Exception as e:
+            logger.error(f"确认订单 {oid} 时发生错误: {e}", exc_info=True)
+            return jsonify({"error": "服务器错误，请稍后重试"}), 500
+            
     @app.route('/orders/update-remark/<int:oid>', methods=['POST'])
     @login_required
     def update_order_remark(oid):
