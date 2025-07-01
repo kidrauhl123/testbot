@@ -2595,9 +2595,40 @@
         // 添加卖家选项
         data.sellers.forEach(seller => {
           const option = document.createElement('option');
-          option.value = seller.id;
+          // 使用卖家名称作为value，而不是ID
+          option.value = seller.name;
           option.textContent = seller.name;
           sellerFilter.appendChild(option);
+        });
+        
+        // 从订单中提取其他接单人
+        const allAcceptedBy = new Set();
+        allOrders.forEach(order => {
+          if (order.accepted_by_nickname) {
+            allAcceptedBy.add(order.accepted_by_nickname);
+          } else if (order.accepted_by) {
+            allAcceptedBy.add(order.accepted_by);
+          }
+        });
+        
+        // 添加从订单中提取的接单人（如果不在卖家列表中）
+        allAcceptedBy.forEach(name => {
+          // 检查是否已经在下拉框中
+          let exists = false;
+          for (let i = 0; i < sellerFilter.options.length; i++) {
+            if (sellerFilter.options[i].value === name) {
+              exists = true;
+              break;
+            }
+          }
+          
+          // 如果不存在，添加到下拉框
+          if (!exists && name) {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            sellerFilter.appendChild(option);
+          }
         });
       }
     } catch (error) {
@@ -2775,8 +2806,17 @@
     // 应用筛选条件
     if (filters.seller) {
       result = result.filter(order => {
-        // 使用accepted_by字段进行筛选
-        return order.accepted_by === filters.seller;
+        // 查找订单的接单人（名称或ID）
+        const orderSeller = order.accepted_by_nickname || order.accepted_by;
+        const filterSeller = filters.seller;
+        
+        // 检查接单人名称是否匹配
+        if (typeof orderSeller === 'string' && typeof filterSeller === 'string') {
+          return orderSeller.includes(filterSeller) || filterSeller.includes(orderSeller);
+        }
+        
+        // 如果不是字符串，尝试直接比较
+        return orderSeller == filterSeller; // 使用==而不是===，允许类型转换
       });
     }
     
