@@ -1458,6 +1458,15 @@
                         <!-- 卖家选项将由JavaScript加载 -->
                       </select>
                     </div>
+                    {% if session.is_admin %}
+                    <div class="filter-section">
+                      <h4>提交人筛选</h4>
+                      <select id="usernameFilter" class="filter-select">
+                        <option value="">全部提交人</option>
+                        <!-- 用户选项将由JavaScript加载 -->
+                      </select>
+                    </div>
+                    {% endif %}
                     <div class="filter-section">
                       <h4>订单状态</h4>
                       <select id="statusFilter" class="filter-select">
@@ -2209,8 +2218,15 @@
   function updateRecordCount(count) {
     const recordCountElement = document.getElementById('recordCount');
     if (recordCountElement) {
-      recordCountElement.textContent = `共 ${count} 条记录`;
-      recordCountElement.style.display = count > 0 ? 'block' : 'none';
+      // 检查是否有任何筛选条件或搜索关键词
+      const hasFilterOrSearch = Object.values(filters).some(val => val !== '') || searchKeyword;
+      
+      if (hasFilterOrSearch) {
+        recordCountElement.textContent = `共 ${count} 条记录`;
+        recordCountElement.style.display = 'block';
+      } else {
+        recordCountElement.style.display = 'none';
+      }
     }
   }
   
@@ -2232,6 +2248,7 @@
           <h4>订单 #${o.id} <span class="status-badge ${cls}">${o.status_text}</span></h4>
           <p class="account"><strong>YouTube：</strong>${o.account.includes('uploads') ? `<a href="/${o.account}" target="_blank">查看二维码</a>` : '未上传二维码'}</p>
           <p class="seller"><strong>接单人：</strong>${o.accepted_by_nickname || o.accepted_by || '-'}</p>
+          ${isAdmin ? `<p class="submitter"><strong>提交人：</strong>${o.username || '-'}</p>` : ''}
           <div class="remark-container">
             <p class="remark"><strong>备注：</strong><span class="remark-text" data-order-id="${o.id}">${escapeHtml(o.remark || '')}</span></p>
             <button class="edit-remark-btn" onclick="editRemark(${o.id})"><i class="fas fa-pencil-alt"></i></button>
@@ -2269,6 +2286,7 @@
             <th>提交时间</th>
             <th>完成时间</th>
             <th>接单人</th>
+            ${isAdmin ? '<th>提交人</th>' : ''}
             <th>操作</th>
           </tr>
         </thead>
@@ -2292,6 +2310,7 @@
           <td>${o.created_at}</td>
           <td>${o.completed_at || '-'}</td>
           <td>${o.accepted_by_nickname || o.accepted_by || '-'}</td>
+          ${isAdmin ? `<td>${o.username || '-'}</td>` : ''}
           <td>
             <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
             <button class="confirm-btn" onclick="confirmOrder(${o.id})">${o.buyer_confirmed ? '已确认' : '确认'}</button>
@@ -2590,6 +2609,11 @@
     // 加载卖家筛选选项
     populateSellerFilter();
     
+    // 如果是管理员，加载用户名筛选选项
+    if (isAdmin) {
+      populateUsernameFilter();
+    }
+    
     // 应用筛选按钮
     const applyFiltersBtn = document.getElementById('applyFiltersBtn');
     if (applyFiltersBtn) {
@@ -2666,6 +2690,38 @@
     }
   }
   
+  // 为管理员填充用户名筛选下拉框
+  async function populateUsernameFilter() {
+    try {
+      // 从所有订单中获取不同的用户名
+      const usernames = new Set();
+      
+      allOrders.forEach(order => {
+        if (order.username) {
+          usernames.add(order.username);
+        }
+      });
+      
+      const usernameFilter = document.getElementById('usernameFilter');
+      if (usernameFilter) {
+        // 保留默认选项
+        const defaultOption = usernameFilter.options[0];
+        usernameFilter.innerHTML = '';
+        usernameFilter.appendChild(defaultOption);
+        
+        // 添加用户名选项
+        usernames.forEach(username => {
+          const option = document.createElement('option');
+          option.value = username;
+          option.textContent = username;
+          usernameFilter.appendChild(option);
+        });
+      }
+    } catch (error) {
+      console.error('获取用户列表失败:', error);
+    }
+  }
+  
   // 应用筛选
   function applyFilters() {
     const sellerFilter = document.getElementById('sellerFilter');
@@ -2680,6 +2736,12 @@
       startDate: startDateFilter ? startDateFilter.value : '',
       endDate: endDateFilter ? endDateFilter.value : ''
     };
+    
+    // 如果是管理员，添加用户名筛选
+    if (isAdmin) {
+      const usernameFilter = document.getElementById('usernameFilter');
+      filters.username = usernameFilter ? usernameFilter.value : '';
+    }
     
     // 更新活动筛选标签
     updateActiveFilters();
@@ -2770,6 +2832,23 @@
       });
       activeFilters.appendChild(tag);
     }
+    
+    // 添加提交人筛选标签（仅管理员）
+    if (isAdmin && filters.username) {
+      const usernameFilter = document.getElementById('usernameFilter');
+      const username = usernameFilter ? usernameFilter.options[usernameFilter.selectedIndex].text : '';
+      
+      if (username) {
+        const tag = createFilterTag('提交人: ' + username, () => {
+          filters.username = '';
+          document.getElementById('usernameFilter').value = '';
+          updateActiveFilters();
+          const filteredOrders = filterOrders(allOrders);
+          renderOrders(filteredOrders);
+        });
+        activeFilters.appendChild(tag);
+      }
+    }
   }
   
   // 创建筛选标签元素
@@ -2836,17 +2915,8 @@
     // 应用筛选条件
     if (filters.seller) {
       result = result.filter(order => {
-        // 查找订单的接单人（名称或ID）
-        const orderSeller = order.accepted_by_nickname || order.accepted_by;
-        const filterSeller = filters.seller;
-        
-        // 检查接单人名称是否匹配
-        if (typeof orderSeller === 'string' && typeof filterSeller === 'string') {
-          return orderSeller.includes(filterSeller) || filterSeller.includes(orderSeller);
-        }
-        
-        // 如果不是字符串，尝试直接比较
-        return orderSeller == filterSeller; // 使用==而不是===，允许类型转换
+        // 使用accepted_by字段进行筛选
+        return order.accepted_by === filters.seller;
       });
     }
     
@@ -2876,6 +2946,13 @@
       result = result.filter(order => {
         const orderDate = new Date(order.created_at.replace(' ', 'T') + 'Z');
         return orderDate <= endDate;
+      });
+    }
+    
+    // 如果是管理员且设置了提交人筛选
+    if (isAdmin && filters.username) {
+      result = result.filter(order => {
+        return order.username === filters.username;
       });
     }
     
