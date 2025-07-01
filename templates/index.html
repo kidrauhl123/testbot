@@ -1754,11 +1754,15 @@
       selectedPrice.textContent = USER_PRICES[this.value];
     });
     
-    // 加载订单
-    loadOrders();
-    
-    // 启动自动刷新
-    startAutoRefresh();
+    // 立即加载订单，确保避免缓存问题
+    console.log('准备首次加载订单数据...');
+    setTimeout(() => {
+      loadOrders(false);
+      
+      // 启动自动刷新
+      startAutoRefresh();
+      console.log('订单加载完成，启动自动刷新...');
+    }, 500);
     
     // 添加动画效果
     const cards = document.querySelectorAll('.card');
@@ -1961,6 +1965,7 @@
   // 加载订单
     async function loadOrders(isAutoRefresh = false) {
     try {
+      console.log(`开始加载订单..., 自动刷新=${isAutoRefresh}`);
       const indicator = document.getElementById('refreshIndicator');
       const ordersContainer = document.getElementById('orders-container');
       
@@ -1974,17 +1979,32 @@
         }
       }
       
-      const response = await fetch('/orders/recent');
+      console.log('发送API请求...');
+      const response = await fetch('/orders/recent', {
+        cache: 'no-store', // 禁止缓存
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      console.log(`API响应状态: ${response.status} ${response.statusText}`);
+      
       if (!response.ok) {
-        throw new Error(`请求失败: ${response.status}`);
+        throw new Error(`请求失败: ${response.status} ${response.statusText}`);
       }
+      
+      const responseText = await response.text();
+      console.log(`获取到响应数据长度: ${responseText.length}`);
+      console.log(`响应数据前100字符: ${responseText.substring(0, 100)}...`);
       
       let orders;
       try {
-        orders = await response.json();
+        orders = JSON.parse(responseText);
+        console.log(`成功解析JSON数据, 类型: ${typeof orders}, 是数组: ${Array.isArray(orders)}`);
       } catch (parseError) {
         console.error('解析返回数据失败:', parseError);
-        throw new Error('解析返回数据失败');
+        throw new Error(`解析返回数据失败: ${parseError.message}`);
       }
       
       // 检查是否有有效的订单数据
@@ -2081,17 +2101,21 @@
 
   // 渲染订单
   function renderOrders(orders) {
-    const container = document.getElementById('orders-container');
-    if (!container) return;
+    console.log(`开始渲染订单, 数据类型: ${typeof orders}, 是否数组: ${Array.isArray(orders)}, 长度: ${Array.isArray(orders) ? orders.length : '未知'}`);
     
-    // 更改加载提示
-    if (container.innerHTML === '<div style="text-align:center;padding:20px;">加载中...</div>') {
-      console.log('清除加载提示');
+    const container = document.getElementById('orders-container');
+    if (!container) {
+      console.error('找不到订单容器元素');
+      return;
     }
     
+    // 记录当前容器内容
+    console.log(`当前容器内容: ${container.innerHTML.substring(0, 50)}...`);
+    
     // 显示订单区域
-    if (!orders || !orders.length) {
-      container.innerHTML = '<div class="no-results">暂无订单</div>';
+    if (!orders || !Array.isArray(orders) || orders.length === 0) {
+      console.log('没有可显示的订单，显示"暂无订单"提示');
+      container.innerHTML = '<div class="no-results" style="text-align:center;padding:40px;color:#666;font-size:16px;">暂无订单</div>';
       const loadMoreContainer = document.getElementById('load-more-container');
       if (loadMoreContainer) {
         loadMoreContainer.style.display = 'none';

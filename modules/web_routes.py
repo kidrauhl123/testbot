@@ -541,13 +541,26 @@ def register_routes(app, notification_queue):
                 }
                 formatted_orders.append(order_data)
             
-            # 直接返回订单列表，而不是嵌套在orders字段中
-            logger.info(f"返回订单数据: {len(formatted_orders)}条")
-            return jsonify(formatted_orders)
+            # 返回订单列表
+            result_count = len(formatted_orders)
+            logger.info(f"返回订单数据: {result_count}条")
+            
+            # 确保返回有效的JSON数组
+            response = jsonify(formatted_orders)
+            response.headers['Content-Type'] = 'application/json; charset=utf-8'
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            logger.info(f"响应内容类型: {response.content_type}")
+            
+            return response
         except Exception as e:
             logger.error(f"获取最近订单失败: {str(e)}", exc_info=True)
             # 返回空数组而不是错误，以确保前端可以正常处理
-            return jsonify([]), 200
+            response = jsonify([])
+            response.headers['Content-Type'] = 'application/json; charset=utf-8'
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            return response
 
     @app.route('/orders/cancel/<int:oid>', methods=['POST'])
     @login_required
