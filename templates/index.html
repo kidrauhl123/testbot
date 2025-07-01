@@ -1982,9 +1982,9 @@
         if (stats.success) {
             let statsHtml = '';
             if (isAdmin) {
-                statsHtml = `<i class="fas fa-check-circle"></i> 今日已确认: ${stats.user_today_confirmed} (全站: ${stats.all_today_confirmed})`;
+                statsHtml = `<i class="fas fa-check-circle"></i> 今日充值成功: ${stats.user_today_confirmed} (全站: ${stats.all_today_confirmed})`;
             } else {
-                statsHtml = `<i class="fas fa-check-circle"></i> 今日已确认: ${stats.user_today_confirmed}`;
+                statsHtml = `<i class="fas fa-check-circle"></i> 今日充值成功: ${stats.user_today_confirmed}`;
             }
             todayStatsEl.innerHTML = statsHtml;
         }
