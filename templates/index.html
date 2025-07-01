@@ -1254,6 +1254,17 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
+
+    /* 添加记录数量样式 */
+    .record-count {
+      font-size: 13px;
+      color: #667eea;
+      margin-left: auto;
+      padding: 3px 8px;
+      background-color: #f0f3ff;
+      border-radius: 12px;
+      font-weight: 500;
+    }
   </style>
 </head>
 <body>
@@ -1437,6 +1448,7 @@
                   </div>
                   <div class="filter-controls">
                     <div id="activeFilters" class="active-filters"></div>
+                    <div id="recordCount" class="record-count"></div>
                   </div>
                   <div id="filterPanel" class="filter-panel" style="display:none;">
                     <div class="filter-section">
@@ -2165,6 +2177,9 @@
     const container = document.getElementById('orders-container');
     if (!container) return;
     
+    // 显示记录总数
+    updateRecordCount(orders.length);
+    
     // 显示订单区域
     if (!orders.length) {
       container.innerHTML = '<div class="no-results">暂无订单</div>';
@@ -2187,6 +2202,15 @@
     if (loadMoreContainer) {
       // 只有当总订单数大于当前显示数时才显示"显示更多"按钮
       loadMoreContainer.style.display = orders.length > displayedOrders ? 'block' : 'none';
+    }
+  }
+  
+  // 更新记录数量显示
+  function updateRecordCount(count) {
+    const recordCountElement = document.getElementById('recordCount');
+    if (recordCountElement) {
+      recordCountElement.textContent = `共 ${count} 条记录`;
+      recordCountElement.style.display = count > 0 ? 'block' : 'none';
     }
   }
   
