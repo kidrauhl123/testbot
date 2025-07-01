@@ -2082,8 +2082,10 @@
 
   // 加载订单
   async function loadOrders(isAutoRefresh = false) {
-    // 移除刷新指示器相关代码
-    showLoadingIndicator();
+    // 只在手动刷新时显示加载指示器
+    if (!isAutoRefresh) {
+      showLoadingIndicator();
+    }
     
     try {
       // 请求所有订单
@@ -2122,17 +2124,21 @@
         
         // 应用筛选
         filteredOrders = filterOrders(filteredOrders);
+        
+        // 渲染订单
+        renderOrders(filteredOrders);
       }
-      
-      // 渲染订单
-      renderOrders(filterOrders(allOrders));
       
       // 更新今日统计
       updateTodayConfirmedStats();
+      
     } catch (error) {
       console.error('加载订单失败:', error);
     } finally {
-      hideLoadingIndicator();
+      // 只在手动刷新时隐藏加载指示器
+      if (!isAutoRefresh) {
+        hideLoadingIndicator();
+      }
     }
   }
 
@@ -2378,11 +2384,10 @@
   function startAutoRefresh() {
     stopAutoRefresh(); // 先停止现有的
     autoRefreshInterval = setInterval(() => {
-      // 如果没有搜索关键词，则自动刷新
-      if (!searchKeyword) {
-        loadOrders(true);
-      }
-    }, 5000); // 改为5秒刷新一次，减少频率
+      // 自动刷新，不考虑搜索关键词
+      loadOrders(true);
+    }, 5000); // 5秒刷新一次
+    console.log('自动刷新已启动');
   }
 
   function stopAutoRefresh() {
