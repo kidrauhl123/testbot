@@ -2210,7 +2210,12 @@
     const recordCountElement = document.getElementById('recordCount');
     if (recordCountElement) {
       recordCountElement.textContent = `共 ${count} 条记录`;
-      recordCountElement.style.display = count > 0 ? 'block' : 'none';
+      
+      // 检查是否有筛选条件
+      const hasFilters = Object.values(filters).some(val => val !== '');
+      
+      // 只在有筛选条件时显示记录数
+      recordCountElement.style.display = hasFilters && count > 0 ? 'block' : 'none';
     }
   }
   
