@@ -1504,9 +1504,31 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        stats_by_user = get_seller_today_confirmed_orders_by_user(user_id)
+        # 添加调试信息
+        await update.message.reply_text("Getting your stats, please wait...")
         
-        total_completed = sum(count for _, count in stats_by_user)
+        # 导入必要的库
+        from datetime import datetime
+        import pytz
+        
+        # 获取今天的日期
+        today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
+        logger.info(f"获取卖家 {user_id} 今日统计，日期: {today}")
+        
+        # 直接从数据库查询充值成功的订单
+        from modules.database import execute_query
+        query = "SELECT id, completed_at FROM orders WHERE accepted_by = ? AND status = '充值成功'"
+        orders = execute_query(query, (str(user_id),), fetch=True)
+        
+        # 输出调试信息
+        logger.info(f"卖家 {user_id} 所有充值成功订单: {orders}")
+        
+        # 筛选今天的订单
+        today_orders = [order for order in orders if order[1] and order[1].startswith(today)]
+        total_completed = len(today_orders)
+        
+        # 查询按用户分组的统计数据
+        stats_by_user = get_seller_today_confirmed_orders_by_user(user_id)
         
         message_parts = [f"You have completed {total_completed} order{'s' if total_completed != 1 else ''} today."]
         
@@ -1516,9 +1538,14 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_display = user if user else "Unknown"
                 message_parts.append(f"- {user_display}: {count} order{'s' if count != 1 else ''}")
         
+        # 添加调试信息
+        message_parts.append(f"\nDebug Info: Today's date is {today}")
+        message_parts.append(f"Total orders found: {len(orders)}")
+        message_parts.append(f"Orders with today's date: {len(today_orders)}")
+        
         message = "\n".join(message_parts)
         await update.message.reply_text(message)
 
     except Exception as e:
         logger.error(f"获取卖家 {user_id} 统计信息时出错: {e}", exc_info=True)
-        await update.message.reply_text("Failed to retrieve your stats. Please try again later.")
+        await update.message.reply_text(f"Failed to retrieve your stats: {str(e)}")
