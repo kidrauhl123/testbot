@@ -1392,14 +1392,15 @@ def get_admin_sellers():
 def check_db_connection():
     """检查并确认数据库连接正常"""
     try:
-        conn = get_db_connection()
-        conn.cursor()
-        conn.close()
+        # 使用execute_query函数测试数据库连接
+        execute_query("SELECT 1", fetch=True)
         logger.info("数据库连接成功。")
+        return True
     except Exception as e:
         logger.error(f"数据库连接失败: {e}", exc_info=True)
         # 根据需要，这里可以决定是否退出程序
         # exit(1)
+        return False
 
 # ===== 余额系统相关函数 =====
 def get_user_balance(user_id):
