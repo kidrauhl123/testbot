@@ -1210,9 +1210,13 @@
     const errorDiv = document.getElementById('edit-order-error');
     
     try {
+      // 获取当前编辑的订单数据，以保留原有的package值
+      const currentOrder = allOrders.find(o => o.id == orderId);
+      
       const data = {
         account: document.getElementById('edit-order-account').value,
-        status: document.getElementById('edit-order-status').value
+        status: document.getElementById('edit-order-status').value,
+        package: currentOrder ? currentOrder.package : '12' // 保留原有套餐值，如果找不到则默认为12个月
       };
       
       if (!data.account) {

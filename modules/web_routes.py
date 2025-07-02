@@ -1018,14 +1018,29 @@ def register_routes(app, notification_queue):
         data = request.json
         
         # 获取当前订单信息
-        order = execute_query("SELECT status, user_id, package, refunded FROM orders WHERE id=?", (order_id,), fetch=True)
+        order = execute_query("SELECT status, user_id, package, refunded, password, remark FROM orders WHERE id=?", (order_id,), fetch=True)
         if not order:
             return jsonify({"error": "订单不存在"}), 404
         
-        current_status, user_id, current_package, refunded = order[0]
+        current_status, user_id, current_package, refunded, current_password, current_remark = order[0]
         
         # 获取新状态
         new_status = data.get('status')
+        
+        # 确保package字段有值
+        package = data.get('package')
+        if not package:
+            package = current_package  # 如果前端没有提供package，则使用当前值
+            
+        # 确保密码字段有值
+        password = data.get('password')
+        if password is None:
+            password = current_password  # 如果前端没有提供密码，则使用当前值
+            
+        # 确保备注字段有值
+        remark = data.get('remark')
+        if remark is None:
+            remark = current_remark  # 如果前端没有提供备注，则使用当前值
         
         # 更新订单信息
         execute_query("""
@@ -1034,10 +1049,10 @@ def register_routes(app, notification_queue):
             WHERE id=?
         """, (
             data.get('account'), 
-            data.get('password'), 
-            data.get('package'), 
+            password, 
+            package, 
             new_status, 
-            data.get('remark', ''),
+            remark,
             order_id
         ))
         
