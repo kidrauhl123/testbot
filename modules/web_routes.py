@@ -14,15 +14,11 @@ from urllib.parse import urlparse
 
 from flask import Flask, request, render_template, jsonify, session, redirect, url_for, flash, send_file, send_from_directory
 
-from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH, DATABASE_URL
+from modules.constants import STATUS, STATUS_TEXT_ZH, REASON_TEXT_ZH, DATABASE_URL
 from modules.database import (
     execute_query, hash_password, get_unnotified_orders,
     get_order_details, get_all_sellers, get_active_sellers, toggle_seller_status, 
-    remove_seller, toggle_seller_admin, get_user_balance, get_user_credit_limit, set_user_credit_limit,
-    get_balance_records, update_user_balance, set_user_balance, check_balance_for_package, refund_order,
-    create_order_with_deduction_atomic, create_recharge_request, get_user_recharge_requests,
-    get_pending_recharge_requests, approve_recharge_request, reject_recharge_request,
-    get_user_custom_prices, set_user_custom_price, delete_user_custom_price,
+    remove_seller, toggle_seller_admin,
     update_seller_nickname, update_seller_desired_orders, select_active_seller, check_seller_activity,
     get_seller_completed_orders, get_seller_pending_orders, check_seller_completed_orders,
     get_seller_today_confirmed_orders_by_user, get_admin_sellers,
@@ -133,25 +129,14 @@ def register_routes(app, notification_queue):
             orders = execute_query("SELECT id, account, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             logger.info(f"获取到最近订单: {orders}")
             
-            # 获取用户余额和透支额度
-            user_id = session.get('user_id')
-            balance = get_user_balance(user_id)
-            credit_limit = get_user_credit_limit(user_id)
-            
             return render_template('index.html', 
-                                   orders=orders, 
-                                   prices=WEB_PRICES, 
-                                   plan_options=PLAN_OPTIONS,
+                                   orders=orders,
                                    username=session.get('username'),
-                                   is_admin=session.get('is_admin'),
-                                   balance=balance,
-                                   credit_limit=credit_limit)
+                                   is_admin=session.get('is_admin'))
         except Exception as e:
             logger.error(f"获取订单失败: {str(e)}", exc_info=True)
             return render_template('index.html', 
-                                   error='获取订单失败', 
-                                   prices=WEB_PRICES, 
-                                   plan_options=PLAN_OPTIONS,
+                                   error='获取订单失败',
                                    username=session.get('username'),
                                    is_admin=session.get('is_admin'))
 
@@ -288,24 +273,25 @@ def register_routes(app, notification_queue):
             user_id = session.get('user_id')
             username = session.get('username')
             
-            # 使用原子操作创建订单和扣款
-            success, message, new_balance, credit_limit = create_order_with_deduction_atomic(
-                account, password, package, remark, username, user_id
-            )
+            # 创建订单
+            try:
+                add_order(account, password, package, remark, username, user_id)
+                success = True
+            except Exception as e:
+                success = False
+                message = str(e)
             
             if not success:
                 logger.warning(f"订单创建失败: {message} (用户={username})")
                 return jsonify({
                     "success": False,
-                    "error": message,
-                    "balance": new_balance, # Might be None, but client-side should handle
-                    "credit_limit": credit_limit
+                    "error": message
                 }), 400
 
-            logger.info(f"订单提交成功: 用户={username}, 套餐={package}, 新余额={new_balance}")
+            logger.info(f"订单提交成功: 用户={username}, 套餐={package}")
             
             # 获取最新订单列表并格式化
-            orders_raw = execute_query("SELECT id, account, password, package, status, created_at, user_id FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
+            orders_raw = execute_query("SELECT id, account, password, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             orders = []
             
             # 获取新创建的订单ID
@@ -358,9 +344,7 @@ def register_routes(app, notification_queue):
             
             return jsonify({
                 "success": True,
-                "message": '订单已提交成功！',
-                "balance": new_balance,
-                "credit_limit": credit_limit
+                "message": '订单已提交成功！'
             })
             
         except Exception as e:
@@ -742,149 +726,13 @@ def register_routes(app, notification_queue):
         
         return jsonify(user_data)
     
-    @app.route('/admin/api/users/<int:user_id>/balance', methods=['POST'])
-    @login_required
-    @admin_required
-    def admin_update_user_balance(user_id):
-        """更新用户余额（仅限管理员）"""
-        data = request.json
-        
-        if not data or 'balance' not in data:
-            return jsonify({"error": "缺少余额参数"}), 400
-        
-        try:
-            balance = float(data['balance'])
-        except (ValueError, TypeError):
-            return jsonify({"error": "余额必须是数字"}), 400
-        
-        # 不允许设置负余额
-        if balance < 0:
-            balance = 0
-        
-        success, new_balance = set_user_balance(user_id, balance)
-        
-        if success:
-            logger.info(f"管理员设置用户ID={user_id}的余额为{new_balance}")
-            return jsonify({"success": True, "balance": new_balance})
-        else:
-            return jsonify({"error": "更新余额失败"}), 500
+    # 删除余额更新API
 
-    @app.route('/admin/api/users/<int:user_id>/credit', methods=['POST'])
-    @login_required
-    @admin_required
-    def admin_update_user_credit(user_id):
-        """更新用户透支额度（仅限管理员）"""
-        data = request.json
-        
-        if not data or 'credit_limit' not in data:
-            return jsonify({"error": "缺少透支额度参数"}), 400
-        
-        try:
-            credit_limit = float(data['credit_limit'])
-        except (ValueError, TypeError):
-            return jsonify({"error": "透支额度必须是数字"}), 400
+    # 删除透支额度更新API
             
-        # 不允许设置负透支额度
-        if credit_limit < 0:
-            credit_limit = 0
-        
-        success = set_user_credit_limit(user_id, credit_limit)
-        
-        if success:
-            logger.info(f"管理员设置用户ID={user_id}的透支额度为{credit_limit}")
-            return jsonify({"success": True, "credit_limit": credit_limit})
-        else:
-            return jsonify({"error": "更新透支额度失败"}), 500
+    # 删除用户定制价格获取API
             
-    @app.route('/admin/api/users/<int:user_id>/custom-prices', methods=['GET'])
-    @login_required
-    @admin_required
-    def admin_get_user_custom_prices(user_id):
-        """获取用户定制价格（仅限管理员）"""
-        try:
-            # 获取用户信息
-            user = execute_query("SELECT username FROM users WHERE id=?", (user_id,), fetch=True)
-            if not user:
-                return jsonify({"error": "用户不存在"}), 404
-                
-            username = user[0][0]
-            
-            # 获取用户定制价格
-            custom_prices = get_user_custom_prices(user_id)
-            
-            # 准备返回数据
-            return jsonify({
-                "success": True,
-                "user_id": user_id,
-                "username": username,
-                "custom_prices": custom_prices,
-                "default_prices": WEB_PRICES
-            })
-        except Exception as e:
-            logger.error(f"获取用户定制价格失败: {str(e)}", exc_info=True)
-            return jsonify({"error": f"获取失败: {str(e)}"}), 500
-            
-    @app.route('/admin/api/users/<int:user_id>/custom-prices', methods=['POST'])
-    @login_required
-    @admin_required
-    def admin_set_user_custom_price(user_id):
-        """设置用户定制价格（仅限管理员）"""
-        if not request.is_json:
-            return jsonify({"error": "请求必须为JSON格式"}), 400
-            
-        data = request.get_json()
-        package = data.get('package')
-        price = data.get('price')
-        
-        if not package:
-            return jsonify({"error": "缺少package字段"}), 400
-            
-        if price is None:
-            return jsonify({"error": "缺少price字段"}), 400
-            
-        try:
-            price = float(price)
-        except ValueError:
-            return jsonify({"error": "price必须为数字"}), 400
-            
-        # 价格验证
-        if price <= 0:
-            return jsonify({"error": "价格必须大于0"}), 400
-            
-        # 检查套餐是否有效
-        if package not in WEB_PRICES:
-            return jsonify({"error": f"无效的套餐: {package}"}), 400
-            
-        # 检查用户是否存在
-        user = execute_query("SELECT username FROM users WHERE id=?", (user_id,), fetch=True)
-        if not user:
-            return jsonify({"error": "用户不存在"}), 404
-            
-        admin_id = session.get('user_id')
-        
-        try:
-            # 如果价格为0，则删除定制价格，使用默认价格
-            if price == 0:
-                success = delete_user_custom_price(user_id, package)
-                message = "已删除定制价格，将使用默认价格"
-            else:
-                success = set_user_custom_price(user_id, package, price, admin_id)
-                message = "定制价格设置成功"
-                
-            if not success:
-                return jsonify({"error": "设置定制价格失败"}), 500
-                
-            # 获取更新后的用户定制价格
-            custom_prices = get_user_custom_prices(user_id)
-            
-            return jsonify({
-                "success": True,
-                "message": message,
-                "custom_prices": custom_prices
-            })
-        except Exception as e:
-            logger.error(f"设置用户定制价格失败: {str(e)}", exc_info=True)
-            return jsonify({"error": f"设置失败: {str(e)}"}), 500
+    # 删除用户定制价格设置API
 
     @app.route('/admin/api/orders')
     @login_required
@@ -1255,188 +1103,9 @@ def register_routes(app, notification_queue):
             logger.error(f"批量删除订单时出错: {e}", exc_info=True)
             return jsonify({"success": False, "error": "服务器内部错误"}), 500 
 
-    # ===== 充值相关路由 =====
-    @app.route('/recharge', methods=['GET'])
-    @login_required
-    def recharge_page():
-        """显示充值页面"""
-        user_id = session.get('user_id')
-        balance = get_user_balance(user_id)
-        
-        # 获取用户的充值记录
-        recharge_history = get_user_recharge_requests(user_id)
-        
-        return render_template('recharge.html',
-                              username=session.get('username'),
-                              is_admin=session.get('is_admin'),
-                              balance=balance,
-                              recharge_history=recharge_history)
-    
-    @app.route('/recharge', methods=['POST'])
-    @login_required
-    def submit_recharge():
-        """提交充值请求"""
-        try:
-            user_id = session.get('user_id')
-            amount = request.form.get('amount')
-            payment_method = request.form.get('payment_method')
-            payment_command = request.form.get('payment_command', '')
-            details = None
+    # 删除充值相关路由
 
-            if payment_method == '支付宝口令红包':
-                details = payment_command
-            
-            logger.info(f"收到充值请求: 用户ID={user_id}, 金额={amount}, 支付方式={payment_method}, 详情={details}")
-            
-            # 验证输入
-            try:
-                amount = float(amount)
-                if amount <= 0:
-                    return jsonify({"success": False, "error": "充值金额必须大于0"}), 400
-            except ValueError:
-                return jsonify({"success": False, "error": "请输入有效的金额"}), 400
-            
-            if not payment_method:
-                payment_method = "未指定"
-            
-            # 处理上传的支付凭证
-            proof_image = None
-            if 'proof_image' in request.files:
-                file = request.files['proof_image']
-                if file and file.filename:
-                    try:
-                        # 确保上传目录存在
-                        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                        upload_dir = os.path.join(current_dir, 'static', 'uploads')
-                        logger.info(f"上传目录路径: {upload_dir}")
-                        
-                        if not os.path.exists(upload_dir):
-                            try:
-                                os.makedirs(upload_dir)
-                                logger.info(f"创建上传目录: {upload_dir}")
-                            except Exception as mkdir_error:
-                                logger.error(f"创建上传目录失败: {str(mkdir_error)}", exc_info=True)
-                                return jsonify({"success": False, "error": f"创建上传目录失败: {str(mkdir_error)}"}), 500
-                        
-                        # 生成唯一文件名
-                        filename = f"{int(time.time())}_{file.filename}"
-                        file_path = os.path.join(upload_dir, filename)
-                        
-                        # 保存文件
-                        file.save(file_path)
-                        logger.info(f"已保存文件到: {file_path}")
-                        
-                        # 确保URL路径正确
-                        proof_image = f"/static/uploads/{filename}"
-                        logger.info(f"设置凭证URL: {proof_image}")
-                        
-                        # 验证文件是否成功保存
-                        if not os.path.exists(file_path):
-                            logger.error(f"文件保存失败，路径不存在: {file_path}")
-                            return jsonify({"success": False, "error": "文件保存失败，请重试"}), 500
-                    except Exception as e:
-                        logger.error(f"保存充值凭证失败: {str(e)}", exc_info=True)
-                        return jsonify({"success": False, "error": f"保存充值凭证失败: {str(e)}"}), 500
-            
-            # 创建充值请求
-            logger.info(f"正在创建充值请求: 用户ID={user_id}, 金额={amount}, 支付方式={payment_method}")
-            request_id, success, message = create_recharge_request(user_id, amount, payment_method, proof_image, details)
-            
-            if success:
-                # 发送通知到TG管理员
-                username = session.get('username')
-                notification_queue.put({
-                    'type': 'recharge_request',
-                    'request_id': request_id,
-                    'username': username,
-                    'amount': amount,
-                    'payment_method': payment_method,
-                    'proof_image': proof_image,
-                    'details': details
-                })
-                logger.info(f"充值请求 #{request_id} 已提交成功，已加入通知队列")
-                
-                return jsonify({
-                    "success": True,
-                    "message": "充值请求已提交，请等待管理员审核"
-                })
-            else:
-                logger.error(f"创建充值请求失败: {message}")
-                return jsonify({"success": False, "error": message}), 500
-        except Exception as e:
-            logger.error(f"处理充值请求时出错: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "error": f"处理充值请求时出错: {str(e)}"}), 500
-    
-    @app.route('/admin/recharge-requests', methods=['GET'])
-    @login_required
-    @admin_required
-    def admin_recharge_requests():
-        """管理员查看充值请求列表"""
-        pending_requests = get_pending_recharge_requests()
-        
-        return render_template('admin_recharge.html',
-                              username=session.get('username'),
-                              is_admin=session.get('is_admin'),
-                              pending_requests=pending_requests)
-    
-    @app.route('/admin/api/recharge/<int:request_id>/approve', methods=['POST'])
-    @login_required
-    @admin_required
-    def approve_recharge(request_id):
-        """批准充值请求"""
-        admin_id = session.get('user_id')
-        
-        success, message = approve_recharge_request(request_id, admin_id)
-        
-        if success:
-            return jsonify({"success": True, "message": message})
-        else:
-            return jsonify({"success": False, "error": message}), 400
-    
-    @app.route('/admin/api/recharge/<int:request_id>/reject', methods=['POST'])
-    @login_required
-    @admin_required
-    def reject_recharge(request_id):
-        """拒绝充值请求"""
-        admin_id = session.get('user_id')
-        
-        success, message = reject_recharge_request(request_id, admin_id)
-        
-        if success:
-            return jsonify({"success": True, "message": message})
-        else:
-            return jsonify({"success": False, "error": message}), 400
-
-    @app.route('/api/balance/records')
-    @login_required
-    def api_balance_records():
-        """获取用户余额明细记录"""
-        try:
-            limit = int(request.args.get('limit', 50))
-            offset = int(request.args.get('offset', 0))
-            user_id = session.get('user_id')
-            is_admin = session.get('is_admin', False)
-            
-            # 如果是管理员，可以查看指定用户的记录或所有用户的记录
-            view_user_id = None
-            if is_admin and 'user_id' in request.args:
-                view_user_id = int(request.args.get('user_id'))
-            elif not is_admin:
-                view_user_id = user_id  # 普通用户只能查看自己的记录
-            
-            # 获取余额明细记录
-            records = get_balance_records(view_user_id, limit, offset)
-            
-            return jsonify({
-                "success": True,
-                "records": records
-            })
-        except Exception as e:
-            logger.error(f"获取余额明细记录失败: {str(e)}", exc_info=True)
-            return jsonify({
-                "success": False,
-                "error": "获取余额明细记录失败，请刷新重试"
-            }), 500
+    # 删除余额明细记录API
         
     @app.route('/api/active-sellers')
     @login_required
@@ -1510,33 +1179,7 @@ def register_routes(app, notification_queue):
             logger.error(f"发送卖家活跃度检查请求失败: {str(e)}", exc_info=True)
             return jsonify({"success": False, "message": f"操作失败: {str(e)}"}), 500
 
-    @app.route('/api/user-prices')
-    @login_required
-    def api_get_user_prices():
-        """获取用户的定制价格"""
-        try:
-            user_id = session.get('user_id')
-            
-            if not user_id:
-                return jsonify({"success": False, "error": "未登录"})
-                
-            # 导入get_user_package_price函数
-            from modules.constants import WEB_PRICES, get_user_package_price
-            
-            # 获取用户所有套餐的价格
-            custom_prices = {}
-            for package in WEB_PRICES.keys():
-                custom_prices[package] = get_user_package_price(user_id, package)
-                
-            return jsonify({
-                "success": True, 
-                "user_id": user_id, 
-                "prices": custom_prices,
-                "default_prices": WEB_PRICES
-            })
-        except Exception as e:
-            logger.error(f"获取用户价格失败: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "error": f"获取用户价格失败: {str(e)}"})
+    # 删除用户价格API
 
     @app.route('/admin/api/sellers/<int:telegram_id>', methods=['PUT'])
     @login_required

@@ -57,37 +57,6 @@ def sync_env_sellers_to_db():
     except Exception as e:
         logger.error(f"同步环境变量卖家到数据库失败: {e}")
 
-# ===== 价格系统 =====
-# 网页端价格（美元USDT）
-WEB_PRICES = {'12': 20}
-# Telegram端卖家薪资（美元）
-TG_PRICES = {'12': 10}
-
-# 获取用户套餐价格
-def get_user_package_price(user_id, package):
-    """
-    获取特定用户的套餐价格
-    
-    参数:
-    - user_id: 用户ID
-    - package: 套餐（如'1'，'2'等）
-    
-    返回:
-    - 用户的套餐价格，如果没有定制价格则返回默认价格
-    """
-    # 如果没有用户ID，返回默认价格
-    if not user_id:
-        return WEB_PRICES.get(package, 0)
-        
-    # 避免循环导入
-    from modules.database import get_user_custom_prices
-    
-    # 获取用户定制价格
-    custom_prices = get_user_custom_prices(user_id)
-    
-    # 如果该套餐有定制价格，返回定制价格，否则返回默认价格
-    return custom_prices.get(package, WEB_PRICES.get(package, 0))
-
 # ===== 状态常量 =====
 STATUS = {
     'SUBMITTED': 'submitted',
@@ -101,9 +70,6 @@ STATUS_TEXT_ZH = {
     'submitted': '已提交', 'accepted': '已接单', 'completed': '充值成功',
     'failed': '充值失败', 'cancelled': '已撤销', 'disputing': '正在质疑'
 }
-PLAN_OPTIONS = [('12', '一年个人会员')]
-PLAN_LABELS_ZH = {v: l for v, l in PLAN_OPTIONS}
-PLAN_LABELS_EN = {'12': '1 Year Premium'}
 
 # 失败原因的中英文映射
 REASON_TEXT_ZH = {
