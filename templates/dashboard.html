@@ -676,10 +676,7 @@
         <thead>
           <tr>
             <th>ID</th>
-            <th>YouTube</th>
-            <th>二维码</th>
-            <th>套餐</th>
-            <th>价格</th>
+            <th>账号</th>
             <th>状态</th>
             <th>提交时间</th>
             <th>完成时间</th>
@@ -697,10 +694,7 @@
       tableHtml += `
         <tr>
           <td data-label="ID">${order.id}</td>
-          <td data-label="YouTube">YouTube账号</td>
-          <td data-label="二维码">${order.account.includes('uploads') ? `<a href="/${order.account}" target="_blank">查看二维码</a>` : '未上传二维码'}</td>
-          <td data-label="套餐">一年个人会员</td>
-          <td data-label="价格">$${price} USDT</td>
+          <td data-label="账号">${order.account}</td>
           <td data-label="状态"><span class="status-badge ${statusClass}">${order.status_text}</span></td>
           <td data-label="提交时间">${order.created_at}</td>
           <td data-label="完成时间">${order.completed_at || '-'}</td>
@@ -732,8 +726,6 @@
     // 构建详细信息
     let detailMessage = `订单 #${orderId} 详情\n\n`;
     detailMessage += `账号: ${order.account}\n`;
-    detailMessage += `密码: ${order.password || '未提供'}\n`;
-    detailMessage += `套餐: ${order.package}个月\n`;
     detailMessage += `状态: ${order.status_text}\n`;
     detailMessage += `提交时间: ${order.created_at}\n`;
     

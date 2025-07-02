@@ -481,7 +481,6 @@
         <li><a href="#users" class="active" onclick="showTab('users'); return false;"><i class="fas fa-users"></i> 用户管理</a></li>
         <li><a href="#orders" onclick="showTab('orders'); return false;"><i class="fas fa-file-invoice-dollar"></i> 订单管理</a></li>
         <li><a href="#sellers" onclick="showTab('sellers'); return false;"><i class="fas fa-user-tie"></i> 卖家管理</a></li>
-        <li><a href="/admin/recharge-requests"><i class="fas fa-credit-card"></i> 充值管理</a></li>
       </ul>
     </div>
     
@@ -529,11 +528,11 @@
                 <th><input type="checkbox" id="select-all-orders"></th>
                 <th>ID</th>
                 <th>账号</th>
-                <th>套餐</th>
                 <th>状态</th>
                 <th>创建者</th>
                 <th>接单人</th>
                 <th>创建时间</th>
+                <th>完成时间</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -603,19 +602,6 @@
           <input type="text" id="edit-order-account" class="form-control" required>
         </div>
         <div class="form-group">
-          <label for="edit-order-password">密码</label>
-          <input type="text" id="edit-order-password" class="form-control" required>
-        </div>
-        <div class="form-group">
-          <label for="edit-order-package">套餐</label>
-          <select id="edit-order-package" class="form-control">
-            <option value="1">1个月</option>
-            <option value="3">3个月</option>
-            <option value="6">6个月</option>
-            <option value="12">12个月</option>
-          </select>
-        </div>
-        <div class="form-group">
           <label for="edit-order-status">状态</label>
           <select id="edit-order-status" class="form-control">
             <option value="submitted">待处理</option>
@@ -625,10 +611,6 @@
             <option value="cancelled">已取消</option>
             <option value="disputing">正在质疑</option>
           </select>
-        </div>
-        <div class="form-group">
-          <label for="edit-order-remark">备注</label>
-          <textarea id="edit-order-remark" class="form-control" rows="3"></textarea>
         </div>
       </form>
     </div>
@@ -935,11 +917,11 @@
           <td><input type="checkbox" class="order-checkbox" value="${order.id}"></td>
           <td>${order.id}</td>
           <td>${accountCell}</td>
-          <td>${order.package}个月</td>
           <td><span class="badge ${statusClass}">${escapeHtml(order.status_text)}</span></td>
           <td>${escapeHtml(order.creator || 'N/A')}</td>
           <td>${order.seller ? escapeHtml(order.seller.name || order.seller.username || order.seller.first_name || 'N/A') : 'N/A'}</td>
           <td>${order.created_at}</td>
+          <td>${order.completed_at || '-'}</td>
           <td><button class="btn btn-primary btn-sm" onclick="editOrder(${order.id})">编辑</button></td>
         `;
         tbody.appendChild(row);
@@ -1212,10 +1194,7 @@
       // 填充表单
       document.getElementById('edit-order-id').value = order.id;
       document.getElementById('edit-order-account').value = order.account;
-      document.getElementById('edit-order-password').value = order.password;
-      document.getElementById('edit-order-package').value = order.package;
       document.getElementById('edit-order-status').value = order.status;
-      document.getElementById('edit-order-remark').value = order.remark || '';
       
       // 显示模态框
       openModal('edit-order-modal');
@@ -1233,14 +1212,11 @@
     try {
       const data = {
         account: document.getElementById('edit-order-account').value,
-        password: document.getElementById('edit-order-password').value,
-        package: document.getElementById('edit-order-package').value,
-        status: document.getElementById('edit-order-status').value,
-        remark: document.getElementById('edit-order-remark').value
+        status: document.getElementById('edit-order-status').value
       };
       
-      if (!data.account || !data.password) {
-        errorDiv.textContent = '账号和密码不能为空';
+      if (!data.account) {
+        errorDiv.textContent = '账号不能为空';
         errorDiv.style.display = 'block';
         return;
       }
@@ -1333,10 +1309,7 @@
     console.log("检查订单编辑表单元素:");
     console.log("edit-order-id:", document.getElementById('edit-order-id'));
     console.log("edit-order-account:", document.getElementById('edit-order-account'));
-    console.log("edit-order-password:", document.getElementById('edit-order-password'));
-    console.log("edit-order-package:", document.getElementById('edit-order-package'));
     console.log("edit-order-status:", document.getElementById('edit-order-status'));
-    console.log("edit-order-remark:", document.getElementById('edit-order-remark'));
     
     try {
     showTab('users');
