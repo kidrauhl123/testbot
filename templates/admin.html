@@ -518,9 +518,50 @@
           <h2><i class="fas fa-file-invoice-dollar"></i> 订单管理</h2>
           <div class="header-actions">
             <input type="text" id="order-search" class="form-control" placeholder="搜索订单ID、账号、创建者..." style="width: 250px;">
+            <button id="filter-toggle-btn" class="btn btn-primary">
+              <i class="fas fa-filter"></i> 筛选
+            </button>
             <button id="batch-delete-btn" class="btn btn-danger">批量删除</button>
           </div>
         </div>
+        
+        <!-- 筛选面板 -->
+        <div id="filter-panel" class="filter-panel" style="display: none; margin-bottom: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+          <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 15px;">
+            <div style="flex: 1; min-width: 200px;">
+              <label for="seller-filter">接单人</label>
+              <select id="seller-filter" class="form-control">
+                <option value="">全部接单人</option>
+              </select>
+            </div>
+            <div style="flex: 1; min-width: 200px;">
+              <label for="status-filter">状态</label>
+              <select id="status-filter" class="form-control">
+                <option value="">全部状态</option>
+                <option value="submitted">待处理</option>
+                <option value="accepted">已接单</option>
+                <option value="completed">已完成</option>
+                <option value="failed">充值失败</option>
+              </select>
+            </div>
+            <div style="flex: 1; min-width: 200px;">
+              <label for="start-date-filter">开始日期</label>
+              <input type="date" id="start-date-filter" class="form-control">
+            </div>
+            <div style="flex: 1; min-width: 200px;">
+              <label for="end-date-filter">结束日期</label>
+              <input type="date" id="end-date-filter" class="form-control">
+            </div>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button id="reset-filters-btn" class="btn btn-secondary">重置</button>
+            <button id="apply-filters-btn" class="btn btn-primary">应用筛选</button>
+          </div>
+        </div>
+        
+        <!-- 活动筛选标签 -->
+        <div id="active-filters" class="active-filters" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px;"></div>
+        
         <div id="orders-table-container">
           <table class="data-table">
             <thead>
@@ -531,6 +572,7 @@
                 <th>状态</th>
                 <th>创建者</th>
                 <th>接单人</th>
+                <th>备注</th>
                 <th>创建时间</th>
                 <th>完成时间</th>
                 <th>操作</th>
@@ -538,7 +580,7 @@
             </thead>
             <tbody id="orders-table-body">
               <tr>
-                <td colspan="9" class="loading">加载中...</td>
+                <td colspan="10" class="loading">加载中...</td>
               </tr>
             </tbody>
           </table>
@@ -836,123 +878,515 @@
     document.getElementById('edit-custom-price-new').value = customPrice === '默认' ? '' : customPrice;
   }
 
+  // 加载订单列表
   async function loadOrders(page = 1) {
     try {
-      console.log("开始加载订单数据...");
-      const container = document.getElementById('orders-table-container');
-      const tbody = document.getElementById('orders-table-body');
-      if (!tbody) {
-        console.error("找不到orders-table-body元素");
-        return;
+      currentPage = page;
+      
+      // 如果是第一页，清空订单列表
+      if (page === 1) {
+        allOrders = [];
       }
+      
+      const tbody = document.getElementById('orders-table-body');
+      if (!tbody) return;
       
       if (page === 1) {
-      tbody.innerHTML = '<tr><td colspan="9" class="loading">加载中...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="loading">加载中...</td></tr>';
       }
       
-      // 使用offset和较大的limit值，确保能加载更多数据
-      const offset = (page - 1) * ordersPerPage;
-      const limit = 1000; // 使用较大值以确保加载更多数据
+      const response = await fetch(`/admin/api/orders?page=${page}&per_page=${ordersPerPage}`);
+      const data = await response.json();
       
-      const response = await fetch(`/admin/api/orders?offset=${offset}&limit=${limit}`);
+      // 合并订单数据
+      if (page === 1) {
+        allOrders = data.orders;
+      } else {
+        allOrders = [...allOrders, ...data.orders];
+      }
+      
+      totalOrders = data.total;
+      hasMoreOrders = data.has_more;
+      
+      // 更新加载更多按钮状态
+      const loadMoreArea = document.getElementById('load-more-area');
+      const loadedCount = document.getElementById('loaded-count');
+      const totalCount = document.getElementById('total-count');
+      
+      if (loadMoreArea && loadedCount && totalCount) {
+        loadMoreArea.style.display = hasMoreOrders ? 'block' : 'none';
+        loadedCount.textContent = allOrders.length;
+        totalCount.textContent = totalOrders;
+      }
+      
+      // 渲染订单列表
+      renderOrders(allOrders);
+      
+      // 填充卖家筛选下拉框
+      populateSellerFilter();
+      
+    } catch (error) {
+      console.error('加载订单失败:', error);
+      const tbody = document.getElementById('orders-table-body');
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="10" class="loading">加载失败，请刷新重试</td></tr>';
+      }
+    }
+  }
+  
+  // 渲染订单列表
+  function renderOrders(orders) {
+    const tbody = document.getElementById('orders-table-body');
+    if (!tbody) return;
+    
+    if (orders.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding: 40px;">暂无订单</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = '';
+    
+    orders.forEach(order => {
+      // 根据订单状态设置样式
+      let statusClass = '';
+      switch (order.status) {
+        case 'submitted': statusClass = 'status-submitted'; break;
+        case 'accepted': statusClass = 'status-accepted'; break;
+        case 'completed': statusClass = 'status-completed'; break;
+        case 'failed': statusClass = 'status-failed'; break;
+        default: statusClass = '';
+      }
+      
+      // 状态文本映射
+      const statusText = {
+        'submitted': '待处理',
+        'accepted': '已接单',
+        'completed': '已完成',
+        'failed': '充值失败',
+        'cancelled': '已取消',
+        'disputing': '正在质疑'
+      }[order.status] || order.status;
+      
+      const row = document.createElement('tr');
+      row.dataset.orderId = order.id;
+      
+      row.innerHTML = `
+        <td><input type="checkbox" class="order-checkbox" value="${order.id}"></td>
+        <td>${order.id}</td>
+        <td>${order.account.includes('uploads') ? `<a href="/${order.account}" target="_blank">查看二维码</a>` : order.account}</td>
+        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+        <td>${escapeHtml(order.created_by || '')}</td>
+        <td>${escapeHtml(order.accepted_by_nickname || order.accepted_by || '-')}</td>
+        <td>
+          <div class="remark-container">
+            <span class="remark-text" data-order-id="${order.id}">${escapeHtml(order.remark || '')}</span>
+            <button class="edit-remark-btn small" onclick="editRemark(${order.id})"><i class="fas fa-pencil-alt"></i></button>
+          </div>
+        </td>
+        <td>${order.created_at}</td>
+        <td>${order.completed_at || '-'}</td>
+        <td>
+          <button class="btn btn-sm btn-primary" onclick="editOrder(${order.id})">编辑</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteOrder(${order.id})">删除</button>
+        </td>
+      `;
+      
+      tbody.appendChild(row);
+    });
+  }
+  
+  // 加载更多订单
+  function loadMoreOrders() {
+    if (hasMoreOrders) {
+      loadOrders(currentPage + 1);
+    }
+  }
+  
+  // 删除订单
+  async function deleteOrder(orderId) {
+    if (!confirm('确定要删除此订单吗？此操作不可撤销！')) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/admin/api/orders/${orderId}`, { method: 'DELETE' });
+      
+      if (response.ok) {
+        // 从本地数据中删除
+        allOrders = allOrders.filter(order => order.id !== orderId);
+        
+        // 重新渲染列表
+        renderOrders(allOrders);
+        
+        showToast('订单已删除', 'success');
+      } else {
+        const result = await response.json();
+        showToast(result.error || '删除失败', 'error');
+      }
+    } catch (error) {
+      console.error('删除订单失败:', error);
+      showToast('网络错误，删除失败', 'error');
+    }
+  }
+  
+  // 编辑备注
+  async function editRemark(orderId) {
+    const order = allOrders.find(o => o.id === orderId);
+    if (!order) return;
+    
+    const newRemark = prompt('请输入新的备注', order.remark || '');
+    if (newRemark === null) return; // 用户取消
+    
+    try {
+      const resp = await fetch(`/orders/update-remark/${orderId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ remark: newRemark })
+      });
+      
+      const result = await resp.json();
+      if (result.success) {
+        // 更新本地数据和显示
+        order.remark = newRemark;
+        
+        // 更新所有显示备注的元素
+        document.querySelectorAll(`.remark-text[data-order-id="${orderId}"]`).forEach(el => {
+          el.textContent = newRemark;
+        });
+        
+        showToast('备注已更新', 'success');
+      } else {
+        showToast(result.error || '更新备注失败', 'error');
+      }
+    } catch (e) {
+      console.error('更新备注失败', e);
+      showToast('更新备注失败，请重试', 'error');
+    }
+  }
+  
+  // 填充卖家筛选下拉框
+  async function populateSellerFilter() {
+    try {
+      const response = await fetch('/api/active-sellers');
       if (!response.ok) {
-        console.error("加载订单数据失败:", response.status, response.statusText);
-        if (page === 1) {
-        tbody.innerHTML = '<tr><td colspan="9" class="loading">加载失败，请刷新重试</td></tr>';
-        }
+        console.error('获取卖家列表失败:', response.status);
         return;
       }
       
       const data = await response.json();
-      const orders = data.orders || [];
-      totalOrders = data.total || 0;
       
-      console.log(`成功获取订单数据: ${orders.length}条，总共${totalOrders}条`);
-      
-      if (page === 1) {
-      tbody.innerHTML = '';
-        allOrders = [];
-      }
-      
-      // 添加到全局订单列表
-      allOrders = allOrders.concat(orders);
-      
-      if (allOrders.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="loading">暂无订单数据</td></tr>';
-        return;
-      }
-      
-      // 判断是否还有更多订单
-      hasMoreOrders = totalOrders > allOrders.length;
-      
-      const statusBadges = {
-        'submitted': 'badge-info',
-        'accepted': 'badge-warning',
-        'completed': 'badge-success',
-        'failed': 'badge-danger',
-        'cancelled': 'badge-secondary',
-        'disputing': 'badge-danger'
-      };
-      
-      // 仅显示新加载的订单
-      const startIndex = (page - 1) * ordersPerPage;
-      const ordersToDisplay = orders;
-      
-      ordersToDisplay.forEach(order => {
-        const statusClass = statusBadges[order.status] || 'badge-secondary';
-        const row = document.createElement('tr');
-        // 判断是否为图片路径
-        let accountCell = '';
-        if (order.account && (order.account.endsWith('.png') || order.account.endsWith('.jpg') || order.account.endsWith('.jpeg') || order.account.endsWith('.webp')) && order.account.includes('uploads')) {
-          // 兼容绝对路径和相对路径
-          let imgSrc = order.account;
-          if (!/^https?:\/\//.test(imgSrc) && !imgSrc.startsWith('/')) {
-            imgSrc = '/' + imgSrc.replace(/^[.\/]+/, '');
+      if (data.success && data.sellers && data.sellers.length > 0) {
+        const sellerFilter = document.getElementById('seller-filter');
+        if (!sellerFilter) return;
+        
+        // 保留默认选项
+        const defaultOption = sellerFilter.options[0];
+        sellerFilter.innerHTML = '';
+        sellerFilter.appendChild(defaultOption);
+        
+        // 添加卖家选项
+        data.sellers.forEach(seller => {
+          const option = document.createElement('option');
+          option.value = seller.name;
+          option.textContent = seller.name;
+          sellerFilter.appendChild(option);
+        });
+        
+        // 从订单中提取其他接单人
+        const allAcceptedBy = new Set();
+        allOrders.forEach(order => {
+          if (order.accepted_by_nickname) {
+            allAcceptedBy.add(order.accepted_by_nickname);
+          } else if (order.accepted_by) {
+            allAcceptedBy.add(order.accepted_by);
           }
-          accountCell = `<img src="${imgSrc}" alt="二维码" style="max-width:60px;max-height:60px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,0.08);" onerror="this.style.display='none'">`;
-        } else {
-          accountCell = escapeHtml(order.account);
-        }
-        row.innerHTML = `
-          <td><input type="checkbox" class="order-checkbox" value="${order.id}"></td>
-          <td>${order.id}</td>
-          <td>${accountCell}</td>
-          <td><span class="badge ${statusClass}">${escapeHtml(order.status_text)}</span></td>
-          <td>${escapeHtml(order.creator || 'N/A')}</td>
-          <td>${order.seller ? escapeHtml(order.seller.name || order.seller.username || order.seller.first_name || 'N/A') : 'N/A'}</td>
-          <td>${order.created_at}</td>
-          <td>${order.completed_at || '-'}</td>
-          <td><button class="btn btn-primary btn-sm" onclick="editOrder(${order.id})">编辑</button></td>
-        `;
-        tbody.appendChild(row);
-      });
-      
-      // 更新加载更多区域
-      const loadMoreArea = document.getElementById('load-more-area');
-      const loadedCountSpan = document.getElementById('loaded-count');
-      const totalCountSpan = document.getElementById('total-count');
-      
-      if (loadMoreArea && loadedCountSpan && totalCountSpan) {
-        loadedCountSpan.textContent = allOrders.length;
-        totalCountSpan.textContent = totalOrders;
-        loadMoreArea.style.display = hasMoreOrders ? 'block' : 'none';
+        });
+        
+        // 添加从订单中提取的接单人（如果不在卖家列表中）
+        allAcceptedBy.forEach(name => {
+          if (name) {
+            // 检查是否已经在下拉框中
+            let exists = false;
+            for (let i = 0; i < sellerFilter.options.length; i++) {
+              if (sellerFilter.options[i].value === name) {
+                exists = true;
+                break;
+              }
+            }
+            
+            // 如果不存在，添加到下拉框
+            if (!exists) {
+              const option = document.createElement('option');
+              option.value = name;
+              option.textContent = name;
+              sellerFilter.appendChild(option);
+            }
+          }
+        });
       }
-      
-      console.log("订单数据加载完成");
-    } catch (e) {
-      console.error('加载订单失败', e);
-      if (page === 1) {
-      const tbody = document.getElementById('orders-table-body');
-      if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="9" class="loading">加载失败，请刷新重试</td></tr>';
-        }
-      }
+    } catch (error) {
+      console.error('获取卖家列表失败:', error);
     }
   }
 
-  function loadMoreOrders() {
-    currentPage++;
-    loadOrders(currentPage);
+  document.addEventListener('DOMContentLoaded', () => {
+    // ... existing code ...
+
+    // 初始化筛选功能
+    const filterToggleBtn = document.getElementById('filter-toggle-btn');
+    const filterPanel = document.getElementById('filter-panel');
+    const applyFiltersBtn = document.getElementById('apply-filters-btn');
+    const resetFiltersBtn = document.getElementById('reset-filters-btn');
+    
+    if (filterToggleBtn && filterPanel) {
+      filterToggleBtn.addEventListener('click', () => {
+        const isVisible = filterPanel.style.display !== 'none';
+        filterPanel.style.display = isVisible ? 'none' : 'block';
+        filterToggleBtn.classList.toggle('active', !isVisible);
+      });
+    }
+    
+    if (applyFiltersBtn) {
+      applyFiltersBtn.addEventListener('click', applyFilters);
+    }
+    
+    if (resetFiltersBtn) {
+      resetFiltersBtn.addEventListener('click', resetFilters);
+    }
+    
+    // 搜索功能
+    const orderSearchInput = document.getElementById('order-search');
+    if (orderSearchInput) {
+      orderSearchInput.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        
+        // 筛选订单
+        const filteredOrders = allOrders.filter(order => 
+          order.id.toString().includes(searchTerm) || 
+          (order.account && order.account.toLowerCase().includes(searchTerm)) ||
+          (order.created_by && order.created_by.toLowerCase().includes(searchTerm))
+        );
+        
+        // 渲染筛选后的订单
+        renderOrders(filteredOrders);
+      });
+    }
+  });
+  
+  // 全局筛选变量
+  let filters = {
+    seller: '',
+    status: '',
+    startDate: '',
+    endDate: ''
+  };
+  
+  // 应用筛选
+  function applyFilters() {
+    const sellerFilter = document.getElementById('seller-filter');
+    const statusFilter = document.getElementById('status-filter');
+    const startDateFilter = document.getElementById('start-date-filter');
+    const endDateFilter = document.getElementById('end-date-filter');
+    
+    // 更新筛选条件
+    filters = {
+      seller: sellerFilter ? sellerFilter.value : '',
+      status: statusFilter ? statusFilter.value : '',
+      startDate: startDateFilter ? startDateFilter.value : '',
+      endDate: endDateFilter ? endDateFilter.value : ''
+    };
+    
+    // 更新活动筛选标签
+    updateActiveFilters();
+    
+    // 应用筛选并渲染
+    const filteredOrders = filterOrders(allOrders);
+    renderOrders(filteredOrders);
+    
+    // 关闭筛选面板
+    const filterPanel = document.getElementById('filter-panel');
+    if (filterPanel) {
+      filterPanel.style.display = 'none';
+    }
+    
+    // 更新筛选按钮状态
+    const filterToggleBtn = document.getElementById('filter-toggle-btn');
+    if (filterToggleBtn) {
+      // 如果有筛选条件，保持按钮高亮
+      const hasActiveFilters = Object.values(filters).some(val => val !== '');
+      filterToggleBtn.classList.toggle('active', hasActiveFilters);
+    }
+  }
+  
+  // 更新活动筛选标签
+  function updateActiveFilters() {
+    const activeFilters = document.getElementById('active-filters');
+    if (!activeFilters) return;
+    
+    activeFilters.innerHTML = '';
+    
+    // 添加接单人筛选标签
+    if (filters.seller) {
+      const sellerFilter = document.getElementById('seller-filter');
+      const sellerName = sellerFilter ? sellerFilter.options[sellerFilter.selectedIndex].text : '';
+      
+      if (sellerName) {
+        const tag = createFilterTag('接单人: ' + sellerName, () => {
+          filters.seller = '';
+          document.getElementById('seller-filter').value = '';
+          updateActiveFilters();
+          const filteredOrders = filterOrders(allOrders);
+          renderOrders(filteredOrders);
+        });
+        activeFilters.appendChild(tag);
+      }
+    }
+    
+    // 添加状态筛选标签
+    if (filters.status) {
+      const statusFilter = document.getElementById('status-filter');
+      const statusName = statusFilter ? statusFilter.options[statusFilter.selectedIndex].text : '';
+      
+      if (statusName) {
+        const tag = createFilterTag('状态: ' + statusName, () => {
+          filters.status = '';
+          document.getElementById('status-filter').value = '';
+          updateActiveFilters();
+          const filteredOrders = filterOrders(allOrders);
+          renderOrders(filteredOrders);
+        });
+        activeFilters.appendChild(tag);
+      }
+    }
+    
+    // 添加日期筛选标签
+    if (filters.startDate || filters.endDate) {
+      let dateText = '日期: ';
+      
+      if (filters.startDate && filters.endDate) {
+        dateText += `${filters.startDate} 至 ${filters.endDate}`;
+      } else if (filters.startDate) {
+        dateText += `${filters.startDate} 起`;
+      } else if (filters.endDate) {
+        dateText += `截至 ${filters.endDate}`;
+      }
+      
+      const tag = createFilterTag(dateText, () => {
+        filters.startDate = '';
+        filters.endDate = '';
+        document.getElementById('start-date-filter').value = '';
+        document.getElementById('end-date-filter').value = '';
+        updateActiveFilters();
+        const filteredOrders = filterOrders(allOrders);
+        renderOrders(filteredOrders);
+      });
+      activeFilters.appendChild(tag);
+    }
+  }
+  
+  // 创建筛选标签元素
+  function createFilterTag(text, removeCallback) {
+    const tag = document.createElement('div');
+    tag.className = 'filter-tag';
+    tag.style.display = 'inline-flex';
+    tag.style.alignItems = 'center';
+    tag.style.padding = '5px 10px';
+    tag.style.background = '#e9ecef';
+    tag.style.borderRadius = '20px';
+    tag.style.fontSize = '12px';
+    tag.style.marginRight = '8px';
+    
+    tag.innerHTML = `
+      <span>${text}</span>
+      <span class="remove-filter" style="margin-left:5px; cursor:pointer; font-weight:bold;">×</span>
+    `;
+    
+    tag.querySelector('.remove-filter').addEventListener('click', removeCallback);
+    
+    return tag;
+  }
+  
+  // 重置筛选
+  function resetFilters() {
+    // 重置所有筛选控件
+    const sellerFilter = document.getElementById('seller-filter');
+    const statusFilter = document.getElementById('status-filter');
+    const startDateFilter = document.getElementById('start-date-filter');
+    const endDateFilter = document.getElementById('end-date-filter');
+    
+    if (sellerFilter) sellerFilter.value = '';
+    if (statusFilter) statusFilter.value = '';
+    if (startDateFilter) startDateFilter.value = '';
+    if (endDateFilter) endDateFilter.value = '';
+    
+    // 重置筛选条件
+    filters = {
+      seller: '',
+      status: '',
+      startDate: '',
+      endDate: ''
+    };
+    
+    // 清空活动筛选标签
+    const activeFilters = document.getElementById('active-filters');
+    if (activeFilters) activeFilters.innerHTML = '';
+    
+    // 重新渲染原始订单列表
+    renderOrders(allOrders);
+    
+    // 更新筛选按钮状态
+    const filterToggleBtn = document.getElementById('filter-toggle-btn');
+    if (filterToggleBtn) {
+      filterToggleBtn.classList.remove('active');
+    }
+  }
+  
+  // 筛选订单
+  function filterOrders(orders) {
+    let result = orders;
+    
+    // 应用筛选条件
+    if (filters.seller) {
+      result = result.filter(order => {
+        // 查找订单的接单人（名称或ID）
+        const orderSeller = order.accepted_by_nickname || order.accepted_by;
+        const filterSeller = filters.seller;
+        
+        // 检查接单人名称是否匹配
+        if (typeof orderSeller === 'string' && typeof filterSeller === 'string') {
+          return orderSeller.includes(filterSeller) || filterSeller.includes(orderSeller);
+        }
+        
+        // 如果不是字符串，尝试直接比较
+        return orderSeller == filterSeller; // 使用==而不是===，允许类型转换
+      });
+    }
+    
+    if (filters.status) {
+      result = result.filter(order => order.status === filters.status);
+    }
+    
+    if (filters.startDate) {
+      const startDate = new Date(filters.startDate);
+      startDate.setHours(0, 0, 0, 0);
+      result = result.filter(order => {
+        const orderDate = new Date(order.created_at.replace(' ', 'T'));
+        return orderDate >= startDate;
+      });
+    }
+    
+    if (filters.endDate) {
+      const endDate = new Date(filters.endDate);
+      endDate.setHours(23, 59, 59, 999);
+      result = result.filter(order => {
+        const orderDate = new Date(order.created_at.replace(' ', 'T'));
+        return orderDate <= endDate;
+      });
+    }
+    
+    return result;
   }
 
   function showAddSellerModal() {
