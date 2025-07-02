@@ -1412,13 +1412,13 @@ def get_user_credit_limit(user_id):
     return 0
 
 def refund_order(order_id):
-    """退款订单金额到用户余额 (兼容SQLite/PostgreSQL)"""
+    """退款功能已移除，此函数仅为兼容性保留"""
     # 标记订单为已退款
     try:
         execute_query("UPDATE orders SET refunded = 1 WHERE id = ?", (order_id,))
         return True, 0
     except Exception as e:
-        logger.error(f"退款失败: {str(e)}", exc_info=True)
+        logger.error(f"标记订单已退款失败: {str(e)}", exc_info=True)
         return False, str(e)
 
 def create_order_with_deduction_atomic(account, password, package, remark, username, user_id):

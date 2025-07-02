@@ -538,14 +538,6 @@ def register_routes(app, notification_queue):
         
         logger.info(f"订单已取消: ID={oid}")
         
-        # 如果订单未退款，执行退款操作
-        if not refunded:
-            success, result = refund_order(oid)
-            if success:
-                logger.info(f"订单退款成功: ID={oid}, 新余额={result}")
-            else:
-                logger.warning(f"订单退款失败: ID={oid}, 原因={result}")
-        
         return jsonify({"success": True})
 
     @app.route('/orders/dispute/<int:oid>', methods=['POST'])
@@ -1055,11 +1047,6 @@ def register_routes(app, notification_queue):
             remark,
             order_id
         ))
-        
-        # 处理状态变更的退款逻辑
-        if current_status != new_status and new_status in [STATUS['CANCELLED'], STATUS['FAILED']] and not refunded:
-            # 订单状态改为已取消或失败，且未退款，执行退款
-            refund_order(order_id)
         
         return jsonify({"success": True})
 
