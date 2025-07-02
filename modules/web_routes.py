@@ -275,7 +275,11 @@ def register_routes(app, notification_queue):
             
             # 创建订单
             try:
-                success, message, _, _ = create_order_with_deduction_atomic(account, password, package, remark, username, user_id)
+                result = create_order_with_deduction_atomic(account, password, package, remark, username, user_id)
+                if isinstance(result, tuple):
+                    success, message = result[0], result[1]
+                else:
+                    success, message = result, ''
             except Exception as e:
                 success = False
                 message = str(e)

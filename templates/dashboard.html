@@ -595,10 +595,11 @@
         throw new Error(`HTTP错误! 状态: ${resp.status}`);
       }
       
-      const orders = await resp.json();
-      console.log('获取到订单数据:', orders && orders.length ? orders.length : 0, '条');
+      const result = await resp.json();
+      const orders = result.orders || [];
+      console.log('获取到订单数据:', orders.length, '条');
       
-      if (!orders || orders.length === 0) {
+      if (orders.length === 0) {
         document.getElementById('orders-container').innerHTML = '<div class="no-orders">暂无订单记录</div>';
         return;
       }
