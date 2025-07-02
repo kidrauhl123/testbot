@@ -1303,6 +1303,7 @@
                   <h2>充值下单</h2>
                 </div>
                 <form id="orderForm" autocomplete="off" enctype="multipart/form-data">
+                  <input type="hidden" name="package" value="12">
                   <div class="form-group">
                     <label>油管二维码图片</label>
                     <div class="upload-container" id="dropArea">
@@ -1372,13 +1373,6 @@
                     }
                   </style>
                   <div class="form-group">
-                    <label>套餐类型</label>
-                    <select name="package" class="form-control" id="packageSelect" required>
-                      <option value="12">一年个人会员</option>
-                    </select>
-                  </div>
-                  
-                  <div class="form-group">
                     <label>指定接单人 <small class="text-muted">(可选)</small></label>
                     <select name="preferred_seller" class="form-control" id="sellerSelect">
                       <option value="">自动分配接单人</option>
@@ -1391,10 +1385,6 @@
                       </div>
                       <button type="button" id="checkSellerBtn" class="btn btn-sm btn-info">检查在线</button>
                     </div>
-                  </div>
-                  <div class="form-group">
-                    <label>价格</label>
-                    <div class="price-display">$<span id="selectedPrice">20</span><small style="margin-left:2px;font-size:12px;font-weight:normal;opacity:0.8;">USDT</small></div>
                   </div>
                   <div class="form-group">
                     <label>备注 (可选)</label>
@@ -1546,13 +1536,8 @@
   
   // 更新价格显示
   function updatePriceDisplay() {
-    const packageSelect = document.getElementById('packageSelect');
-    const selectedPrice = document.getElementById('selectedPrice');
-    
-    if (packageSelect && selectedPrice) {
-      // 显示当前选中套餐的价格
-      selectedPrice.textContent = USER_PRICES[packageSelect.value];
-    }
+    // 已经删除价格显示和套餐选择UI元素，此函数不再需要执行具体操作
+    return;
   }
   
   // 加载活跃卖家列表
@@ -1982,9 +1967,9 @@
         if (stats.success) {
             let statsHtml = '';
             if (isAdmin) {
-                statsHtml = `<i class="fas fa-check-circle"></i> 今日充值成功: ${stats.user_today_confirmed} (全站: ${stats.all_today_confirmed})`;
+                statsHtml = `<i class="fas fa-check-circle"></i> 今日已确认: ${stats.user_today_confirmed} (全站: ${stats.all_today_confirmed})`;
             } else {
-                statsHtml = `<i class="fas fa-check-circle"></i> 今日充值成功: ${stats.user_today_confirmed}`;
+                statsHtml = `<i class="fas fa-check-circle"></i> 今日已确认: ${stats.user_today_confirmed}`;
             }
             todayStatsEl.innerHTML = statsHtml;
         }

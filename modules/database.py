@@ -1590,73 +1590,45 @@ def get_seller_completed_orders(telegram_id):
     return 0
 
 def get_user_today_confirmed_count(user_id):
-    """获取指定用户今天完成的订单数（状态为充值成功）"""
+    """获取指定用户今天已确认的订单数"""
     from datetime import datetime
     import pytz
     today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
-    
-    # 打印调试信息
-    print(f"查询今日充值成功订单，用户ID: {user_id}, 今日日期: {today}")
     
     query = ""
     params = ()
     
-    # 根据数据库类型选择不同查询语句，使用更宽松的日期匹配方式
+    # 根据数据库类型选择不同查询语句
     if DATABASE_URL.startswith('postgres'):
-        query = "SELECT COUNT(*) FROM orders WHERE user_id = %s AND status = '充值成功' AND completed_at LIKE %s"
+        query = "SELECT COUNT(*) FROM orders WHERE user_id = %s AND buyer_confirmed = TRUE AND buyer_confirmed_at LIKE %s"
         params = (user_id, f"{today}%")
     else:
-        query = "SELECT COUNT(*) FROM orders WHERE user_id = ? AND status = '充值成功' AND completed_at LIKE ?"
+        query = "SELECT COUNT(*) FROM orders WHERE user_id = ? AND buyer_confirmed = 1 AND buyer_confirmed_at LIKE ?"
         params = (user_id, f"{today}%")
-    
-    # 打印调试信息
-    print(f"执行SQL查询: {query}, 参数: {params}")
-    
-    # 执行查询
+        
     result = execute_query(query, params, fetch=True)
-    
-    # 如果直接匹配不到，尝试打印所有充值成功的订单及其完成时间，用于调试
-    if result[0][0] == 0:
-        debug_query = "SELECT id, completed_at, status FROM orders WHERE user_id = ? AND status = '充值成功'"
-        debug_result = execute_query(debug_query, (user_id,), fetch=True)
-        print(f"用户所有充值成功订单: {debug_result}")
-    
     return result[0][0] if result and result[0] else 0
 
 def get_all_today_confirmed_count():
-    """获取所有用户今天完成的订单总数（状态为充值成功）"""
+    """获取所有用户今天已确认的订单总数"""
     from datetime import datetime
     import pytz
     today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
     
-    # 打印调试信息
-    print(f"查询全站今日充值成功订单，今日日期: {today}")
-    
     query = ""
     params = (f"{today}%",)
     
-    # 根据数据库类型选择不同查询语句，使用更宽松的日期匹配方式
+    # 根据数据库类型选择不同查询语句
     if DATABASE_URL.startswith('postgres'):
-        query = "SELECT COUNT(*) FROM orders WHERE status = '充值成功' AND completed_at LIKE %s"
+        query = "SELECT COUNT(*) FROM orders WHERE buyer_confirmed = TRUE AND buyer_confirmed_at LIKE %s"
     else:
-        query = "SELECT COUNT(*) FROM orders WHERE status = '充值成功' AND completed_at LIKE ?"
-    
-    # 打印调试信息
-    print(f"执行SQL查询: {query}, 参数: {params}")
-    
-    # 执行查询
+        query = "SELECT COUNT(*) FROM orders WHERE buyer_confirmed = 1 AND buyer_confirmed_at LIKE ?"
+        
     result = execute_query(query, params, fetch=True)
-    
-    # 如果直接匹配不到，尝试打印所有充值成功的订单及其完成时间，用于调试
-    if result[0][0] == 0:
-        debug_query = "SELECT id, completed_at, status FROM orders WHERE status = '充值成功'"
-        debug_result = execute_query(debug_query, (), fetch=True)
-        print(f"全站所有充值成功订单: {debug_result}")
-    
     return result[0][0] if result and result[0] else 0
 
 def get_seller_today_confirmed_orders_by_user(telegram_id):
-    """获取卖家今天完成的订单数（状态为充值成功），并按用户分组"""
+    """获取卖家今天已确认的订单数，并按用户分组"""
     from datetime import datetime
     import pytz
     today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
@@ -1666,7 +1638,7 @@ def get_seller_today_confirmed_orders_by_user(telegram_id):
             """
             SELECT web_user_id, COUNT(*) 
             FROM orders 
-            WHERE accepted_by = %s AND status = '充值成功' AND completed_at LIKE %s
+            WHERE accepted_by = %s AND buyer_confirmed = TRUE AND buyer_confirmed_at LIKE %s
             GROUP BY web_user_id
             """,
             (str(telegram_id), f"{today}%"),
@@ -1677,7 +1649,7 @@ def get_seller_today_confirmed_orders_by_user(telegram_id):
             """
             SELECT web_user_id, COUNT(*) 
             FROM orders 
-            WHERE accepted_by = ? AND status = '充值成功' AND completed_at LIKE ?
+            WHERE accepted_by = ? AND buyer_confirmed = 1 AND buyer_confirmed_at LIKE ?
             GROUP BY web_user_id
             """,
             (str(telegram_id), f"{today}%"),
