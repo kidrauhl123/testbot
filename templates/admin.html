@@ -462,14 +462,6 @@
       </div>
       <div class="dropdown-menu">
         <div class="dropdown-menu-header">账户信息</div>
-        {% if balance is defined %}
-        <div class="dropdown-menu-item">
-          <span>账户余额：</span>
-          <span class="{% if balance < 0 %}text-danger{% else %}text-success{% endif %}">
-            {{ balance }}{% if credit_limit is defined and credit_limit > 0 %} (额度：{{ credit_limit }}){% endif %}
-          </span>
-        </div>
-        {% endif %}
         <div class="dropdown-divider"></div>
         <a href="/" class="dropdown-menu-item">
           <i class="fas fa-home"></i>返回主页
@@ -479,12 +471,6 @@
         </a>
       </div>
     </div>
-    
-    {% if balance is defined %}
-    <div class="balance-badge {% if balance < 0 %}negative{% endif %}">
-      余额: {{ balance }}元{% if credit_limit is defined and credit_limit > 0 %} (额度: {{ credit_limit }}元){% endif %}
-    </div>
-    {% endif %}
   </div>
 </div>
 
@@ -495,7 +481,6 @@
         <li><a href="#users" class="active" onclick="showTab('users'); return false;"><i class="fas fa-users"></i> 用户管理</a></li>
         <li><a href="#orders" onclick="showTab('orders'); return false;"><i class="fas fa-file-invoice-dollar"></i> 订单管理</a></li>
         <li><a href="#sellers" onclick="showTab('sellers'); return false;"><i class="fas fa-user-tie"></i> 卖家管理</a></li>
-        <li><a href="#balance" onclick="showTab('balance'); return false;"><i class="fas fa-money-bill-wave"></i> 余额明细</a></li>
         <li><a href="/admin/recharge-requests"><i class="fas fa-credit-card"></i> 充值管理</a></li>
       </ul>
     </div>
@@ -514,8 +499,6 @@
               <th>用户名</th>
                 <th>注册时间</th>
               <th>最后登录</th>
-                <th>余额</th>
-                <th>透支额度</th>
                 <th>今日消费</th>
                 <th>角色</th>
               <th>操作</th>
@@ -600,153 +583,6 @@
           </table>
         </div>
       </div>
-      
-      <!-- 余额明细管理 -->
-      <div id="balance" class="tab-content">
-        <div class="content-header">
-          <h2><i class="fas fa-money-bill-wave"></i> 余额明细</h2>
-          <div class="header-actions">
-            <select id="balance-user-filter" class="form-control" style="width: 200px;">
-              <option value="">所有用户</option>
-              <!-- 用户列表会通过JS动态加载 -->
-            </select>
-          </div>
-        </div>
-        <div class="balance-container">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>用户</th>
-                <th>类型</th>
-                <th>金额</th>
-                <th>变动后余额</th>
-                <th>原因</th>
-                <th>参考ID</th>
-                <th>时间</th>
-              </tr>
-            </thead>
-            <tbody id="balance-records-tbody">
-              <tr>
-                <td colspan="8" class="loading">加载中...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- 修改余额模态框 -->
-<div class="modal-backdrop" id="editBalanceModal">
-    <div class="modal">
-      <div class="modal-header">
-      <h3>修改用户余额</h3>
-      <button class="modal-close" data-dismiss="modal">&times;</button>
-      </div>
-      <div class="modal-body">
-      <form id="editBalanceForm">
-        <input type="hidden" id="edit-balance-user-id">
-        <div class="form-group">
-          <label for="edit-balance-username">用户名</label>
-          <input type="text" id="edit-balance-username" class="form-control" disabled>
-        </div>
-        <div class="form-group">
-          <label for="edit-balance-current">当前余额</label>
-          <input type="text" id="edit-balance-current" class="form-control" disabled>
-        </div>
-        <div class="form-group">
-          <label for="edit-balance-new">新余额</label>
-          <input type="number" id="edit-balance-new" class="form-control" step="0.01" min="0" required>
-        </div>
-      </form>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
-      <button class="btn btn-primary" id="saveBalanceBtn">保存</button>
-    </div>
-  </div>
-</div>
-
-<!-- 修改透支额度模态框 -->
-<div class="modal-backdrop" id="editCreditModal">
-  <div class="modal">
-    <div class="modal-header">
-      <h3>修改用户透支额度</h3>
-      <button class="modal-close" data-dismiss="modal">&times;</button>
-    </div>
-    <div class="modal-body">
-      <form id="editCreditForm">
-        <input type="hidden" id="edit-credit-user-id">
-        <div class="form-group">
-          <label for="edit-credit-username">用户名</label>
-          <input type="text" id="edit-credit-username" class="form-control" disabled>
-        </div>
-        <div class="form-group">
-          <label for="edit-credit-current">当前透支额度</label>
-          <input type="text" id="edit-credit-current" class="form-control" disabled>
-        </div>
-        <div class="form-group">
-          <label for="edit-credit-new">新透支额度</label>
-          <input type="number" id="edit-credit-new" class="form-control" step="0.01" min="0" required>
-        </div>
-      </form>
-      </div>
-      <div class="modal-footer">
-      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
-      <button class="btn btn-primary" id="saveCreditBtn">保存</button>
-    </div>
-  </div>
-</div>
-
-<!-- 用户定制价格模态框 -->
-<div class="modal-backdrop" id="editCustomPriceModal">
-  <div class="modal">
-    <div class="modal-header">
-      <h3>设置用户定制价格</h3>
-      <button class="modal-close" data-dismiss="modal">&times;</button>
-    </div>
-    <div class="modal-body">
-      <form id="editCustomPriceForm">
-        <input type="hidden" id="edit-custom-price-user-id">
-        <div class="form-group">
-          <label for="edit-custom-price-username">用户名</label>
-          <input type="text" id="edit-custom-price-username" class="form-control" disabled>
-        </div>
-        
-        <div class="form-group">
-          <label>选择套餐</label>
-          <select id="edit-custom-price-package" class="form-control">
-            <option value="1">1个月</option>
-            <option value="2">2个月</option>
-            <option value="3">3个月</option>
-            <option value="6">6个月</option>
-            <option value="12">12个月</option>
-          </select>
-        </div>
-        
-        <div class="form-group">
-          <label for="edit-custom-price-default">默认价格</label>
-          <input type="text" id="edit-custom-price-default" class="form-control" disabled>
-        </div>
-        
-        <div class="form-group">
-          <label for="edit-custom-price-current">当前定制价格</label>
-          <input type="text" id="edit-custom-price-current" class="form-control" disabled>
-          <small class="text-muted">无定制价格时显示"默认"</small>
-        </div>
-        
-        <div class="form-group">
-          <label for="edit-custom-price-new">新定制价格</label>
-          <input type="number" id="edit-custom-price-new" class="form-control" step="0.01" min="0" required>
-          <small class="text-muted">设置为0可删除定制价格，恢复默认价格</small>
-        </div>
-      </form>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
-      <button class="btn btn-primary" id="saveCustomPriceBtn">保存</button>
     </div>
   </div>
 </div>
@@ -867,18 +703,12 @@
       loadSellers();
       sellerDataLoaded = true;
     }
-    else if (tabId === 'balance' && !balanceDataLoaded) {
-      loadBalanceRecords();
-      populateUserFilter();
-      balanceDataLoaded = true;
-    }
   }
   
   // 全局变量
   let userDataLoaded = false;
   let orderDataLoaded = false;
   let sellerDataLoaded = false;
-  let balanceDataLoaded = false;
   let allUsers = []; // 存储所有用户数据
   let allOrders = [];
   let currentPage = 1;
@@ -943,17 +773,9 @@
           <td>${user.username}</td>
           <td>${createdAt}</td>
           <td>${lastLogin}</td>
-          <td class="user-balance">${user.balance ? user.balance.toFixed(2) : '0.00'} 元</td>
-          <td class="user-credit">${user.credit_limit ? user.credit_limit.toFixed(2) : '0.00'} 元</td>
           <td class="user-consumption">${user.today_consumption ? user.today_consumption.toFixed(2) : '0.00'} 元</td>
           <td>${user.is_admin ? '<span class="badge badge-warning">管理员</span>' : '<span class="badge badge-secondary">普通用户</span>'}</td>
           <td>
-            <button class="btn btn-sm btn-primary" onclick="editUserBalance(${user.id}, '${user.username}', ${user.balance || 0})">
-              修改余额
-            </button>
-            <button class="btn btn-sm btn-warning" onclick="editUserCredit(${user.id}, '${user.username}', ${user.credit_limit || 0})">
-              修改额度
-            </button>
             <button class="btn btn-sm btn-info" onclick="editUserCustomPrice(${user.id}, '${user.username}')">
               定制价格
             </button>
@@ -974,31 +796,7 @@
     }
   }
 
-  // 修改用户余额函数
-  function editUserBalance(userId, username, balance) {
-    console.log("修改用户余额:", userId, username, balance);
-    
-    document.getElementById('edit-balance-user-id').value = userId;
-    document.getElementById('edit-balance-username').value = username;
-    document.getElementById('edit-balance-current').value = balance;
-    document.getElementById('edit-balance-new').value = balance;
-    
-    openModal('editBalanceModal');
-  }
-
-  // 修改用户透支额度函数
-  function editUserCredit(userId, username, credit) {
-    console.log("修改用户透支额度:", userId, username, credit);
-    
-    document.getElementById('edit-credit-user-id').value = userId;
-    document.getElementById('edit-credit-username').value = username;
-    document.getElementById('edit-credit-current').value = credit;
-    document.getElementById('edit-credit-new').value = credit;
-    
-    openModal('editCreditModal');
-  }
-
-  // 编辑用户定制价格函数
+  // 修改用户定制价格函数
   async function editUserCustomPrice(userId, username) {
     console.log("修改用户定制价格:", userId, username);
     
@@ -1520,141 +1318,9 @@
     });
   });
 
-  // 保存余额修改
-  document.getElementById('saveBalanceBtn').addEventListener('click', async function() {
-    const userId = document.getElementById('edit-balance-user-id').value;
-    const newBalance = document.getElementById('edit-balance-new').value;
-    
-    console.log("保存余额:", userId, newBalance);
-    
-    if (!userId || !newBalance) {
-      alert('请填写完整信息');
-      return;
-    }
-    
-    try {
-      const response = await fetch(`/admin/api/users/${userId}/balance`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          balance: parseFloat(newBalance)
-        })
-      });
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        closeModal('editBalanceModal');
-        alert('余额已更新');
-        loadUsers();
-      } else {
-        alert('更新余额失败: ' + (result.error || '未知错误'));
-      }
-    } catch (e) {
-      console.error('更新余额失败', e);
-      alert('更新余额失败: ' + e.message);
-    }
-  });
-
-  // 保存透支额度修改
-  document.getElementById('saveCreditBtn').addEventListener('click', async function() {
-    const userId = document.getElementById('edit-credit-user-id').value;
-    const newCredit = document.getElementById('edit-credit-new').value;
-    
-    console.log("保存透支额度:", userId, newCredit);
-    
-    if (!userId || newCredit === '') {
-      alert('请填写完整信息');
-      return;
-    }
-    
-    try {
-      const response = await fetch(`/admin/api/users/${userId}/credit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          credit_limit: parseFloat(newCredit)
-        })
-      });
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        closeModal('editCreditModal');
-        alert('透支额度已更新');
-        loadUsers();
-      } else {
-        alert('更新透支额度失败: ' + (result.error || '未知错误'));
-      }
-    } catch (e) {
-      console.error('更新透支额度失败', e);
-      alert('更新透支额度失败: ' + e.message);
-    }
-  });
-
-  // 为"保存定制价格"按钮添加点击事件
-  document.getElementById('saveCustomPriceBtn').addEventListener('click', async function() {
-    const userId = document.getElementById('edit-custom-price-user-id').value;
-    const package = document.getElementById('edit-custom-price-package').value;
-    const newPrice = document.getElementById('edit-custom-price-new').value;
-    
-    console.log("保存定制价格:", userId, package, newPrice);
-    
-    if (!userId || !package || newPrice === '') {
-      alert('请填写完整信息');
-      return;
-    }
-    
-    try {
-      const response = await fetch(`/admin/api/users/${userId}/custom-prices`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          package: package,
-          price: parseFloat(newPrice)
-        })
-      });
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        closeModal('editCustomPriceModal');
-        alert(result.message || '定制价格已更新');
-        
-        // 如果当前还在查看该用户的定制价格，更新显示
-        const currentUserId = document.getElementById('edit-custom-price-user-id').value;
-        if (currentUserId === userId) {
-          // 更新当前选中套餐的价格显示
-          const currentPackage = document.getElementById('edit-custom-price-package').value;
-          const customPrices = result.custom_prices || {};
-          
-          // 获取默认价格
-          const defaultPriceField = document.getElementById('edit-custom-price-default');
-          const defaultPrice = defaultPriceField.value;
-          
-          // 更新显示
-          updateCustomPriceDisplay(currentPackage, { [currentPackage]: defaultPrice }, customPrices);
-        }
-      } else {
-        alert('设置定制价格失败: ' + (result.error || '未知错误'));
-      }
-    } catch (e) {
-      console.error('设置定制价格失败', e);
-      alert('设置定制价格失败: ' + e.message);
-    }
-  });
-
   document.addEventListener('DOMContentLoaded', () => {
     // 检查页面上的所有模态框元素
     console.log("检查模态框元素:");
-    console.log("editBalanceModal:", document.getElementById('editBalanceModal'));
-    console.log("editCreditModal:", document.getElementById('editCreditModal'));
     console.log("edit-order-modal:", document.getElementById('edit-order-modal'));
     
     // 检查标签页元素
@@ -1671,14 +1337,6 @@
     console.log("edit-order-package:", document.getElementById('edit-order-package'));
     console.log("edit-order-status:", document.getElementById('edit-order-status'));
     console.log("edit-order-remark:", document.getElementById('edit-order-remark'));
-    
-    // 检查余额编辑表单元素
-    console.log("检查余额编辑表单元素:");
-    console.log("edit-balance-user-id:", document.getElementById('edit-balance-user-id'));
-    console.log("edit-balance-username:", document.getElementById('edit-balance-username'));
-    console.log("edit-balance-current:", document.getElementById('edit-balance-current'));
-    console.log("edit-balance-new:", document.getElementById('edit-balance-new'));
-    console.log("saveBalanceBtn:", document.getElementById('saveBalanceBtn'));
     
     try {
     showTab('users');
@@ -1720,18 +1378,8 @@
       loadSellers();
       showTab('sellers');
     });
-    document.querySelector('.sidebar-menu a[href="#balance"]').addEventListener('click', function() {
-      loadBalanceRecords();
-      populateUserFilter();
-      showTab('balance');
-    });
     
     // 手动测试绑定事件是否有效
-    window.testEditBalance = function() {
-      console.log("测试修改余额");
-      editUserBalance(1, 'test', 100);
-    };
-    
     window.testEditOrder = function() {
       console.log("测试编辑订单");
       editOrder(1);
@@ -1763,7 +1411,7 @@
       }
     };
     
-    console.log("页面初始化完成，绑定了测试函数 testEditBalance()、testEditOrder()、testOpenModal() 和 testCloseModal()");
+    console.log("页面初始化完成，绑定了测试函数 testEditOrder()、testOpenModal() 和 testCloseModal()");
 
     // --- 订单管理 ---
     const selectAllCheckbox = document.getElementById('select-all-orders');
@@ -1899,105 +1547,6 @@
   `;
   document.head.appendChild(style);
 
-  // 加载余额明细记录
-  async function loadBalanceRecords(userId = null) {
-    const tbody = document.getElementById('balance-records-tbody');
-    tbody.innerHTML = '<tr><td colspan="8" class="loading">加载中...</td></tr>';
-    
-    try {
-      // 构建请求URL，如果有指定用户ID则添加过滤条件
-      let url = '/api/balance/records?limit=100';
-      if (userId) {
-        url += `&user_id=${userId}`;
-      }
-      
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`获取余额明细失败: ${response.status}`);
-      
-      const data = await response.json();
-      if (!data.success) throw new Error(data.error || '获取余额明细失败');
-      
-      const records = data.records;
-      if (!records || records.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="no-data">暂无余额变动记录</td></tr>';
-        return;
-      }
-      
-      // 渲染数据
-      let html = '';
-      records.forEach(record => {
-        // 类型显示转换
-        const typeMap = {
-          'recharge': '充值',
-          'consume': '消费',
-          'refund': '退款'
-        };
-        
-        const typeDisplay = typeMap[record.type] || record.type;
-        const amountClass = record.amount > 0 ? 'text-success' : 'text-danger';
-        const amountDisplay = record.amount > 0 ? `+${record.amount}` : record.amount;
-        
-        html += `
-          <tr>
-            <td>${record.id}</td>
-            <td>${record.username}</td>
-            <td>${typeDisplay}</td>
-            <td class="${amountClass}">${amountDisplay}</td>
-            <td>${record.balance_after}</td>
-            <td>${record.reason}</td>
-            <td>${record.reference_id || '-'}</td>
-            <td>${record.created_at}</td>
-          </tr>
-        `;
-      });
-      
-      tbody.innerHTML = html;
-    } catch (error) {
-      console.error('加载余额明细失败:', error);
-      tbody.innerHTML = `<tr><td colspan="8" class="error">加载失败: ${error.message}</td></tr>`;
-    }
-  }
-  
-  // 填充用户筛选下拉框
-  function populateUserFilter() {
-    const userFilter = document.getElementById('balance-user-filter');
-    
-    // 如果尚未加载用户数据，则先加载
-    if (allUsers.length === 0) {
-      fetch('/admin/api/users')
-        .then(response => response.json())
-        .then(data => {
-          if (data.success) {
-            allUsers = data.users;
-            populateUserFilterOptions(userFilter);
-          }
-        })
-        .catch(error => console.error('加载用户数据失败:', error));
-    } else {
-      populateUserFilterOptions(userFilter);
-    }
-    
-    // 添加事件监听器
-    userFilter.addEventListener('change', function() {
-      const userId = this.value;
-      loadBalanceRecords(userId || null);
-    });
-  }
-  
-  // 填充用户筛选下拉框选项
-  function populateUserFilterOptions(selectElement) {
-    // 保留第一个"所有用户"选项
-    selectElement.innerHTML = '<option value="">所有用户</option>';
-    
-    // 添加所有用户选项
-    allUsers.forEach(user => {
-      const option = document.createElement('option');
-      option.value = user.id;
-      option.textContent = `${user.username} (ID: ${user.id})`;
-      selectElement.appendChild(option);
-    });
-  }
-
   async function editSeller(telegramId, currentNickname) {
     const newNickname = prompt('请输入新的显示昵称', currentNickname || '');
     if (newNickname === null) {
@@ -2044,6 +1593,60 @@
       showToast('操作失败: ' + e.message, 'error');
     }
   }
+
+  // 为"保存定制价格"按钮添加点击事件
+  document.getElementById('saveCustomPriceBtn').addEventListener('click', async function() {
+    const userId = document.getElementById('edit-custom-price-user-id').value;
+    const package = document.getElementById('edit-custom-price-package').value;
+    const newPrice = document.getElementById('edit-custom-price-new').value;
+    
+    console.log("保存定制价格:", userId, package, newPrice);
+    
+    if (!userId || !package || newPrice === '') {
+      alert('请填写完整信息');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/admin/api/users/${userId}/custom-prices`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          package: package,
+          price: parseFloat(newPrice)
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        closeModal('editCustomPriceModal');
+        alert(result.message || '定制价格已更新');
+        
+        // 如果当前还在查看该用户的定制价格，更新显示
+        const currentUserId = document.getElementById('edit-custom-price-user-id').value;
+        if (currentUserId === userId) {
+          // 更新当前选中套餐的价格显示
+          const currentPackage = document.getElementById('edit-custom-price-package').value;
+          const customPrices = result.custom_prices || {};
+          
+          // 获取默认价格
+          const defaultPriceField = document.getElementById('edit-custom-price-default');
+          const defaultPrice = defaultPriceField.value;
+          
+          // 更新显示
+          updateCustomPriceDisplay(currentPackage, { [currentPackage]: defaultPrice }, customPrices);
+        }
+      } else {
+        alert('设置定制价格失败: ' + (result.error || '未知错误'));
+      }
+    } catch (e) {
+      console.error('设置定制价格失败', e);
+      alert('设置定制价格失败: ' + e.message);
+    }
+  });
 </script>
 </body>
 </html> 

@@ -669,15 +669,9 @@ def register_routes(app, notification_queue):
         username = session.get('username')
         is_admin = session.get('is_admin', 0)
         
-        # 获取用户余额和透支额度
-        balance = get_user_balance(user_id)
-        credit_limit = get_user_credit_limit(user_id)
-        
         return render_template('dashboard.html', 
                               username=username, 
-                              is_admin=is_admin,
-                              balance=balance,
-                              credit_limit=credit_limit)
+                              is_admin=is_admin)
 
     @app.route('/admin/api/users')
     @login_required
@@ -727,8 +721,24 @@ def register_routes(app, notification_queue):
         return jsonify(user_data)
     
     # 删除余额更新API
+    @app.route('/admin/api/users/<int:user_id>/balance', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_update_user_balance(user_id):
+        """设置用户余额（为保持兼容性而添加）"""
+        return jsonify({
+            "success": True
+        })
 
     # 删除透支额度更新API
+    @app.route('/admin/api/users/<int:user_id>/credit', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_update_user_credit(user_id):
+        """设置用户透支额度（为保持兼容性而添加）"""
+        return jsonify({
+            "success": True
+        })
             
     # 删除用户定制价格获取API
             
@@ -1106,6 +1116,14 @@ def register_routes(app, notification_queue):
     # 删除充值相关路由
 
     # 删除余额明细记录API
+    @app.route('/api/balance/records')
+    @login_required
+    def api_balance_records():
+        """获取余额明细记录（为保持兼容性而添加）"""
+        return jsonify({
+            "success": True,
+            "records": []
+        })
         
     @app.route('/api/active-sellers')
     @login_required
