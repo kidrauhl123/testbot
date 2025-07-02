@@ -25,8 +25,8 @@ from telegram.ext import (
 )
 
 from modules.constants import (
-    BOT_TOKEN, STATUS, PLAN_LABELS_EN,
-    STATUS_TEXT_ZH, TG_PRICES, WEB_PRICES, SELLER_CHAT_IDS, DATABASE_URL
+    BOT_TOKEN, STATUS,
+    STATUS_TEXT_ZH, SELLER_CHAT_IDS, DATABASE_URL
 )
 from modules.database import (
     get_order_details, execute_query, 

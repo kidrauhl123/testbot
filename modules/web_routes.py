@@ -130,13 +130,13 @@ def register_routes(app, notification_queue):
             logger.info(f"获取到最近订单: {orders}")
             
             return render_template('index.html', 
-                                   orders=orders,
+                                   orders=orders, 
                                    username=session.get('username'),
                                    is_admin=session.get('is_admin'))
         except Exception as e:
             logger.error(f"获取订单失败: {str(e)}", exc_info=True)
             return render_template('index.html', 
-                                   error='获取订单失败',
+                                   error='获取订单失败', 
                                    username=session.get('username'),
                                    is_admin=session.get('is_admin'))
 

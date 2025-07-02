@@ -611,7 +611,7 @@
     }
 
     /* 删除balance-info相关的样式 */
-    
+
     /* 用户下拉菜单样式 */
     .user-dropdown {
       position: relative;
@@ -1793,16 +1793,16 @@
         e.target.reset();
         displayedOrders = 5;
         searchKeyword = '';
-              
-      // 更新订单列表
-      if (result.orders) {
-        allOrders = result.orders;
-        renderOrders(result.orders);
-      } else {
-        // 立即刷新订单和统计
-        await loadOrders();
-      }
-      
+        
+        // 更新订单列表
+        if (result.orders) {
+          allOrders = result.orders;
+          renderOrders(result.orders);
+        } else {
+          // 立即刷新订单和统计
+          await loadOrders();
+        }
+        
       // 显示成功消息
       showCustomAlert(result.message || '订单提交成功！', 'success');
 
