@@ -1344,11 +1344,16 @@
   let viewMode = 'table'; // 默认视图模式：grid 或 table
   let page = 1; // 当前页码
   let orderPageSize = 10; // 每次加载的订单数量
+  
+  // 获取今天的日期，格式为YYYY-MM-DD
+  const today = new Date().toISOString().split('T')[0];
+  
+  // 初始化筛选条件，默认显示今日订单
   let filters = {
     seller: '',
     status: '',
-    startDate: '',
-    endDate: ''
+    startDate: today,
+    endDate: today
   };
   
   // 删除价格和套餐相关代码
@@ -2284,32 +2289,20 @@
 
   // 初始化筛选功能
   function initFilterControls() {
-    // 筛选面板展开/收起
-    const filterToggleBtn = document.getElementById('filterToggleBtn');
-    const filterPanel = document.getElementById('filterPanel');
+    // 绑定筛选按钮事件
+    document.getElementById('filterToggleBtn').addEventListener('click', toggleFilterPanel);
+    document.getElementById('applyFiltersBtn').addEventListener('click', applyFilters);
+    document.getElementById('resetFiltersBtn').addEventListener('click', resetFilters);
     
-    if (filterToggleBtn && filterPanel) {
-      filterToggleBtn.addEventListener('click', () => {
-        const isVisible = filterPanel.style.display !== 'none';
-        filterPanel.style.display = isVisible ? 'none' : 'block';
-        filterToggleBtn.classList.toggle('active', !isVisible);
-      });
-    }
-    
-    // 加载卖家筛选选项
+    // 初始化卖家筛选
     populateSellerFilter();
     
-    // 应用筛选按钮
-    const applyFiltersBtn = document.getElementById('applyFiltersBtn');
-    if (applyFiltersBtn) {
-      applyFiltersBtn.addEventListener('click', applyFilters);
-    }
+    // 设置日期筛选控件的初始值为今日
+    document.getElementById('startDateFilter').value = today;
+    document.getElementById('endDateFilter').value = today;
     
-    // 重置筛选按钮
-    const resetFiltersBtn = document.getElementById('resetFiltersBtn');
-    if (resetFiltersBtn) {
-      resetFiltersBtn.addEventListener('click', resetFilters);
-    }
+    // 初始化活动筛选标签
+    updateActiveFilters();
   }
   
   // 填充卖家筛选下拉框
@@ -2506,15 +2499,15 @@
     
     if (sellerFilter) sellerFilter.value = '';
     if (statusFilter) statusFilter.value = '';
-    if (startDateFilter) startDateFilter.value = '';
-    if (endDateFilter) endDateFilter.value = '';
+    if (startDateFilter) startDateFilter.value = today;
+    if (endDateFilter) endDateFilter.value = today;
     
     // 重置筛选条件
     filters = {
       seller: '',
       status: '',
-      startDate: '',
-      endDate: ''
+      startDate: today,
+      endDate: today
     };
     
     // 清空活动筛选标签
@@ -2525,13 +2518,17 @@
     displayedOrders = orderPageSize;
     
     // 重新渲染原始订单列表
-    renderOrders(allOrders);
+    const filteredOrders = filterOrders(allOrders);
+    renderOrders(filteredOrders);
     
     // 更新筛选按钮状态
     const filterToggleBtn = document.getElementById('filterToggleBtn');
     if (filterToggleBtn) {
       filterToggleBtn.classList.remove('active');
     }
+    
+    // 更新活动筛选标签
+    updateActiveFilters();
   }
   
   // 筛选订单
@@ -2564,8 +2561,8 @@
       const statusMap = {
         'submitted': '已提交',
         'accepted': '已接单',
-        'completed': '已完成',
-        'failed': '已失败'
+        'completed': '充值成功',
+        'failed': '充值失败'
       };
       const statusText = statusMap[filters.status];
       result = result.filter(order => order.status_text === statusText);
@@ -2590,6 +2587,18 @@
     }
     
     return result;
+  }
+  
+  // 切换筛选面板显示状态
+  function toggleFilterPanel() {
+    const filterPanel = document.getElementById('filterPanel');
+    const filterToggleBtn = document.getElementById('filterToggleBtn');
+    
+    if (filterPanel && filterToggleBtn) {
+      const isVisible = filterPanel.style.display !== 'none';
+      filterPanel.style.display = isVisible ? 'none' : 'block';
+      filterToggleBtn.classList.toggle('active', !isVisible);
+    }
   }
 </script>
 
