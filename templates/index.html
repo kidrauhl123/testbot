@@ -1861,18 +1861,21 @@
         let filteredOrders = allOrders;
         
         // 应用搜索
-      if (searchKeyword) {
+        if (searchKeyword) {
           filteredOrders = filteredOrders.filter(order => 
-          order.id.toString().includes(searchKeyword) || 
-          order.account.toLowerCase().includes(searchKeyword.toLowerCase())
-        );
-      }
+            order.id.toString().includes(searchKeyword) || 
+            order.account.toLowerCase().includes(searchKeyword.toLowerCase())
+          );
+        }
         
         // 应用筛选
         filteredOrders = filterOrders(filteredOrders);
-      
-      // 渲染订单
-      renderOrders(filteredOrders);
+        
+        // 渲染订单
+        renderOrders(filteredOrders);
+        
+        // 更新活动筛选标签
+        updateActiveFilters();
       }
       
       // 更新今日统计
@@ -2572,7 +2575,8 @@
       const startDate = new Date(filters.startDate);
       startDate.setHours(0, 0, 0, 0);
       result = result.filter(order => {
-        const orderDate = new Date(order.created_at.replace(' ', 'T') + 'Z');
+        // 将订单时间字符串转换为Date对象，不添加Z，以便使用本地时区
+        const orderDate = new Date(order.created_at);
         return orderDate >= startDate;
       });
     }
@@ -2581,7 +2585,8 @@
       const endDate = new Date(filters.endDate);
       endDate.setHours(23, 59, 59, 999);
       result = result.filter(order => {
-        const orderDate = new Date(order.created_at.replace(' ', 'T') + 'Z');
+        // 将订单时间字符串转换为Date对象，不添加Z，以便使用本地时区
+        const orderDate = new Date(order.created_at);
         return orderDate <= endDate;
       });
     }
