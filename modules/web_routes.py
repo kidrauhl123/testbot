@@ -1163,6 +1163,29 @@ def register_routes(app, notification_queue):
             "sellers": sellers
         })
         
+    @app.route('/api/all-sellers')
+    @login_required
+    def api_all_sellers():
+        """获取所有卖家列表（包括非活跃的），供订单筛选使用"""
+        # 获取所有卖家
+        sellers_raw = get_all_sellers()
+        
+        # 格式化卖家数据
+        sellers = []
+        for s in sellers_raw:
+            telegram_id, username, first_name, nickname, is_active = s[0], s[1], s[2], s[3], s[4]
+            # 如果没有设置昵称，则使用first_name或username作为默认昵称
+            display_name = nickname or first_name or f"卖家 {telegram_id}"
+            sellers.append({
+                "id": telegram_id,
+                "name": display_name
+            })
+        
+        return jsonify({
+            "success": True,
+            "sellers": sellers
+        })
+        
     @app.route('/api/check-seller-activity/<int:seller_id>', methods=['POST'])
     @login_required
     def check_seller_activity_api(seller_id):

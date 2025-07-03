@@ -1284,8 +1284,8 @@
                         <option value="">全部状态</option>
                         <option value="submitted">已提交</option>
                         <option value="accepted">已接单</option>
-                        <option value="completed">已完成</option>
-                        <option value="failed">已失败</option>
+                        <option value="completed">充值成功</option>
+                        <option value="failed">充值失败</option>
                       </select>
                     </div>
                     <div class="filter-section">
@@ -2315,7 +2315,8 @@
   // 填充卖家筛选下拉框
   async function populateSellerFilter() {
     try {
-      const response = await fetch('/api/active-sellers');
+      // 使用新的API获取所有卖家（包括非活跃的）
+      const response = await fetch('/api/all-sellers');
       if (!response.ok) {
         console.error('获取卖家列表失败:', response.status);
         return;
