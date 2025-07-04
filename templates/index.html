@@ -1691,8 +1691,13 @@
     
     // 点击上传区域触发粘贴操作
     dropArea.addEventListener('click', function(e) {
-      // 阻止冒泡，避免重复触发
+      // 阻止默认行为
       e.preventDefault();
+      
+      // 如果点击的是手动上传按钮或其子元素，不执行任何操作
+      if (e.target.id === 'manualUploadBtn' || e.target.closest('#manualUploadBtn')) {
+        return;
+      }
       
       // 如果有预览区域显示，则不执行粘贴
       if (imagePreview.style.display === 'block') {
@@ -1706,8 +1711,10 @@
     // 手动上传按钮触发文件选择
     const manualUploadBtn = document.getElementById('manualUploadBtn');
     manualUploadBtn.addEventListener('click', function(e) {
-      // 阻止事件冒泡
+      // 阻止事件冒泡，防止触发上传区域的点击事件
       e.stopPropagation();
+      e.preventDefault();
+      
       // 触发文件选择
       fileInput.click();
     });
