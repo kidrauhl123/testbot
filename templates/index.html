@@ -1375,6 +1375,12 @@
   let viewMode = 'table'; // 默认视图模式：grid 或 table
   let page = 1; // 当前页码
   let orderPageSize = 10; // 每次加载的订单数量
+  let fileInputClickCount = 0; // 记录文件选择器被触发的次数
+  
+  // 日志函数，用于调试
+  function debugLog(message) {
+    console.log(`[${new Date().toISOString()}] ${message}`);
+  }
   
   // 获取今天的日期，格式为YYYY-MM-DD
   const today = new Date().toISOString().split('T')[0];
@@ -1498,7 +1504,7 @@
   // 处理图片上传（拖放和粘贴）
   function initImageUpload() {
     const dropArea = document.getElementById('dropArea');
-    const fileInput = document.getElementById('qr_code_input');
+    let fileInput = document.getElementById('qr_code_input');
     const imagePreview = document.getElementById('imagePreview');
     
     // 处理拖拽事件
@@ -1618,12 +1624,48 @@
       });
     }
     
-    // 监听文件选择变化
-    fileInput.addEventListener('change', function() {
-      if (this.files && this.files[0]) {
-        previewFile(this.files[0]);
+    // 彻底重建文件输入框，清除所有事件
+    const newFileInput = document.createElement('input');
+    newFileInput.type = 'file';
+    newFileInput.name = 'qr_code';
+    newFileInput.id = 'qr_code_input';
+    newFileInput.className = 'form-control file-input';
+    newFileInput.required = true;
+    newFileInput.accept = 'image/*';
+    newFileInput.setAttribute('capture', 'environment');
+    
+    // 替换旧的输入框
+    fileInput.parentNode.replaceChild(newFileInput, fileInput);
+    fileInput = newFileInput;
+    
+    // 添加一个单一的变更事件处理函数
+    let changeCount = 0;
+    let isProcessingChange = false;
+    
+    fileInput.onchange = function(e) {
+      changeCount++;
+      debugLog(`文件选择变化事件触发 (计数: ${changeCount})`);
+      
+      if (isProcessingChange) {
+        debugLog('已经在处理变更，忽略重复事件');
+        return;
       }
-    });
+      
+      isProcessingChange = true;
+      debugLog('开始处理文件选择变化');
+      
+      if (this.files && this.files[0]) {
+        debugLog(`选择的文件: ${this.files[0].name}, 大小: ${this.files[0].size} 字节`);
+        previewFile(this.files[0]);
+      } else {
+        debugLog('没有选择文件');
+      }
+      
+      setTimeout(() => {
+        isProcessingChange = false;
+        debugLog('文件变更处理完成，可以接收新的变更');
+      }, 1000);
+    };
     
     // 处理选择的文件
     function handleFiles(files) {
@@ -1714,22 +1756,51 @@
       simulatePaste();
     });
     
-    // 手动上传按钮触发文件选择
+    // 完全重写手动上传按钮的事件处理
     const manualUploadBtn = document.getElementById('manualUploadBtn');
     if (manualUploadBtn) {
-      // 先移除所有已存在的事件监听器
-      manualUploadBtn.replaceWith(manualUploadBtn.cloneNode(true));
+      // 移除当前按钮并创建一个新的
+      const newBtn = document.createElement('button');
+      newBtn.id = 'manualUploadBtn';
+      newBtn.className = 'btn btn-sm btn-secondary';
+      newBtn.textContent = '手动上传';
+      newBtn.type = 'button';
       
-      // 重新获取元素并添加事件监听器
-      const newManualUploadBtn = document.getElementById('manualUploadBtn');
-      newManualUploadBtn.addEventListener('click', function(e) {
-        // 停止事件传播
+      // 替换按钮
+      manualUploadBtn.parentNode.replaceChild(newBtn, manualUploadBtn);
+      
+      // 单独的标志位，确保只处理一次点击
+      let clickProcessed = false;
+      
+      // 添加新的事件监听器
+      newBtn.onclick = function(e) {
+        debugLog('手动上传按钮被点击');
+        
+        // 阻止任何事件冒泡
         e.stopPropagation();
         e.preventDefault();
         
-        // 直接调用文件选择器
-        fileInput.click();
-      });
+        // 确保只处理一次
+        if (clickProcessed) {
+          debugLog('忽略重复点击');
+          return;
+        }
+        
+        clickProcessed = true;
+        fileInputClickCount++;
+        debugLog(`触发文件选择器 (计数: ${fileInputClickCount})`);
+        
+        // 异步触发文件选择以避免事件堆叠
+        setTimeout(() => {
+          fileInput.click();
+          
+          // 延迟重置处理状态
+          setTimeout(() => {
+            clickProcessed = false;
+            debugLog('重置处理状态，可以再次点击');
+          }, 2000); // 较长的延迟，确保文件选择对话框完全处理
+        }, 100);
+      };
     }
   }
 
@@ -1737,17 +1808,6 @@
   document.addEventListener('DOMContentLoaded', function() {
     // 初始化图片上传功能
     initImageUpload();
-    
-    // 确保手动上传按钮正常工作
-    const fileInput = document.getElementById('qr_code_input');
-    const manualUploadBtn = document.getElementById('manualUploadBtn');
-    if (manualUploadBtn && fileInput) {
-      manualUploadBtn.onclick = function(e) {
-        e.stopPropagation();
-        e.preventDefault();
-        fileInput.click();
-      };
-    }
     
       // 删除加载用户定制价格
     
@@ -1994,15 +2054,25 @@
         const imagePreview = document.getElementById('imagePreview');
         const dropArea = document.getElementById('dropArea');
         const placeholder = dropArea.querySelector('.upload-placeholder');
+        const fileInput = document.getElementById('qr_code_input');
         
         // 清空预览
         imagePreview.innerHTML = '';
         imagePreview.style.display = 'none';
         
+        // 清空文件选择器
+        if (fileInput) {
+          debugLog('重置文件输入框');
+          fileInput.value = '';
+        }
+        
         // 显示占位提示
         if (placeholder) {
           placeholder.style.display = 'flex';
         }
+        
+        // 记录表单重置状态
+        debugLog('订单提交成功，已重置表单和图片预览');
         
         // 更新订单列表
         if (result.orders) {
