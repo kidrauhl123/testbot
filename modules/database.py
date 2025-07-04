@@ -1437,3 +1437,48 @@ def create_order_with_deduction_atomic(account, password, package, remark, usern
     except Exception as e:
         logger.error(f"创建订单失败: {str(e)}", exc_info=True)
         return False, f"创建订单失败: {str(e)}", None, None
+
+def check_duplicate_remark(user_id, remark):
+    """
+    检查当前用户今日订单中是否存在重复的备注
+    
+    参数:
+    - user_id: 用户ID
+    - remark: 要检查的备注
+    
+    返回:
+    - 如果存在重复，返回True，否则返回False
+    """
+    if not remark or remark.strip() == '':
+        # 空备注不检查重复
+        return False
+        
+    try:
+        # 获取今天的日期，格式为YYYY-MM-DD
+        today = datetime.now(CN_TIMEZONE).strftime("%Y-%m-%d")
+        
+        # 根据数据库类型选择不同查询语句
+        if DATABASE_URL.startswith('postgres'):
+            query = """
+                SELECT COUNT(*) FROM orders 
+                WHERE user_id = %s 
+                AND remark = %s 
+                AND created_at LIKE %s
+            """
+            params = (user_id, remark, f"{today}%")
+        else:
+            query = """
+                SELECT COUNT(*) FROM orders 
+                WHERE user_id = ? 
+                AND remark = ? 
+                AND created_at LIKE ?
+            """
+            params = (user_id, remark, f"{today}%")
+            
+        result = execute_query(query, params, fetch=True)
+        count = result[0][0] if result and result[0] else 0
+        
+        return count > 0
+    except Exception as e:
+        logger.error(f"检查备注重复失败: {str(e)}", exc_info=True)
+        return False

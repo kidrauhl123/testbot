@@ -1353,23 +1353,53 @@ def register_routes(app, notification_queue):
     @login_required
     def today_stats():
         try:
-            user_id = session['user_id']
-            is_admin = session.get('is_admin', False)
-            user_count = get_user_today_confirmed_count(user_id)
+            user_id = session.get('user_id')
+            username = session.get('username')
             
-            stats = {
-                "success": True,
-                "user_today_confirmed": user_count
-            }
-
-            if is_admin:
-                all_count = get_all_today_confirmed_count()
-                stats["all_today_confirmed"] = all_count
-
-            return jsonify(stats)
+            # 获取用户今日确认订单数
+            user_confirmed_count = get_user_today_confirmed_count(user_id)
+            
+            # 如果是管理员，还要获取全站今日确认订单数
+            all_confirmed_count = 0
+            if session.get('is_admin'):
+                all_confirmed_count = get_all_today_confirmed_count()
+                
+            return jsonify({
+                'success': True,
+                'user_today_confirmed': user_confirmed_count,
+                'all_today_confirmed': all_confirmed_count
+            })
         except Exception as e:
-            logger.error(f"获取今日统计失败: {e}", exc_info=True)
-            return jsonify({"success": False, "error": "Failed to retrieve stats"}), 500
+            logger.error(f"获取今日统计失败: {str(e)}", exc_info=True)
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/check-duplicate-remark', methods=['POST'])
+    @login_required
+    def check_duplicate_remark():
+        """检查当前用户今日订单中是否有重复的备注"""
+        try:
+            user_id = session.get('user_id')
+            remark = request.json.get('remark', '')
+            
+            if not remark or remark.strip() == '':
+                return jsonify({
+                    'success': True,
+                    'duplicate': False,
+                    'message': '备注为空，无需检查重复'
+                })
+                
+            # 检查备注是否重复
+            from modules.database import check_duplicate_remark
+            is_duplicate = check_duplicate_remark(user_id, remark)
+                
+            return jsonify({
+                'success': True,
+                'duplicate': is_duplicate,
+                'message': '发现重复备注，请确认是否继续提交' if is_duplicate else '备注没有重复'
+            })
+        except Exception as e:
+            logger.error(f"检查备注重复失败: {str(e)}", exc_info=True)
+            return jsonify({'success': False, 'error': str(e)}), 500
 
 def ensure_orders_columns():
     """确保orders表包含所有必需的列，比如buyer_confirmed_at"""
