@@ -1085,9 +1085,11 @@ def get_all_today_confirmed_count():
     
     # 根据数据库类型选择不同查询语句
     if DATABASE_URL.startswith('postgres'):
-        query = "SELECT COUNT(*) FROM orders WHERE buyer_confirmed = TRUE AND buyer_confirmed_at LIKE %s"
+        # 计算status为'充值成功'的订单数量
+        query = "SELECT COUNT(*) FROM orders WHERE status = '充值成功' AND updated_at LIKE %s"
     else:
-        query = "SELECT COUNT(*) FROM orders WHERE buyer_confirmed = 1 AND buyer_confirmed_at LIKE ?"
+        # 计算status为'充值成功'的订单数量
+        query = "SELECT COUNT(*) FROM orders WHERE status = '充值成功' AND updated_at LIKE ?"
         
     result = execute_query(query, params, fetch=True)
     return result[0][0] if result and result[0] else 0
