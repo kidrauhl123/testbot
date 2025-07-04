@@ -1164,11 +1164,9 @@
                         <i class="fas fa-paste"></i>
                         <span>点击此处粘贴截图</span>
                         <span class="small">或拖拽图片到此处</span>
+                        <button type="button" id="manualUploadBtn" class="manual-upload-btn">手动上传</button>
                       </div>
                       <div class="image-preview" id="imagePreview"></div>
-                    </div>
-                    <div class="manual-upload-btn-container">
-                      <button type="button" id="manualUploadBtn" class="btn btn-sm btn-secondary">手动上传</button>
                     </div>
                     <small class="form-text text-muted">请上传您YouTube账号的二维码截图</small>
                   </div>
@@ -1227,22 +1225,18 @@
                       border-radius: 8px;
                       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
                     }
-                    .manual-upload-btn-container {
-                      display: flex;
-                      justify-content: center;
-                      margin-top: 10px;
-                    }
-                    #manualUploadBtn {
-                      padding: 5px 15px;
-                      font-size: 14px;
-                      background-color: #f8f9fa;
+                    .manual-upload-btn {
+                      margin-top: 15px;
+                      padding: 4px 12px;
+                      font-size: 12px;
+                      background-color: #f0f0f0;
                       border: 1px solid #ddd;
                       border-radius: 4px;
                       color: #333;
                       cursor: pointer;
                     }
-                    #manualUploadBtn:hover {
-                      background-color: #e9ecef;
+                    .manual-upload-btn:hover {
+                      background-color: #e6e6e6;
                     }
                   </style>
                   <div class="form-group">
