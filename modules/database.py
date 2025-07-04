@@ -1428,7 +1428,7 @@ def create_order_with_deduction_atomic(account, password, package, remark, usern
         now = get_china_time()
         execute_query(
             """
-            INSERT INTO orders (account, password, package, status, created_at, remark, user_id, web_user_id)
+            INSERT INTO orders (account, password, package, status, created_at, remark, user_id, username)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (account, password, package, 'submitted', now, remark, user_id, username)

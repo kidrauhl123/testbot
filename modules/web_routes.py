@@ -456,7 +456,8 @@ def register_routes(app, notification_queue):
                 orders = execute_query("""
                     SELECT id, account, password, package, status, created_at, 
                     accepted_at, completed_at, remark, web_user_id, user_id, 
-                    accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
+                    accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed,
+                    username
                     FROM orders 
                     ORDER BY id DESC LIMIT ? OFFSET ?
                 """, (limit, offset), fetch=True)
@@ -465,7 +466,8 @@ def register_routes(app, notification_queue):
                 orders = execute_query("""
                     SELECT id, account, password, package, status, created_at, 
                     accepted_at, completed_at, remark, web_user_id, user_id, 
-                    accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
+                    accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed,
+                    username
                     FROM orders 
                     WHERE user_id = ? 
                     ORDER BY id DESC LIMIT ? OFFSET ?
@@ -474,7 +476,7 @@ def register_routes(app, notification_queue):
             # 格式化订单数据
             formatted_orders = []
             for order in orders:
-                oid, account, password, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed = order
+                oid, account, password, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed, username = order
                 
                 # 优先使用自定义昵称，其次是用户名称，最后是ID
                 seller_display = accepted_by_nickname or accepted_by_first_name or accepted_by_username or accepted_by
@@ -499,7 +501,8 @@ def register_routes(app, notification_queue):
                     "remark": translated_remark or "",
                     "accepted_by": seller_display or "",
                     "buyer_confirmed": bool(buyer_confirmed),
-                    "can_cancel": status == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == user_id)
+                    "can_cancel": status == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == user_id),
+                    "username": username or web_user_id or ""  # 使用web_user_id作为后备
                 }
                 formatted_orders.append(order_data)
             
