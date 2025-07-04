@@ -1480,7 +1480,7 @@ def register_routes(app, notification_queue):
                 query = """
                     SELECT id, status, updated_at, created_at
                     FROM orders 
-                    WHERE status = '充值成功' 
+                    WHERE status = 'completed' 
                     AND to_char(updated_at::timestamp, 'YYYY-MM-DD') = %s
                 """
                 params = (today,)
@@ -1488,7 +1488,7 @@ def register_routes(app, notification_queue):
                 query = """
                     SELECT id, status, updated_at, created_at
                     FROM orders 
-                    WHERE status = '充值成功' 
+                    WHERE status = 'completed' 
                     AND updated_at LIKE ?
                 """
                 params = (f"{today}%",)

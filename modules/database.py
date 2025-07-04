@@ -1067,13 +1067,13 @@ def get_user_today_confirmed_count(user_id):
             query = """
                 SELECT COUNT(*) FROM orders 
                 WHERE user_id = %s 
-                AND status = '充值成功' 
+                AND status = 'completed' 
                 AND to_char(updated_at::timestamp, 'YYYY-MM-DD') = %s
             """
             params = (user_id, today)
         else:
             # SQLite继续使用LIKE
-            query = "SELECT COUNT(*) FROM orders WHERE user_id = ? AND status = '充值成功' AND updated_at LIKE ?"
+            query = "SELECT COUNT(*) FROM orders WHERE user_id = ? AND status = 'completed' AND updated_at LIKE ?"
             params = (user_id, f"{today}%")
             
         result = execute_query(query, params, fetch=True)
@@ -1097,13 +1097,13 @@ def get_all_today_confirmed_count():
             # PostgreSQL使用to_char函数转换日期格式
             query = """
                 SELECT COUNT(*) FROM orders 
-                WHERE status = '充值成功' 
+                WHERE status = 'completed' 
                 AND to_char(updated_at::timestamp, 'YYYY-MM-DD') = %s
             """
             params = (today,)
         else:
             # SQLite继续使用LIKE
-            query = "SELECT COUNT(*) FROM orders WHERE status = '充值成功' AND updated_at LIKE ?"
+            query = "SELECT COUNT(*) FROM orders WHERE status = 'completed' AND updated_at LIKE ?"
             params = (f"{today}%",)
             
         result = execute_query(query, params, fetch=True)
@@ -1127,7 +1127,7 @@ def get_seller_today_confirmed_orders_by_user(telegram_id):
                 SELECT web_user_id, COUNT(*) 
                 FROM orders 
                 WHERE accepted_by = %s 
-                AND status = '充值成功' 
+                AND status = 'completed' 
                 AND to_char(updated_at::timestamp, 'YYYY-MM-DD') = %s
                 GROUP BY web_user_id
                 """,
@@ -1140,7 +1140,7 @@ def get_seller_today_confirmed_orders_by_user(telegram_id):
                 SELECT web_user_id, COUNT(*) 
                 FROM orders 
                 WHERE accepted_by = ? 
-                AND status = '充值成功' 
+                AND status = 'completed' 
                 AND updated_at LIKE ?
                 GROUP BY web_user_id
                 """,
