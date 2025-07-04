@@ -1111,14 +1111,6 @@
       border-radius: 12px;
       font-weight: 500;
     }
-    .manual-upload-btn:hover {
-      background-color: #e6e6e6;
-    }
-    .upload-button-container {
-      margin-top: 10px;
-      display: flex;
-      justify-content: center;
-    }
   </style>
 </head>
 <body>
@@ -1173,10 +1165,10 @@
                         <span>点击此处粘贴截图</span>
                         <span class="small">或拖拽图片到此处</span>
                       </div>
-                      <div class="upload-button-container">
-                        <button type="button" id="manualUploadBtn" class="manual-upload-btn" onclick="document.getElementById('qr_code_input').click(); event.stopPropagation(); return false;">手动上传</button>
-                      </div>
                       <div class="image-preview" id="imagePreview"></div>
+                    </div>
+                    <div class="manual-upload-btn-container">
+                      <button type="button" id="manualUploadBtn" class="btn btn-sm btn-secondary">手动上传</button>
                     </div>
                     <small class="form-text text-muted">请上传您YouTube账号的二维码截图</small>
                   </div>
@@ -1235,18 +1227,19 @@
                       border-radius: 8px;
                       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
                     }
-                    .manual-upload-btn {
-                      margin-top: 15px;
-                      padding: 4px 12px;
+                    .manual-upload-btn-container {
+                      display: flex;
+                      justify-content: center;
+                      margin-top: 8px;
+                    }
+                    #manualUploadBtn {
+                      padding: 3px 10px;
                       font-size: 12px;
-                      background-color: #f0f0f0;
+                      background-color: #f8f9fa;
                       border: 1px solid #ddd;
                       border-radius: 4px;
                       color: #333;
                       cursor: pointer;
-                    }
-                    .manual-upload-btn:hover {
-                      background-color: #e6e6e6;
                     }
                   </style>
                   <div class="form-group">
@@ -1275,7 +1268,7 @@
         <div class="right">
             <div class="card">
                 <div class="card-header">
-                  <h2>{% if session.is_admin %}系统订单状态{% else %}我的订单{% endif %}</h2>
+                  <h2>{% if session.is_admin %}今日订单{% else %}我的订单{% endif %}</h2>
                   <div class="header-actions">
                     <div class="view-toggle">
                       <button id="gridViewBtn" class="view-btn" title="网格视图"><i class="fas fa-th"></i></button>
@@ -1575,6 +1568,56 @@
       }
     });
     
+    // 模拟粘贴功能
+    function simulatePaste() {
+      // 检查剪贴板权限并请求访问
+      navigator.permissions.query({name: "clipboard-read"}).then(result => {
+        if (result.state === "granted" || result.state === "prompt") {
+          // 尝试从剪贴板读取
+          navigator.clipboard.read()
+            .then(clipboardItems => {
+              for (const clipboardItem of clipboardItems) {
+                for (const type of clipboardItem.types) {
+                  if (type.startsWith('image/')) {
+                    clipboardItem.getType(type)
+                      .then(blob => {
+                        // 创建一个新的文件对象
+                        const fileName = `pasted_image_${new Date().getTime()}.png`;
+                        const file = new File([blob], fileName, {type: blob.type});
+                        
+                        // 创建一个新的 DataTransfer 对象并附加文件
+                        const dataTransfer = new DataTransfer();
+                        dataTransfer.items.add(file);
+                        
+                        // 设置文件输入框的文件
+                        fileInput.files = dataTransfer.files;
+                        
+                        // 预览图片
+                        previewFile(file);
+                        
+                        // 触发变更事件
+                        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+                      })
+                      .catch(err => {
+                        console.error("无法获取剪贴板中的图片:", err);
+                        showCustomAlert('获取剪贴板图片失败，请尝试Ctrl+V或手动上传', 'warning');
+                      });
+                    return;
+                  }
+                }
+              }
+              showCustomAlert('剪贴板中没有图片，请先复制图片或使用手动上传', 'warning');
+            })
+            .catch(err => {
+              console.error("无法读取剪贴板:", err);
+              showCustomAlert('请按Ctrl+V粘贴图片或使用手动上传', 'info');
+            });
+        } else {
+          showCustomAlert('浏览器不支持剪贴板访问，请按Ctrl+V粘贴或使用手动上传', 'info');
+        }
+      });
+    }
+    
     // 监听文件选择变化
     fileInput.addEventListener('change', function() {
       if (this.files && this.files[0]) {
@@ -1648,73 +1691,28 @@
       
       reader.readAsDataURL(file);
     }
-
-    // 清除所有之前添加的事件监听器，重新设置
-    const newDropArea = dropArea.cloneNode(true);
-    dropArea.parentNode.replaceChild(newDropArea, dropArea);
     
-    // 重新获取元素引用
-    const updatedDropArea = document.getElementById('dropArea');
-    const manualUploadBtn = document.getElementById('manualUploadBtn');
-    
-    // 不再需要处理手动上传按钮的点击事件，因为已经使用内联onclick属性
-    
-    // 模拟粘贴功能
-    function simulatePaste() {
-      // 检查剪贴板权限并请求访问
-      navigator.permissions.query({name: "clipboard-read"}).then(result => {
-        if (result.state === "granted" || result.state === "prompt") {
-          // 尝试从剪贴板读取
-          navigator.clipboard.read()
-            .then(clipboardItems => {
-              for (const clipboardItem of clipboardItems) {
-                for (const type of clipboardItem.types) {
-                  if (type.startsWith('image/')) {
-                    clipboardItem.getType(type)
-                      .then(blob => {
-                        // 创建一个新的文件对象
-                        const fileName = `pasted_image_${new Date().getTime()}.png`;
-                        const file = new File([blob], fileName, {type: blob.type});
-                        
-                        // 创建一个新的 DataTransfer 对象并附加文件
-                        const dataTransfer = new DataTransfer();
-                        dataTransfer.items.add(file);
-                        
-                        // 设置文件输入框的文件
-                        fileInput.files = dataTransfer.files;
-                        
-                        // 预览图片
-                        previewFile(file);
-                        
-                        // 触发变更事件
-                        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-                      })
-                      .catch(err => {
-                        console.error("无法获取剪贴板中的图片:", err);
-                        showCustomAlert('获取剪贴板图片失败，请尝试Ctrl+V或手动上传', 'warning');
-                      });
-                    return;
-                  }
-                }
-              }
-              showCustomAlert('剪贴板中没有图片，请先复制图片或使用手动上传', 'warning');
-            })
-            .catch(err => {
-              console.error("无法读取剪贴板:", err);
-              showCustomAlert('请按Ctrl+V粘贴图片或使用手动上传', 'info');
-            });
-        } else {
-          showCustomAlert('浏览器不支持剪贴板访问，请按Ctrl+V粘贴或使用手动上传', 'info');
-        }
-      });
-    }
-    
-    // 处理上传区域的点击事件（排除按钮）
-    updatedDropArea.addEventListener('click', function(e) {
-      // 如果点击的不是手动上传按钮且预览区域不可见
-      if (e.target.id !== 'manualUploadBtn' && !e.target.closest('#manualUploadBtn') && imagePreview.style.display !== 'block') {
-        simulatePaste();
+    // 点击上传区域触发粘贴操作
+    dropArea.addEventListener('click', function(e) {
+      // 阻止冒泡，避免重复触发
+      e.preventDefault();
+      
+      // 如果有预览区域显示，则不执行粘贴
+      if (imagePreview.style.display === 'block') {
+        return;
       }
+      
+      // 尝试模拟粘贴操作
+      simulatePaste();
+    });
+    
+    // 手动上传按钮触发文件选择
+    const manualUploadBtn = document.getElementById('manualUploadBtn');
+    manualUploadBtn.addEventListener('click', function(e) {
+      // 阻止事件冒泡
+      e.stopPropagation();
+      // 触发文件选择
+      fileInput.click();
     });
   }
 
@@ -1961,25 +1959,22 @@
       if (resp.ok && result.success) {
         // 重置表单和状态
         document.getElementById('orderForm').reset();
+        displayedOrders = 5;
+        searchKeyword = '';
         
         // 清空图片预览
         const imagePreview = document.getElementById('imagePreview');
         const dropArea = document.getElementById('dropArea');
         const placeholder = dropArea.querySelector('.upload-placeholder');
         
-        // 清除预览图片
-        if (imagePreview) {
-          imagePreview.innerHTML = '';
-          imagePreview.style.display = 'none';
-        }
+        // 清空预览
+        imagePreview.innerHTML = '';
+        imagePreview.style.display = 'none';
         
-        // 显示上传占位符
+        // 显示占位提示
         if (placeholder) {
           placeholder.style.display = 'flex';
         }
-        
-        displayedOrders = 5;
-        searchKeyword = '';
         
         // 更新订单列表
         if (result.orders) {
