@@ -1060,15 +1060,19 @@ def get_user_today_confirmed_count(user_id):
     import pytz
     today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
     
-    query = ""
-    params = ()
-    
     # 根据数据库类型选择不同查询语句
     if DATABASE_URL.startswith('postgres'):
-        query = "SELECT COUNT(*) FROM orders WHERE user_id = %s AND buyer_confirmed = TRUE AND buyer_confirmed_at LIKE %s"
-        params = (user_id, f"{today}%")
+        # PostgreSQL使用日期范围比较而不是LIKE
+        query = """
+            SELECT COUNT(*) FROM orders 
+            WHERE user_id = %s 
+            AND status = '充值成功' 
+            AND updated_at::date = %s::date
+        """
+        params = (user_id, today)
     else:
-        query = "SELECT COUNT(*) FROM orders WHERE user_id = ? AND buyer_confirmed = 1 AND buyer_confirmed_at LIKE ?"
+        # SQLite继续使用LIKE
+        query = "SELECT COUNT(*) FROM orders WHERE user_id = ? AND status = '充值成功' AND updated_at LIKE ?"
         params = (user_id, f"{today}%")
         
     result = execute_query(query, params, fetch=True)
@@ -1078,18 +1082,22 @@ def get_all_today_confirmed_count():
     """获取所有用户今天已确认的订单总数"""
     from datetime import datetime
     import pytz
-    today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
     
-    query = ""
-    params = (f"{today}%",)
+    today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
     
     # 根据数据库类型选择不同查询语句
     if DATABASE_URL.startswith('postgres'):
-        # 计算status为'充值成功'的订单数量
-        query = "SELECT COUNT(*) FROM orders WHERE status = '充值成功' AND updated_at LIKE %s"
+        # PostgreSQL使用日期范围比较而不是LIKE
+        query = """
+            SELECT COUNT(*) FROM orders 
+            WHERE status = '充值成功' 
+            AND updated_at::date = %s::date
+        """
+        params = (today,)
     else:
-        # 计算status为'充值成功'的订单数量
+        # SQLite继续使用LIKE
         query = "SELECT COUNT(*) FROM orders WHERE status = '充值成功' AND updated_at LIKE ?"
+        params = (f"{today}%",)
         
     result = execute_query(query, params, fetch=True)
     return result[0][0] if result and result[0] else 0
@@ -1105,10 +1113,12 @@ def get_seller_today_confirmed_orders_by_user(telegram_id):
             """
             SELECT web_user_id, COUNT(*) 
             FROM orders 
-            WHERE accepted_by = %s AND buyer_confirmed = TRUE AND buyer_confirmed_at LIKE %s
+            WHERE accepted_by = %s 
+            AND status = '充值成功' 
+            AND updated_at::date = %s::date
             GROUP BY web_user_id
             """,
-            (str(telegram_id), f"{today}%"),
+            (str(telegram_id), today),
             fetch=True
         )
     else:
@@ -1116,7 +1126,9 @@ def get_seller_today_confirmed_orders_by_user(telegram_id):
             """
             SELECT web_user_id, COUNT(*) 
             FROM orders 
-            WHERE accepted_by = ? AND buyer_confirmed = 1 AND buyer_confirmed_at LIKE ?
+            WHERE accepted_by = ? 
+            AND status = '充值成功' 
+            AND updated_at LIKE ?
             GROUP BY web_user_id
             """,
             (str(telegram_id), f"{today}%"),
