@@ -754,34 +754,28 @@
     .orders-table {
       width: 100%;
       border-collapse: collapse;
+      border-spacing: 0;
       margin-top: 10px;
-      background: white;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      font-size: 13px;
     }
     
     .orders-table th {
-      background: rgba(102,126,234,0.1);
-      padding: 12px;
+      background: #f7f8fc;
+      padding: 10px 12px;
       text-align: left;
       font-weight: 600;
-      color: #555;
-      border-bottom: 2px solid rgba(102,126,234,0.2);
+      color: #444;
+      border-bottom: 2px solid #e1e5e9;
     }
     
     .orders-table td {
-      padding: 12px;
-      border-bottom: 1px solid rgba(0,0,0,0.05);
+      padding: 10px 12px;
+      border-bottom: 1px solid #e1e5e9;
       vertical-align: middle;
     }
     
-    .orders-table tr:last-child td {
-      border-bottom: none;
-    }
-    
     .orders-table tr:hover {
-      background: rgba(102,126,234,0.05);
+      background-color: #f5f7ff;
     }
     
     .detail-btn {
@@ -1111,6 +1105,19 @@
       border-radius: 12px;
       font-weight: 500;
     }
+
+    .order-list-item p.seller::before {
+      content: '👨‍💻';
+      margin-right: 8px;
+    }
+    
+    /* 提交者样式 */
+    .order-list-item p.submitter::before {
+      content: '📝';
+      margin-right: 8px;
+    }
+    
+    /* 状态标签 */
   </style>
 </head>
 <body>
@@ -2230,6 +2237,7 @@
           <h4>订单 #${o.id} <span class="status-badge ${cls}">${o.status_text}</span></h4>
           <p class="account"><strong>YouTube：</strong>${o.account.includes('uploads') ? `<a href="/${o.account}" target="_blank">查看二维码</a>` : '未上传二维码'}</p>
           <p class="seller"><strong>接单人：</strong>${o.accepted_by_nickname || o.accepted_by || '-'}</p>
+          ${isAdmin ? `<p class="submitter"><strong>提交者：</strong>${escapeHtml(o.username || '-')}</p>` : ''}
           <div class="remark-container">
             <p class="remark"><strong>备注：</strong><span class="remark-text" data-order-id="${o.id}">${escapeHtml(o.remark || '')}</span></p>
             <button class="edit-remark-btn" onclick="editRemark(${o.id})"><i class="fas fa-pencil-alt"></i></button>
@@ -2267,6 +2275,7 @@
             <th>提交时间</th>
             <th>完成时间</th>
             <th>接单人</th>
+            ${isAdmin ? '<th>提交者</th>' : ''}
             <th>操作</th>
           </tr>
         </thead>
@@ -2290,6 +2299,7 @@
           <td>${o.created_at}</td>
           <td>${o.completed_at || '-'}</td>
           <td>${o.accepted_by_nickname || o.accepted_by || '-'}</td>
+          ${isAdmin ? `<td>${escapeHtml(o.username || '-')}</td>` : ''}
           <td>
             <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
             <button class="confirm-btn" onclick="confirmOrder(${o.id})">${o.buyer_confirmed ? '已确认' : '确认'}</button>
@@ -2367,6 +2377,11 @@
     
     // 显示接单人
     detailMessage += `接单人: ${order.accepted_by_nickname || order.accepted_by || '-'}\n`;
+    
+    // 管理员可以看到提交者
+    if (isAdmin && order.username) {
+      detailMessage += `提交者: ${order.username}\n`;
+    }
     
     alert(detailMessage);
   }
