@@ -1207,10 +1207,11 @@
                       position: absolute;
                       top: 0;
                       left: 0;
-                      width: 100%;
-                      height: 100%;
+                      width: 0.1px;
+                      height: 0.1px;
                       opacity: 0;
-                      cursor: pointer;
+                      overflow: hidden;
+                      z-index: -1;
                     }
                     .image-preview {
                       margin-top: 15px;
@@ -1575,7 +1576,7 @@
       }
     }
     
-          // 预览文件
+    // 预览文件
     function previewFile(file) {
       if (!file.type.match('image.*')) {
         alert('请选择图片文件！');
@@ -1624,9 +1625,15 @@
       reader.readAsDataURL(file);
     }
     
-    // 点击上传区域也能触发文件选择
-    dropArea.addEventListener('click', function() {
-      fileInput.click();
+    // 点击上传区域也能触发文件选择，但排除直接点击input元素的情况
+    dropArea.addEventListener('click', function(e) {
+      // 阻止冒泡，避免重复触发
+      e.preventDefault();
+      
+      // 如果点击的是文件输入框本身，不执行click()以避免重复触发
+      if (e.target !== fileInput) {
+        fileInput.click();
+      }
     });
   }
 
