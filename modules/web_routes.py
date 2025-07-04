@@ -1455,6 +1455,68 @@ def register_routes(app, notification_queue):
         except Exception as e:
             logger.error(f"检查备注重复失败: {str(e)}", exc_info=True)
             return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @app.route('/api/debug-stats')
+    @login_required
+    def debug_stats():
+        """调试统计功能"""
+        try:
+            from datetime import datetime
+            import pytz
+            
+            user_id = session.get('user_id')
+            is_admin = session.get('is_admin', 0)
+            
+            if not is_admin:
+                return jsonify({"error": "仅管理员可访问"}), 403
+                
+            today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
+            
+            # 获取数据库类型
+            db_type = "PostgreSQL" if DATABASE_URL.startswith('postgres') else "SQLite"
+            
+            # 获取今日充值成功的订单
+            if DATABASE_URL.startswith('postgres'):
+                query = """
+                    SELECT id, status, updated_at, created_at
+                    FROM orders 
+                    WHERE status = '充值成功' 
+                    AND to_char(updated_at::timestamp, 'YYYY-MM-DD') = %s
+                """
+                params = (today,)
+            else:
+                query = """
+                    SELECT id, status, updated_at, created_at
+                    FROM orders 
+                    WHERE status = '充值成功' 
+                    AND updated_at LIKE ?
+                """
+                params = (f"{today}%",)
+                
+            orders = execute_query(query, params, fetch=True)
+            
+            # 获取统计数据
+            user_confirmed_count = get_user_today_confirmed_count(user_id)
+            all_confirmed_count = get_all_today_confirmed_count()
+            
+            return jsonify({
+                'success': True,
+                'debug_info': {
+                    'database_type': db_type,
+                    'today': today,
+                    'query': query,
+                    'params': params,
+                    'orders_count': len(orders) if orders else 0,
+                    'orders': [dict(zip(['id', 'status', 'updated_at', 'created_at'], order)) for order in orders] if orders else []
+                },
+                'stats': {
+                    'user_today_confirmed': user_confirmed_count,
+                    'all_today_confirmed': all_confirmed_count
+                }
+            })
+        except Exception as e:
+            logger.error(f"调试统计功能失败: {str(e)}", exc_info=True)
+            return jsonify({'success': False, 'error': str(e)}), 500
 
 def ensure_orders_columns():
     """确保orders表包含所有必需的列，比如buyer_confirmed_at"""

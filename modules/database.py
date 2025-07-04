@@ -1060,23 +1060,29 @@ def get_user_today_confirmed_count(user_id):
     import pytz
     today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
     
-    # 根据数据库类型选择不同查询语句
-    if DATABASE_URL.startswith('postgres'):
-        # PostgreSQL使用日期范围比较而不是LIKE
-        query = """
-            SELECT COUNT(*) FROM orders 
-            WHERE user_id = %s 
-            AND status = '充值成功' 
-            AND updated_at::date = %s::date
-        """
-        params = (user_id, today)
-    else:
-        # SQLite继续使用LIKE
-        query = "SELECT COUNT(*) FROM orders WHERE user_id = ? AND status = '充值成功' AND updated_at LIKE ?"
-        params = (user_id, f"{today}%")
-        
-    result = execute_query(query, params, fetch=True)
-    return result[0][0] if result and result[0] else 0
+    try:
+        # 根据数据库类型选择不同查询语句
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL使用to_char函数转换日期格式
+            query = """
+                SELECT COUNT(*) FROM orders 
+                WHERE user_id = %s 
+                AND status = '充值成功' 
+                AND to_char(updated_at::timestamp, 'YYYY-MM-DD') = %s
+            """
+            params = (user_id, today)
+        else:
+            # SQLite继续使用LIKE
+            query = "SELECT COUNT(*) FROM orders WHERE user_id = ? AND status = '充值成功' AND updated_at LIKE ?"
+            params = (user_id, f"{today}%")
+            
+        result = execute_query(query, params, fetch=True)
+        count = result[0][0] if result and result[0] else 0
+        logger.info(f"用户 {user_id} 今日充值成功订单数: {count}")
+        return count
+    except Exception as e:
+        logger.error(f"获取用户今日确认订单数失败: {str(e)}", exc_info=True)
+        return 0
 
 def get_all_today_confirmed_count():
     """获取所有用户今天已确认的订单总数"""
@@ -1085,22 +1091,28 @@ def get_all_today_confirmed_count():
     
     today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
     
-    # 根据数据库类型选择不同查询语句
-    if DATABASE_URL.startswith('postgres'):
-        # PostgreSQL使用日期范围比较而不是LIKE
-        query = """
-            SELECT COUNT(*) FROM orders 
-            WHERE status = '充值成功' 
-            AND updated_at::date = %s::date
-        """
-        params = (today,)
-    else:
-        # SQLite继续使用LIKE
-        query = "SELECT COUNT(*) FROM orders WHERE status = '充值成功' AND updated_at LIKE ?"
-        params = (f"{today}%",)
-        
-    result = execute_query(query, params, fetch=True)
-    return result[0][0] if result and result[0] else 0
+    try:
+        # 根据数据库类型选择不同查询语句
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL使用to_char函数转换日期格式
+            query = """
+                SELECT COUNT(*) FROM orders 
+                WHERE status = '充值成功' 
+                AND to_char(updated_at::timestamp, 'YYYY-MM-DD') = %s
+            """
+            params = (today,)
+        else:
+            # SQLite继续使用LIKE
+            query = "SELECT COUNT(*) FROM orders WHERE status = '充值成功' AND updated_at LIKE ?"
+            params = (f"{today}%",)
+            
+        result = execute_query(query, params, fetch=True)
+        count = result[0][0] if result and result[0] else 0
+        logger.info(f"今日全站充值成功订单数: {count}, 查询参数: {today}")
+        return count
+    except Exception as e:
+        logger.error(f"获取全站今日确认订单数失败: {str(e)}", exc_info=True)
+        return 0
 
 def get_seller_today_confirmed_orders_by_user(telegram_id):
     """获取卖家今天已确认的订单数，并按用户分组"""
@@ -1108,34 +1120,39 @@ def get_seller_today_confirmed_orders_by_user(telegram_id):
     import pytz
     today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
     
-    if DATABASE_URL.startswith('postgres'):
-        results = execute_query(
-            """
-            SELECT web_user_id, COUNT(*) 
-            FROM orders 
-            WHERE accepted_by = %s 
-            AND status = '充值成功' 
-            AND updated_at::date = %s::date
-            GROUP BY web_user_id
-            """,
-            (str(telegram_id), today),
-            fetch=True
-        )
-    else:
-        results = execute_query(
-            """
-            SELECT web_user_id, COUNT(*) 
-            FROM orders 
-            WHERE accepted_by = ? 
-            AND status = '充值成功' 
-            AND updated_at LIKE ?
-            GROUP BY web_user_id
-            """,
-            (str(telegram_id), f"{today}%"),
-            fetch=True
-        )
-    
-    return results if results else []
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            results = execute_query(
+                """
+                SELECT web_user_id, COUNT(*) 
+                FROM orders 
+                WHERE accepted_by = %s 
+                AND status = '充值成功' 
+                AND to_char(updated_at::timestamp, 'YYYY-MM-DD') = %s
+                GROUP BY web_user_id
+                """,
+                (str(telegram_id), today),
+                fetch=True
+            )
+        else:
+            results = execute_query(
+                """
+                SELECT web_user_id, COUNT(*) 
+                FROM orders 
+                WHERE accepted_by = ? 
+                AND status = '充值成功' 
+                AND updated_at LIKE ?
+                GROUP BY web_user_id
+                """,
+                (str(telegram_id), f"{today}%"),
+                fetch=True
+            )
+        
+        logger.info(f"卖家 {telegram_id} 今日充值成功订单数: {len(results) if results else 0}")
+        return results if results else []
+    except Exception as e:
+        logger.error(f"获取卖家今日确认订单数失败: {str(e)}", exc_info=True)
+        return []
 
 def get_seller_pending_orders(telegram_id):
     """获取卖家当前未完成的订单数（已接单但未确认）"""
