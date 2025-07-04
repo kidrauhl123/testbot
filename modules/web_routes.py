@@ -451,60 +451,117 @@ def register_routes(app, notification_queue):
             is_admin = session.get('is_admin')
             user_id = session.get('user_id')
             
-            if is_admin:
-                # 管理员可查看所有订单
-                orders = execute_query("""
-                    SELECT id, account, password, package, status, created_at, 
-                    accepted_at, completed_at, remark, web_user_id, user_id, 
-                    accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed,
-                    username
-                    FROM orders 
-                    ORDER BY id DESC LIMIT ? OFFSET ?
-                """, (limit, offset), fetch=True)
-            else:
-                # 普通用户只能查看自己的订单
-                orders = execute_query("""
-                    SELECT id, account, password, package, status, created_at, 
-                    accepted_at, completed_at, remark, web_user_id, user_id, 
-                    accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed,
-                    username
-                    FROM orders 
-                    WHERE user_id = ? 
-                    ORDER BY id DESC LIMIT ? OFFSET ?
-                """, (user_id, limit, offset), fetch=True)
-            
             # 格式化订单数据
             formatted_orders = []
-            for order in orders:
-                oid, account, password, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed, username = order
+            
+            # 根据数据库类型使用不同的查询
+            if DATABASE_URL.startswith('postgres'):
+                if is_admin:
+                    # 管理员可查看所有订单
+                    orders = execute_query("""
+                        SELECT id, account, password, package, status, created_at, 
+                        accepted_at, completed_at, remark, web_user_id, user_id, 
+                        accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
+                        FROM orders 
+                        ORDER BY id DESC LIMIT ? OFFSET ?
+                    """, (limit, offset), fetch=True)
+                else:
+                    # 普通用户只能查看自己的订单
+                    orders = execute_query("""
+                        SELECT id, account, password, package, status, created_at, 
+                        accepted_at, completed_at, remark, web_user_id, user_id, 
+                        accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed
+                        FROM orders 
+                        WHERE user_id = ? 
+                        ORDER BY id DESC LIMIT ? OFFSET ?
+                    """, (user_id, limit, offset), fetch=True)
                 
-                # 优先使用自定义昵称，其次是用户名称，最后是ID
-                seller_display = accepted_by_nickname or accepted_by_first_name or accepted_by_username or accepted_by
-                if seller_display and not isinstance(seller_display, str):
-                    seller_display = str(seller_display)
+                for order in orders:
+                    oid, account, password, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed = order
+                    
+                    # 优先使用自定义昵称，其次是用户名称，最后是ID
+                    seller_display = accepted_by_nickname or accepted_by_first_name or accepted_by_username or accepted_by
+                    if seller_display and not isinstance(seller_display, str):
+                        seller_display = str(seller_display)
+                    
+                    # 如果是失败状态，翻译失败原因
+                    translated_remark = remark
+                    if status == STATUS['FAILED'] and remark:
+                        translated_remark = REASON_TEXT_ZH.get(remark, remark)
+                    
+                    # 使用web_user_id作为username
+                    username = web_user_id
+                    
+                    order_data = {
+                        "id": oid,
+                        "account": account,
+                        "password": password,
+                        "package": package,
+                        "status": status,
+                        "status_text": STATUS_TEXT_ZH.get(status, status),
+                        "created_at": created_at,
+                        "accepted_at": accepted_at or "",
+                        "completed_at": completed_at or "",
+                        "remark": translated_remark or "",
+                        "accepted_by": seller_display or "",
+                        "buyer_confirmed": bool(buyer_confirmed),
+                        "can_cancel": status == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == user_id),
+                        "username": username or ""
+                    }
+                    formatted_orders.append(order_data)
+            else:
+                if is_admin:
+                    # 管理员可查看所有订单
+                    orders = execute_query("""
+                        SELECT id, account, password, package, status, created_at, 
+                        accepted_at, completed_at, remark, web_user_id, user_id, 
+                        accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed,
+                        username
+                        FROM orders 
+                        ORDER BY id DESC LIMIT ? OFFSET ?
+                    """, (limit, offset), fetch=True)
+                else:
+                    # 普通用户只能查看自己的订单
+                    orders = execute_query("""
+                        SELECT id, account, password, package, status, created_at, 
+                        accepted_at, completed_at, remark, web_user_id, user_id, 
+                        accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed,
+                        username
+                        FROM orders 
+                        WHERE user_id = ? 
+                        ORDER BY id DESC LIMIT ? OFFSET ?
+                    """, (user_id, limit, offset), fetch=True)
                 
-                # 如果是失败状态，翻译失败原因
-                translated_remark = remark
-                if status == STATUS['FAILED'] and remark:
-                    translated_remark = REASON_TEXT_ZH.get(remark, remark)
-                
-                order_data = {
-                    "id": oid,
-                    "account": account,
-                    "password": password,
-                    "package": package,
-                    "status": status,
-                    "status_text": STATUS_TEXT_ZH.get(status, status),
-                    "created_at": created_at,
-                    "accepted_at": accepted_at or "",
-                    "completed_at": completed_at or "",
-                    "remark": translated_remark or "",
-                    "accepted_by": seller_display or "",
-                    "buyer_confirmed": bool(buyer_confirmed),
-                    "can_cancel": status == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == user_id),
-                    "username": username or web_user_id or ""  # 使用web_user_id作为后备
-                }
-                formatted_orders.append(order_data)
+                for order in orders:
+                    oid, account, password, package, status, created_at, accepted_at, completed_at, remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, buyer_confirmed, username = order
+                    
+                    # 优先使用自定义昵称，其次是用户名称，最后是ID
+                    seller_display = accepted_by_nickname or accepted_by_first_name or accepted_by_username or accepted_by
+                    if seller_display and not isinstance(seller_display, str):
+                        seller_display = str(seller_display)
+                    
+                    # 如果是失败状态，翻译失败原因
+                    translated_remark = remark
+                    if status == STATUS['FAILED'] and remark:
+                        translated_remark = REASON_TEXT_ZH.get(remark, remark)
+                    
+                    order_data = {
+                        "id": oid,
+                        "account": account,
+                        "password": password,
+                        "package": package,
+                        "status": status,
+                        "status_text": STATUS_TEXT_ZH.get(status, status),
+                        "created_at": created_at,
+                        "accepted_at": accepted_at or "",
+                        "completed_at": completed_at or "",
+                        "remark": translated_remark or "",
+                        "accepted_by": seller_display or "",
+                        "buyer_confirmed": bool(buyer_confirmed),
+                        "can_cancel": status == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == user_id),
+                        "username": username or web_user_id or ""
+                    }
+                    formatted_orders.append(order_data)
             
             # 直接返回订单列表，而不是嵌套在orders字段中
             return jsonify({"success": True, "orders": formatted_orders})

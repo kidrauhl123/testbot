@@ -1426,13 +1426,27 @@ def create_order_with_deduction_atomic(account, password, package, remark, usern
     try:
         # 创建订单记录
         now = get_china_time()
-        execute_query(
-            """
-            INSERT INTO orders (account, password, package, status, created_at, remark, user_id, username)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (account, password, package, 'submitted', now, remark, user_id, username)
-        )
+        
+        # 根据数据库类型选择不同的SQL
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL版本 - 不使用username字段
+            execute_query(
+                """
+                INSERT INTO orders (account, password, package, status, created_at, remark, user_id, web_user_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (account, password, package, 'submitted', now, remark, user_id, username)
+            )
+        else:
+            # SQLite版本
+            execute_query(
+                """
+                INSERT INTO orders (account, password, package, status, created_at, remark, user_id, username)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (account, password, package, 'submitted', now, remark, user_id, username)
+            )
+            
         return True, "订单创建成功", 0, 0
     except Exception as e:
         logger.error(f"创建订单失败: {str(e)}", exc_info=True)
