@@ -1800,15 +1800,78 @@
     const orig = btn.textContent;
     btn.textContent = '提交中…';
     btn.disabled = true;
+    
     try {
-      const data = new FormData(e.target);
+      const formData = new FormData(e.target);
+      const remark = formData.get('remark');
       
-      const resp = await fetch('/', { method: 'POST', body: data });
+      // 检查备注是否重复
+      if (remark && remark.trim() !== '') {
+        const checkResp = await fetch('/api/check-duplicate-remark', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ remark: remark }),
+        });
+        
+        const checkResult = await checkResp.json();
+        
+        if (checkResult.success && checkResult.duplicate) {
+          // 显示备注重复确认对话框
+          btn.textContent = orig;
+          btn.disabled = false;
+          
+          // 显示确认对话框
+          const duplicateModal = document.getElementById('duplicateRemarkModal');
+          duplicateModal.style.display = 'block';
+          
+          // 处理确认/取消事件
+          return new Promise((resolve) => {
+            document.getElementById('confirmDuplicateYes').onclick = async () => {
+              duplicateModal.style.display = 'none';
+              // 继续提交订单
+              await submitOrderForm(formData);
+              resolve();
+            };
+            
+            document.getElementById('confirmDuplicateNo').onclick = () => {
+              duplicateModal.style.display = 'none';
+              resolve();
+            };
+            
+            duplicateModal.querySelector('.close-modal').onclick = () => {
+              duplicateModal.style.display = 'none';
+              resolve();
+            };
+          });
+        }
+      }
+      
+      // 如果没有重复或不需要确认，直接提交
+      await submitOrderForm(formData);
+    } catch (error) {
+      showCustomAlert('网络错误或服务器无响应，请重试', 'error');
+      console.error('订单提交错误:', error);
+      btn.textContent = orig;
+      btn.disabled = false;
+    }
+  });
+  
+  // 提交订单表单
+  async function submitOrderForm(formData) {
+    const btn = document.getElementById('orderForm').querySelector('button');
+    const orig = btn.textContent;
+    btn.textContent = '提交中…';
+    btn.disabled = true;
+    
+    try {
+      const resp = await fetch('/', { method: 'POST', body: formData });
       const result = await resp.json();
       
       if (resp.ok && result.success) {
         // 重置表单和状态
-        e.target.reset();
+        document.getElementById('orderForm').reset();
         displayedOrders = 5;
         searchKeyword = '';
         
@@ -1821,9 +1884,8 @@
           await loadOrders();
         }
         
-      // 显示成功消息
-      showCustomAlert(result.message || '订单提交成功！', 'success');
-
+        // 显示成功消息
+        showCustomAlert(result.message || '订单提交成功！', 'success');
       } else {
         // 处理错误情况
         showCustomAlert(result.error || '提交失败，请重试', 'error');
@@ -1835,7 +1897,7 @@
       btn.textContent = orig;
       btn.disabled = false;
     }
-  });
+  }
   
   // 删除余额显示相关函数
 
