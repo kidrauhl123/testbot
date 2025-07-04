@@ -1708,16 +1708,18 @@
       simulatePaste();
     });
     
-    // 手动上传按钮触发文件选择
-    const manualUploadBtn = document.getElementById('manualUploadBtn');
-    manualUploadBtn.addEventListener('click', function(e) {
-      // 阻止事件冒泡，防止触发上传区域的点击事件
-      e.stopPropagation();
-      e.preventDefault();
-      
-      // 触发文件选择
-      fileInput.click();
-    });
+    // 手动上传按钮触发文件选择 - 必须使用事件委托，因为按钮可能在DOM加载后才创建
+    document.addEventListener('click', function(e) {
+      // 检查点击的是否是手动上传按钮
+      if (e.target && e.target.id === 'manualUploadBtn') {
+        // 阻止事件冒泡和默认行为
+        e.stopPropagation();
+        e.preventDefault();
+        
+        // 触发文件选择
+        fileInput.click();
+      }
+    }, true);
   }
 
   // 页面加载处理
@@ -1963,6 +1965,23 @@
       if (resp.ok && result.success) {
         // 重置表单和状态
         document.getElementById('orderForm').reset();
+        
+        // 清空图片预览
+        const imagePreview = document.getElementById('imagePreview');
+        const dropArea = document.getElementById('dropArea');
+        const placeholder = dropArea.querySelector('.upload-placeholder');
+        
+        // 清除预览图片
+        if (imagePreview) {
+          imagePreview.innerHTML = '';
+          imagePreview.style.display = 'none';
+        }
+        
+        // 显示上传占位符
+        if (placeholder) {
+          placeholder.style.display = 'flex';
+        }
+        
         displayedOrders = 5;
         searchKeyword = '';
         
