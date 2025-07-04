@@ -2005,11 +2005,50 @@
         if (stats.success) {
             const todaySuccessCount = document.getElementById('today-success-count');
             if (todaySuccessCount) {
+                let count = 0;
+                
                 if (isAdmin) {
-                    todaySuccessCount.textContent = stats.all_today_confirmed;
+                    count = stats.all_today_confirmed;
                 } else {
-                    todaySuccessCount.textContent = stats.user_today_confirmed;
+                    count = stats.user_today_confirmed;
                 }
+                
+                // 如果API返回的数量为0，尝试从页面上的订单列表计算
+                if (count === 0 && allOrders && allOrders.length > 0) {
+                    console.log("API返回的充值成功订单数为0，尝试从页面订单列表计算...");
+                    
+                    // 获取今天的日期字符串 YYYY-MM-DD
+                    const today = new Date().toISOString().split('T')[0];
+                    console.log("今天日期:", today);
+                    
+                    // 从allOrders中筛选今天的充值成功订单
+                    const todayCompletedOrders = allOrders.filter(order => {
+                        // 检查订单状态是否为completed/充值成功
+                        const isCompleted = order.status === 'completed' || order.status_text === '充值成功';
+                        
+                        // 检查订单日期是否为今天
+                        let orderDate = '';
+                        if (order.updated_at) {
+                            // 尝试从updated_at获取日期
+                            orderDate = order.updated_at.split(' ')[0];
+                        } else if (order.completed_at) {
+                            // 尝试从completed_at获取日期
+                            orderDate = order.completed_at.split(' ')[0];
+                        } else if (order.created_at) {
+                            // 尝试从created_at获取日期
+                            orderDate = order.created_at.split(' ')[0];
+                        }
+                        
+                        console.log(`订单 ${order.id}: 状态=${isCompleted}, 日期=${orderDate}, 是今天=${orderDate === today}`);
+                        
+                        return isCompleted && orderDate === today;
+                    });
+                    
+                    count = todayCompletedOrders.length;
+                    console.log(`从页面计算得到今日充值成功订单数: ${count}`);
+                }
+                
+                todaySuccessCount.textContent = count;
             }
         }
     } catch (e) {

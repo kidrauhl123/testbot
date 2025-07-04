@@ -1518,6 +1518,84 @@ def register_routes(app, notification_queue):
             logger.error(f"调试统计功能失败: {str(e)}", exc_info=True)
             return jsonify({'success': False, 'error': str(e)}), 500
 
+    @app.route('/api/debug-orders')
+    @login_required
+    def debug_orders():
+        """直接查询今日订单数据"""
+        try:
+            from datetime import datetime
+            import pytz
+            
+            user_id = session.get('user_id')
+            is_admin = session.get('is_admin', 0)
+            
+            if not is_admin:
+                return jsonify({"error": "仅管理员可访问"}), 403
+                
+            today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
+            
+            # 直接查询所有订单，不做任何过滤
+            all_orders = execute_query(
+                "SELECT id, status, updated_at, created_at FROM orders ORDER BY id DESC LIMIT 10",
+                fetch=True
+            )
+            
+            # 尝试不同的日期匹配方式
+            if DATABASE_URL.startswith('postgres'):
+                # 使用不同的日期匹配方法
+                methods = [
+                    {
+                        "name": "to_char方法",
+                        "query": "SELECT id, status, updated_at, created_at FROM orders WHERE status = 'completed' AND to_char(updated_at::timestamp, 'YYYY-MM-DD') = %s",
+                        "params": (today,)
+                    },
+                    {
+                        "name": "日期截取方法",
+                        "query": "SELECT id, status, updated_at, created_at FROM orders WHERE status = 'completed' AND substring(updated_at, 1, 10) = %s",
+                        "params": (today,)
+                    },
+                    {
+                        "name": "简单LIKE方法",
+                        "query": "SELECT id, status, updated_at, created_at FROM orders WHERE status = 'completed' AND updated_at LIKE %s",
+                        "params": (f"{today}%",)
+                    }
+                ]
+            else:
+                # SQLite方法
+                methods = [
+                    {
+                        "name": "LIKE方法",
+                        "query": "SELECT id, status, updated_at, created_at FROM orders WHERE status = 'completed' AND updated_at LIKE ?",
+                        "params": (f"{today}%",)
+                    },
+                    {
+                        "name": "substr方法",
+                        "query": "SELECT id, status, updated_at, created_at FROM orders WHERE status = 'completed' AND substr(updated_at, 1, 10) = ?",
+                        "params": (today,)
+                    }
+                ]
+            
+            results = {}
+            for method in methods:
+                try:
+                    orders = execute_query(method["query"], method["params"], fetch=True)
+                    results[method["name"]] = {
+                        "count": len(orders) if orders else 0,
+                        "orders": [dict(zip(['id', 'status', 'updated_at', 'created_at'], order)) for order in orders] if orders else []
+                    }
+                except Exception as e:
+                    results[method["name"]] = {"error": str(e)}
+            
+            return jsonify({
+                'success': True,
+                'today': today,
+                'all_orders': [dict(zip(['id', 'status', 'updated_at', 'created_at'], order)) for order in all_orders] if all_orders else [],
+                'results': results
+            })
+        except Exception as e:
+            logger.error(f"调试订单数据失败: {str(e)}", exc_info=True)
+            return jsonify({'success': False, 'error': str(e)}), 500
+
 def ensure_orders_columns():
     """确保orders表包含所有必需的列，比如buyer_confirmed_at"""
     try:

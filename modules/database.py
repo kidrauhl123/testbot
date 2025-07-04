@@ -1090,26 +1090,91 @@ def get_all_today_confirmed_count():
     import pytz
     
     today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
+    logger.info(f"查询今日({today})充值成功订单...")
     
     try:
+        # 首先，查询所有状态为completed的订单，不考虑日期
+        all_completed_query = "SELECT id, status, updated_at FROM orders WHERE status = 'completed'"
+        all_completed = execute_query(all_completed_query, (), fetch=True)
+        logger.info(f"所有充值成功订单数: {len(all_completed) if all_completed else 0}")
+        if all_completed:
+            for order in all_completed:
+                logger.info(f"订单ID: {order[0]}, 状态: {order[1]}, 更新时间: {order[2]}")
+        
         # 根据数据库类型选择不同查询语句
         if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL使用to_char函数转换日期格式
-            query = """
-                SELECT COUNT(*) FROM orders 
-                WHERE status = 'completed' 
-                AND to_char(updated_at::timestamp, 'YYYY-MM-DD') = %s
-            """
-            params = (today,)
+            # 尝试多种方法
+            methods = [
+                {
+                    "name": "to_char方法",
+                    "query": """
+                        SELECT COUNT(*) FROM orders 
+                        WHERE status = 'completed' 
+                        AND to_char(updated_at::timestamp, 'YYYY-MM-DD') = %s
+                    """,
+                    "params": (today,)
+                },
+                {
+                    "name": "substring方法",
+                    "query": """
+                        SELECT COUNT(*) FROM orders 
+                        WHERE status = 'completed' 
+                        AND substring(updated_at, 1, 10) = %s
+                    """,
+                    "params": (today,)
+                },
+                {
+                    "name": "LIKE方法",
+                    "query": """
+                        SELECT COUNT(*) FROM orders 
+                        WHERE status = 'completed' 
+                        AND updated_at LIKE %s
+                    """,
+                    "params": (f"{today}%",)
+                }
+            ]
+            
+            # 尝试所有方法
+            for method in methods:
+                try:
+                    result = execute_query(method["query"], method["params"], fetch=True)
+                    count = result[0][0] if result and result[0] else 0
+                    logger.info(f"使用{method['name']}查询结果: {count}")
+                    
+                    # 如果找到了结果，就返回
+                    if count > 0:
+                        logger.info(f"今日全站充值成功订单数: {count}, 查询方法: {method['name']}")
+                        return count
+                except Exception as e:
+                    logger.error(f"使用{method['name']}查询失败: {str(e)}")
+            
+            # 如果所有方法都没有找到结果，返回0
+            logger.warning("所有查询方法都返回0，可能是日期格式问题")
+            return 0
         else:
-            # SQLite继续使用LIKE
+            # SQLite使用LIKE方法
             query = "SELECT COUNT(*) FROM orders WHERE status = 'completed' AND updated_at LIKE ?"
             params = (f"{today}%",)
             
-        result = execute_query(query, params, fetch=True)
-        count = result[0][0] if result and result[0] else 0
-        logger.info(f"今日全站充值成功订单数: {count}, 查询参数: {today}")
-        return count
+            result = execute_query(query, params, fetch=True)
+            count = result[0][0] if result and result[0] else 0
+            
+            # 如果没有找到结果，尝试其他方法
+            if count == 0:
+                try:
+                    # 尝试使用substr
+                    substr_query = "SELECT COUNT(*) FROM orders WHERE status = 'completed' AND substr(updated_at, 1, 10) = ?"
+                    substr_result = execute_query(substr_query, (today,), fetch=True)
+                    substr_count = substr_result[0][0] if substr_result and substr_result[0] else 0
+                    
+                    if substr_count > 0:
+                        logger.info(f"今日全站充值成功订单数(使用substr): {substr_count}")
+                        return substr_count
+                except Exception as e:
+                    logger.error(f"使用substr查询失败: {str(e)}")
+            
+            logger.info(f"今日全站充值成功订单数: {count}, 查询参数: {today}")
+            return count
     except Exception as e:
         logger.error(f"获取全站今日确认订单数失败: {str(e)}", exc_info=True)
         return 0
