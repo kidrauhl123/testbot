@@ -99,17 +99,44 @@
       color: #667eea;
       display: flex;
       align-items: center;
+      flex: 1;
     }
     .navbar-brand::before {
       content: '🎵';
       margin-right: 6px;
       font-size: 20px;
     }
+    .navbar-stats {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      flex: 2;
+    }
+    .stats-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 14px;
+      color: #555;
+      background: rgba(242, 242, 247, 0.7);
+      padding: 6px 12px;
+      border-radius: 20px;
+    }
+    .stats-item i {
+      color: #667eea;
+    }
+    .stats-item span {
+      font-weight: 600;
+      color: #333;
+    }
     .navbar-user {
       display: flex;
       align-items: center;
       gap: 15px;
       position: relative;
+      flex: 1;
+      justify-content: flex-end;
     }
     .admin-badge {
       background: linear-gradient(135deg, #ffb347 0%, #ffcc33 100%);
@@ -585,6 +612,13 @@
       }
       .navbar-brand {
         margin-bottom: 10px;
+        justify-content: center;
+      }
+      .navbar-stats {
+        margin: 10px 0;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
       }
       .navbar-user {
         flex-wrap: wrap;
@@ -1123,6 +1157,14 @@
 <body>
 <div class="navbar">
   <div class="navbar-brand">优图充值系统</div>
+  <div class="navbar-stats">
+    <div class="stats-item">
+      <i class="fas fa-check-circle"></i> 今日已有 <span id="today-success-count">0</span> 单充值成功
+    </div>
+    <div class="stats-item">
+      <i class="fas fa-user-check"></i> 当前有 <span id="active-sellers-count">0</span> 位活跃卖家
+    </div>
+  </div>
   <div class="navbar-user">
     <div class="user-dropdown">
       <div class="user-info">
@@ -1281,7 +1323,6 @@
                       <button id="gridViewBtn" class="view-btn" title="网格视图"><i class="fas fa-th"></i></button>
                       <button id="tableViewBtn" class="view-btn active" title="表格视图"><i class="fas fa-list"></i></button>
                     </div>
-                    <div id="today-stats" class="today-total"></div>
                   </div>
                 </div>
                 <div class="search-container">
@@ -1824,6 +1865,9 @@
     // 初始化筛选功能
     initFilterControls();
     
+    // 更新页面统计信息
+    updatePageStats();
+    
     // 搜索功能初始化
     const searchInput = document.getElementById('searchInput');
     const searchBtn = document.getElementById('searchBtn');
@@ -1954,25 +1998,51 @@
 
   // 更新今日确认订单统计
   async function updateTodayConfirmedStats() {
-    const todayStatsEl = document.getElementById('today-stats');
-    if (!todayStatsEl) return;
-
     try {
         const response = await fetch('/api/today-stats');
         const stats = await response.json();
 
         if (stats.success) {
-            let statsHtml = '';
-            if (isAdmin) {
-                statsHtml = `<i class="fas fa-check-circle"></i> 今日已确认: ${stats.user_today_confirmed} (全站: ${stats.all_today_confirmed})`;
-            } else {
-                statsHtml = `<i class="fas fa-check-circle"></i> 今日已确认: ${stats.user_today_confirmed}`;
+            const todaySuccessCount = document.getElementById('today-success-count');
+            if (todaySuccessCount) {
+                if (isAdmin) {
+                    todaySuccessCount.textContent = stats.all_today_confirmed;
+                } else {
+                    todaySuccessCount.textContent = stats.user_today_confirmed;
+                }
             }
-            todayStatsEl.innerHTML = statsHtml;
         }
     } catch (e) {
         console.error('获取今日确认订单数失败:', e);
     }
+  }
+  
+  // 更新活跃卖家数量
+  async function updateActiveSellersCount() {
+    try {
+        const response = await fetch('/api/active-sellers');
+        if (!response.ok) {
+            console.error('获取卖家列表失败:', response.status);
+            return;
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.sellers) {
+            const activeSellersCount = document.getElementById('active-sellers-count');
+            if (activeSellersCount) {
+                activeSellersCount.textContent = data.sellers.length;
+            }
+        }
+    } catch (error) {
+        console.error('获取卖家列表失败:', error);
+    }
+  }
+  
+  // 更新页面统计数据
+  async function updatePageStats() {
+    await updateTodayConfirmedStats();
+    await updateActiveSellersCount();
   }
 
   // 提交订单
@@ -2159,8 +2229,8 @@
         updateActiveFilters();
       }
       
-      // 更新今日统计
-      updateTodayConfirmedStats();
+      // 更新页面统计数据
+      updatePageStats();
       
     } catch (error) {
       console.error('加载订单失败:', error);
