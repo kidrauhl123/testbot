@@ -694,13 +694,8 @@ def register_routes(app, notification_queue):
                 WHERE web_user_id = ? AND created_at LIKE ? AND status = 'completed'
             """, (username, today), fetch=True)
             
-            # 计算总消费额
+            # 计算总消费额（功能已移除，设置为0）
             today_consumption = 0
-            for order in today_orders:
-                package = order[0]
-                # 从常量获取套餐价格
-                if package in WEB_PRICES:
-                    today_consumption += WEB_PRICES[package]
             
             user_data.append({
                 "id": user_id,
