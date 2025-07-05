@@ -2084,9 +2084,20 @@
     await updateActiveSellersCount();
   }
 
-  // 提交订单
+  // 添加表单提交锁定标志
+  let isSubmitting = false;
+  
   document.getElementById('orderForm').addEventListener('submit', async e => {
     e.preventDefault();
+    
+    // 如果正在提交中，则忽略此次点击
+    if (isSubmitting) {
+      return;
+    }
+    
+    // 设置提交状态为true
+    isSubmitting = true;
+    
     const btn = e.target.querySelector('button');
     const orig = btn.textContent;
     btn.textContent = '提交中…';
@@ -2112,6 +2123,7 @@
           // 显示备注重复确认对话框
           btn.textContent = orig;
           btn.disabled = false;
+          isSubmitting = false; // 重置提交状态
           
           // 显示确认对话框
           const duplicateModal = document.getElementById('duplicateRemarkModal');
@@ -2146,6 +2158,10 @@
       console.error('订单提交错误:', error);
       btn.textContent = orig;
       btn.disabled = false;
+      isSubmitting = false; // 重置提交状态
+    } finally {
+      // 确保总是重置提交状态
+      isSubmitting = false;
     }
   });
   
@@ -2155,6 +2171,9 @@
     const orig = btn.textContent;
     btn.textContent = '提交中…';
     btn.disabled = true;
+    
+    // 更新提交状态
+    isSubmitting = true;
     
     try {
       const resp = await fetch('/', { method: 'POST', body: formData });
@@ -2211,6 +2230,8 @@
     } finally {
       btn.textContent = orig;
       btn.disabled = false;
+      // 重置提交状态
+      isSubmitting = false;
     }
   }
   
