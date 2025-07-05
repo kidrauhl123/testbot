@@ -295,7 +295,7 @@ def register_routes(app, notification_queue):
             logger.info(f"订单提交成功: 用户={username}, 套餐={package}")
             
             # 获取最新订单列表并格式化
-            orders_raw = execute_query("SELECT id, account, password, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
+            orders_raw = execute_query("SELECT id, account, password, package, status, created_at, user_id FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             orders = []
             
             # 获取新创建的订单ID
