@@ -1411,6 +1411,37 @@
   <div class="loading-text">处理中...</div>
 </div>
 
+<!-- 编辑订单状态模态框 -->
+<div class="modal-backdrop" id="edit-order-status-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>编辑订单状态</h3>
+      <button class="modal-close" onclick="closeOrderStatusModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="edit-order-status-error" class="error-message" style="display:none;"></div>
+      <form id="edit-order-status-form">
+        <input type="hidden" id="edit-order-status-id">
+        <div class="form-group">
+          <label for="edit-order-status-select">订单状态</label>
+          <select id="edit-order-status-select" class="form-control">
+            <option value="submitted">待处理</option>
+            <option value="accepted">已接单</option>
+            <option value="completed">已完成</option>
+            <option value="failed">充值失败</option>
+            <option value="cancelled">已取消</option>
+            <option value="disputing">正在质疑</option>
+          </select>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeOrderStatusModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveOrderStatus()">保存</button>
+    </div>
+  </div>
+</div>
+
 <script>
   // 全局变量
   let displayedOrders = 10; // 初始显示10个订单
@@ -2378,6 +2409,7 @@
           </div>
           <button class="confirm-btn" onclick="confirmOrder(${o.id})">${o.buyer_confirmed ? '已确认' : '确认'}</button>
           <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
+          ${isAdmin ? `<button class="edit-btn" onclick="editOrderStatus(${o.id})">编辑</button>` : ''}
         </div>`;
       gridContainer.insertAdjacentHTML('beforeend', html);
       
@@ -2433,6 +2465,7 @@
           <td>
             <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
             <button class="confirm-btn" onclick="confirmOrder(${o.id})">${o.buyer_confirmed ? '已确认' : '确认'}</button>
+            ${isAdmin ? `<button class="edit-btn" onclick="editOrderStatus(${o.id})">编辑</button>` : ''}
           </td>
         </tr>
       `;
@@ -2675,11 +2708,11 @@
       modal.style.display = 'none';
       loadingOverlay.style.display = 'flex';
       
-    try {
-      const resp = await fetch(`/orders/confirm/${orderId}`, { method: 'POST' });
-      const result = await resp.json();
+      try {
+        const resp = await fetch(`/orders/confirm/${orderId}`, { method: 'POST' });
+        const result = await resp.json();
         
-      if (result.success) {
+        if (result.success) {
           showCustomAlert('订单确认成功', 'success');
           
           // 更新订单状态
@@ -2697,7 +2730,7 @@
           
           // 重新加载订单列表，确保所有数据都是最新的
           await loadOrders();
-      } else {
+        } else {
           showCustomAlert(result.error || '确认失败，请重试', 'error');
         }
       } catch (error) {
@@ -2707,6 +2740,103 @@
         loadingOverlay.style.display = 'none';
       }
     };
+  }
+
+  // 编辑订单状态
+  async function editOrderStatus(orderId) {
+    if (!isAdmin) {
+      showCustomAlert('只有管理员可以编辑订单状态', 'error');
+      return;
+    }
+    
+    const order = allOrders.find(o => o.id === orderId);
+    if (!order) {
+      showCustomAlert('找不到订单信息', 'error');
+      return;
+    }
+    
+    // 填充表单
+    document.getElementById('edit-order-status-id').value = order.id;
+    document.getElementById('edit-order-status-select').value = order.status;
+    
+    // 显示模态框
+    const modal = document.getElementById('edit-order-status-modal');
+    modal.style.display = 'flex';
+  }
+  
+  // 关闭订单状态编辑模态框
+  function closeOrderStatusModal() {
+    const modal = document.getElementById('edit-order-status-modal');
+    modal.style.display = 'none';
+    // 清除错误信息
+    document.getElementById('edit-order-status-error').style.display = 'none';
+  }
+  
+  // 保存订单状态
+  async function saveOrderStatus() {
+    const orderId = document.getElementById('edit-order-status-id').value;
+    const status = document.getElementById('edit-order-status-select').value;
+    const errorDiv = document.getElementById('edit-order-status-error');
+    
+    try {
+      // 从本地订单数据中查找当前订单
+      const order = allOrders.find(o => o.id === parseInt(orderId));
+      if (!order) {
+        errorDiv.textContent = '找不到订单信息';
+        errorDiv.style.display = 'block';
+        return;
+      }
+      
+      // 准备要发送的数据
+      const data = {
+        account: order.account,
+        status: status,
+        package: order.package || '12' // 使用当前套餐值，如果没有则默认为12个月
+      };
+      
+      // 发送请求
+      const response = await fetch(`/admin/api/orders/${orderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      
+      if (response.ok) {
+        // 更新本地数据
+        order.status = status;
+        order.status_text = {
+          'submitted': '待处理',
+          'accepted': '已接单',
+          'completed': '已完成',
+          'failed': '充值失败',
+          'cancelled': '已取消',
+          'disputing': '正在质疑'
+        }[status] || status;
+        
+        // 重新渲染订单列表
+        let filteredOrders = allOrders;
+        if (searchKeyword) {
+          filteredOrders = filteredOrders.filter(order => 
+            order.id.toString().includes(searchKeyword) || 
+            order.account.toLowerCase().includes(searchKeyword.toLowerCase())
+          );
+        }
+        filteredOrders = filterOrders(filteredOrders);
+        renderOrders(filteredOrders);
+        
+        // 关闭模态框
+        closeOrderStatusModal();
+        showCustomAlert('订单状态已更新', 'success');
+      } else {
+        const result = await response.json();
+        errorDiv.textContent = result.error || '更新失败，请重试';
+        errorDiv.style.display = 'block';
+      }
+    } catch (error) {
+      console.error('保存订单状态失败:', error);
+      errorDiv.textContent = '网络错误，请重试';
+      errorDiv.style.display = 'block';
+    }
   }
 
   // 初始化筛选功能
