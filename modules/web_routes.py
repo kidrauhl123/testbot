@@ -21,8 +21,9 @@ from modules.database import (
     remove_seller, toggle_seller_admin,
     update_seller_nickname, update_seller_desired_orders, select_active_seller, check_seller_activity,
     get_seller_completed_orders, get_seller_pending_orders, check_seller_completed_orders,
-    get_seller_today_confirmed_orders_by_user, get_admin_sellers,
-    get_user_today_confirmed_count, get_all_today_confirmed_count, create_order_with_deduction_atomic
+    get_user_today_confirmed_orders_by_user, get_admin_sellers,
+    get_user_today_confirmed_count, get_all_today_confirmed_count, create_order_with_deduction_atomic,
+    add_seller
 )
 import modules.constants as constants
 
