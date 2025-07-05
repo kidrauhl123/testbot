@@ -1152,6 +1152,94 @@
     }
     
     /* 状态标签 */
+    
+    /* 模态框样式 */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal {
+      background-color: white;
+      border-radius: 5px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 20px;
+      background-color: #f8f9fa;
+      border-bottom: 1px solid #e9ecef;
+    }
+
+    .modal-header h3 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #6c757d;
+    }
+
+    .modal-body {
+      padding: 20px;
+    }
+
+    .modal-footer {
+      padding: 15px 20px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      border-top: 1px solid #e9ecef;
+    }
+
+    .error-message {
+      color: #dc3545;
+      margin-bottom: 15px;
+      padding: 10px;
+      background-color: #f8d7da;
+      border-radius: 4px;
+    }
+    
+    .form-control {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+    
+    .edit-btn {
+      background-color: #28a745;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 3px 8px;
+      cursor: pointer;
+      margin-left: 5px;
+      font-size: 12px;
+    }
+    
+    .edit-btn:hover {
+      background-color: #218838;
+    }
   </style>
 </head>
 <body>
@@ -2744,6 +2832,9 @@
 
   // 编辑订单状态
   async function editOrderStatus(orderId) {
+    console.log("编辑订单状态被调用，订单ID:", orderId);
+    console.log("isAdmin值:", isAdmin);
+    
     if (!isAdmin) {
       showCustomAlert('只有管理员可以编辑订单状态', 'error');
       return;
@@ -2752,24 +2843,55 @@
     const order = allOrders.find(o => o.id === orderId);
     if (!order) {
       showCustomAlert('找不到订单信息', 'error');
+      console.error("找不到订单ID:", orderId);
       return;
     }
+    
+    console.log("找到订单:", order);
     
     // 填充表单
     document.getElementById('edit-order-status-id').value = order.id;
     document.getElementById('edit-order-status-select').value = order.status;
     
+    console.log("填充表单完成");
+    
     // 显示模态框
     const modal = document.getElementById('edit-order-status-modal');
+    console.log("模态框元素:", modal);
+    
+    if (!modal) {
+      console.error("找不到模态框元素!");
+      return;
+    }
+    
+    // 确保模态框可见
     modal.style.display = 'flex';
+    console.log("已设置模态框为显示状态");
   }
   
   // 关闭订单状态编辑模态框
   function closeOrderStatusModal() {
+    console.log("关闭模态框函数被调用");
     const modal = document.getElementById('edit-order-status-modal');
+    console.log("获取模态框元素:", modal);
+    
+    if (!modal) {
+      console.error("找不到模态框元素!");
+      return;
+    }
+    
+    // 隐藏模态框
     modal.style.display = 'none';
+    console.log("已设置模态框为隐藏状态");
+    
     // 清除错误信息
-    document.getElementById('edit-order-status-error').style.display = 'none';
+    const errorDiv = document.getElementById('edit-order-status-error');
+    if (errorDiv) {
+      errorDiv.style.display = 'none';
+      console.log("已清除错误信息");
+    } else {
+      console.error("找不到错误信息元素!");
+    }
   }
   
   // 保存订单状态
@@ -3154,6 +3276,22 @@
       filterToggleBtn.classList.toggle('active', !isVisible);
     }
   }
+
+  // 添加事件监听器，点击模态框外部区域关闭模态框
+  document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('edit-order-status-modal');
+    if (modal) {
+      modal.addEventListener('click', function(event) {
+        // 如果点击的是模态框的背景部分，而不是模态框内容
+        if (event.target === modal) {
+          closeOrderStatusModal();
+        }
+      });
+      console.log("已添加模态框外部点击关闭事件");
+    } else {
+      console.error("找不到模态框元素，无法添加点击事件!");
+    }
+  });
 </script>
 
 </body>
