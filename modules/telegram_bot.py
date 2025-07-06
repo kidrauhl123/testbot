@@ -31,7 +31,7 @@ from modules.constants import (
 from modules.database import (
     get_order_details, execute_query, 
     get_unnotified_orders, get_active_seller_ids,
-    update_seller_desired_orders, update_seller_last_active, get_active_sellers,
+    update_seller_last_active, get_active_sellers,
     select_active_seller, get_seller_info,
     get_user_custom_prices, set_user_custom_price, delete_user_custom_price,
     update_seller_nickname, get_seller_completed_orders, get_seller_pending_orders,
