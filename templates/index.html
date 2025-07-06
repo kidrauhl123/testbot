@@ -1167,6 +1167,10 @@
       justify-content: center;
     }
 
+    .modal-backdrop.show {
+      display: flex;
+    }
+
     .modal {
       background-color: white;
       border-radius: 5px;
@@ -1499,7 +1503,7 @@
 </div>
 
 <!-- 编辑订单状态模态框 -->
-<div class="modal-backdrop" id="edit-order-status-modal">
+<div class="modal-backdrop" id="edit-order-status-modal" style="display:none;">
   <div class="modal">
     <div class="modal-header">
       <h3>编辑订单状态</h3>
@@ -2826,7 +2830,6 @@
   // 编辑订单状态
   async function editOrderStatus(orderId) {
     console.log("编辑订单状态被调用，订单ID:", orderId);
-    console.log("isAdmin值:", isAdmin);
     
     if (!isAdmin) {
       showCustomAlert('只有管理员可以编辑订单状态', 'error');
@@ -2836,56 +2839,29 @@
     const order = allOrders.find(o => o.id === orderId);
     if (!order) {
       showCustomAlert('找不到订单信息', 'error');
-      console.error("找不到订单ID:", orderId);
       return;
     }
-    
-    console.log("找到订单:", order);
     
     // 填充表单
     document.getElementById('edit-order-status-id').value = order.id;
     document.getElementById('edit-order-status-select').value = order.status;
     
-    console.log("填充表单完成");
-    
     // 显示模态框
-    const modal = document.getElementById('edit-order-status-modal');
-    console.log("模态框元素:", modal);
-    
-    if (!modal) {
-      console.error("找不到模态框元素!");
-      return;
-    }
-    
-    // 确保模态框可见
-    modal.style.display = 'flex';
-    console.log("已设置模态框为显示状态");
+    document.getElementById('edit-order-status-modal').style.display = 'flex';
   }
   
   // 关闭订单状态编辑模态框
   function closeOrderStatusModal() {
-    console.log("关闭模态框函数被调用");
-    const modal = document.getElementById('edit-order-status-modal');
-    console.log("获取模态框元素:", modal);
-    
-    if (!modal) {
-      console.error("找不到模态框元素!");
-      return;
-    }
-    
-    // 隐藏模态框
-    modal.style.display = 'none';
-    console.log("已设置模态框为隐藏状态");
+    document.getElementById('edit-order-status-modal').style.display = 'none';
     
     // 清除错误信息
     const errorDiv = document.getElementById('edit-order-status-error');
     if (errorDiv) {
       errorDiv.style.display = 'none';
-      console.log("已清除错误信息");
-    } else {
-      console.error("找不到错误信息元素!");
     }
   }
+  
+  // 保存订单状态
   
   // 保存订单状态
   async function saveOrderStatus() {
