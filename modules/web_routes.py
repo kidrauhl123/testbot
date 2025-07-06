@@ -1334,10 +1334,8 @@ def register_routes(app, notification_queue):
         if order_user_id != user_id and not session.get('is_admin'):
             return jsonify({"error": "您无权确认该订单"}), 403
         
-        # 检查订单状态是否为已完成
-        if status != STATUS['COMPLETED']:
-            return jsonify({"error": "订单尚未完成，无法确认"}), 400
-
+        # 不再检查订单状态，允许任何状态的订单都可以确认
+        
         try:
             # 更新buyer_confirmed字段和时间戳
             timestamp = get_china_time()

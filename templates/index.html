@@ -2761,66 +2761,42 @@
 
   // 确认订单
   async function confirmOrder(orderId) {
-    const modal = document.getElementById('confirmOrderModal');
-    const confirmBtn = document.getElementById('confirmOrderYes');
-    const cancelBtn = document.getElementById('confirmOrderNo');
     const loadingOverlay = document.getElementById('loadingOverlay');
     
-    // 显示确认对话框
-    modal.style.display = 'block';
+    // 直接确认订单，无需弹出确认对话框
+    loadingOverlay.style.display = 'flex';
     
-    // 清除之前的事件
-    const newConfirmBtn = confirmBtn.cloneNode(true);
-    const newCancelBtn = cancelBtn.cloneNode(true);
-    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-    cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
-    
-    // 关闭对话框
-    function closeModal() {
-      modal.style.display = 'none';
-    }
-    
-    // 关闭按钮事件
-    document.querySelector('.close-modal').onclick = closeModal;
-    newCancelBtn.onclick = closeModal;
-    
-    // 确认按钮事件
-    newConfirmBtn.onclick = async function() {
-      modal.style.display = 'none';
-      loadingOverlay.style.display = 'flex';
+    try {
+      const resp = await fetch(`/orders/confirm/${orderId}`, { method: 'POST' });
+      const result = await resp.json();
       
-      try {
-        const resp = await fetch(`/orders/confirm/${orderId}`, { method: 'POST' });
-        const result = await resp.json();
+      if (result.success) {
+        showCustomAlert('订单确认成功', 'success');
         
-        if (result.success) {
-          showCustomAlert('订单确认成功', 'success');
-          
-          // 更新订单状态
-          const orderElem = document.querySelector(`.order-list-item[data-order-id="${orderId}"]`) || 
-                           document.querySelector(`tr[data-order-id="${orderId}"]`);
-          
-          if (orderElem) {
-            const confirmBtn = orderElem.querySelector('.confirm-btn');
-            if (confirmBtn) {
-              confirmBtn.textContent = '已确认';
-              confirmBtn.disabled = true;
-              confirmBtn.classList.add('confirmed');
-            }
+        // 更新订单状态
+        const orderElem = document.querySelector(`.order-list-item[data-order-id="${orderId}"]`) || 
+                         document.querySelector(`tr[data-order-id="${orderId}"]`);
+        
+        if (orderElem) {
+          const confirmBtn = orderElem.querySelector('.confirm-btn');
+          if (confirmBtn) {
+            confirmBtn.textContent = '已确认';
+            confirmBtn.disabled = true;
+            confirmBtn.classList.add('confirmed');
           }
-          
-          // 重新加载订单列表，确保所有数据都是最新的
-          await loadOrders();
-        } else {
-          showCustomAlert(result.error || '确认失败，请重试', 'error');
         }
-      } catch (error) {
-        console.error('确认订单失败:', error);
-        showCustomAlert('网络错误，确认失败', 'error');
-      } finally {
-        loadingOverlay.style.display = 'none';
+        
+        // 重新加载订单列表，确保所有数据都是最新的
+        await loadOrders();
+      } else {
+        showCustomAlert(result.error || '确认失败，请重试', 'error');
       }
-    };
+    } catch (error) {
+      console.error('确认订单失败:', error);
+      showCustomAlert('网络错误，确认失败', 'error');
+    } finally {
+      loadingOverlay.style.display = 'none';
+    }
   }
 
   // 编辑订单状态
