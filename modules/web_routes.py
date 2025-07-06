@@ -912,7 +912,7 @@ def register_routes(app, notification_queue):
                 "added_at": s[5],
                 "added_by": s[6],
                 "is_admin": bool(s[7]),
-                "desired_orders": s[8] if len(s) > 8 else 0
+                "distribution_level": s[8] if len(s) > 8 and s[8] is not None else 1
             }
             
             # 获取已完成订单数和未完成订单数
@@ -1290,10 +1290,27 @@ def register_routes(app, notification_queue):
         """更新卖家信息"""
         data = request.get_json()
         nickname = data.get('nickname')
+        distribution_level = data.get('distribution_level')
         
         try:
             if nickname is not None:
                 update_seller_nickname(telegram_id, nickname)
+                
+            if distribution_level is not None:
+                # 确保分流等级是合法的整数
+                level = int(distribution_level)
+                if level < 1:
+                    level = 1
+                if level > 10:
+                    level = 10
+                    
+                # 更新分流等级
+                if DATABASE_URL.startswith('postgres'):
+                    execute_query("UPDATE sellers SET distribution_level = %s WHERE telegram_id = %s", (level, telegram_id))
+                else:
+                    execute_query("UPDATE sellers SET distribution_level = ? WHERE telegram_id = ?", (level, telegram_id))
+                
+                logger.info(f"更新卖家 {telegram_id} 分流等级为 {level}")
                 
             return jsonify({"success": True})
         except Exception as e:

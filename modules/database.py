@@ -165,7 +165,8 @@ def init_sqlite_db():
         is_admin INTEGER DEFAULT 0,
         last_active_at TEXT,
         desired_orders INTEGER DEFAULT 0,
-        activity_check_at TEXT
+        activity_check_at TEXT,
+        distribution_level INTEGER DEFAULT 1
     )
     ''')
     
@@ -202,6 +203,14 @@ def init_sqlite_db():
     except sqlite3.OperationalError:
         logger.info("为sellers表添加is_admin列")
         c.execute("ALTER TABLE sellers ADD COLUMN is_admin INTEGER DEFAULT 0")
+        conn.commit()
+    
+    # 检查sellers表是否需要添加distribution_level列
+    try:
+        c.execute("SELECT distribution_level FROM sellers LIMIT 1")
+    except sqlite3.OperationalError:
+        logger.info("为sellers表添加distribution_level列")
+        c.execute("ALTER TABLE sellers ADD COLUMN distribution_level INTEGER DEFAULT 1")
         conn.commit()
     
     # 检查users表中是否需要添加新列
@@ -336,7 +345,8 @@ def init_postgres_db():
         is_admin BOOLEAN DEFAULT FALSE,
         last_active_at TEXT,
         desired_orders INTEGER DEFAULT 0,
-        activity_check_at TEXT
+        activity_check_at TEXT,
+        distribution_level INTEGER DEFAULT 1
     )
     ''')
     
@@ -360,6 +370,14 @@ def init_postgres_db():
     except psycopg2.errors.UndefinedColumn:
         logger.info("为sellers表添加activity_check_at列")
         cur.execute("ALTER TABLE sellers ADD COLUMN activity_check_at TEXT")
+        conn.commit()
+    
+    # 检查sellers表是否需要添加distribution_level列
+    try:
+        cur.execute("SELECT distribution_level FROM sellers LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为sellers表添加distribution_level列")
+        cur.execute("ALTER TABLE sellers ADD COLUMN distribution_level INTEGER DEFAULT 1")
         conn.commit()
     
     # 检查sellers表是否需要添加nickname列
@@ -521,25 +539,32 @@ def get_order_details(oid):
 
 # ===== 卖家管理 =====
 def get_all_sellers():
-    """获取所有卖家信息"""
-    if DATABASE_URL.startswith('postgres'):
-        # PostgreSQL需要显式处理BOOLEAN类型
-        return execute_query("""
-            SELECT telegram_id, username, first_name, nickname, is_active, 
-                   added_at, added_by, 
-                   COALESCE(is_admin, FALSE) as is_admin
-            FROM sellers 
-            ORDER BY added_at DESC
-        """, fetch=True)
-    else:
-        # SQLite版本
-        return execute_query("""
-            SELECT telegram_id, username, first_name, nickname, is_active, 
-                   added_at, added_by, 
-                   COALESCE(is_admin, 0) as is_admin
-            FROM sellers 
-            ORDER BY added_at DESC
-        """, fetch=True)
+    """获取所有卖家列表"""
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            return execute_query("""
+                SELECT telegram_id, username, first_name, nickname, is_active, 
+                       added_at, added_by, 
+                       COALESCE(is_admin, FALSE) as is_admin,
+                       COALESCE(distribution_level, 1) as distribution_level
+                FROM sellers
+                ORDER BY added_at DESC
+            """, fetch=True)
+        else:
+            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("""
+                SELECT telegram_id, username, first_name, nickname, is_active, added_at, added_by, is_admin, distribution_level
+                FROM sellers
+                ORDER BY added_at DESC
+            """)
+            results = c.fetchall()
+            conn.close()
+            return results
+    except Exception as e:
+        logger.error(f"获取卖家列表失败: {str(e)}", exc_info=True)
+        return []
 
 def get_active_seller_ids():
     """获取所有活跃的卖家ID"""
