@@ -1388,7 +1388,6 @@
                     <div id="sellerInfo" class="seller-info" style="display:none; margin-top:10px;">
                       <div class="seller-status">
                         <span class="seller-active-status"></span>
-                        <span class="seller-orders-status"></span>
                       </div>
                       <button type="button" id="checkSellerBtn" class="btn btn-sm btn-info">检查在线</button>
                     </div>
@@ -1588,7 +1587,6 @@
           option.textContent = seller.name;
           option.dataset.lastActive = seller.last_active_at || '';
           option.dataset.activeStatus = seller.active_status || '未知';
-          option.dataset.desiredOrders = seller.desired_orders || 0;
           sellerSelect.appendChild(option);
         });
         
@@ -1608,12 +1606,10 @@
     const sellerSelect = document.getElementById('sellerSelect');
     const sellerInfo = document.getElementById('sellerInfo');
     const activeStatus = sellerInfo.querySelector('.seller-active-status');
-    const ordersStatus = sellerInfo.querySelector('.seller-orders-status');
     
     if (sellerSelect.value) {
       const selectedOption = sellerSelect.options[sellerSelect.selectedIndex];
       const status = selectedOption.dataset.activeStatus || '未知';
-      const desiredOrders = selectedOption.dataset.desiredOrders || 0;
       
       activeStatus.textContent = `状态: ${status}`;
       
@@ -1623,9 +1619,6 @@
       } else {
         activeStatus.className = 'seller-active-status inactive';
       }
-      
-      // 显示期望接单数
-      ordersStatus.textContent = `期望接单: ${desiredOrders} 单/小时`;
       
       // 显示卖家信息区域
       sellerInfo.style.display = 'flex';

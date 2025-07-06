@@ -1290,23 +1290,10 @@ def register_routes(app, notification_queue):
         """更新卖家信息"""
         data = request.get_json()
         nickname = data.get('nickname')
-        desired_orders = data.get('desired_orders')
-        max_concurrent_orders = data.get('max_concurrent_orders')
         
         try:
             if nickname is not None:
                 update_seller_nickname(telegram_id, nickname)
-                
-            if desired_orders is not None:
-                update_seller_desired_orders(telegram_id, desired_orders)
-                # 每次最大接单数变更时，清零当前未完成订单数
-                execute_query("UPDATE sellers SET pending_orders = 0 WHERE telegram_id = ?", (telegram_id,))
-            
-            if max_concurrent_orders is not None:
-                execute_query("UPDATE sellers SET max_concurrent_orders = ? WHERE telegram_id = ?", (max_concurrent_orders, telegram_id))
-                
-            # 检查是否需要自动停用卖家
-            check_seller_completed_orders(str(telegram_id))
                 
             return jsonify({"success": True})
         except Exception as e:
@@ -1316,36 +1303,29 @@ def register_routes(app, notification_queue):
     @app.route('/orders/confirm/<int:oid>', methods=['POST'])
     @login_required
     def confirm_order(oid):
-        """用户确认订单，设置buyer_confirmed字段为1，不改变订单状态"""
+        """买家确认订单已完成"""
         user_id = session.get('user_id')
-        is_admin = session.get('is_admin', 0)
-
-        # 查询订单
-        order = execute_query("""
-            SELECT id, user_id, status, accepted_by
-            FROM orders WHERE id=?
-        """, (oid,), fetch=True)
-
+        
+        # 检查订单是否存在并属于当前用户
+        order = execute_query("SELECT status, user_id, accepted_by FROM orders WHERE id=?", (oid,), fetch=True)
         if not order:
-            logger.error(f"确认订单失败: 订单 {oid} 不存在")
             return jsonify({"error": "订单不存在"}), 404
-
-        order_id, order_user_id, status, accepted_by = order[0]
-
-        # 权限：只能确认自己的订单，或管理员
-        if user_id != order_user_id and not is_admin:
-            logger.warning(f"用户 {user_id} 尝试确认不属于自己的订单 {oid}")
-            return jsonify({"error": "权限不足"}), 403
+            
+        status, order_user_id, accepted_by = order[0]
+        
+        # 检查订单是否属于当前用户
+        if order_user_id != user_id and not session.get('is_admin'):
+            return jsonify({"error": "您无权确认该订单"}), 403
+        
+        # 检查订单状态是否为已完成
+        if status != STATUS['COMPLETED']:
+            return jsonify({"error": "订单尚未完成，无法确认"}), 400
 
         try:
             # 更新buyer_confirmed字段和时间戳
             timestamp = get_china_time()
             execute_query("UPDATE orders SET buyer_confirmed=TRUE, buyer_confirmed_at=? WHERE id=?", (timestamp, oid))
             logger.info(f"用户 {user_id} 确认订单 {oid} 成功，buyer_confirmed已设置为TRUE，时间: {timestamp}")
-
-            # 检查卖家是否达到最大接单数
-            if accepted_by:
-                check_seller_completed_orders(str(accepted_by))
 
             # 发送通知
             try:
@@ -1623,7 +1603,7 @@ def ensure_orders_columns():
         logger.error(f"检查或添加 'buyer_confirmed_at' 列时出错: {e}", exc_info=True)
 
 def ensure_sellers_columns():
-    """确保PostgreSQL sellers表有pending_orders和max_concurrent_orders字段"""
+    """确保PostgreSQL sellers表存在所需字段"""
     if DATABASE_URL.startswith('postgres'):
         url = urlparse(DATABASE_URL)
         conn = psycopg2.connect(
@@ -1634,24 +1614,7 @@ def ensure_sellers_columns():
             port=url.port
         )
         cur = conn.cursor()
-        # 检查并添加pending_orders字段
-        cur.execute("""
-            DO $$
-            BEGIN
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sellers' AND column_name='pending_orders') THEN
-                    ALTER TABLE sellers ADD COLUMN pending_orders INTEGER DEFAULT 0;
-                END IF;
-            END$$;
-        """)
-        # 检查并添加max_concurrent_orders字段
-        cur.execute("""
-            DO $$
-            BEGIN
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sellers' AND column_name='max_concurrent_orders') THEN
-                    ALTER TABLE sellers ADD COLUMN max_concurrent_orders INTEGER DEFAULT 1;
-                END IF;
-            END$$;
-        """)
+        # 确保连接成功
         conn.commit()
         cur.close()
         conn.close()

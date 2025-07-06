@@ -380,30 +380,34 @@ async def on_seller_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ====== 恢复 /orders 命令处理 ======
 async def on_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle command to set maximum order capacity"""
+    """显示卖家的当前订单状态"""
     user_id = update.effective_user.id
     
     if not is_seller(user_id):
         await update.message.reply_text("You are not a seller, cannot use this command")
         return
     
-    # 检查参数
-    if not context.args or len(context.args) != 1 or not context.args[0].isdigit():
-        await update.message.reply_text(
-            "Please provide your current maximum order capacity, for example:\n/orders 5"
-        )
-        return
+    # 获取卖家当前的活跃订单数
+    active_orders = execute_query(
+        "SELECT COUNT(*) FROM orders WHERE accepted_by = ? AND status = ?",
+        (str(user_id), STATUS['ACCEPTED']),
+        fetch=True
+    )
     
-    desired_orders = int(context.args[0])
-    desired_orders = max(0, min(desired_orders, 20))  # 0~20 范围
+    active_count = active_orders[0][0] if active_orders and len(active_orders) > 0 else 0
     
-    update_seller_desired_orders(user_id, desired_orders)
-    update_seller_last_active(user_id)
+    # 获取卖家已完成的订单数
+    completed_orders = get_seller_completed_orders(user_id)
     
     await update.message.reply_text(
-        f"✅ Your maximum order capacity has been set to: {desired_orders}"
+        f"📊 *Your Orders Status*\n\n"
+        f"Active orders: {active_count}\n"
+        f"Completed orders: {completed_orders}\n\n"
+        f"_You will receive new orders automatically._",
+        parse_mode='Markdown'
     )
-    logger.info(f"卖家 {user_id} 设置最大接单数量为 {desired_orders}")
+    update_seller_last_active(user_id)
+    logger.info(f"卖家 {user_id} 查看了订单状态")
 
 async def on_active_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """切换卖家激活状态 (on/off)"""
@@ -716,21 +720,26 @@ async def send_notification_from_queue(data):
                 # 如果指定了特定卖家，检查该卖家是否活跃
                 target_sellers = [seller for seller in active_sellers if str(seller.get('id', seller.get('telegram_id'))) == str(preferred_seller)]
                 if not target_sellers:
-                    logger.warning(f"指定的卖家不存在或不活跃: {preferred_seller}，将选择一位活跃卖家")
-                    # 选择一位活跃卖家
-                    selected_seller_id = select_active_seller()
-                    if selected_seller_id:
-                        target_sellers = [seller for seller in active_sellers if str(seller.get('id', seller.get('telegram_id'))) == str(selected_seller_id)]
-            else:
-                        # 如果没有选出合适的卖家，使用所有活跃卖家
-                        logger.warning(f"未能选择合适的卖家，使用随机卖家")
+                    logger.warning(f"指定的卖家不存在或不活跃: {preferred_seller}，将随机选择一位活跃卖家")
+                    # 随机选择一位活跃卖家
+                    if active_sellers:
                         import random
-                        if active_sellers:
-                            random_seller = random.choice(active_sellers)
-                            target_sellers = [random_seller]
-                        else:
-                            logger.error("没有活跃卖家可用")
-                            return
+                        random_seller = random.choice(active_sellers)
+                        target_sellers = [random_seller]
+                        logger.info(f"随机选择卖家: {random_seller['id']}")
+                    else:
+                        logger.error("没有活跃卖家可用")
+                        return
+            else:
+                # 如果没有指定卖家，随机选择一位活跃卖家
+                if active_sellers:
+                    import random
+                    random_seller = random.choice(active_sellers)
+                    target_sellers = [random_seller]
+                    logger.info(f"随机选择卖家: {random_seller['id']}")
+                else:
+                    logger.error("没有活跃卖家可用")
+                    return
                 
             # 为订单添加状态标记
             await mark_order_as_processing(order_id)

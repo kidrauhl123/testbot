@@ -527,8 +527,7 @@ def get_all_sellers():
         return execute_query("""
             SELECT telegram_id, username, first_name, nickname, is_active, 
                    added_at, added_by, 
-                   COALESCE(is_admin, FALSE) as is_admin,
-                   COALESCE(desired_orders, 0) as desired_orders
+                   COALESCE(is_admin, FALSE) as is_admin
             FROM sellers 
             ORDER BY added_at DESC
         """, fetch=True)
@@ -537,8 +536,7 @@ def get_all_sellers():
         return execute_query("""
             SELECT telegram_id, username, first_name, nickname, is_active, 
                    added_at, added_by, 
-                   COALESCE(is_admin, 0) as is_admin,
-                   COALESCE(desired_orders, 0) as desired_orders
+                   COALESCE(is_admin, 0) as is_admin
             FROM sellers 
             ORDER BY added_at DESC
         """, fetch=True)
@@ -603,28 +601,27 @@ def get_active_sellers():
     if DATABASE_URL.startswith('postgres'):
         sellers = execute_query("""
             SELECT telegram_id, nickname, username, first_name, 
-                   last_active_at, desired_orders
+                   last_active_at
             FROM sellers 
             WHERE is_active = TRUE
         """, fetch=True)
     else:
         sellers = execute_query("""
             SELECT telegram_id, nickname, username, first_name, 
-                   last_active_at, desired_orders
+                   last_active_at
             FROM sellers 
             WHERE is_active = 1
         """, fetch=True)
     
     result = []
     for seller in sellers:
-        telegram_id, nickname, username, first_name, last_active_at, desired_orders = seller
+        telegram_id, nickname, username, first_name, last_active_at = seller
         # 如果没有设置昵称，则使用first_name或username作为默认昵称
         display_name = nickname or first_name or f"卖家 {telegram_id}"
         result.append({
             "id": telegram_id,
             "name": display_name,
-            "last_active_at": last_active_at or "",
-            "desired_orders": desired_orders or 0
+            "last_active_at": last_active_at or ""
         })
     return result
 
@@ -1013,11 +1010,12 @@ def reject_recharge_request(request_id, admin_id):
         return False, f"拒绝充值请求失败: {str(e)}"
 
 def update_seller_nickname(telegram_id, nickname):
-    """更新卖家的显示昵称"""
+    """更新卖家昵称"""
     execute_query(
         "UPDATE sellers SET nickname = ? WHERE telegram_id = ?",
         (nickname, telegram_id)
     )
+    logger.info(f"已更新卖家 {telegram_id} 的昵称为 {nickname}")
 
 def update_seller_last_active(telegram_id):
     """更新卖家最后活跃时间"""
@@ -1026,14 +1024,6 @@ def update_seller_last_active(telegram_id):
         "UPDATE sellers SET last_active_at = ? WHERE telegram_id = ?",
         (timestamp, telegram_id)
     )
-
-def update_seller_desired_orders(telegram_id, desired_orders):
-    """更新卖家最大接单数，并清零当前未完成订单数"""
-    execute_query(
-        "UPDATE sellers SET desired_orders = ?, pending_orders = 0 WHERE telegram_id = ?",
-        (desired_orders, telegram_id)
-    )
-    logger.info(f"已更新卖家 {telegram_id} 的最大接单数为 {desired_orders}，并清零当前未完成订单数")
 
 def get_seller_completed_orders(telegram_id):
     """获取卖家已完成的订单数（以买家已确认为准）"""
@@ -1249,41 +1239,11 @@ def get_seller_pending_orders(telegram_id):
     return 0
 
 def check_seller_completed_orders(telegram_id):
-    """检查卖家完成订单数，如果达到最大接单数则自动停用"""
-    # 获取卖家信息
-    seller = execute_query(
-        "SELECT desired_orders, is_active FROM sellers WHERE telegram_id = ?",
-        (telegram_id,),
-        fetch=True
-    )
-    
-    if not seller or not seller[0]:
-        logger.warning(f"检查卖家完成订单数失败：找不到卖家 {telegram_id}")
-        return
-    
-    desired_orders, is_active = seller[0]
-    
-    # 如果没有设置最大接单数或已经是非活跃状态，则不处理
-    if not desired_orders or desired_orders <= 0 or not is_active:
-        return
-    
+    """检查卖家完成的订单数（现在只是记录，不再自动停用）"""
     # 获取已完成订单数
     completed_orders = get_seller_completed_orders(telegram_id)
-    
-    # 如果已完成订单数达到或超过最大接单数，则自动停用
-    if completed_orders >= desired_orders:
-        logger.info(f"卖家 {telegram_id} 已完成 {completed_orders} 单，达到最大接单数 {desired_orders}，自动停用")
-        
-        if DATABASE_URL.startswith('postgres'):
-            execute_query(
-                "UPDATE sellers SET is_active = FALSE WHERE telegram_id = ?",
-                (telegram_id,)
-            )
-        else:
-            execute_query(
-                "UPDATE sellers SET is_active = 0 WHERE telegram_id = ?",
-                (telegram_id,)
-            )
+    logger.info(f"卖家 {telegram_id} 当前已完成订单数: {completed_orders}")
+    return completed_orders
 
 def select_active_seller():
     """
@@ -1291,8 +1251,7 @@ def select_active_seller():
     
     选择逻辑：
     1. 获取所有活跃的卖家
-    2. 优先考虑当前最大接单数量较高的卖家
-    3. 如果多个卖家当前最大接单数量相同，优先考虑最近活跃的卖家
+    2. 随机选择一个活跃卖家
     
     返回:
     - 卖家ID，如果没有活跃卖家则返回None
@@ -1304,33 +1263,11 @@ def select_active_seller():
             logger.warning("没有活跃的卖家可用于选择")
             return None
             
-        # 按当前最大接单数量降序排序
-        active_sellers.sort(key=lambda x: x.get("desired_orders", 0), reverse=True)
-        
-        # 选择当前最大接单数量最高的卖家
-        max_desired_orders = active_sellers[0].get("desired_orders", 0)
-        
-        # 如果当前最大接单数为0，说明没有卖家想接单
-        if max_desired_orders <= 0:
-            # 随机选择一个活跃卖家
-            import random
-            selected_seller = random.choice(active_sellers)
-            logger.info(f"没有卖家设置最大接单数，随机选择卖家: {selected_seller['id']}")
-            return selected_seller["id"]
-            
-        # 找出所有当前最大接单数量最高的卖家
-        top_sellers = [s for s in active_sellers if s.get("desired_orders", 0) == max_desired_orders]
-        
-        if len(top_sellers) == 1:
-            # 只有一个最高值的卖家
-            logger.info(f"选择最大接单数最高的卖家: {top_sellers[0]['id']}, 最大数: {max_desired_orders}")
-            return top_sellers[0]["id"]
-        else:
-            # 有多个相同值的卖家，选择最近活跃的
-            top_sellers.sort(key=lambda x: x.get("last_active_at", ""), reverse=True)
-            selected_seller = top_sellers[0]
-            logger.info(f"从多个最大接单数相同的卖家中选择最近活跃的: {selected_seller['id']}")
-            return selected_seller["id"]
+        # 随机选择一个活跃卖家
+        import random
+        selected_seller = random.choice(active_sellers)
+        logger.info(f"随机选择卖家: {selected_seller['id']}")
+        return selected_seller["id"]
     
     except Exception as e:
         logger.error(f"选择活跃卖家失败: {str(e)}", exc_info=True)

@@ -1587,30 +1587,7 @@
     }
   }
   
-  // 更新卖家最大接单数
-  async function updateSellerMaxOrders(telegramId, maxOrders) {
-    try {
-      const response = await fetch(`/admin/api/sellers/${telegramId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          desired_orders: parseInt(maxOrders) 
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error('操作失败');
-      }
-      
-      showToast('最大接单数更新成功', 'success');
-      // 不刷新整个表格，只更新本地数据
-    } catch (e) {
-      console.error('更新卖家最大接单数失败:', e);
-      showToast('操作失败: ' + e.message, 'error');
-    }
-  }
+  // 移除了最大接单数相关功能
 
   // 编辑订单
   async function editOrder(orderId) {
