@@ -1165,10 +1165,15 @@
       z-index: 1000;
       align-items: center;
       justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
     }
 
     .modal-backdrop.show {
-      display: flex;
+      display: flex !important;
+      opacity: 1;
+      visibility: visible;
     }
 
     .modal {
@@ -1503,7 +1508,7 @@
 </div>
 
 <!-- 编辑订单状态模态框 -->
-<div class="modal-backdrop" id="edit-order-status-modal" style="display:none;">
+<div class="modal-backdrop" id="edit-order-status-modal">
   <div class="modal">
     <div class="modal-header">
       <h3>编辑订单状态</h3>
@@ -1973,7 +1978,7 @@
     // 初始化图片上传功能
     initImageUpload();
     
-      // 删除加载用户定制价格
+    // 删除加载用户定制价格
     
     // 加载活跃卖家列表
     loadActiveSellers();
@@ -1983,6 +1988,16 @@
     
     // 更新页面统计信息
     updatePageStats();
+    
+    // 初始化模态框背景点击关闭功能
+    const editOrderStatusModal = document.getElementById('edit-order-status-modal');
+    if (editOrderStatusModal) {
+      editOrderStatusModal.addEventListener('click', function(event) {
+        if (event.target === editOrderStatusModal) {
+          closeOrderStatusModal();
+        }
+      });
+    }
     
     // 搜索功能初始化
     const searchInput = document.getElementById('searchInput');
@@ -2847,18 +2862,50 @@
     document.getElementById('edit-order-status-select').value = order.status;
     
     // 显示模态框
-    document.getElementById('edit-order-status-modal').style.display = 'flex';
+    openModal('edit-order-status-modal');
   }
   
   // 关闭订单状态编辑模态框
   function closeOrderStatusModal() {
-    document.getElementById('edit-order-status-modal').style.display = 'none';
+    closeModal('edit-order-status-modal');
     
     // 清除错误信息
     const errorDiv = document.getElementById('edit-order-status-error');
     if (errorDiv) {
       errorDiv.style.display = 'none';
     }
+  }
+  
+  // 通用显示模态框函数
+  function openModal(modalId) {
+    console.log("显示模态框:", modalId);
+    const modal = document.getElementById(modalId);
+    if (!modal) {
+      console.error("找不到模态框元素:", modalId);
+      return;
+    }
+    
+    // 强制显示模态框
+    modal.style.display = 'flex';
+    setTimeout(() => {
+      modal.classList.add('show');
+    }, 10);
+  }
+  
+  // 通用隐藏模态框函数
+  function closeModal(modalId) {
+    console.log("隐藏模态框:", modalId);
+    const modal = document.getElementById(modalId);
+    if (!modal) {
+      console.error("找不到模态框元素:", modalId);
+      return;
+    }
+    modal.classList.remove('show');
+    
+    // 延迟隐藏，以便动画效果
+    setTimeout(() => {
+      modal.style.display = 'none';
+    }, 300);
   }
   
   // 保存订单状态
@@ -3261,6 +3308,31 @@
       console.error("找不到模态框元素，无法添加点击事件!");
     }
   });
+
+  // 初始化模态框背景点击关闭功能
+  function initModalBackdropClose() {
+    // 获取所有模态框
+    const modals = document.querySelectorAll('.modal-backdrop');
+    
+    // 为每个模态框添加点击事件
+    modals.forEach(modal => {
+      modal.addEventListener('click', function(event) {
+        // 如果点击的是模态框背景（而不是模态框内容）
+        if (event.target === modal) {
+          // 获取模态框ID
+          const modalId = modal.id;
+          
+          // 根据ID关闭对应的模态框
+          if (modalId === 'edit-order-status-modal') {
+            closeOrderStatusModal();
+          } else {
+            // 通用关闭
+            closeModal(modalId);
+          }
+        }
+      });
+    });
+  }
 </script>
 
 </body>
