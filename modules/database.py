@@ -167,7 +167,7 @@ def init_sqlite_db():
         desired_orders INTEGER DEFAULT 0,
         activity_check_at TEXT,
         distribution_level INTEGER DEFAULT 1,
-        max_orders INTEGER DEFAULT 3
+        max_concurrent_orders INTEGER DEFAULT 5
     )
     ''')
     
@@ -214,12 +214,12 @@ def init_sqlite_db():
         c.execute("ALTER TABLE sellers ADD COLUMN distribution_level INTEGER DEFAULT 1")
         conn.commit()
     
-    # 检查sellers表是否需要添加max_orders列
+    # 检查sellers表是否需要添加max_concurrent_orders列
     try:
-        c.execute("SELECT max_orders FROM sellers LIMIT 1")
+        c.execute("SELECT max_concurrent_orders FROM sellers LIMIT 1")
     except sqlite3.OperationalError:
-        logger.info("为sellers表添加max_orders列")
-        c.execute("ALTER TABLE sellers ADD COLUMN max_orders INTEGER DEFAULT 3")
+        logger.info("为sellers表添加max_concurrent_orders列")
+        c.execute("ALTER TABLE sellers ADD COLUMN max_concurrent_orders INTEGER DEFAULT 5")
         conn.commit()
     
     # 检查users表中是否需要添加新列
@@ -263,170 +263,182 @@ def init_sqlite_db():
 
 def init_postgres_db():
     """初始化PostgreSQL数据库"""
-    logger.info("使用PostgreSQL数据库")
-    
-    # 解析数据库URL
     url = urlparse(DATABASE_URL)
+    dbname = url.path[1:]
+    user = url.username
+    password = url.password
+    host = url.hostname
+    port = url.port
     
-    # 连接到数据库
+    logger.info(f"使用PostgreSQL数据库: {host}:{port}/{dbname}")
+    logger.info(f"连接PostgreSQL数据库: {host}:{port}/{dbname}")
+    
+    conn = psycopg2.connect(
+        dbname=dbname,
+        user=user,
+        password=password,
+        host=host,
+        port=port
+    )
+    
+    # 使用自动提交模式，避免事务问题
+    conn.autocommit = True
+    cur = conn.cursor()
+    
+    # 创建订单表
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS orders (
+        id SERIAL PRIMARY KEY,
+        account TEXT,
+        password TEXT,
+        package TEXT,
+        remark TEXT,
+        status TEXT DEFAULT 'submitted',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP,
+        user_id INTEGER,
+        username TEXT,
+        accepted_by TEXT,
+        accepted_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        notified INTEGER DEFAULT 0,
+        accepted_by_username TEXT,
+        accepted_by_first_name TEXT,
+        accepted_by_nickname TEXT,
+        failed_at TIMESTAMP,
+        fail_reason TEXT,
+        buyer_confirmed BOOLEAN DEFAULT FALSE
+    )
+    ''')
+    
+    # 检查orders表是否需要添加accepted_by_nickname列
     try:
-        conn = psycopg2.connect(
-            dbname=url.path[1:],
-            user=url.username,
-            password=url.password,
-            host=url.hostname,
-            port=url.port
-        )
-        conn.autocommit = True
-        cursor = conn.cursor()
-        
-        # 创建订单表
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS orders (
-            id SERIAL PRIMARY KEY,
-            account TEXT,
-            password TEXT,
-            package TEXT,
-            remark TEXT,
-            status TEXT DEFAULT 'submitted',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP,
-            user_id INTEGER,
-            username TEXT,
-            accepted_by TEXT,
-            accepted_at TIMESTAMP,
-            completed_at TIMESTAMP,
-            notified BOOLEAN DEFAULT FALSE,
-            accepted_by_username TEXT,
-            accepted_by_first_name TEXT,
-            accepted_by_nickname TEXT,
-            failed_at TIMESTAMP,
-            fail_reason TEXT,
-            buyer_confirmed BOOLEAN DEFAULT FALSE
-        )
-        ''')
-        
-        # 检查orders表是否需要添加buyer_confirmed列
-        cursor.execute("""
-        SELECT column_name FROM information_schema.columns 
-        WHERE table_name='orders' AND column_name='buyer_confirmed'
-        """)
-        if not cursor.fetchone():
-            logger.info("为orders表添加buyer_confirmed列")
-            cursor.execute("ALTER TABLE orders ADD COLUMN buyer_confirmed BOOLEAN DEFAULT FALSE")
-        
-        # 创建用户表
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            username TEXT UNIQUE,
-            password_hash TEXT,
-            email TEXT,
-            is_admin BOOLEAN DEFAULT FALSE,
-            created_at TEXT,
-            balance REAL DEFAULT 0,
-            credit_limit REAL DEFAULT 0
-        )
-        ''')
-        
-        # 创建卖家表
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS sellers (
-            telegram_id TEXT PRIMARY KEY,
-            username TEXT,
-            first_name TEXT,
-            nickname TEXT,
-            is_active BOOLEAN DEFAULT TRUE,
-            added_at TEXT,
-            added_by TEXT,
-            is_admin BOOLEAN DEFAULT FALSE,
-            last_active_at TEXT,
-            desired_orders INTEGER DEFAULT 0,
-            activity_check_at TEXT,
-            distribution_level INTEGER DEFAULT 1,
-            max_orders INTEGER DEFAULT 3
-        )
-        ''')
-        
-        # 检查sellers表是否需要添加nickname列
-        cursor.execute("""
-        SELECT column_name FROM information_schema.columns 
-        WHERE table_name='sellers' AND column_name='nickname'
-        """)
-        if not cursor.fetchone():
-            logger.info("为sellers表添加nickname列")
-            cursor.execute("ALTER TABLE sellers ADD COLUMN nickname TEXT")
-        
-        # 检查sellers表是否需要添加is_admin列
-        cursor.execute("""
-        SELECT column_name FROM information_schema.columns 
-        WHERE table_name='sellers' AND column_name='is_admin'
-        """)
-        if not cursor.fetchone():
-            logger.info("为sellers表添加is_admin列")
-            cursor.execute("ALTER TABLE sellers ADD COLUMN is_admin BOOLEAN DEFAULT FALSE")
-        
-        # 检查sellers表是否需要添加last_active_at列
-        cursor.execute("""
-        SELECT column_name FROM information_schema.columns 
-        WHERE table_name='sellers' AND column_name='last_active_at'
-        """)
-        if not cursor.fetchone():
-            logger.info("为sellers表添加last_active_at列")
-            cursor.execute("ALTER TABLE sellers ADD COLUMN last_active_at TEXT")
-        
-        # 检查sellers表是否需要添加desired_orders列
-        cursor.execute("""
-        SELECT column_name FROM information_schema.columns 
-        WHERE table_name='sellers' AND column_name='desired_orders'
-        """)
-        if not cursor.fetchone():
-            logger.info("为sellers表添加desired_orders列")
-            cursor.execute("ALTER TABLE sellers ADD COLUMN desired_orders INTEGER DEFAULT 0")
-        
-        # 检查sellers表是否需要添加activity_check_at列
-        cursor.execute("""
-        SELECT column_name FROM information_schema.columns 
-        WHERE table_name='sellers' AND column_name='activity_check_at'
-        """)
-        if not cursor.fetchone():
-            logger.info("为sellers表添加activity_check_at列")
-            cursor.execute("ALTER TABLE sellers ADD COLUMN activity_check_at TEXT")
-        
-        # 检查sellers表是否需要添加distribution_level列
-        cursor.execute("""
-        SELECT column_name FROM information_schema.columns 
-        WHERE table_name='sellers' AND column_name='distribution_level'
-        """)
-        if not cursor.fetchone():
-            logger.info("为sellers表添加distribution_level列")
-            cursor.execute("ALTER TABLE sellers ADD COLUMN distribution_level INTEGER DEFAULT 1")
-        
-        # 检查sellers表是否需要添加max_orders列
-        cursor.execute("""
-        SELECT column_name FROM information_schema.columns 
-        WHERE table_name='sellers' AND column_name='max_orders'
-        """)
-        if not cursor.fetchone():
-            logger.info("为sellers表添加max_orders列")
-            cursor.execute("ALTER TABLE sellers ADD COLUMN max_orders INTEGER DEFAULT 3")
-        
-        # 创建超级管理员账号（如果不存在）
-        admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
-        cursor.execute("SELECT id FROM users WHERE username = %s", (ADMIN_USERNAME,))
-        if not cursor.fetchone():
-            logger.info(f"创建默认管理员账号: {ADMIN_USERNAME}")
-            cursor.execute("""
-                INSERT INTO users (username, password_hash, is_admin, created_at) 
-                VALUES (%s, %s, TRUE, %s)
-            """, (ADMIN_USERNAME, admin_hash, get_china_time()))
-        
-        # 关闭连接
-        cursor.close()
-        conn.close()
-        
-    except Exception as e:
-        logger.error(f"初始化PostgreSQL数据库失败: {str(e)}", exc_info=True)
+        cur.execute("SELECT accepted_by_nickname FROM orders LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为orders表添加accepted_by_nickname列")
+        cur.execute("ALTER TABLE orders ADD COLUMN accepted_by_nickname TEXT")
+        conn.commit()
+    
+    # 检查orders表是否需要添加buyer_confirmed列
+    try:
+        cur.execute("SELECT buyer_confirmed FROM orders LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为orders表添加buyer_confirmed列")
+        cur.execute("ALTER TABLE orders ADD COLUMN buyer_confirmed BOOLEAN DEFAULT FALSE")
+        conn.commit()
+    
+    # 创建用户表
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE,
+        password TEXT,
+        email TEXT,
+        is_admin INTEGER DEFAULT 0,
+        created_at TEXT,
+        balance REAL DEFAULT 0,
+        credit_limit REAL DEFAULT 0
+    )
+    ''')
+    
+    # 创建卖家表
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS sellers (
+        telegram_id TEXT PRIMARY KEY,
+        username TEXT,
+        first_name TEXT,
+        nickname TEXT,
+        is_active BOOLEAN DEFAULT TRUE,
+        added_at TEXT,
+        added_by TEXT,
+        is_admin BOOLEAN DEFAULT FALSE,
+        last_active_at TEXT,
+        desired_orders INTEGER DEFAULT 0,
+        activity_check_at TEXT,
+        distribution_level INTEGER DEFAULT 1,
+        max_concurrent_orders INTEGER DEFAULT 5
+    )
+    ''')
+    
+    # 检查sellers表是否需要添加新字段
+    try:
+        cur.execute("SELECT last_active_at FROM sellers LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为sellers表添加last_active_at列")
+        cur.execute("ALTER TABLE sellers ADD COLUMN last_active_at TEXT")
+        conn.commit()
+    
+    try:
+        cur.execute("SELECT desired_orders FROM sellers LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为sellers表添加desired_orders列")
+        cur.execute("ALTER TABLE sellers ADD COLUMN desired_orders INTEGER DEFAULT 0")
+        conn.commit()
+    
+    try:
+        cur.execute("SELECT activity_check_at FROM sellers LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为sellers表添加activity_check_at列")
+        cur.execute("ALTER TABLE sellers ADD COLUMN activity_check_at TEXT")
+        conn.commit()
+    
+    # 检查sellers表是否需要添加distribution_level列
+    try:
+        cur.execute("SELECT distribution_level FROM sellers LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为sellers表添加distribution_level列")
+        cur.execute("ALTER TABLE sellers ADD COLUMN distribution_level INTEGER DEFAULT 1")
+        conn.commit()
+    
+    # 检查sellers表是否需要添加max_concurrent_orders列
+    try:
+        cur.execute("SELECT max_concurrent_orders FROM sellers LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为sellers表添加max_concurrent_orders列")
+        cur.execute("ALTER TABLE sellers ADD COLUMN max_concurrent_orders INTEGER DEFAULT 5")
+        conn.commit()
+    
+    # 检查sellers表是否需要添加nickname列
+    try:
+        cur.execute("SELECT nickname FROM sellers LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为sellers表添加nickname列")
+        cur.execute("ALTER TABLE sellers ADD COLUMN nickname TEXT")
+        conn.commit()
+    
+    # 检查sellers表是否需要添加is_admin列
+    try:
+        cur.execute("SELECT is_admin FROM sellers LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为sellers表添加is_admin列")
+        cur.execute("ALTER TABLE sellers ADD COLUMN is_admin BOOLEAN DEFAULT FALSE")
+        conn.commit()
+    
+    # 创建用户自定义价格表
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS user_custom_prices (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        package TEXT NOT NULL,
+        price REAL NOT NULL,
+        created_at TEXT NOT NULL,
+        created_by INTEGER,
+        FOREIGN KEY (user_id) REFERENCES users (id),
+        FOREIGN KEY (created_by) REFERENCES users (id),
+        UNIQUE(user_id, package)
+    )
+    ''')
+    
+    # 创建超级管理员账号（如果不存在）
+    admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
+    cur.execute("SELECT id FROM users WHERE username = %s", (ADMIN_USERNAME,))
+    if not cur.fetchone():
+        cur.execute("""
+            INSERT INTO users (username, password_hash, is_admin, created_at) 
+            VALUES (%s, %s, 1, %s)
+        """, (ADMIN_USERNAME, admin_hash, get_china_time()))
+    
+    conn.close()
 
 # 数据库执行函数
 def execute_query(query, params=(), fetch=False, return_cursor=False):
@@ -552,8 +564,7 @@ def get_all_sellers():
                 SELECT telegram_id, username, first_name, nickname, is_active, 
                        added_at, added_by, 
                        COALESCE(is_admin, FALSE) as is_admin,
-                       COALESCE(distribution_level, 1) as distribution_level,
-                       COALESCE(max_orders, 3) as max_orders
+                       COALESCE(distribution_level, 1) as distribution_level
                 FROM sellers
                 ORDER BY added_at DESC
             """, fetch=True)
@@ -562,7 +573,7 @@ def get_all_sellers():
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
             c.execute("""
-                SELECT telegram_id, username, first_name, nickname, is_active, added_at, added_by, is_admin, distribution_level, max_orders
+                SELECT telegram_id, username, first_name, nickname, is_active, added_at, added_by, is_admin, distribution_level
                 FROM sellers
                 ORDER BY added_at DESC
             """)
@@ -1271,11 +1282,87 @@ def get_seller_pending_orders(telegram_id):
     return 0
 
 def check_seller_completed_orders(telegram_id):
-    """检查卖家完成的订单数（现在只是记录，不再自动停用）"""
-    # 获取已完成订单数
-    completed_orders = get_seller_completed_orders(telegram_id)
-    logger.info(f"卖家 {telegram_id} 当前已完成订单数: {completed_orders}")
-    return completed_orders
+    """检查卖家完成的订单数量"""
+    orders = get_seller_completed_orders(telegram_id)
+    return len(orders) if orders else 0
+
+def get_seller_current_orders_count(telegram_id):
+    """
+    获取卖家当前未完成的订单数量
+    
+    参数:
+    - telegram_id: 卖家的Telegram ID
+    
+    返回:
+    - 未完成订单数量
+    """
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            result = execute_query("""
+                SELECT COUNT(*) FROM orders 
+                WHERE accepted_by = %s 
+                AND status = 'accepted'
+            """, (str(telegram_id),), fetch=True)
+        else:
+            result = execute_query("""
+                SELECT COUNT(*) FROM orders 
+                WHERE accepted_by = ? 
+                AND status = 'accepted'
+            """, (str(telegram_id),), fetch=True)
+            
+        return result[0][0] if result else 0
+    except Exception as e:
+        logger.error(f"获取卖家当前订单数量失败: {e}", exc_info=True)
+        return 0
+
+def check_all_sellers_full():
+    """
+    检查是否所有活跃卖家都已达到最大接单量
+    
+    返回:
+    - True: 所有卖家都已满
+    - False: 至少有一个卖家未满
+    """
+    try:
+        # 获取所有活跃卖家
+        active_sellers = get_active_sellers()
+        
+        if not active_sellers:
+            logger.warning("没有活跃卖家，订单提交受限")
+            return True  # 没有活跃卖家时返回True（不允许接单）
+        
+        for seller in active_sellers:
+            seller_id = seller["id"]
+            
+            # 获取卖家最大接单量
+            if DATABASE_URL.startswith('postgres'):
+                max_orders_result = execute_query("""
+                    SELECT max_concurrent_orders FROM sellers 
+                    WHERE telegram_id = %s
+                """, (seller_id,), fetch=True)
+            else:
+                max_orders_result = execute_query("""
+                    SELECT max_concurrent_orders FROM sellers 
+                    WHERE telegram_id = ?
+                """, (seller_id,), fetch=True)
+                
+            max_orders = max_orders_result[0][0] if max_orders_result else 5  # 默认值为5
+            
+            # 获取当前接单量
+            current_orders = get_seller_current_orders_count(seller_id)
+            
+            logger.info(f"卖家 {seller_id} 当前订单: {current_orders}, 最大接单: {max_orders}")
+            
+            # 如果有卖家未达到最大接单量，返回False
+            if current_orders < max_orders:
+                return False
+        
+        # 所有卖家都已达到最大接单量
+        logger.warning("所有卖家都已达到最大接单量，订单提交受限")
+        return True
+    except Exception as e:
+        logger.error(f"检查卖家接单状态时出错: {e}", exc_info=True)
+        return False  # 发生错误时默认允许提交订单
 
 def select_active_seller():
     """
@@ -1283,10 +1370,11 @@ def select_active_seller():
     
     选择逻辑：
     1. 获取所有活跃的卖家
-    2. 随机选择一个活跃卖家
+    2. 选择当前接单数小于最大接单量的卖家
+    3. 如果多个卖家满足条件，优先选择接单比例最低的卖家
     
     返回:
-    - 卖家ID，如果没有活跃卖家则返回None
+    - 卖家ID，如果没有可用卖家则返回None
     """
     try:
         active_sellers = get_active_sellers()
@@ -1295,10 +1383,49 @@ def select_active_seller():
             logger.warning("没有活跃的卖家可用于选择")
             return None
             
-        # 随机选择一个活跃卖家
-        import random
-        selected_seller = random.choice(active_sellers)
-        logger.info(f"随机选择卖家: {selected_seller['id']}")
+        available_sellers = []
+        
+        # 检查每个活跃卖家的当前接单数
+        for seller in active_sellers:
+            seller_id = seller["id"]
+            
+            # 获取卖家最大接单量
+            if DATABASE_URL.startswith('postgres'):
+                max_orders_result = execute_query("""
+                    SELECT max_concurrent_orders FROM sellers 
+                    WHERE telegram_id = %s
+                """, (seller_id,), fetch=True)
+            else:
+                max_orders_result = execute_query("""
+                    SELECT max_concurrent_orders FROM sellers 
+                    WHERE telegram_id = ?
+                """, (seller_id,), fetch=True)
+                
+            max_orders = max_orders_result[0][0] if max_orders_result else 5
+            
+            # 获取当前接单量
+            current_orders = get_seller_current_orders_count(seller_id)
+            
+            # 如果卖家当前接单数小于最大接单量，则添加到可用卖家列表
+            if current_orders < max_orders:
+                # 计算接单比例，用于后续排序
+                ratio = current_orders / max_orders if max_orders > 0 else 1
+                available_sellers.append({
+                    "id": seller_id,
+                    "current_orders": current_orders,
+                    "max_orders": max_orders,
+                    "ratio": ratio
+                })
+        
+        if not available_sellers:
+            logger.warning("没有可用的卖家（所有卖家都已达到最大接单量）")
+            return None
+        
+        # 按接单比例排序，选择接单比例最低的卖家
+        available_sellers.sort(key=lambda x: x["ratio"])
+        selected_seller = available_sellers[0]
+        
+        logger.info(f"选择卖家: {selected_seller['id']}, 当前接单: {selected_seller['current_orders']}/{selected_seller['max_orders']}")
         return selected_seller["id"]
     
     except Exception as e:
@@ -1561,94 +1688,3 @@ def check_duplicate_remark(user_id, remark):
     except Exception as e:
         logger.error(f"检查备注重复失败: {str(e)}", exc_info=True)
         return False
-
-def get_seller_pending_orders_count(telegram_id):
-    """
-    获取卖家当前正在处理的订单数量（已接单但未完成的订单）
-    
-    参数:
-    - telegram_id: 卖家的Telegram ID
-    
-    返回:
-    - 正在处理的订单数量
-    """
-    try:
-        if DATABASE_URL.startswith('postgres'):
-            result = execute_query("""
-                SELECT COUNT(*) 
-                FROM orders 
-                WHERE accepted_by = %s AND status = %s
-            """, (telegram_id, STATUS['ACCEPTED']), fetch=True)
-        else:
-            result = execute_query("""
-                SELECT COUNT(*) 
-                FROM orders 
-                WHERE accepted_by = ? AND status = ?
-            """, (telegram_id, STATUS['ACCEPTED']), fetch=True)
-        
-        return result[0][0] if result else 0
-    except Exception as e:
-        logger.error(f"获取卖家 {telegram_id} 待处理订单数失败: {str(e)}", exc_info=True)
-        return 0
-
-def check_seller_at_max_capacity(telegram_id):
-    """
-    检查卖家是否已达到最大接单数
-    
-    参数:
-    - telegram_id: 卖家的Telegram ID
-    
-    返回:
-    - True: 卖家已达到最大接单数
-    - False: 卖家未达到最大接单数
-    """
-    try:
-        # 获取卖家的最大接单数
-        if DATABASE_URL.startswith('postgres'):
-            max_orders_result = execute_query("""
-                SELECT max_orders FROM sellers WHERE telegram_id = %s
-            """, (telegram_id,), fetch=True)
-        else:
-            max_orders_result = execute_query("""
-                SELECT max_orders FROM sellers WHERE telegram_id = ?
-            """, (telegram_id,), fetch=True)
-        
-        if not max_orders_result:
-            return True  # 卖家不存在，视为已满
-        
-        max_orders = max_orders_result[0][0] or 3  # 默认为3
-        
-        # 获取当前待处理订单数
-        pending_count = get_seller_pending_orders_count(telegram_id)
-        
-        # 检查是否达到最大值
-        return pending_count >= max_orders
-    except Exception as e:
-        logger.error(f"检查卖家 {telegram_id} 接单容量失败: {str(e)}", exc_info=True)
-        return True  # 出错时保守返回已满
-
-def check_all_sellers_at_max_capacity():
-    """
-    检查是否所有活跃卖家都已达到最大接单数
-    
-    返回:
-    - True: 所有活跃卖家都已达到最大接单数
-    - False: 至少有一个活跃卖家未达到最大接单数
-    """
-    try:
-        # 获取所有活跃卖家
-        active_sellers = get_active_seller_ids()
-        
-        if not active_sellers:
-            return True  # 没有活跃卖家，视为所有卖家都已满
-        
-        # 检查每个卖家是否已达到最大接单数
-        for seller_id in active_sellers:
-            if not check_seller_at_max_capacity(seller_id):
-                return False  # 找到一个未达到最大接单数的卖家
-        
-        # 所有卖家都已达到最大接单数
-        return True
-    except Exception as e:
-        logger.error(f"检查所有卖家接单容量失败: {str(e)}", exc_info=True)
-        return False  # 出错时保守返回未满

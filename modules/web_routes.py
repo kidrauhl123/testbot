@@ -23,7 +23,7 @@ from modules.database import (
     get_seller_completed_orders, get_seller_pending_orders, check_seller_completed_orders,
     get_seller_today_confirmed_orders_by_user, get_admin_sellers,
     get_user_today_confirmed_count, get_all_today_confirmed_count, create_order_with_deduction_atomic,
-    add_seller
+    add_seller, check_all_sellers_full
 )
 import modules.constants as constants
 
@@ -254,26 +254,15 @@ def register_routes(app, notification_queue):
                 fetch=True
             )[0][0]
             
-            # 检查该卖家是否已达到最大接单数
-            from modules.database import check_seller_at_max_capacity
-            if check_seller_at_max_capacity(preferred_seller):
-                logger.warning(f"订单提交失败: 卖家 {preferred_seller} 已达到最大接单数")
+            if unconfirmed_count >= 3:
+                logger.warning(f"订单提交失败: 卖家 {preferred_seller} 已有 {unconfirmed_count} 个未确认订单")
                 return jsonify({
                     "success": False, 
-                    "error": "该卖家已达到最大接单数，请选择其他卖家或稍后再试"
+                    "error": "该卖家已有3个未确认订单，请选择其他卖家或等待卖家完成现有订单"
                 }), 400
             
             # 记录日志但不再修改备注
             logger.info(f"用户指定接单人: {preferred_seller}")
-        else:
-            # 如果没有指定卖家，检查是否所有卖家都已达到最大接单数
-            from modules.database import check_all_sellers_at_max_capacity
-            if check_all_sellers_at_max_capacity():
-                logger.warning("订单提交失败: 所有卖家都已达到最大接单数")
-                return jsonify({
-                    "success": False, 
-                    "error": "所有卖家都已达到最大接单数，请稍后再试"
-                }), 400
         
         logger.info(f"收到订单提交请求: 二维码={file_path}, 套餐={package}, 指定接单人={preferred_seller or '无'}")
         
@@ -284,6 +273,14 @@ def register_routes(app, notification_queue):
         try:
             user_id = session.get('user_id')
             username = session.get('username')
+            
+            # 检查是否所有卖家都已达到最大接单量
+            if check_all_sellers_full():
+                logger.warning("订单提交失败: 所有卖家都已达到最大接单量")
+                return jsonify({
+                    "success": False,
+                    "error": "当前所有卖家已达到最大接单量，请稍后再试"
+                }), 400
             
             # 创建订单
             try:
@@ -306,7 +303,7 @@ def register_routes(app, notification_queue):
             logger.info(f"订单提交成功: 用户={username}, 套餐={package}")
             
             # 获取最新订单列表并格式化
-            orders_raw = execute_query("SELECT id, account, password, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
+            orders_raw = execute_query("SELECT id, account, password, package, status, created_at, user_id FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             orders = []
             
             # 获取新创建的订单ID
@@ -923,8 +920,7 @@ def register_routes(app, notification_queue):
                 "added_at": s[5],
                 "added_by": s[6],
                 "is_admin": bool(s[7]),
-                "distribution_level": s[8] if len(s) > 8 and s[8] is not None else 1,
-                "max_orders": s[9] if len(s) > 9 and s[9] is not None else 3
+                "distribution_level": s[8] if len(s) > 8 and s[8] is not None else 1
             }
             
             # 获取已完成订单数和未完成订单数
@@ -1303,7 +1299,7 @@ def register_routes(app, notification_queue):
         data = request.get_json()
         nickname = data.get('nickname')
         distribution_level = data.get('distribution_level')
-        max_orders = data.get('max_orders')
+        max_concurrent_orders = data.get('max_concurrent_orders')
         
         try:
             if nickname is not None:
@@ -1325,19 +1321,21 @@ def register_routes(app, notification_queue):
                 
                 logger.info(f"更新卖家 {telegram_id} 分流等级为 {level}")
             
-            if max_orders is not None:
+            if max_concurrent_orders is not None:
                 # 确保最大接单数是合法的整数
-                max_orders_value = int(max_orders)
-                if max_orders_value < 1:
-                    max_orders_value = 1
-                
+                max_orders = int(max_concurrent_orders)
+                if max_orders < 1:
+                    max_orders = 1
+                if max_orders > 20:
+                    max_orders = 20
+                    
                 # 更新最大接单数
                 if DATABASE_URL.startswith('postgres'):
-                    execute_query("UPDATE sellers SET max_orders = %s WHERE telegram_id = %s", (max_orders_value, telegram_id))
+                    execute_query("UPDATE sellers SET max_concurrent_orders = %s WHERE telegram_id = %s", (max_orders, telegram_id))
                 else:
-                    execute_query("UPDATE sellers SET max_orders = ? WHERE telegram_id = ?", (max_orders_value, telegram_id))
+                    execute_query("UPDATE sellers SET max_concurrent_orders = ? WHERE telegram_id = ?", (max_orders, telegram_id))
                 
-                logger.info(f"更新卖家 {telegram_id} 最大接单数为 {max_orders_value}")
+                logger.info(f"更新卖家 {telegram_id} 最大接单数为 {max_orders}")
                 
             return jsonify({"success": True})
         except Exception as e:

@@ -663,30 +663,58 @@ async def send_notification_from_queue(data):
                 print(f"WARNING: 没有活跃的卖家可以接收订单通知: {order_id}")
                 return
                 
-            image_path = account
+            image_path = account # 路径现在是相对的
+            
+            # 尝试不同的路径格式
+            image_paths_to_try = [
+                image_path,  # 原始路径
+                image_path.replace('/', '\\'),  # Windows 风格路径
+                os.path.join(os.getcwd(), image_path),  # 绝对路径
+                os.path.join(os.getcwd(), image_path.replace('/', '\\')),  # 绝对 Windows 路径
+            ]
+            
+            logger.info(f"将尝试以下图片路径:")
+            for idx, path in enumerate(image_paths_to_try):
+                logger.info(f"  路径 {idx+1}: {path} (存在: {os.path.exists(path)})")
+                print(f"DEBUG: 尝试路径 {idx+1}: {path} (存在: {os.path.exists(path)})")
+                
+            # 找到第一个存在的路径
+            valid_path = None
+            for path in image_paths_to_try:
+                if os.path.exists(path):
+                    valid_path = path
+                    logger.info(f"找到有效的图片路径: {valid_path}")
+                    print(f"DEBUG: 找到有效的图片路径: {valid_path}")
+                    break
+                    
+            if valid_path:
+                image_path = valid_path
+            else:
+                logger.error(f"所有尝试的图片路径都不存在")
+                print(f"ERROR: 所有尝试的图片路径都不存在")
+                
+            logger.info(f"将发送图片: {image_path}")
+            print(f"DEBUG: 将发送图片: {image_path}")
             
             # 检查图片是否存在
             if not os.path.exists(image_path):
-                logger.error(f"图片不存在: {image_path}")
+                logger.error(f"图片文件不存在: {image_path}")
+                print(f"ERROR: 图片文件不存在: {image_path}")
+                # 尝试列出目录内容
+                try:
+                    dir_path = os.path.dirname(image_path)
+                    if os.path.exists(dir_path):
+                        files = os.listdir(dir_path)
+                        logger.info(f"目录 {dir_path} 中的文件: {files}")
+                        print(f"DEBUG: 目录 {dir_path} 中的文件: {files}")
+                    else:
+                        logger.error(f"目录不存在: {dir_path}")
+                        print(f"ERROR: 目录不存在: {dir_path}")
+                except Exception as e:
+                    logger.error(f"列出目录内容时出错: {str(e)}")
+                    print(f"ERROR: 列出目录内容时出错: {str(e)}")
                 return
                 
-            # 准备发送的消息内容
-            package_text = f"{order.get('package', '未知')}个月"
-            
-            # 构建消息内容
-            caption = f"*新订单 #{order_id}*\n"
-            caption += f"套餐: {package_text}\n"
-            if remark:
-                caption += f"备注: {remark}\n"
-            caption += f"创建者: {creator}\n"
-            caption += f"创建时间: {order.get('created_at', '未知')}\n\n"
-            caption += "请点击下方按钮接单:"
-            
-            # 创建接单按钮
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("接单", callback_data=f"accept_{order_id}")]
-            ])
-            
             # 确定目标卖家（从活跃卖家中选择一个）
             if preferred_seller:
                 # 如果指定了特定卖家，检查该卖家是否活跃
@@ -695,42 +723,20 @@ async def send_notification_from_queue(data):
                     logger.warning(f"指定的卖家不存在或不活跃: {preferred_seller}，将随机选择一位活跃卖家")
                     # 随机选择一位活跃卖家
                     if active_sellers:
-                        # 过滤出未达到最大接单数的卖家
-                        from modules.database import check_seller_at_max_capacity
-                        available_sellers = [
-                            seller for seller in active_sellers 
-                            if not check_seller_at_max_capacity(seller['id'])
-                        ]
-                        
-                        if available_sellers:
-                            import random
-                            random_seller = random.choice(available_sellers)
-                            target_sellers = [random_seller]
-                            logger.info(f"随机选择卖家: {random_seller['id']}")
-                        else:
-                            logger.error("没有可用卖家（所有卖家都已达到最大接单数）")
-                            return
+                        import random
+                        random_seller = random.choice(active_sellers)
+                        target_sellers = [random_seller]
+                        logger.info(f"随机选择卖家: {random_seller['id']}")
                     else:
                         logger.error("没有活跃卖家可用")
                         return
             else:
                 # 如果没有指定卖家，随机选择一位活跃卖家
                 if active_sellers:
-                    # 过滤出未达到最大接单数的卖家
-                    from modules.database import check_seller_at_max_capacity
-                    available_sellers = [
-                        seller for seller in active_sellers 
-                        if not check_seller_at_max_capacity(seller['id'])
-                    ]
-                    
-                    if available_sellers:
-                        import random
-                        random_seller = random.choice(available_sellers)
-                        target_sellers = [random_seller]
-                        logger.info(f"随机选择卖家: {random_seller['id']}")
-                    else:
-                        logger.error("没有可用卖家（所有卖家都已达到最大接单数）")
-                        return
+                    import random
+                    random_seller = random.choice(active_sellers)
+                    target_sellers = [random_seller]
+                    logger.info(f"随机选择卖家: {random_seller['id']}")
                 else:
                     logger.error("没有活跃卖家可用")
                     return
@@ -738,21 +744,38 @@ async def send_notification_from_queue(data):
             # 为订单添加状态标记
             await mark_order_as_processing(order_id)
             
-            # 向选中的卖家发送消息
-            for seller in target_sellers:
+            # 发送通知给选中的卖家
+            if target_sellers:
+                seller = target_sellers[0]
                 seller_id = seller.get('id', seller.get('telegram_id'))
-                
                 try:
-                    # 发送图片消息
+                    # 使用备注作为标题，如果没有备注则显示订单号
+                    caption_parts = []
+                    if remark:
+                        caption_parts.append(f"*{remark}*")
+                    else:
+                        caption_parts.append(f"Order #{order_id}")
+                    
+                    caption_parts.append(f"From user: {creator}")
+                    caption = "\n".join(caption_parts)
+                    
+                    # 创建按钮
+                    keyboard = [
+                        [InlineKeyboardButton("✅ Complete", callback_data=f"done_{order_id}"),
+                         InlineKeyboardButton("❓ Any Problem", callback_data=f"fail_{order_id}")]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
+                    # 发送图片和备注
                     with open(image_path, 'rb') as photo_file:
                         await bot_application.bot.send_photo(
                             chat_id=seller_id,
                             photo=photo_file,
                             caption=caption,
-                            reply_markup=keyboard,
-                            parse_mode='Markdown'
+                            parse_mode='Markdown',
+                            reply_markup=reply_markup
                         )
-                    logger.info(f"已向卖家 {seller_id} 发送订单 {order_id} 的通知")
+                    logger.info(f"已发送订单 #{order_id} 通知到卖家 {seller_id}")
 
                     # 向管理员发送通知
                     try:

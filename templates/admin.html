@@ -595,33 +595,32 @@
       
       <!-- 卖家管理 -->
       <div id="sellers" class="tab-content">
-        <div class="section-header">
-          <h2>卖家管理</h2>
+        <div class="content-header">
+          <h2><i class="fas fa-user-tie"></i> 卖家管理</h2>
           <div class="header-actions">
             <button class="btn btn-primary" onclick="showAddSellerModal()">添加卖家</button>
           </div>
         </div>
         <div class="alert alert-info" style="margin-bottom: 20px;">
-          <strong>提示：</strong> 分流等级决定卖家获得订单的优先级。等级越高，获得订单的机会越多。分流等级范围为1-10。<br>
-          <strong>最大接单数：</strong> 卖家可以同时接受的最大订单数量。当卖家达到最大接单数时，系统将不再分配新订单给该卖家。
+          <strong>提示：</strong> 分流等级决定卖家获得订单的优先级。等级越高，获得订单的机会越多。分流等级范围为1-10。
         </div>
         <div class="sellers-container">
           <table class="data-table">
-            <thead>
+            <thead class="thead-dark">
               <tr>
-                <th>显示昵称</th>
+                <th>昵称</th>
                 <th>状态</th>
-                <th>身份</th>
+                <th>角色</th>
                 <th>分流等级</th>
                 <th>最大接单数</th>
                 <th>添加时间</th>
-                <th>添加人</th>
+                <th>添加者</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody id="sellers-table-body">
               <tr>
-                <td colspan="8" class="loading">加载中...</td>
+                <td colspan="7" class="loading">加载中...</td>
               </tr>
             </tbody>
           </table>
@@ -1425,12 +1424,12 @@
         return;
       }
       
-      tbody.innerHTML = '<tr><td colspan="8" class="loading">加载中...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
       
       const response = await fetch('/admin/api/sellers');
       if (!response.ok) {
         console.error("加载卖家数据失败:", response.status, response.statusText);
-        tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
         return;
       }
       
@@ -1440,7 +1439,7 @@
       tbody.innerHTML = '';
       
       if (sellers.length === 0) {
-        const colCount = tbody.parentElement.querySelector('thead tr').childElementCount || 8;
+        const colCount = tbody.parentElement.querySelector('thead tr').childElementCount || 7;
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding: 40px;">暂无卖家</td></tr>`;
         return;
       }
@@ -1471,7 +1470,14 @@
                 data-id="${seller.telegram_id}" 
                 onchange="updateSellerLevel(${seller.telegram_id}, this.value)">
             </td>
-            <td>${seller.max_orders || '未设置'}</td>
+            <td>
+              <input type="number" class="form-control form-control-sm max-orders-input" 
+                value="${seller.max_concurrent_orders || 5}" 
+                min="1" 
+                max="20" 
+                data-id="${seller.telegram_id}" 
+                onchange="updateSellerMaxOrders(${seller.telegram_id}, this.value)">
+            </td>
             <td>${seller.added_at}</td>
             <td>${escapeHtml(seller.added_by || '')}</td>
             <td class="actions">
@@ -1490,7 +1496,7 @@
       console.error('加载卖家失败', e);
       const tbody = document.getElementById('sellers-table-body');
       if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
       }
     }
   }
@@ -1957,26 +1963,45 @@
   }
 
   // 在loadSellers函数后添加如下JS方法：
-  async function updateSellerLevel(telegramId, level) {
+  async function updateSellerLevel(telegramId, newLevel) {
     try {
       const response = await fetch(`/admin/api/sellers/${telegramId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          distribution_level: level
-        })
+        body: JSON.stringify({ distribution_level: parseInt(newLevel) })
       });
       
       if (!response.ok) {
-        throw new Error('更新失败');
+        throw new Error('更新分流等级失败');
       }
       
-      showToast(`卖家分流等级已更新为 ${level}`, 'success');
+      showToast('分流等级已更新', 'success');
     } catch (e) {
-      console.error('更新卖家分流等级失败:', e);
-      showToast('更新失败: ' + e.message, 'error');
+      console.error('更新分流等级失败:', e);
+      showToast('更新分流等级失败: ' + e.message, 'error');
+    }
+  }
+
+  async function updateSellerMaxOrders(telegramId, newMaxOrders) {
+    try {
+      const response = await fetch(`/admin/api/sellers/${telegramId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ max_concurrent_orders: parseInt(newMaxOrders) })
+      });
+      
+      if (!response.ok) {
+        throw new Error('更新最大接单数失败');
+      }
+      
+      showToast('最大接单数已更新', 'success');
+    } catch (e) {
+      console.error('更新最大接单数失败:', e);
+      showToast('更新最大接单数失败: ' + e.message, 'error');
     }
   }
 
@@ -2033,34 +2058,6 @@
       alert('设置定制价格失败: ' + e.message);
     }
   });
-
-  async function updateSellerMaxOrders(telegramId, maxOrders) {
-    try {
-      if (maxOrders < 1) {
-        alert('最大接单数不能小于1');
-        return;
-      }
-      
-      const response = await fetch(`/admin/api/sellers/${telegramId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          max_orders: maxOrders
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error('更新失败');
-      }
-      
-      showToast(`卖家最大接单数已更新为 ${maxOrders}`, 'success');
-    } catch (e) {
-      console.error('更新卖家最大接单数失败:', e);
-      showToast('更新失败: ' + e.message, 'error');
-    }
-  }
 </script>
 </body>
 </html> 
