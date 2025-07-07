@@ -1416,34 +1416,21 @@
   }
 
   async function loadSellers() {
+    const tbody = document.getElementById('sellers-table-body');
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="8" class="loading">正在加载...</td></tr>';
+    }
     try {
-      console.log("开始加载卖家数据...");
-      const tbody = document.getElementById('sellers-table-body');
-      if (!tbody) {
-        console.error("找不到sellers-table-body元素");
-        return;
-      }
-      
-      tbody.innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
-      
       const response = await fetch('/admin/api/sellers');
-      if (!response.ok) {
-        console.error("加载卖家数据失败:", response.status, response.statusText);
-        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
-        return;
-      }
-      
       const sellers = await response.json();
-      console.log("成功获取卖家数据:", sellers);
       
+      // 添加调试日志，输出API返回的卖家数据
+      console.log('API返回的卖家数据:', sellers);
+      
+      // 清空表格
       tbody.innerHTML = '';
       
-      if (sellers.length === 0) {
-        const colCount = tbody.parentElement.querySelector('thead tr').childElementCount || 7;
-        tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding: 40px;">暂无卖家</td></tr>`;
-        return;
-      }
-      
+      // 填充数据
       sellers.forEach(seller => {
         const statusBadge = seller.is_active 
           ? '<span class="badge badge-success">活跃</span>' 

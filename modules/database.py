@@ -564,7 +564,8 @@ def get_all_sellers():
                 SELECT telegram_id, username, first_name, nickname, is_active, 
                        added_at, added_by, 
                        COALESCE(is_admin, FALSE) as is_admin,
-                       COALESCE(distribution_level, 1) as distribution_level
+                       COALESCE(distribution_level, 1) as distribution_level,
+                       COALESCE(max_concurrent_orders, 5) as max_concurrent_orders
                 FROM sellers
                 ORDER BY added_at DESC
             """, fetch=True)
@@ -573,7 +574,7 @@ def get_all_sellers():
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
             c.execute("""
-                SELECT telegram_id, username, first_name, nickname, is_active, added_at, added_by, is_admin, distribution_level
+                SELECT telegram_id, username, first_name, nickname, is_active, added_at, added_by, is_admin, distribution_level, max_concurrent_orders
                 FROM sellers
                 ORDER BY added_at DESC
             """)
@@ -606,13 +607,13 @@ def get_seller_info(telegram_id):
     try:
         if DATABASE_URL.startswith('postgres'):
             result = execute_query("""
-                SELECT telegram_id, nickname, username, first_name, is_active
+                SELECT telegram_id, nickname, username, first_name, is_active, max_concurrent_orders
                 FROM sellers
                 WHERE telegram_id = %s
             """, (telegram_id,), fetch=True)
         else:
             result = execute_query("""
-                SELECT telegram_id, nickname, username, first_name, is_active
+                SELECT telegram_id, nickname, username, first_name, is_active, max_concurrent_orders
                 FROM sellers
                 WHERE telegram_id = ?
             """, (telegram_id,), fetch=True)
@@ -622,7 +623,7 @@ def get_seller_info(telegram_id):
             return None
             
         seller = result[0]
-        telegram_id, nickname, username, first_name, is_active = seller
+        telegram_id, nickname, username, first_name, is_active, max_concurrent_orders = seller
         
         # 如果没有设置昵称，则使用first_name或username作为默认昵称
         display_name = nickname or first_name or f"Seller {telegram_id}"
@@ -633,7 +634,8 @@ def get_seller_info(telegram_id):
             "username": username,
             "first_name": first_name, 
             "display_name": display_name,
-            "is_active": bool(is_active)
+            "is_active": bool(is_active),
+            "max_concurrent_orders": max_concurrent_orders if max_concurrent_orders is not None else 5
         }
     except Exception as e:
         logger.error(f"获取卖家 {telegram_id} 信息失败: {str(e)}", exc_info=True)
