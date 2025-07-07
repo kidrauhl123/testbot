@@ -23,7 +23,7 @@ from modules.database import (
     get_seller_completed_orders, get_seller_pending_orders, check_seller_completed_orders,
     get_seller_today_confirmed_orders_by_user, get_admin_sellers,
     get_user_today_confirmed_count, get_all_today_confirmed_count, create_order_with_deduction_atomic,
-    add_seller
+    add_seller, are_all_sellers_at_max_capacity, update_system_setting, update_seller_max_orders
 )
 import modules.constants as constants
 
@@ -145,6 +145,14 @@ def register_routes(app, notification_queue):
     @login_required
     def create_order():
         logger.info("处理图片上传请求")
+        
+        # 首先检查是否所有卖家都已达到最大接单数
+        if are_all_sellers_at_max_capacity():
+            logger.warning("订单提交失败: 所有卖家都已达到最大接单数")
+            return jsonify({
+                "success": False,
+                "error": "所有卖家都已达到最大接单数，请稍后再试"
+            }), 400
         
         # 优先检查正常文件上传
         if 'qr_code' in request.files and request.files['qr_code'].filename != '':
@@ -1213,6 +1221,9 @@ def register_routes(app, notification_queue):
                     seller['active_status'] = "未知"
             else:
                 seller['active_status'] = "从未活跃"
+            
+            # 添加卖家是否可接单的标志
+            seller['available'] = seller['current_orders'] < seller['max_orders']
         
         return jsonify({
             "success": True,
@@ -1591,6 +1602,89 @@ def register_routes(app, notification_queue):
         except Exception as e:
             logger.error(f"调试订单数据失败: {str(e)}", exc_info=True)
             return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/admin/api/settings/max-orders', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_update_max_orders():
+        """更新系统全局最大接单数设置"""
+        try:
+            data = request.get_json()
+            if not data or 'value' not in data:
+                return jsonify({"success": False, "error": "缺少必要参数"}), 400
+                
+            max_orders = int(data['value'])
+            if max_orders < 1:
+                return jsonify({"success": False, "error": "最大接单数必须大于0"}), 400
+                
+            success = update_system_setting(
+                'max_orders_per_seller', 
+                str(max_orders), 
+                '每个卖家的最大同时接单数'
+            )
+            
+            if success:
+                logger.info(f"更新系统最大接单数为: {max_orders}")
+                return jsonify({"success": True, "message": f"已更新系统最大接单数为: {max_orders}"})
+            else:
+                return jsonify({"success": False, "error": "更新系统设置失败"}), 500
+                
+        except Exception as e:
+            logger.error(f"更新最大接单数设置失败: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": f"操作失败: {str(e)}"}), 500
+            
+    @app.route('/admin/api/sellers/<int:telegram_id>/max-orders', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_update_seller_max_orders(telegram_id):
+        """更新特定卖家的最大接单数"""
+        try:
+            data = request.get_json()
+            if not data or 'value' not in data:
+                return jsonify({"success": False, "error": "缺少必要参数"}), 400
+                
+            max_orders = int(data['value'])
+            if max_orders < 1:
+                return jsonify({"success": False, "error": "最大接单数必须大于0"}), 400
+                
+            success = update_seller_max_orders(telegram_id, max_orders)
+            
+            if success:
+                logger.info(f"更新卖家 {telegram_id} 的最大接单数为: {max_orders}")
+                return jsonify({"success": True, "message": f"已更新卖家最大接单数为: {max_orders}"})
+            else:
+                return jsonify({"success": False, "error": "更新卖家设置失败"}), 500
+                
+        except Exception as e:
+            logger.error(f"更新卖家最大接单数失败: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": f"操作失败: {str(e)}"}), 500
+            
+    @app.route('/admin/api/settings')
+    @login_required
+    @admin_required
+    def admin_get_settings():
+        """获取系统设置"""
+        try:
+            # 查询所有系统设置
+            settings = execute_query(
+                "SELECT key, value, description, updated_at FROM system_settings",
+                fetch=True
+            )
+            
+            result = {}
+            if settings:
+                for key, value, description, updated_at in settings:
+                    result[key] = {
+                        "value": value,
+                        "description": description,
+                        "updated_at": updated_at
+                    }
+                    
+            return jsonify({"success": True, "settings": result})
+            
+        except Exception as e:
+            logger.error(f"获取系统设置失败: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": f"操作失败: {str(e)}"}), 500
 
 def ensure_orders_columns():
     """确保orders表包含所有必需的列，比如buyer_confirmed_at"""
