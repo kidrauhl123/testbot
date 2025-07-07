@@ -35,7 +35,8 @@ from modules.database import (
     select_active_seller, get_seller_info,
     get_user_custom_prices, set_user_custom_price, delete_user_custom_price,
     update_seller_nickname, get_seller_completed_orders, get_seller_pending_orders,
-    check_seller_completed_orders, get_seller_today_confirmed_orders_by_user, get_admin_sellers
+    check_seller_completed_orders, get_seller_today_confirmed_orders_by_user, get_admin_sellers,
+    get_seller_current_orders_count, get_seller_max_orders, get_system_max_orders_setting
 )
 
 # 设置日志
@@ -731,12 +732,43 @@ async def send_notification_from_queue(data):
                         logger.error("没有活跃卖家可用")
                         return
             else:
-                # 如果没有指定卖家，随机选择一位活跃卖家
+                # 如果没有指定卖家，选择一位未达到最大接单数的活跃卖家
                 if active_sellers:
-                    import random
-                    random_seller = random.choice(active_sellers)
-                    target_sellers = [random_seller]
-                    logger.info(f"随机选择卖家: {random_seller['id']}")
+                    # 获取所有卖家当前的订单数
+                    seller_orders = get_seller_current_orders_count()
+                    system_max_orders = get_system_max_orders_setting()
+                    
+                    # 筛选未达到最大接单数的卖家
+                    available_sellers = []
+                    for seller in active_sellers:
+                        seller_id = seller.get('id', seller.get('telegram_id'))
+                        # 获取该卖家的个人最大接单数设置
+                        seller_max_orders = get_seller_max_orders(seller_id)
+                        # 使用卖家个人设置或系统默认值
+                        max_orders = seller_max_orders or system_max_orders
+                        # 获取当前接单数
+                        current_orders = seller_orders.get(str(seller_id), 0)
+                        
+                        # 如果未达到最大接单数，加入可用卖家列表
+                        if current_orders < max_orders:
+                            # 添加当前接单数和最大接单数信息
+                            seller['current_orders'] = current_orders
+                            seller['max_orders'] = max_orders
+                            seller['available_slots'] = max_orders - current_orders
+                            available_sellers.append(seller)
+                    
+                    if available_sellers:
+                        # 按照可用槽位数量降序排序（优先分配给空闲槽位多的卖家）
+                        available_sellers.sort(key=lambda s: s['available_slots'], reverse=True)
+                        # 选择空闲槽位最多的卖家
+                        target_sellers = [available_sellers[0]]
+                        logger.info(f"选择空闲槽位最多的卖家: {target_sellers[0]['id']}, 当前接单数: {target_sellers[0]['current_orders']}/{target_sellers[0]['max_orders']}")
+                    else:
+                        # 如果所有卖家都已满额，随机选择一位
+                        import random
+                        random_seller = random.choice(active_sellers)
+                        target_sellers = [random_seller]
+                        logger.info(f"所有卖家都已满额，随机选择卖家: {random_seller['id']}")
                 else:
                     logger.error("没有活跃卖家可用")
                     return
@@ -1437,9 +1469,6 @@ async def on_test_notify(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def check_and_push_orders():
     """检查新订单并推送通知"""
     try:
-        # 导入必要的函数
-        from modules.database import get_unnotified_orders
-        
         # 获取未通知的订单
         unnotified_orders = get_unnotified_orders()
         
