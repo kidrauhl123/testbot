@@ -1548,8 +1548,18 @@
     console.log(`[${new Date().toISOString()}] ${message}`);
   }
   
-  // 获取今天的日期，格式为YYYY-MM-DD
-  const today = new Date().toISOString().split('T')[0];
+  // 获取中国时间的今天日期（UTC+8）
+  const nowDate = new Date();
+  const chinaOffsetMinutes = 8 * 60; // 中国是UTC+8，偏移量为480分钟
+  const localOffsetMinutes = nowDate.getTimezoneOffset(); // 获取本地时区与UTC的偏移量，单位分钟
+  const totalOffsetMinutes = chinaOffsetMinutes + localOffsetMinutes; // 需要调整的总分钟数
+  
+  // 调整到中国时间
+  nowDate.setMinutes(nowDate.getMinutes() + totalOffsetMinutes);
+  
+  // 格式化为YYYY-MM-DD格式
+  const today = nowDate.toISOString().split('T')[0];
+  console.log("今天的中国日期:", today);
   
   // 初始化筛选条件，默认显示今日订单
   let filters = {
@@ -2129,9 +2139,18 @@
                 if (count === 0 && allOrders && allOrders.length > 0) {
                     console.log("API返回的充值成功订单数为0，尝试从页面订单列表计算...");
                     
-                    // 获取今天的日期字符串 YYYY-MM-DD
-                    const today = new Date().toISOString().split('T')[0];
-                    console.log("今天日期:", today);
+                    // 获取中国时间的今天日期（UTC+8）
+                    const todayNow = new Date();
+                    const todayChinaOffset = 8 * 60; // 中国是UTC+8，偏移量为480分钟
+                    const todayLocalOffset = todayNow.getTimezoneOffset(); // 获取本地时区与UTC的偏移量，单位分钟
+                    const todayTotalOffset = todayChinaOffset + todayLocalOffset; // 需要调整的总分钟数
+                    
+                    // 调整到中国时间
+                    todayNow.setMinutes(todayNow.getMinutes() + todayTotalOffset);
+                    
+                    // 格式化为YYYY-MM-DD格式
+                    const today = todayNow.toISOString().split('T')[0];
+                    console.log("统计的中国日期:", today);
                     
                     // 从allOrders中筛选今天的充值成功订单
                     const todayCompletedOrders = allOrders.filter(order => {
@@ -3261,6 +3280,46 @@
       console.error("找不到模态框元素，无法添加点击事件!");
     }
   });
+
+  // 初始化筛选
+  function initializeFilters() {
+    // 获取中国时间的今天日期（UTC+8）
+    const now = new Date();
+    const chinaOffset = 8 * 60; // 中国是UTC+8，偏移量为480分钟
+    const localOffset = now.getTimezoneOffset(); // 获取本地时区与UTC的偏移量，单位分钟
+    const totalOffset = chinaOffset + localOffset; // 需要调整的总分钟数
+    
+    // 调整到中国时间
+    now.setMinutes(now.getMinutes() + totalOffset);
+    
+    // 格式化为YYYY-MM-DD格式
+    const today = now.toISOString().split('T')[0];
+    
+    console.log("今天的中国日期:", today);
+    
+    // 初始化卖家筛选
+    populateSellerFilter();
+    
+    // 设置日期筛选控件的初始值为今日
+    document.getElementById('startDateFilter').value = today;
+    document.getElementById('endDateFilter').value = today;
+    
+    // 初始化活动筛选标签
+    updateActiveFilters();
+  }
+
+  // 获取中国时间的今天日期（UTC+8）
+  const nowDate = new Date();
+  const chinaOffsetMinutes = 8 * 60; // 中国是UTC+8，偏移量为480分钟
+  const localOffsetMinutes = nowDate.getTimezoneOffset(); // 获取本地时区与UTC的偏移量，单位分钟
+  const totalOffsetMinutes = chinaOffsetMinutes + localOffsetMinutes; // 需要调整的总分钟数
+
+  // 调整到中国时间
+  nowDate.setMinutes(nowDate.getMinutes() + totalOffsetMinutes);
+
+  // 格式化为YYYY-MM-DD格式
+  const today = nowDate.toISOString().split('T')[0];
+  console.log("今天的中国日期:", today);
 </script>
 
 </body>
