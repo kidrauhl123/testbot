@@ -481,7 +481,6 @@
         <li><a href="#users" class="active" onclick="showTab('users'); return false;"><i class="fas fa-users"></i> 用户管理</a></li>
         <li><a href="#orders" onclick="showTab('orders'); return false;"><i class="fas fa-file-invoice-dollar"></i> 订单管理</a></li>
         <li><a href="#sellers" onclick="showTab('sellers'); return false;"><i class="fas fa-user-tie"></i> 卖家管理</a></li>
-        <li><a href="#settings" onclick="showTab('settings'); return false;"><i class="fas fa-cog"></i> 系统设置</a></li>
       </ul>
     </div>
     
@@ -613,7 +612,6 @@
                 <th>状态</th>
                 <th>身份</th>
                 <th>分流等级</th>
-                <th>最大接单数</th>
                 <th>添加时间</th>
                 <th>添加人</th>
                 <th>操作</th>
@@ -625,33 +623,6 @@
               </tr>
             </tbody>
           </table>
-        </div>
-      </div>
-      
-      <!-- 系统设置 -->
-      <div id="settings" class="tab-content">
-        <div class="content-header">
-          <h2><i class="fas fa-cog"></i> 系统设置</h2>
-        </div>
-        <div class="settings-container">
-          <div class="card mb-4">
-            <div class="card-header">
-              <h3>卖家接单设置</h3>
-            </div>
-            <div class="card-body">
-              <div class="form-group">
-                <label for="max-orders-setting">默认最大同时接单数</label>
-                <div class="input-group" style="max-width: 200px;">
-                  <input type="number" id="max-orders-setting" class="form-control" min="1" max="100" value="3">
-                  <div class="input-group-append">
-                    <button class="btn btn-primary" onclick="updateMaxOrdersSetting()">保存</button>
-                  </div>
-                </div>
-                <small class="form-text text-muted">设置卖家默认的最大同时接单数，每个卖家可以在卖家管理中单独设置</small>
-              </div>
-              <div id="max-orders-setting-result" class="mt-2"></div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -757,17 +728,12 @@
       loadSellers();
       sellerDataLoaded = true;
     }
-    else if (tabId === 'settings' && !settingsDataLoaded) {
-      loadSettings();
-      settingsDataLoaded = true;
-    }
   }
   
   // 全局变量
   let userDataLoaded = false;
   let orderDataLoaded = false;
   let sellerDataLoaded = false;
-  let settingsDataLoaded = false;
   let allUsers = []; // 存储所有用户数据
   let allOrders = [];
   let currentPage = 1;
@@ -1503,14 +1469,6 @@
                 data-id="${seller.telegram_id}" 
                 onchange="updateSellerLevel(${seller.telegram_id}, this.value)">
             </td>
-            <td>
-              <input type="number" class="form-control form-control-sm max-orders-input" 
-                value="${seller.max_orders || 3}" 
-                min="1" 
-                max="100" 
-                data-id="${seller.telegram_id}" 
-                onchange="updateSellerMaxOrders(${seller.telegram_id}, this.value)">
-            </td>
             <td>${seller.added_at}</td>
             <td>${escapeHtml(seller.added_by || '')}</td>
             <td class="actions">
@@ -1802,10 +1760,6 @@
       loadSellers();
       showTab('sellers');
     });
-    document.querySelector('.sidebar-menu a[href="#settings"]').addEventListener('click', function() {
-      loadSettings();
-      showTab('settings');
-    });
     
     // 手动测试绑定事件是否有效
     window.testEditOrder = function() {
@@ -2073,99 +2027,6 @@
       alert('设置定制价格失败: ' + e.message);
     }
   });
-
-  // 更新卖家最大接单数
-  async function updateSellerMaxOrders(telegramId, maxOrders) {
-    try {
-      const response = await fetch(`/admin/api/sellers/${telegramId}/max-orders`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ value: parseInt(maxOrders) })
-      });
-      
-      if (!response.ok) {
-        throw new Error('操作失败');
-      }
-      
-      const result = await response.json();
-      showToast(result.message || '最大接单数更新成功', 'success');
-    } catch (e) {
-      console.error('更新卖家最大接单数失败:', e);
-      showToast('操作失败: ' + e.message, 'error');
-    }
-  }
-
-  // 加载系统设置
-  async function loadSettings() {
-    try {
-      const response = await fetch('/admin/api/settings');
-      if (!response.ok) {
-        console.error('加载系统设置失败:', response.status);
-        return;
-      }
-      
-      const result = await response.json();
-      if (result.success && result.settings) {
-        // 加载最大接单数设置
-        const maxOrdersSetting = document.getElementById('max-orders-setting');
-        if (maxOrdersSetting && result.settings.max_orders_per_seller) {
-          maxOrdersSetting.value = result.settings.max_orders_per_seller.value || 3;
-        }
-        
-        settingsDataLoaded = true;
-      }
-    } catch (error) {
-      console.error('加载系统设置失败:', error);
-    }
-  }
-  
-  // 更新最大接单数设置
-  async function updateMaxOrdersSetting() {
-    const maxOrdersInput = document.getElementById('max-orders-setting');
-    const resultDiv = document.getElementById('max-orders-setting-result');
-    
-    if (!maxOrdersInput || !resultDiv) {
-      console.error('找不到最大接单数设置元素');
-      return;
-    }
-    
-    const maxOrders = parseInt(maxOrdersInput.value);
-    if (isNaN(maxOrders) || maxOrders < 1) {
-      resultDiv.innerHTML = '<div class="alert alert-danger">请输入有效的数字（大于等于1）</div>';
-      return;
-    }
-    
-    try {
-      const response = await fetch('/admin/api/settings/max-orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ value: maxOrders })
-      });
-      
-      if (!response.ok) {
-        throw new Error('操作失败');
-      }
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        resultDiv.innerHTML = '<div class="alert alert-success">设置已更新</div>';
-        // 3秒后清除结果提示
-        setTimeout(() => {
-          resultDiv.innerHTML = '';
-        }, 3000);
-      } else {
-        resultDiv.innerHTML = `<div class="alert alert-danger">${result.error || '更新失败'}</div>`;
-      }
-    } catch (e) {
-      console.error('更新最大接单数设置失败:', e);
-      resultDiv.innerHTML = `<div class="alert alert-danger">操作失败: ${e.message}</div>`;
-    }
-  }
 </script>
 </body>
 </html> 

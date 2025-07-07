@@ -1584,16 +1584,7 @@
         data.sellers.forEach(seller => {
           const option = document.createElement('option');
           option.value = seller.id;
-          
-          // 显示卖家名称和接单状态
-          const availableText = seller.available ? '✅可接单' : '❌已满额';
-          option.textContent = `${seller.name} (${seller.current_orders}/${seller.max_orders}) ${availableText}`;
-          
-          // 如果卖家已满额，设置禁用状态
-          if (!seller.available) {
-            option.disabled = true;
-          }
-          
+          option.textContent = seller.name;
           option.dataset.lastActive = seller.last_active_at || '';
           option.dataset.activeStatus = seller.active_status || '未知';
           sellerSelect.appendChild(option);
@@ -2297,23 +2288,6 @@
     isSubmitting = true;
     
     try {
-      // 首先检查是否所有卖家都已满额
-      const sellersResponse = await fetch('/api/active-sellers');
-      if (sellersResponse.ok) {
-        const sellersData = await sellersResponse.json();
-        if (sellersData.success && sellersData.sellers) {
-          // 检查是否有可用卖家
-          const availableSellers = sellersData.sellers.filter(seller => seller.available);
-          if (availableSellers.length === 0) {
-            showCustomAlert('所有卖家都已达到最大接单数，请稍后再试', 'error');
-            btn.textContent = orig;
-            btn.disabled = false;
-            isSubmitting = false;
-            return;
-          }
-        }
-      }
-      
       const resp = await fetch('/', { method: 'POST', body: formData });
       const result = await resp.json();
       

@@ -166,7 +166,8 @@ def init_sqlite_db():
         last_active_at TEXT,
         desired_orders INTEGER DEFAULT 0,
         activity_check_at TEXT,
-        distribution_level INTEGER DEFAULT 1
+        distribution_level INTEGER DEFAULT 1,
+        max_orders INTEGER DEFAULT 3
     )
     ''')
     
@@ -213,6 +214,14 @@ def init_sqlite_db():
         c.execute("ALTER TABLE sellers ADD COLUMN distribution_level INTEGER DEFAULT 1")
         conn.commit()
     
+    # 检查sellers表是否需要添加max_orders列
+    try:
+        c.execute("SELECT max_orders FROM sellers LIMIT 1")
+    except sqlite3.OperationalError:
+        logger.info("为sellers表添加max_orders列")
+        c.execute("ALTER TABLE sellers ADD COLUMN max_orders INTEGER DEFAULT 3")
+        conn.commit()
+    
     # 检查users表中是否需要添加新列
     c.execute("PRAGMA table_info(users)")
     users_columns = [column[1] for column in c.fetchall()]
@@ -247,32 +256,6 @@ def init_sqlite_db():
             INSERT INTO users (username, password_hash, is_admin, created_at) 
             VALUES (?, ?, 1, ?)
         """, (ADMIN_USERNAME, admin_hash, get_china_time()))
-    
-    # 检查sellers表是否需要添加max_orders列
-    try:
-        c.execute("SELECT max_orders FROM sellers LIMIT 1")
-    except sqlite3.OperationalError:
-        logger.info("为sellers表添加max_orders列")
-        c.execute("ALTER TABLE sellers ADD COLUMN max_orders INTEGER DEFAULT 3")
-        conn.commit()
-    
-    # 创建系统设置表
-    c.execute('''
-    CREATE TABLE IF NOT EXISTS system_settings (
-        key TEXT PRIMARY KEY,
-        value TEXT,
-        description TEXT,
-        updated_at TEXT
-    )
-    ''')
-    
-    # 初始化系统设置
-    c.execute("SELECT key FROM system_settings WHERE key = 'max_orders_per_seller'")
-    if not c.fetchone():
-        c.execute(
-            "INSERT INTO system_settings (key, value, description, updated_at) VALUES (?, ?, ?, ?)",
-            ('max_orders_per_seller', '3', '每个卖家的最大同时接单数', get_china_time())
-        )
     
     conn.commit()
     conn.close()
@@ -372,7 +355,8 @@ def init_postgres_db():
         last_active_at TEXT,
         desired_orders INTEGER DEFAULT 0,
         activity_check_at TEXT,
-        distribution_level INTEGER DEFAULT 1
+        distribution_level INTEGER DEFAULT 1,
+        max_orders INTEGER DEFAULT 3
     )
     ''')
     
@@ -422,20 +406,6 @@ def init_postgres_db():
         cur.execute("ALTER TABLE sellers ADD COLUMN is_admin BOOLEAN DEFAULT FALSE")
         conn.commit()
     
-    # 检查sellers表是否需要添加max_orders列
-    max_orders_exists = execute_query("""
-        SELECT EXISTS (
-            SELECT FROM information_schema.columns 
-            WHERE table_name = 'sellers' 
-            AND column_name = 'max_orders'
-        )
-    """, fetch=True)
-    
-    if not max_orders_exists or not max_orders_exists[0][0]:
-        logger.info("为sellers表添加max_orders列")
-        cur.execute("ALTER TABLE sellers ADD COLUMN max_orders INTEGER DEFAULT 3")
-        conn.commit()
-    
     # 创建用户自定义价格表
     cur.execute('''
     CREATE TABLE IF NOT EXISTS user_custom_prices (
@@ -450,38 +420,6 @@ def init_postgres_db():
         UNIQUE(user_id, package)
     )
     ''')
-    
-    # 创建系统设置表
-    table_exists = execute_query("""
-        SELECT EXISTS (
-            SELECT FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND table_name = 'system_settings'
-        )
-    """, fetch=True)
-    
-    if not table_exists or not table_exists[0][0]:
-        cur.execute("""
-            CREATE TABLE system_settings (
-                key TEXT PRIMARY KEY,
-                value TEXT,
-                description TEXT,
-                updated_at TEXT
-            )
-        """)
-        conn.commit()
-        
-    # 初始化系统设置
-    setting_exists = execute_query("""
-        SELECT key FROM system_settings WHERE key = 'max_orders_per_seller'
-    """, fetch=True)
-    
-    if not setting_exists:
-        cur.execute(
-            "INSERT INTO system_settings (key, value, description, updated_at) VALUES (%s, %s, %s, %s)",
-            ('max_orders_per_seller', '3', '每个卖家的最大同时接单数', get_china_time())
-        )
-        conn.commit()
     
     # 创建超级管理员账号（如果不存在）
     admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
@@ -698,47 +636,27 @@ def get_active_sellers():
     if DATABASE_URL.startswith('postgres'):
         sellers = execute_query("""
             SELECT telegram_id, nickname, username, first_name, 
-                   last_active_at, max_orders
+                   last_active_at
             FROM sellers 
             WHERE is_active = TRUE
         """, fetch=True)
     else:
         sellers = execute_query("""
             SELECT telegram_id, nickname, username, first_name, 
-                   last_active_at, max_orders
+                   last_active_at
             FROM sellers 
             WHERE is_active = 1
         """, fetch=True)
     
-    # 获取所有卖家当前的订单数
-    seller_orders = get_seller_current_orders_count()
-    
-    # 获取系统默认最大接单数
-    system_max_orders = get_system_max_orders_setting()
-    
     result = []
     for seller in sellers:
-        if len(seller) >= 6:
-            telegram_id, nickname, username, first_name, last_active_at, max_orders = seller
-        else:
-            telegram_id, nickname, username, first_name, last_active_at = seller
-            max_orders = None
-            
+        telegram_id, nickname, username, first_name, last_active_at = seller
         # 如果没有设置昵称，则使用first_name或username作为默认昵称
         display_name = nickname or first_name or f"卖家 {telegram_id}"
-        
-        # 使用卖家个人设置或系统默认值
-        seller_max_orders = max_orders or system_max_orders
-        
-        # 获取当前接单数
-        current_orders = seller_orders.get(telegram_id, 0)
-        
         result.append({
             "id": telegram_id,
             "name": display_name,
-            "last_active_at": last_active_at or "",
-            "max_orders": seller_max_orders,
-            "current_orders": current_orders
+            "last_active_at": last_active_at or ""
         })
     return result
 
@@ -1327,16 +1245,15 @@ def get_seller_today_confirmed_orders_by_user(telegram_id):
         return []
 
 def get_seller_pending_orders(telegram_id):
-    """获取卖家当前未完成的订单数（已接单但未确认）"""
+    """获取卖家未完成的订单数"""
     if DATABASE_URL.startswith('postgres'):
         result = execute_query(
             """
             SELECT COUNT(*) FROM orders 
-            WHERE accepted_by = ? 
-            AND status != '已取消' 
-            AND (buyer_confirmed IS NULL OR buyer_confirmed = FALSE)
+            WHERE accepted_by = %s 
+            AND status = %s
             """,
-            (telegram_id,),
+            (telegram_id, STATUS['ACCEPTED']),
             fetch=True
         )
     else:
@@ -1354,6 +1271,120 @@ def get_seller_pending_orders(telegram_id):
     if result and len(result) > 0:
         return result[0][0]
     return 0
+
+def get_seller_current_orders(telegram_id):
+    """获取卖家当前未完成的订单数量"""
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            result = execute_query(
+                """
+                SELECT COUNT(*) FROM orders 
+                WHERE accepted_by = %s 
+                AND status = %s
+                """,
+                (telegram_id, STATUS['ACCEPTED']),
+                fetch=True
+            )
+        else:
+            result = execute_query(
+                """
+                SELECT COUNT(*) FROM orders 
+                WHERE accepted_by = ? 
+                AND status = ?
+                """,
+                (telegram_id, STATUS['ACCEPTED']),
+                fetch=True
+            )
+        
+        if result and len(result) > 0:
+            return result[0][0]
+        return 0
+    except Exception as e:
+        logger.error(f"获取卖家 {telegram_id} 当前订单数失败: {str(e)}", exc_info=True)
+        return 0
+
+def get_available_sellers():
+    """获取当前有空接单的卖家列表"""
+    try:
+        # 获取所有活跃卖家
+        if DATABASE_URL.startswith('postgres'):
+            sellers = execute_query("""
+                SELECT telegram_id, nickname, username, first_name, 
+                       last_active_at, max_orders
+                FROM sellers 
+                WHERE is_active = TRUE
+            """, fetch=True)
+        else:
+            sellers = execute_query("""
+                SELECT telegram_id, nickname, username, first_name, 
+                       last_active_at, max_orders
+                FROM sellers 
+                WHERE is_active = 1
+            """, fetch=True)
+        
+        available_sellers = []
+        for seller in sellers:
+            telegram_id, nickname, username, first_name, last_active_at, max_orders = seller
+            
+            # 如果没有设置最大订单数，默认为3
+            if max_orders is None:
+                max_orders = 3
+                
+            # 获取当前未完成订单数
+            current_orders = get_seller_current_orders(telegram_id)
+            
+            # 如果未完成订单数小于最大订单数，则认为该卖家可接单
+            if current_orders < max_orders:
+                display_name = nickname or first_name or f"卖家 {telegram_id}"
+                available_sellers.append({
+                    "id": telegram_id,
+                    "name": display_name,
+                    "last_active_at": last_active_at or "",
+                    "current_orders": current_orders,
+                    "max_orders": max_orders
+                })
+        
+        return available_sellers
+    except Exception as e:
+        logger.error(f"获取可用卖家列表失败: {str(e)}", exc_info=True)
+        return []
+
+def check_seller_availability(seller_id=None):
+    """检查指定卖家或所有卖家是否有空接单"""
+    try:
+        if seller_id:
+            # 检查特定卖家
+            if DATABASE_URL.startswith('postgres'):
+                seller = execute_query("""
+                    SELECT telegram_id, max_orders
+                    FROM sellers 
+                    WHERE telegram_id = %s AND is_active = TRUE
+                """, (seller_id,), fetch=True)
+            else:
+                seller = execute_query("""
+                    SELECT telegram_id, max_orders
+                    FROM sellers 
+                    WHERE telegram_id = ? AND is_active = 1
+                """, (seller_id,), fetch=True)
+            
+            if not seller:
+                return False, "卖家不存在或未激活"
+            
+            max_orders = seller[0][1] if seller[0][1] is not None else 3
+            current_orders = get_seller_current_orders(seller_id)
+            
+            if current_orders >= max_orders:
+                return False, f"卖家已达到最大接单数 ({current_orders}/{max_orders})"
+            return True, ""
+        else:
+            # 检查所有卖家
+            available_sellers = get_available_sellers()
+            if not available_sellers:
+                return False, "当前没有可接单的卖家"
+            return True, ""
+    except Exception as e:
+        logger.error(f"检查卖家可用性失败: {str(e)}", exc_info=True)
+        return False, f"检查卖家可用性时出错: {str(e)}"
 
 def check_seller_completed_orders(telegram_id):
     """检查卖家完成的订单数（现在只是记录，不再自动停用）"""
@@ -1645,282 +1676,4 @@ def check_duplicate_remark(user_id, remark):
         return count > 0
     except Exception as e:
         logger.error(f"检查备注重复失败: {str(e)}", exc_info=True)
-        return False
-
-def get_seller_current_orders_count(telegram_id=None):
-    """
-    获取卖家当前正在处理的订单数量
-    
-    参数:
-    - telegram_id: 卖家的Telegram ID，如果为None则获取所有卖家的订单数
-    
-    返回:
-    - 如果指定telegram_id，返回该卖家的订单数
-    - 如果不指定telegram_id，返回一个字典，键为卖家ID，值为订单数
-    """
-    try:
-        if telegram_id:
-            # 获取特定卖家的订单数
-            if DATABASE_URL.startswith('postgres'):
-                result = execute_query(
-                    """
-                    SELECT COUNT(*) FROM orders 
-                    WHERE accepted_by = %s 
-                    AND status = %s 
-                    AND completed_at IS NULL
-                    """,
-                    (telegram_id, STATUS['ACCEPTED']),
-                    fetch=True
-                )
-            else:
-                result = execute_query(
-                    """
-                    SELECT COUNT(*) FROM orders 
-                    WHERE accepted_by = ? 
-                    AND status = ? 
-                    AND completed_at IS NULL
-                    """,
-                    (telegram_id, STATUS['ACCEPTED']),
-                    fetch=True
-                )
-            
-            if result and len(result) > 0:
-                return result[0][0]
-            return 0
-        else:
-            # 获取所有卖家的订单数
-            if DATABASE_URL.startswith('postgres'):
-                result = execute_query(
-                    """
-                    SELECT accepted_by, COUNT(*) 
-                    FROM orders 
-                    WHERE status = %s 
-                    AND completed_at IS NULL
-                    GROUP BY accepted_by
-                    """,
-                    (STATUS['ACCEPTED'],),
-                    fetch=True
-                )
-            else:
-                result = execute_query(
-                    """
-                    SELECT accepted_by, COUNT(*) 
-                    FROM orders 
-                    WHERE status = ? 
-                    AND completed_at IS NULL
-                    GROUP BY accepted_by
-                    """,
-                    (STATUS['ACCEPTED'],),
-                    fetch=True
-                )
-            
-            # 构建卖家ID到订单数的映射
-            seller_orders = {}
-            if result:
-                for seller_id, count in result:
-                    if seller_id:  # 确保seller_id不为空
-                        seller_orders[seller_id] = count
-            
-            return seller_orders
-    except Exception as e:
-        logger.error(f"获取卖家当前订单数失败: {str(e)}", exc_info=True)
-        if telegram_id:
-            return 0
-        return {}
-
-def are_all_sellers_at_max_capacity():
-    """
-    检查是否所有活跃卖家都已达到最大接单数
-    
-    返回:
-    - 如果所有活跃卖家都达到最大接单数，返回True
-    - 否则返回False
-    """
-    try:
-        # 获取所有活跃卖家
-        active_sellers = get_active_seller_ids()
-        if not active_sellers:
-            # 如果没有活跃卖家，视为全部满额
-            return True
-        
-        # 获取所有卖家当前的订单数
-        seller_orders = get_seller_current_orders_count()
-        
-        # 获取系统默认最大接单数
-        system_max_orders = get_system_max_orders_setting()
-        
-        # 检查是否所有活跃卖家都已达到最大接单数
-        for seller_id in active_sellers:
-            # 获取该卖家的个人最大接单数设置
-            seller_max_orders = get_seller_max_orders(seller_id)
-            # 使用卖家个人设置或系统默认值
-            max_orders = seller_max_orders or system_max_orders
-            
-            current_orders = seller_orders.get(seller_id, 0)
-            if current_orders < max_orders:
-                # 只要有一个卖家未达到最大接单数，就返回False
-                return False
-        
-        # 所有活跃卖家都已达到最大接单数
-        return True
-    except Exception as e:
-        logger.error(f"检查卖家接单容量失败: {str(e)}", exc_info=True)
-        # 出错时默认返回False，允许继续接单
-        return False
-
-def get_seller_max_orders(telegram_id):
-    """
-    获取卖家的最大接单数
-    
-    参数:
-    - telegram_id: 卖家的Telegram ID
-    
-    返回:
-    - 卖家的最大接单数，默认为3
-    """
-    try:
-        if DATABASE_URL.startswith('postgres'):
-            result = execute_query(
-                "SELECT max_orders FROM sellers WHERE telegram_id = %s",
-                (telegram_id,),
-                fetch=True
-            )
-        else:
-            result = execute_query(
-                "SELECT max_orders FROM sellers WHERE telegram_id = ?",
-                (telegram_id,),
-                fetch=True
-            )
-        
-        if result and len(result) > 0 and result[0][0] is not None:
-            return result[0][0]
-        return 3  # 默认值
-    except Exception as e:
-        logger.error(f"获取卖家最大接单数失败: {str(e)}", exc_info=True)
-        return 3  # 出错时返回默认值
-
-def update_seller_max_orders(telegram_id, max_orders):
-    """
-    更新卖家的最大接单数
-    
-    参数:
-    - telegram_id: 卖家的Telegram ID
-    - max_orders: 新的最大接单数
-    
-    返回:
-    - 成功返回True，失败返回False
-    """
-    try:
-        if DATABASE_URL.startswith('postgres'):
-            execute_query(
-                "UPDATE sellers SET max_orders = %s WHERE telegram_id = %s",
-                (max_orders, telegram_id)
-            )
-        else:
-            execute_query(
-                "UPDATE sellers SET max_orders = ? WHERE telegram_id = ?",
-                (max_orders, telegram_id)
-            )
-        return True
-    except Exception as e:
-        logger.error(f"更新卖家最大接单数失败: {str(e)}", exc_info=True)
-        return False
-
-def get_system_max_orders_setting():
-    """
-    获取系统全局的最大接单数设置
-    
-    返回:
-    - 系统全局的最大接单数，默认为3
-    """
-    try:
-        # 尝试从系统设置表中获取
-        if DATABASE_URL.startswith('postgres'):
-            result = execute_query(
-                "SELECT value FROM system_settings WHERE key = 'max_orders_per_seller'",
-                fetch=True
-            )
-        else:
-            result = execute_query(
-                "SELECT value FROM system_settings WHERE key = 'max_orders_per_seller'",
-                fetch=True
-            )
-        
-        if result and len(result) > 0:
-            return int(result[0][0])
-        return 3  # 默认值
-    except Exception as e:
-        logger.error(f"获取系统最大接单数设置失败: {str(e)}", exc_info=True)
-        return 3  # 出错时返回默认值
-
-def update_system_setting(key, value, description=None):
-    """
-    更新系统设置
-    
-    参数:
-    - key: 设置键名
-    - value: 设置值
-    - description: 设置描述（可选）
-    
-    返回:
-    - 成功返回True，失败返回False
-    """
-    try:
-        now = get_china_time()
-        
-        # 检查设置是否已存在
-        if DATABASE_URL.startswith('postgres'):
-            existing = execute_query(
-                "SELECT key FROM system_settings WHERE key = %s",
-                (key,),
-                fetch=True
-            )
-            
-            if existing:
-                # 更新已有设置
-                if description:
-                    execute_query(
-                        "UPDATE system_settings SET value = %s, description = %s, updated_at = %s WHERE key = %s",
-                        (value, description, now, key)
-                    )
-                else:
-                    execute_query(
-                        "UPDATE system_settings SET value = %s, updated_at = %s WHERE key = %s",
-                        (value, now, key)
-                    )
-            else:
-                # 添加新设置
-                execute_query(
-                    "INSERT INTO system_settings (key, value, description, updated_at) VALUES (%s, %s, %s, %s)",
-                    (key, value, description or '', now)
-                )
-        else:
-            existing = execute_query(
-                "SELECT key FROM system_settings WHERE key = ?",
-                (key,),
-                fetch=True
-            )
-            
-            if existing:
-                # 更新已有设置
-                if description:
-                    execute_query(
-                        "UPDATE system_settings SET value = ?, description = ?, updated_at = ? WHERE key = ?",
-                        (value, description, now, key)
-                    )
-                else:
-                    execute_query(
-                        "UPDATE system_settings SET value = ?, updated_at = ? WHERE key = ?",
-                        (value, now, key)
-                    )
-            else:
-                # 添加新设置
-                execute_query(
-                    "INSERT INTO system_settings (key, value, description, updated_at) VALUES (?, ?, ?, ?)",
-                    (key, value, description or '', now)
-                )
-            
-        return True
-    except Exception as e:
-        logger.error(f"更新系统设置失败: {str(e)}", exc_info=True)
         return False
