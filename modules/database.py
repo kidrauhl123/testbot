@@ -5,7 +5,7 @@ import hashlib
 import logging
 import psycopg2
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 import pytz
 
@@ -1290,31 +1290,37 @@ def check_seller_completed_orders(telegram_id):
 
 def get_seller_current_orders_count(telegram_id):
     """
-    获取卖家当前未完成的订单数量
+    获取卖家最近1小时内未完成的订单数量
     
     参数:
     - telegram_id: 卖家的Telegram ID
     
     返回:
-    - 未完成订单数量（已接单但未完成的）
+    - 最近1小时内未完成订单数量
     """
     try:
-        # 查询不同于完成/失败/取消的所有订单
+        # 获取1小时前的时间戳
+        one_hour_ago = datetime.now() - timedelta(hours=1)
+        one_hour_ago_str = one_hour_ago.strftime("%Y-%m-%d %H:%M:%S")
+        
+        # 查询最近1小时内非完成/失败/取消的订单
         if DATABASE_URL.startswith('postgres'):
             result = execute_query("""
                 SELECT COUNT(*) FROM orders 
                 WHERE accepted_by = %s 
                 AND status NOT IN (%s, %s, %s)
-            """, (str(telegram_id), STATUS['COMPLETED'], STATUS['FAILED'], STATUS['CANCELLED']), fetch=True)
+                AND accepted_at >= %s
+            """, (str(telegram_id), STATUS['COMPLETED'], STATUS['FAILED'], STATUS['CANCELLED'], one_hour_ago_str), fetch=True)
         else:
             result = execute_query("""
                 SELECT COUNT(*) FROM orders 
                 WHERE accepted_by = ? 
                 AND status NOT IN (?, ?, ?)
-            """, (str(telegram_id), STATUS['COMPLETED'], STATUS['FAILED'], STATUS['CANCELLED']), fetch=True)
+                AND accepted_at >= ?
+            """, (str(telegram_id), STATUS['COMPLETED'], STATUS['FAILED'], STATUS['CANCELLED'], one_hour_ago_str), fetch=True)
             
         count = result[0][0] if result else 0
-        logger.info(f"卖家 {telegram_id} 当前有效订单数: {count}")
+        logger.info(f"卖家 {telegram_id} 最近1小时内有效订单数: {count}")
         return count
     except Exception as e:
         logger.error(f"获取卖家当前订单数量失败: {e}", exc_info=True)
