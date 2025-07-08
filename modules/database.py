@@ -8,6 +8,7 @@ from functools import wraps
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 import pytz
+import random
 
 from modules.constants import DATABASE_URL, STATUS, ADMIN_USERNAME, ADMIN_PASSWORD
 
@@ -1381,8 +1382,8 @@ def select_active_seller():
     
     选择逻辑：
     1. 获取所有活跃的卖家
-    2. 选择当前接单数小于最大接单量的卖家
-    3. 如果多个卖家满足条件，优先选择接单比例最低的卖家
+    2. 筛选出当前接单数小于最大接单量的卖家
+    3. 基于分流等级进行加权随机选择，等级越高被选中的概率越大
     
     返回:
     - 卖家ID，如果没有可用卖家则返回None
@@ -1395,48 +1396,77 @@ def select_active_seller():
             return None
             
         available_sellers = []
+        total_weight = 0
         
         # 检查每个活跃卖家的当前接单数
         for seller in active_sellers:
             seller_id = seller["id"]
             
-            # 获取卖家最大接单量
+            # 获取卖家最大接单量和分流等级
             if DATABASE_URL.startswith('postgres'):
-                max_orders_result = execute_query("""
-                    SELECT max_concurrent_orders FROM sellers 
+                seller_info = execute_query("""
+                    SELECT max_concurrent_orders, distribution_level FROM sellers 
                     WHERE telegram_id = %s
                 """, (seller_id,), fetch=True)
             else:
-                max_orders_result = execute_query("""
-                    SELECT max_concurrent_orders FROM sellers 
+                seller_info = execute_query("""
+                    SELECT max_concurrent_orders, distribution_level FROM sellers 
                     WHERE telegram_id = ?
                 """, (seller_id,), fetch=True)
                 
-            max_orders = max_orders_result[0][0] if max_orders_result else 5
+            max_orders = seller_info[0][0] if seller_info else 5
+            distribution_level = seller_info[0][1] if seller_info and len(seller_info[0]) > 1 else 1
             
             # 获取当前接单量
             current_orders = get_seller_current_orders_count(seller_id)
             
             # 如果卖家当前接单数小于最大接单量，则添加到可用卖家列表
             if current_orders < max_orders:
-                # 计算接单比例，用于后续排序
-                ratio = current_orders / max_orders if max_orders > 0 else 1
+                # 权重就是分流等级，确保分流等级至少为1
+                weight = max(1, distribution_level)
+                total_weight += weight
+                
                 available_sellers.append({
                     "id": seller_id,
                     "current_orders": current_orders,
                     "max_orders": max_orders,
-                    "ratio": ratio
+                    "distribution_level": distribution_level,
+                    "weight": weight
                 })
         
         if not available_sellers:
             logger.warning("没有可用的卖家（所有卖家都已达到最大接单量）")
             return None
         
-        # 按接单比例排序，选择接单比例最低的卖家
-        available_sellers.sort(key=lambda x: x["ratio"])
-        selected_seller = available_sellers[0]
+        # 如果只有一个可用卖家，直接返回
+        if len(available_sellers) == 1:
+            selected_seller = available_sellers[0]
+            logger.info(f"只有一个可用卖家: {selected_seller['id']}, 当前接单: {selected_seller['current_orders']}/{selected_seller['max_orders']}, 分流等级: {selected_seller['distribution_level']}")
+            return selected_seller["id"]
         
-        logger.info(f"选择卖家: {selected_seller['id']}, 当前接单: {selected_seller['current_orders']}/{selected_seller['max_orders']}")
+        # 使用加权随机选择，等级越高被选中的概率越大
+        # 计算每个卖家的选择概率范围
+        cumulative_weight = 0
+        for seller in available_sellers:
+            seller["cumulative_weight_start"] = cumulative_weight
+            cumulative_weight += seller["weight"]
+            seller["cumulative_weight_end"] = cumulative_weight
+        
+        # 随机选择一个值
+        random_value = random.uniform(0, total_weight)
+        
+        # 找到对应的卖家
+        selected_seller = None
+        for seller in available_sellers:
+            if seller["cumulative_weight_start"] <= random_value < seller["cumulative_weight_end"]:
+                selected_seller = seller
+                break
+        
+        # 如果没有选中（理论上不应该发生），选择第一个可用卖家
+        if not selected_seller:
+            selected_seller = available_sellers[0]
+        
+        logger.info(f"选择卖家: {selected_seller['id']}, 当前接单: {selected_seller['current_orders']}/{selected_seller['max_orders']}, 分流等级: {selected_seller['distribution_level']}")
         return selected_seller["id"]
     
     except Exception as e:
