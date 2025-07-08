@@ -1296,23 +1296,26 @@ def get_seller_current_orders_count(telegram_id):
     - telegram_id: 卖家的Telegram ID
     
     返回:
-    - 未完成订单数量
+    - 未完成订单数量（已接单但未完成的）
     """
     try:
+        # 查询不同于完成/失败/取消的所有订单
         if DATABASE_URL.startswith('postgres'):
             result = execute_query("""
                 SELECT COUNT(*) FROM orders 
                 WHERE accepted_by = %s 
-                AND status = 'accepted'
-            """, (str(telegram_id),), fetch=True)
+                AND status NOT IN (%s, %s, %s)
+            """, (str(telegram_id), STATUS['COMPLETED'], STATUS['FAILED'], STATUS['CANCELLED']), fetch=True)
         else:
             result = execute_query("""
                 SELECT COUNT(*) FROM orders 
                 WHERE accepted_by = ? 
-                AND status = 'accepted'
-            """, (str(telegram_id),), fetch=True)
+                AND status NOT IN (?, ?, ?)
+            """, (str(telegram_id), STATUS['COMPLETED'], STATUS['FAILED'], STATUS['CANCELLED']), fetch=True)
             
-        return result[0][0] if result else 0
+        count = result[0][0] if result else 0
+        logger.info(f"卖家 {telegram_id} 当前有效订单数: {count}")
+        return count
     except Exception as e:
         logger.error(f"获取卖家当前订单数量失败: {e}", exc_info=True)
         return 0

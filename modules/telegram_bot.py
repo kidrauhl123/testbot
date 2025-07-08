@@ -35,7 +35,8 @@ from modules.database import (
     select_active_seller, get_seller_info,
     get_user_custom_prices, set_user_custom_price, delete_user_custom_price,
     update_seller_nickname, get_seller_completed_orders, get_seller_pending_orders,
-    check_seller_completed_orders, get_seller_today_confirmed_orders_by_user, get_admin_sellers
+    check_seller_completed_orders, get_seller_today_confirmed_orders_by_user, get_admin_sellers,
+    get_seller_current_orders_count
 )
 
 # 设置日志
@@ -720,25 +721,40 @@ async def send_notification_from_queue(data):
                 # 如果指定了特定卖家，检查该卖家是否活跃
                 target_sellers = [seller for seller in active_sellers if str(seller.get('id', seller.get('telegram_id'))) == str(preferred_seller)]
                 if not target_sellers:
-                    logger.warning(f"指定的卖家不存在或不活跃: {preferred_seller}，将随机选择一位活跃卖家")
-                    # 随机选择一位活跃卖家
-                    if active_sellers:
-                        import random
-                        random_seller = random.choice(active_sellers)
-                        target_sellers = [random_seller]
-                        logger.info(f"随机选择卖家: {random_seller['id']}")
+                    logger.warning(f"指定的卖家不存在或不活跃: {preferred_seller}，将使用分流逻辑选择卖家")
+                    # 使用基于最大接单数的分流逻辑
+                    from modules.database import select_active_seller
+                    selected_seller_id = select_active_seller()
+                    
+                    if selected_seller_id:
+                        # 找到对应的卖家信息
+                        for seller in active_sellers:
+                            if str(seller.get('id')) == str(selected_seller_id):
+                                target_sellers = [seller]
+                                logger.info(f"基于最大接单数选择卖家: {selected_seller_id}")
+                                break
                     else:
-                        logger.error("没有活跃卖家可用")
+                        logger.error("没有可用卖家（所有卖家都已达到最大接单量）")
                         return
             else:
-                # 如果没有指定卖家，随机选择一位活跃卖家
-                if active_sellers:
-                    import random
-                    random_seller = random.choice(active_sellers)
-                    target_sellers = [random_seller]
-                    logger.info(f"随机选择卖家: {random_seller['id']}")
+                # 如果没有指定卖家，使用基于最大接单数的分流逻辑
+                from modules.database import select_active_seller
+                selected_seller_id = select_active_seller()
+                
+                if selected_seller_id:
+                    # 找到对应的卖家信息
+                    target_sellers = []
+                    for seller in active_sellers:
+                        if str(seller.get('id')) == str(selected_seller_id):
+                            target_sellers = [seller]
+                            logger.info(f"基于最大接单数选择卖家: {selected_seller_id}")
+                            break
+                    
+                    if not target_sellers:
+                        logger.error(f"无法找到ID为 {selected_seller_id} 的卖家信息")
+                        return
                 else:
-                    logger.error("没有活跃卖家可用")
+                    logger.error("没有可用卖家（所有卖家都已达到最大接单量）")
                     return
                 
             # 为订单添加状态标记
@@ -802,7 +818,9 @@ async def send_notification_from_queue(data):
                         logger.error(f"Failed to send admin notification for order #{order_id}: {e}", exc_info=True)
                     
                     # 自动接单（标记该订单已被该卖家接受）
-                    await auto_accept_order(order_id, seller_id)
+                    accept_result = await auto_accept_order(order_id, seller_id)
+                    if not accept_result:
+                        logger.warning(f"订单 #{order_id} 分配给卖家 {seller_id} 失败，该卖家可能已达到最大接单量")
                     
                 except Exception as e:
                     logger.error(f"向卖家 {seller_id} 发送订单通知时出错: {str(e)}", exc_info=True)
@@ -828,6 +846,28 @@ async def mark_order_as_processing(order_id):
 async def auto_accept_order(order_id, seller_id):
     """自动接单处理"""
     try:
+        # 检查卖家当前接单数是否已达到最大值
+        current_orders = get_seller_current_orders_count(seller_id)
+        
+        # 获取卖家最大接单量
+        if DATABASE_URL.startswith('postgres'):
+            max_orders_result = execute_query("""
+                SELECT max_concurrent_orders FROM sellers 
+                WHERE telegram_id = %s
+            """, (seller_id,), fetch=True)
+        else:
+            max_orders_result = execute_query("""
+                SELECT max_concurrent_orders FROM sellers 
+                WHERE telegram_id = ?
+            """, (seller_id,), fetch=True)
+            
+        max_orders = max_orders_result[0][0] if max_orders_result else 5
+        
+        # 如果卖家已达到最大接单量，不分配给该卖家
+        if current_orders >= max_orders:
+            logger.warning(f"卖家 {seller_id} 已达到最大接单量 {max_orders}，不分配订单 #{order_id}")
+            return False
+        
         # 获取卖家信息
         # 优先使用数据库中的卖家信息，包括管理员设置的昵称
         seller_info = get_seller_info(seller_id)
@@ -853,9 +893,11 @@ async def auto_accept_order(order_id, seller_id):
             (STATUS['ACCEPTED'], str(seller_id), timestamp, username, first_name, nickname, order_id)
         )
         logger.info(f"卖家 {display_name} ({seller_id}) 已自动接受订单 #{order_id}")
+        return True
     except Exception as e:
         logger.error(f"自动接单过程中出错: {str(e)}")
-    
+        return False
+
 def run_bot_in_thread():
     """在单独的线程中运行机器人"""
     # 这个函数现在可以被废弃或重构，因为启动逻辑已移至app.py
