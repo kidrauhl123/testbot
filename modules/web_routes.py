@@ -920,7 +920,8 @@ def register_routes(app, notification_queue):
                 "added_at": s[5],
                 "added_by": s[6],
                 "is_admin": bool(s[7]),
-                "distribution_level": s[8] if len(s) > 8 and s[8] is not None else 1
+                "distribution_level": s[8] if len(s) > 8 and s[8] is not None else 1,
+                "max_concurrent_orders": s[9] if len(s) > 9 and s[9] is not None else 5
             }
             
             # 获取已完成订单数和未完成订单数

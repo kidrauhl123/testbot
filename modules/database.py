@@ -564,7 +564,8 @@ def get_all_sellers():
                 SELECT telegram_id, username, first_name, nickname, is_active, 
                        added_at, added_by, 
                        COALESCE(is_admin, FALSE) as is_admin,
-                       COALESCE(distribution_level, 1) as distribution_level
+                       COALESCE(distribution_level, 1) as distribution_level,
+                       COALESCE(max_concurrent_orders, 5) as max_concurrent_orders
                 FROM sellers
                 ORDER BY added_at DESC
             """, fetch=True)
@@ -573,7 +574,8 @@ def get_all_sellers():
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
             c.execute("""
-                SELECT telegram_id, username, first_name, nickname, is_active, added_at, added_by, is_admin, distribution_level
+                SELECT telegram_id, username, first_name, nickname, is_active, 
+                      added_at, added_by, is_admin, distribution_level, max_concurrent_orders
                 FROM sellers
                 ORDER BY added_at DESC
             """)
