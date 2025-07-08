@@ -11,7 +11,6 @@ import random
 import string
 import psycopg2
 from urllib.parse import urlparse
-import traceback
 
 from flask import Flask, request, render_template, jsonify, session, redirect, url_for, flash, send_file, send_from_directory
 
@@ -670,42 +669,17 @@ def register_routes(app, notification_queue):
         # 以下旧代码保留以防日后恢复
         # user_id = session.get('user_id')
 
+    # 添加一个测试路由
     @app.route('/test')
     def test_route():
-        """测试路由"""
-        return "测试成功"
-        
-    @app.route('/test-sellers')
-    def test_sellers():
-        """测试获取卖家信息的路由"""
-        try:
-            sellers = get_all_sellers()
-            
-            # 转换为可JSON序列化的格式
-            result = []
-            for s in sellers:
-                seller = {
-                    "telegram_id": s[0],
-                    "username": s[1],
-                    "first_name": s[2],
-                    "nickname": s[3],
-                    "is_active": bool(s[4]),
-                    "added_at": s[5],
-                    "added_by": s[6],
-                    "is_admin": bool(s[7]),
-                    "distribution_level": s[8] if len(s) > 8 and s[8] is not None else 1,
-                    "max_concurrent_orders": s[9] if len(s) > 9 and s[9] is not None else 5
-                }
-                result.append(seller)
-                
-            return jsonify({
-                "seller_raw_data": str(sellers),
-                "seller_data": result,
-                "seller_lengths": [len(s) for s in sellers]
-            })
-        except Exception as e:
-            return jsonify({"error": str(e), "traceback": traceback.format_exc()})
-            
+        logger.info("访问测试路由")
+        return jsonify({
+            'status': 'ok',
+            'message': '服务器正常运行',
+            'time': get_china_time(),
+        })
+
+    # 添加一个路由用于手动触发订单检查
     @app.route('/check-orders')
     def manual_check_orders():
         logger.info("手动触发订单检查")
@@ -946,8 +920,7 @@ def register_routes(app, notification_queue):
                 "added_at": s[5],
                 "added_by": s[6],
                 "is_admin": bool(s[7]),
-                "distribution_level": s[8] if len(s) > 8 and s[8] is not None else 1,
-                "max_concurrent_orders": s[9] if len(s) > 9 and s[9] is not None else 5
+                "distribution_level": s[8] if len(s) > 8 and s[8] is not None else 1
             }
             
             # 获取已完成订单数和未完成订单数
