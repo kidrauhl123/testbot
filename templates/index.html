@@ -1548,8 +1548,16 @@
     console.log(`[${new Date().toISOString()}] ${message}`);
   }
   
-  // 获取今天的日期，格式为YYYY-MM-DD
-  const today = new Date().toISOString().split('T')[0];
+  // 获取今天的日期，格式为YYYY-MM-DD，使用客户端本地时间
+  function getTodayDate() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  const today = getTodayDate();
   
   // 初始化筛选条件，默认显示今日订单
   let filters = {
@@ -2940,9 +2948,16 @@
     // 初始化卖家筛选
     populateSellerFilter();
     
+    // 获取最新的今日日期
+    const currentToday = getTodayDate();
+    
     // 设置日期筛选控件的初始值为今日
-    document.getElementById('startDateFilter').value = today;
-    document.getElementById('endDateFilter').value = today;
+    document.getElementById('startDateFilter').value = currentToday;
+    document.getElementById('endDateFilter').value = currentToday;
+    
+    // 更新筛选条件中的日期
+    filters.startDate = currentToday;
+    filters.endDate = currentToday;
     
     // 初始化活动筛选标签
     updateActiveFilters();
@@ -3215,7 +3230,7 @@
       const startDate = new Date(filters.startDate);
       startDate.setHours(0, 0, 0, 0);
       result = result.filter(order => {
-        // 将订单时间字符串转换为Date对象，不添加Z，以便使用本地时区
+        // 确保使用浏览器本地时间解析订单时间
         const orderDate = new Date(order.created_at);
         return orderDate >= startDate;
       });
@@ -3225,7 +3240,7 @@
       const endDate = new Date(filters.endDate);
       endDate.setHours(23, 59, 59, 999);
       result = result.filter(order => {
-        // 将订单时间字符串转换为Date对象，不添加Z，以便使用本地时区
+        // 确保使用浏览器本地时间解析订单时间
         const orderDate = new Date(order.created_at);
         return orderDate <= endDate;
       });
@@ -3248,6 +3263,11 @@
 
   // 添加事件监听器，点击模态框外部区域关闭模态框
   document.addEventListener('DOMContentLoaded', function() {
+    // 确保在页面加载时使用最新的系统日期
+    const currentToday = getTodayDate();
+    filters.startDate = currentToday;
+    filters.endDate = currentToday;
+    
     const modal = document.getElementById('edit-order-status-modal');
     if (modal) {
       modal.addEventListener('click', function(event) {
