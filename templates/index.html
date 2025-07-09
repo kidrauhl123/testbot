@@ -3384,26 +3384,6 @@
       if (submitterSection) {
         submitterSection.style.display = 'block';
       }
-
-      // 添加测试按钮，用于测试模态框
-      const container = document.querySelector('.card-header');
-      if (container) {
-        const testBtn = document.createElement('button');
-        testBtn.textContent = '测试编辑';
-        testBtn.className = 'btn btn-sm btn-primary';
-        testBtn.style.marginLeft = '10px';
-        testBtn.onclick = function() {
-          // 测试调用editOrderStatus函数，传入第一个订单ID
-          if (allOrders.length > 0) {
-            console.log('测试调用editOrderStatus，订单ID:', allOrders[0].id);
-            editOrderStatus(allOrders[0].id);
-          } else {
-            console.log('没有可用的订单进行测试');
-            alert('没有可用的订单进行测试');
-          }
-        };
-        container.appendChild(testBtn);
-      }
     }
     
     // 为模态框设置关闭事件
