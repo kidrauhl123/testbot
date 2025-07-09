@@ -1163,53 +1163,55 @@
       height: 100%;
       background-color: rgba(0, 0, 0, 0.5);
       z-index: 1000;
-      align-items: center;
       justify-content: center;
+      align-items: center;
     }
-
+    
     .modal {
       background-color: white;
-      border-radius: 5px;
-      max-width: 500px;
+      border-radius: 10px;
       width: 90%;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      max-width: 500px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
       overflow: hidden;
     }
-
+    
     .modal-header {
+      padding: 15px 20px;
+      background-color: #f8f9fa;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 15px 20px;
-      background-color: #f8f9fa;
       border-bottom: 1px solid #e9ecef;
     }
-
+    
     .modal-header h3 {
       margin: 0;
+      color: #333;
       font-size: 18px;
     }
-
+    
     .modal-close {
       background: none;
       border: none;
-      font-size: 24px;
+      font-size: 22px;
       cursor: pointer;
-      color: #6c757d;
+      color: #777;
     }
-
+    
     .modal-body {
       padding: 20px;
     }
-
+    
     .modal-footer {
       padding: 15px 20px;
+      background-color: #f8f9fa;
+      border-top: 1px solid #e9ecef;
       display: flex;
       justify-content: flex-end;
       gap: 10px;
-      border-top: 1px solid #e9ecef;
     }
-
+    
     .error-message {
       color: #dc3545;
       margin-bottom: 15px;
@@ -1431,6 +1433,14 @@
                         <!-- 卖家选项将由JavaScript加载 -->
                       </select>
                     </div>
+                    <!-- 管理员才能看到的提交者筛选 -->
+                    <div class="filter-section" id="submitterFilterSection" style="display:none;">
+                      <h4>提交者筛选</h4>
+                      <select id="submitterFilter" class="filter-select">
+                        <option value="">全部提交者</option>
+                        <!-- 提交者选项将由JavaScript加载 -->
+                      </select>
+                    </div>
                     <div class="filter-section">
                       <h4>订单状态</h4>
                       <select id="statusFilter" class="filter-select">
@@ -1562,6 +1572,7 @@
   // 初始化筛选条件，默认显示今日订单
   let filters = {
     seller: '',
+    submitter: '', // 新增提交者筛选
     status: '',
     startDate: today,
     endDate: today
@@ -2388,6 +2399,11 @@
         // 更新全局订单数据
         allOrders = result.orders;
         
+        // 如果是管理员，更新提交者筛选
+        if (isAdmin) {
+          populateSubmitterFilter();
+        }
+        
         // 应用搜索关键词和筛选条件
         let filteredOrders = allOrders;
         
@@ -2963,7 +2979,7 @@
     updateActiveFilters();
   }
   
-  // 填充卖家筛选下拉框
+  // 填充卖家筛选下拉框和提交者筛选下拉框
   async function populateSellerFilter() {
     try {
       // 使用新的API获取所有卖家（包括非活跃的）
@@ -2975,9 +2991,9 @@
       
       const data = await response.json();
       
-      if (data.success && data.sellers && data.sellers.length > 0) {
-        const sellerFilter = document.getElementById('sellerFilter');
-        
+      const sellerFilter = document.getElementById('sellerFilter');
+      
+      if (data.success && data.sellers && data.sellers.length > 0 && sellerFilter) {
         // 保留默认选项
         const defaultOption = sellerFilter.options[0];
         sellerFilter.innerHTML = '';
@@ -3022,14 +3038,56 @@
           }
         });
       }
+      
+      // 如果是管理员，初始化提交者筛选
+      if (isAdmin) {
+        populateSubmitterFilter();
+      }
     } catch (error) {
       console.error('获取卖家列表失败:', error);
+    }
+  }
+  
+  // 填充提交者筛选下拉框（仅管理员可见）
+  function populateSubmitterFilter() {
+    // 确保是管理员
+    if (!isAdmin) return;
+    
+    const submitterSection = document.getElementById('submitterFilterSection');
+    if (submitterSection) {
+      submitterSection.style.display = 'block';
+    }
+    
+    // 获取所有订单中的提交者用户名
+    const submitters = new Set();
+    allOrders.forEach(order => {
+      if (order.created_by_username) {
+        submitters.add(order.created_by_username);
+      }
+    });
+    
+    // 填充提交者筛选下拉框
+    const submitterFilter = document.getElementById('submitterFilter');
+    if (submitterFilter && submitters.size > 0) {
+      // 保留默认选项
+      const defaultSubmitterOption = submitterFilter.options[0];
+      submitterFilter.innerHTML = '';
+      submitterFilter.appendChild(defaultSubmitterOption);
+      
+      // 添加提交者选项
+      [...submitters].sort().forEach(submitter => {
+        const option = document.createElement('option');
+        option.value = submitter;
+        option.textContent = submitter;
+        submitterFilter.appendChild(option);
+      });
     }
   }
   
   // 应用筛选
   function applyFilters() {
     const sellerFilter = document.getElementById('sellerFilter');
+    const submitterFilter = document.getElementById('submitterFilter');
     const statusFilter = document.getElementById('statusFilter');
     const startDateFilter = document.getElementById('startDateFilter');
     const endDateFilter = document.getElementById('endDateFilter');
@@ -3037,6 +3095,7 @@
     // 更新筛选条件
     filters = {
       seller: sellerFilter ? sellerFilter.value : '',
+      submitter: submitterFilter && isAdmin ? submitterFilter.value : '', // 只有管理员才能使用提交者筛选
       status: statusFilter ? statusFilter.value : '',
       startDate: startDateFilter ? startDateFilter.value : '',
       endDate: endDateFilter ? endDateFilter.value : ''
@@ -3083,6 +3142,23 @@
         const tag = createFilterTag('接单人: ' + sellerName, () => {
           filters.seller = '';
           document.getElementById('sellerFilter').value = '';
+          updateActiveFilters();
+          const filteredOrders = filterOrders(allOrders);
+          renderOrders(filteredOrders);
+        });
+        activeFilters.appendChild(tag);
+      }
+    }
+    
+    // 添加提交者筛选标签（仅管理员可见）
+    if (filters.submitter && isAdmin) {
+      const submitterFilter = document.getElementById('submitterFilter');
+      const submitterName = submitterFilter ? submitterFilter.options[submitterFilter.selectedIndex].text : '';
+      
+      if (submitterName) {
+        const tag = createFilterTag('提交者: ' + submitterName, () => {
+          filters.submitter = '';
+          document.getElementById('submitterFilter').value = '';
           updateActiveFilters();
           const filteredOrders = filterOrders(allOrders);
           renderOrders(filteredOrders);
@@ -3151,11 +3227,13 @@
   function resetFilters() {
     // 重置所有筛选控件
     const sellerFilter = document.getElementById('sellerFilter');
+    const submitterFilter = document.getElementById('submitterFilter');
     const statusFilter = document.getElementById('statusFilter');
     const startDateFilter = document.getElementById('startDateFilter');
     const endDateFilter = document.getElementById('endDateFilter');
     
     if (sellerFilter) sellerFilter.value = '';
+    if (submitterFilter) submitterFilter.value = '';
     if (statusFilter) statusFilter.value = '';
     if (startDateFilter) startDateFilter.value = today;
     if (endDateFilter) endDateFilter.value = today;
@@ -3163,6 +3241,7 @@
     // 重置筛选条件
     filters = {
       seller: '',
+      submitter: '',
       status: '',
       startDate: today,
       endDate: today
@@ -3212,6 +3291,23 @@
         
         // 如果不是字符串，尝试直接比较
         return orderSeller == filterSeller; // 使用==而不是===，允许类型转换
+      });
+    }
+    
+    // 应用提交者筛选（管理员专用）
+    if (filters.submitter && isAdmin) {
+      result = result.filter(order => {
+        // 检查订单的提交者
+        const orderSubmitter = order.created_by_username || order.created_by;
+        const filterSubmitter = filters.submitter;
+        
+        // 检查提交者是否匹配
+        if (typeof orderSubmitter === 'string' && typeof filterSubmitter === 'string') {
+          return orderSubmitter.includes(filterSubmitter) || filterSubmitter.includes(orderSubmitter);
+        }
+        
+        // 如果不是字符串，尝试直接比较
+        return orderSubmitter == filterSubmitter;
       });
     }
     
@@ -3267,6 +3363,14 @@
     const currentToday = getTodayDate();
     filters.startDate = currentToday;
     filters.endDate = currentToday;
+    
+    // 如果是管理员，显示提交者筛选部分
+    if (isAdmin) {
+      const submitterSection = document.getElementById('submitterFilterSection');
+      if (submitterSection) {
+        submitterSection.style.display = 'block';
+      }
+    }
     
     const modal = document.getElementById('edit-order-status-modal');
     if (modal) {
