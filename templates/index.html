@@ -1509,7 +1509,7 @@
 </div>
 
 <!-- 编辑订单状态模态框 -->
-<div class="modal-backdrop" id="edit-order-status-modal">
+<div class="modal-backdrop" id="edit-order-status-modal" style="display:none;">
   <div class="modal">
     <div class="modal-header">
       <h3>编辑订单状态</h3>
@@ -2833,7 +2833,8 @@
       return;
     }
     
-    const order = allOrders.find(o => o.id === orderId);
+    // 查找订单数据
+    const order = allOrders.find(o => o.id === parseInt(orderId));
     if (!order) {
       showCustomAlert('找不到订单信息', 'error');
       console.error("找不到订单ID:", orderId);
@@ -2857,8 +2858,17 @@
       return;
     }
     
-    // 确保模态框可见
+    // 显示遮罩和模态框
     modal.style.display = 'flex';
+    
+    // 自动聚焦到下拉菜单
+    setTimeout(() => {
+      const statusSelect = document.getElementById('edit-order-status-select');
+      if (statusSelect) {
+        statusSelect.focus();
+      }
+    }, 100);
+    
     console.log("已设置模态框为显示状态");
   }
   
@@ -3061,20 +3071,23 @@
     // 获取所有订单中的提交者用户名
     const submitters = new Set();
     allOrders.forEach(order => {
-      if (order.created_by_username) {
-        submitters.add(order.created_by_username);
+      // 使用正确的字段名：username
+      if (order.username) {
+        submitters.add(order.username);
       }
     });
     
+    console.log("找到的提交者用户名:", [...submitters]);
+    
     // 填充提交者筛选下拉框
     const submitterFilter = document.getElementById('submitterFilter');
-    if (submitterFilter && submitters.size > 0) {
+    if (submitterFilter) {
       // 保留默认选项
       const defaultSubmitterOption = submitterFilter.options[0];
       submitterFilter.innerHTML = '';
       submitterFilter.appendChild(defaultSubmitterOption);
       
-      // 添加提交者选项
+      // 添加提交者选项（即使只有一个也添加）
       [...submitters].sort().forEach(submitter => {
         const option = document.createElement('option');
         option.value = submitter;
@@ -3297,13 +3310,13 @@
     // 应用提交者筛选（管理员专用）
     if (filters.submitter && isAdmin) {
       result = result.filter(order => {
-        // 检查订单的提交者
-        const orderSubmitter = order.created_by_username || order.created_by;
+        // 检查订单的提交者，使用正确的字段名：username
+        const orderSubmitter = order.username;
         const filterSubmitter = filters.submitter;
         
         // 检查提交者是否匹配
         if (typeof orderSubmitter === 'string' && typeof filterSubmitter === 'string') {
-          return orderSubmitter.includes(filterSubmitter) || filterSubmitter.includes(orderSubmitter);
+          return orderSubmitter === filterSubmitter;
         }
         
         // 如果不是字符串，尝试直接比较
