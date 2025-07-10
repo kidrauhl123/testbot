@@ -966,12 +966,77 @@
       margin-top: 3px;
     }
 
-    /* 已确认按钮样式 */
+    /* 确认按钮容器样式 */
+    .confirm-btn-container {
+      position: relative;
+      display: inline-block;
+      margin: 0 5px;
+    }
+    
+    /* 确认按钮基础样式 */
+    .confirm-btn {
+      background-color: #f1f2f6;
+      color: #333;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.3s ease;
+    }
+    
+    /* 确认按钮悬停样式 */
+    .confirm-btn:hover {
+      background-color: #e8e9ec;
+    }
+    
+    /* 不同状态的确认按钮样式 */
+    .confirm-btn.pending {
+      background-color: #fff3cd;
+      color: #856404;
+      border-color: #ffeeba;
+    }
+    
     .confirm-btn.confirmed {
       background-color: #d4edda;
       color: #155724;
       border-color: #c3e6cb;
-      cursor: default;
+    }
+    
+    .confirm-btn.not_received {
+      background-color: #f8d7da;
+      color: #721c24;
+      border-color: #f5c6cb;
+    }
+    
+    /* 确认选项下拉菜单 */
+    .confirm-options {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      z-index: 10;
+      background-color: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      width: 120px;
+      display: none;
+      overflow: hidden;
+    }
+    
+    .confirm-options.active {
+      display: block;
+    }
+    
+    .confirm-option {
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      font-size: 13px;
+    }
+    
+    .confirm-option:hover {
+      background-color: #f5f5f5;
     }
     
     /* 备注编辑相关样式 */
@@ -2513,7 +2578,16 @@
             <p class="time">提交时间：${o.created_at}</p>
             ${o.completed_at ? `<p class="time">完成时间：${o.completed_at}</p>` : ''}
           </div>
-          <button class="confirm-btn" onclick="confirmOrder(${o.id})">${o.buyer_confirmed ? '已确认' : '确认'}</button>
+          <div class="confirm-btn-container">
+            <button class="confirm-btn ${o.confirm_status || 'pending'}" onclick="showConfirmOptions(${o.id}, this)">
+              ${getConfirmButtonText(o.confirm_status)}
+            </button>
+            <div class="confirm-options" id="confirm-options-${o.id}">
+              <div class="confirm-option" onclick="confirmOrder(${o.id}, 'pending')">待确认</div>
+              <div class="confirm-option" onclick="confirmOrder(${o.id}, 'confirmed')">确认收到</div>
+              <div class="confirm-option" onclick="confirmOrder(${o.id}, 'not_received')">长时间未收到</div>
+            </div>
+          </div>
           <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
           ${isAdmin ? `<button class="edit-btn" onclick="editOrderStatus(${o.id})">编辑</button>` : ''}
         </div>`;
@@ -2570,7 +2644,16 @@
           ${isAdmin ? `<td>${escapeHtml(o.username || '-')}</td>` : ''}
           <td>
             <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
-            <button class="confirm-btn" onclick="confirmOrder(${o.id})">${o.buyer_confirmed ? '已确认' : '确认'}</button>
+            <div class="confirm-btn-container">
+              <button class="confirm-btn ${o.confirm_status || 'pending'}" onclick="showConfirmOptions(${o.id}, this)">
+                ${o.confirm_status === 'confirmed' ? '确认收到' : (o.confirm_status === 'not_received' ? '长时间未收到' : '待确认')}
+              </button>
+              <div class="confirm-options" id="confirm-options-${o.id}">
+                <div class="confirm-option" onclick="confirmOrder(${o.id}, 'pending')">待确认</div>
+                <div class="confirm-option" onclick="confirmOrder(${o.id}, 'confirmed')">确认收到</div>
+                <div class="confirm-option" onclick="confirmOrder(${o.id}, 'not_received')">长时间未收到</div>
+              </div>
+            </div>
             ${isAdmin ? `<button class="edit-btn" onclick="editOrderStatus(${o.id})">编辑</button>` : ''}
           </td>
         </tr>
@@ -2584,14 +2667,13 @@
     
     container.innerHTML = html;
     
-    // 如果已确认，禁用按钮
+    // 设置按钮状态样式
     orders.forEach(o => {
-      if (o.buyer_confirmed) {
-        const confirmBtn = container.querySelector(`tr[data-order-id="${o.id}"] .confirm-btn`);
-        if (confirmBtn) {
-          confirmBtn.disabled = true;
-          confirmBtn.classList.add("confirmed");
-        }
+      const confirmBtn = container.querySelector(`tr[data-order-id="${o.id}"] .confirm-btn`);
+      if (confirmBtn) {
+        // 添加对应状态的类
+        const status = o.confirm_status || 'pending';
+        confirmBtn.classList.add(status);
       }
     });
   }
@@ -2785,18 +2867,52 @@
   }
 
   // 确认订单
-  async function confirmOrder(orderId) {
-    const loadingOverlay = document.getElementById('loadingOverlay');
+  // 获取确认按钮显示文字
+  function getConfirmButtonText(status) {
+    if (status === 'confirmed') return '确认收到';
+    if (status === 'not_received') return '长时间未收到';
+    return '待确认';
+  }
+  
+  // 显示确认选项
+  function showConfirmOptions(orderId, btnElem) {
+    // 先关闭所有其他打开的确认选项
+    document.querySelectorAll('.confirm-options.active').forEach(elem => {
+      if (elem.id !== `confirm-options-${orderId}`) {
+        elem.classList.remove('active');
+      }
+    });
     
-    // 直接确认订单，无需弹出确认对话框
+    const optionsElem = document.getElementById(`confirm-options-${orderId}`);
+    optionsElem.classList.toggle('active');
+    
+    // 添加点击外部关闭下拉菜单
+    document.addEventListener('click', function closeOptions(e) {
+      if (!e.target.closest('.confirm-btn-container')) {
+        optionsElem.classList.remove('active');
+        document.removeEventListener('click', closeOptions);
+      }
+    });
+  }
+  
+  // 确认订单
+  async function confirmOrder(orderId, status) {
+    const loadingOverlay = document.getElementById('loadingOverlay');
     loadingOverlay.style.display = 'flex';
     
     try {
-      const resp = await fetch(`/orders/confirm/${orderId}`, { method: 'POST' });
+      const resp = await fetch(`/orders/confirm/${orderId}`, { 
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: status })
+      });
+      
       const result = await resp.json();
       
       if (result.success) {
-        showCustomAlert('订单确认成功', 'success');
+        showCustomAlert(`订单状态已更新为：${result.confirm_text}`, 'success');
         
         // 更新订单状态
         const orderElem = document.querySelector(`.order-list-item[data-order-id="${orderId}"]`) || 
@@ -2804,10 +2920,21 @@
         
         if (orderElem) {
           const confirmBtn = orderElem.querySelector('.confirm-btn');
+          const optionsElem = document.getElementById(`confirm-options-${orderId}`);
+          
           if (confirmBtn) {
-            confirmBtn.textContent = '已确认';
-            confirmBtn.disabled = true;
-            confirmBtn.classList.add('confirmed');
+            // 更新按钮状态
+            confirmBtn.textContent = result.confirm_text;
+            
+            // 移除之前的状态类
+            confirmBtn.classList.remove('pending', 'confirmed', 'not_received');
+            // 添加新的状态类
+            confirmBtn.classList.add(status);
+            
+            // 关闭选项菜单
+            if (optionsElem) {
+              optionsElem.classList.remove('active');
+            }
           }
         }
         

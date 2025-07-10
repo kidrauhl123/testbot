@@ -71,6 +71,19 @@ STATUS_TEXT_ZH = {
     'failed': '充值失败', 'cancelled': '已撤销', 'disputing': '正在质疑'
 }
 
+# 确认状态常量
+CONFIRM_STATUS = {
+    'PENDING': 'pending',
+    'CONFIRMED': 'confirmed',
+    'NOT_RECEIVED': 'not_received'
+}
+
+CONFIRM_STATUS_TEXT_ZH = {
+    'pending': '待确认',
+    'confirmed': '确认收到',
+    'not_received': '长时间未收到'
+}
+
 # 失败原因的中英文映射
 REASON_TEXT_ZH = {
     'Wrong password': '密码错误',

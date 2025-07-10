@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 
 from flask import Flask, request, render_template, jsonify, session, redirect, url_for, flash, send_file, send_from_directory
 
-from modules.constants import STATUS, STATUS_TEXT_ZH, REASON_TEXT_ZH, DATABASE_URL
+from modules.constants import STATUS, STATUS_TEXT_ZH, REASON_TEXT_ZH, DATABASE_URL, CONFIRM_STATUS, CONFIRM_STATUS_TEXT_ZH
 from modules.database import (
     execute_query, hash_password, get_unnotified_orders,
     get_order_details, get_all_sellers, get_active_sellers, toggle_seller_status, 
@@ -501,6 +501,19 @@ def register_routes(app, notification_queue):
                     # 使用web_user_id作为username
                     username = web_user_id
                     
+                    # 获取确认状态，如果没有则根据buyer_confirmed设置默认值
+                    confirm_status = execute_query(
+                        "SELECT confirm_status FROM orders WHERE id=?", 
+                        (oid,), 
+                        fetch=True
+                    )
+                    
+                    # 如果confirm_status存在，使用它；否则根据buyer_confirmed设置默认值
+                    if confirm_status and confirm_status[0][0]:
+                        confirm_status = confirm_status[0][0]
+                    else:
+                        confirm_status = CONFIRM_STATUS['CONFIRMED'] if buyer_confirmed else CONFIRM_STATUS['PENDING']
+                    
                     order_data = {
                         "id": oid,
                         "account": account,
@@ -514,6 +527,7 @@ def register_routes(app, notification_queue):
                         "remark": translated_remark or "",
                         "accepted_by": seller_display or "",
                         "buyer_confirmed": bool(buyer_confirmed),
+                        "confirm_status": confirm_status,
                         "can_cancel": status == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == user_id),
                         "username": username or ""
                     }
@@ -554,6 +568,19 @@ def register_routes(app, notification_queue):
                     if status == STATUS['FAILED'] and remark:
                         translated_remark = REASON_TEXT_ZH.get(remark, remark)
                     
+                    # 获取确认状态，如果没有则根据buyer_confirmed设置默认值
+                    confirm_status = execute_query(
+                        "SELECT confirm_status FROM orders WHERE id=?", 
+                        (oid,), 
+                        fetch=True
+                    )
+                    
+                    # 如果confirm_status存在，使用它；否则根据buyer_confirmed设置默认值
+                    if confirm_status and confirm_status[0][0]:
+                        confirm_status = confirm_status[0][0]
+                    else:
+                        confirm_status = CONFIRM_STATUS['CONFIRMED'] if buyer_confirmed else CONFIRM_STATUS['PENDING']
+                    
                     order_data = {
                         "id": oid,
                         "account": account,
@@ -567,6 +594,7 @@ def register_routes(app, notification_queue):
                         "remark": translated_remark or "",
                         "accepted_by": seller_display or "",
                         "buyer_confirmed": bool(buyer_confirmed),
+                        "confirm_status": confirm_status,
                         "can_cancel": status == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == user_id),
                         "username": username or web_user_id or ""
                     }
@@ -878,6 +906,19 @@ def register_routes(app, notification_queue):
                     "name": display_name
                 }
             
+            # 获取确认状态，如果没有则根据buyer_confirmed设置默认值
+            confirm_status_result = execute_query(
+                "SELECT confirm_status FROM orders WHERE id=?", 
+                (order_id,), 
+                fetch=True
+            )
+            
+            # 如果confirm_status存在，使用它；否则根据buyer_confirmed设置默认值
+            if confirm_status_result and confirm_status_result[0][0]:
+                confirm_status = confirm_status_result[0][0]
+            else:
+                confirm_status = CONFIRM_STATUS['CONFIRMED'] if buyer_confirmed else CONFIRM_STATUS['PENDING']
+            
             formatted_orders.append({
                 "id": order_id,
                 "account": account,
@@ -892,7 +933,8 @@ def register_routes(app, notification_queue):
                 "creator": creator or "N/A",
                 "seller": seller_info,
                 "refunded": bool(refunded),
-                "buyer_confirmed": bool(buyer_confirmed)
+                "buyer_confirmed": bool(buyer_confirmed),
+                "confirm_status": confirm_status
             })
         
         return jsonify({
@@ -1349,6 +1391,10 @@ def register_routes(app, notification_queue):
         """买家确认订单已完成"""
         user_id = session.get('user_id')
         
+        # 获取确认状态
+        data = request.get_json()
+        confirm_status = data.get('status', CONFIRM_STATUS['CONFIRMED']) if data else CONFIRM_STATUS['CONFIRMED']
+        
         # 检查订单是否存在并属于当前用户
         order = execute_query("SELECT status, user_id, accepted_by FROM orders WHERE id=?", (oid,), fetch=True)
         if not order:
@@ -1363,23 +1409,35 @@ def register_routes(app, notification_queue):
         # 不再检查订单状态，允许任何状态的订单都可以确认
         
         try:
-            # 更新buyer_confirmed字段和时间戳
+            # 更新buyer_confirmed字段和confirm_status字段
             timestamp = get_china_time()
-            execute_query("UPDATE orders SET buyer_confirmed=TRUE, buyer_confirmed_at=? WHERE id=?", (timestamp, oid))
-            logger.info(f"用户 {user_id} 确认订单 {oid} 成功，buyer_confirmed已设置为TRUE，时间: {timestamp}")
+            # 如果是确认收到，则设置buyer_confirmed为TRUE，否则设置为FALSE
+            buyer_confirmed = True if confirm_status == CONFIRM_STATUS['CONFIRMED'] else False
+            
+            execute_query(
+                "UPDATE orders SET buyer_confirmed=?, confirm_status=?, buyer_confirmed_at=? WHERE id=?", 
+                (buyer_confirmed, confirm_status, timestamp, oid)
+            )
+            
+            logger.info(f"用户 {user_id} 更新订单 {oid} 确认状态为 {confirm_status}，buyer_confirmed设置为{buyer_confirmed}，时间: {timestamp}")
 
             # 发送通知
             try:
                 notification_queue.put({
                     'type': 'buyer_confirmed',
                     'order_id': oid,
-                    'handler_id': user_id
+                    'handler_id': user_id,
+                    'confirm_status': confirm_status
                 })
                 logger.info(f"已将订单 {oid} 买家确认通知添加到队列")
             except Exception as e:
                 logger.error(f"添加买家确认通知到队列失败: {e}", exc_info=True)
 
-            return jsonify({"success": True})
+            return jsonify({
+                "success": True, 
+                "confirm_status": confirm_status,
+                "confirm_text": CONFIRM_STATUS_TEXT_ZH.get(confirm_status, confirm_status)
+            })
         except Exception as e:
             logger.error(f"确认订单 {oid} 时发生错误: {e}", exc_info=True)
             return jsonify({"error": "服务器错误，请稍后重试"}), 500

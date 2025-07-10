@@ -119,7 +119,8 @@ def init_sqlite_db():
         accepted_by_nickname TEXT,
         failed_at TEXT,
         fail_reason TEXT,
-        buyer_confirmed INTEGER DEFAULT 0
+        buyer_confirmed INTEGER DEFAULT 0,
+        confirm_status TEXT DEFAULT 'pending'
     )
     ''')
     
@@ -137,6 +138,14 @@ def init_sqlite_db():
     except sqlite3.OperationalError:
         logger.info("为orders表添加buyer_confirmed列")
         c.execute("ALTER TABLE orders ADD COLUMN buyer_confirmed INTEGER DEFAULT 0")
+        conn.commit()
+        
+    # 检查orders表是否需要添加confirm_status列
+    try:
+        c.execute("SELECT confirm_status FROM orders LIMIT 1")
+    except sqlite3.OperationalError:
+        logger.info("为orders表添加confirm_status列")
+        c.execute("ALTER TABLE orders ADD COLUMN confirm_status TEXT DEFAULT 'pending'")
         conn.commit()
     
     # 创建用户表
@@ -308,7 +317,8 @@ def init_postgres_db():
         accepted_by_nickname TEXT,
         failed_at TIMESTAMP,
         fail_reason TEXT,
-        buyer_confirmed BOOLEAN DEFAULT FALSE
+        buyer_confirmed BOOLEAN DEFAULT FALSE,
+        confirm_status TEXT DEFAULT 'pending'
     )
     ''')
     
@@ -326,6 +336,14 @@ def init_postgres_db():
     except psycopg2.errors.UndefinedColumn:
         logger.info("为orders表添加buyer_confirmed列")
         cur.execute("ALTER TABLE orders ADD COLUMN buyer_confirmed BOOLEAN DEFAULT FALSE")
+        conn.commit()
+        
+    # 检查orders表是否需要添加confirm_status列
+    try:
+        cur.execute("SELECT confirm_status FROM orders LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为orders表添加confirm_status列")
+        cur.execute("ALTER TABLE orders ADD COLUMN confirm_status TEXT DEFAULT 'pending'")
         conn.commit()
     
     # 创建用户表
