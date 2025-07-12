@@ -522,6 +522,9 @@
               <i class="fas fa-filter"></i> 筛选
             </button>
             <button id="batch-delete-btn" class="btn btn-danger">批量删除</button>
+            <button id="cleanup-old-orders-btn" class="btn btn-warning">
+              <i class="fas fa-broom"></i> 清理旧订单
+            </button>
           </div>
         </div>
         
@@ -661,6 +664,30 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" data-dismiss="modal">取消</button>
       <button class="btn btn-primary" onclick="saveOrderEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 清理旧订单模态框 -->
+<div class="modal-backdrop" id="cleanup-orders-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>清理旧订单</h3>
+      <button class="modal-close" data-dismiss="modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="cleanup-orders-error" class="error-message" style="display:none;"></div>
+      <form id="cleanup-orders-form">
+        <div class="form-group">
+          <label for="cleanup-days">保留最近几天的订单？</label>
+          <input type="number" id="cleanup-days" class="form-control" min="1" value="3" required>
+          <small class="text-muted">将删除指定天数之前的所有订单，此操作不可撤销！</small>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
+      <button class="btn btn-danger" onclick="cleanupOldOrders()">执行清理</button>
     </div>
   </div>
 </div>
@@ -1712,10 +1739,69 @@
     });
   });
 
+  // 清理旧订单函数
+  function showCleanupOrdersModal() {
+    const modal = document.getElementById('cleanup-orders-modal');
+    if (modal) {
+      modal.style.display = 'flex';
+      modal.classList.add('show');
+      document.getElementById('cleanup-days').value = 3;
+      document.getElementById('cleanup-orders-error').style.display = 'none';
+    }
+  }
+  
+  // 执行清理旧订单
+  async function cleanupOldOrders() {
+    const daysInput = document.getElementById('cleanup-days');
+    const days = parseInt(daysInput.value);
+    const errorElement = document.getElementById('cleanup-orders-error');
+    
+    if (isNaN(days) || days < 1) {
+      errorElement.textContent = '请输入有效的天数（至少为1）';
+      errorElement.style.display = 'block';
+      return;
+    }
+    
+    if (!confirm(`确定要删除 ${days} 天前的所有订单吗？此操作不可撤销！`)) {
+      return;
+    }
+    
+    try {
+      const response = await fetch('/admin/api/cleanup-old-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ days })
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        // 关闭模态框
+        const modal = document.getElementById('cleanup-orders-modal');
+        modal.classList.remove('show');
+        setTimeout(() => { modal.style.display = 'none'; }, 300);
+        
+        // 显示成功消息
+        showToast(`成功清理了 ${result.deleted_count} 条旧订单记录！`, 'success');
+        
+        // 重新加载订单列表
+        loadOrders();
+      } else {
+        errorElement.textContent = result.error || '清理失败';
+        errorElement.style.display = 'block';
+      }
+    } catch (e) {
+      errorElement.textContent = '请求失败，请检查网络连接';
+      errorElement.style.display = 'block';
+      console.error('清理旧订单请求出错:', e);
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     // 检查页面上的所有模态框元素
     console.log("检查模态框元素:");
     console.log("edit-order-modal:", document.getElementById('edit-order-modal'));
+    console.log("cleanup-orders-modal:", document.getElementById('cleanup-orders-modal'));
     
     // 检查标签页元素
     console.log("检查标签页元素:");
@@ -1818,6 +1904,14 @@
       });
     }
 
+    // 绑定清理旧订单按钮事件
+    const cleanupOldOrdersBtn = document.getElementById('cleanup-old-orders-btn');
+    if (cleanupOldOrdersBtn) {
+      cleanupOldOrdersBtn.addEventListener('click', () => {
+        showCleanupOrdersModal();
+      });
+    }
+    
     if (batchDeleteBtn) {
       batchDeleteBtn.addEventListener('click', async () => {
         const selectedCheckboxes = document.querySelectorAll('.order-checkbox:checked');
