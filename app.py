@@ -11,6 +11,7 @@ import traceback
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash, send_file
 import sqlite3
 import shutil
+import schedule  # 添加schedule库用于定时任务
 
 # 根据环境变量确定是否为生产环境
 is_production = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('PRODUCTION')
@@ -26,7 +27,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 导入自定义模块
-from modules.database import init_db, execute_query, check_db_connection
+from modules.database import init_db, execute_query, check_db_connection, delete_old_orders
 from modules.telegram_bot import run_bot, process_telegram_update
 from modules.web_routes import register_routes, ensure_sellers_columns, ensure_orders_columns
 from modules.constants import sync_env_sellers_to_db
@@ -36,6 +37,18 @@ notification_queue = queue.Queue()
 
 # 锁目录路径
 lock_dir = 'bot.lock'
+
+# 定时任务：每天清理旧订单
+def run_scheduled_tasks():
+    """运行定时任务"""
+    # 每天凌晨2点删除3天前的订单
+    schedule.every().day.at("02:00").do(delete_old_orders)
+    
+    logger.info("定时任务已设置")
+    
+    while True:
+        schedule.run_pending()
+        time.sleep(60)  # 每分钟检查一次
 
 # 清理锁目录和数据库 journal 文件的函数
 def cleanup_resources():
@@ -241,6 +254,12 @@ if __name__ == "__main__":
     bot_thread = threading.Thread(target=run_bot, args=(notification_queue,), daemon=True)
     bot_thread.start()
     logger.info("Telegram机器人线程已启动")
+    
+    # 启动定时任务线程
+    logger.info("正在启动定时任务...")
+    schedule_thread = threading.Thread(target=run_scheduled_tasks, daemon=True)
+    schedule_thread.start()
+    logger.info("定时任务线程已启动")
     
     # 启动 Flask
     port = int(os.environ.get("PORT", 5000))

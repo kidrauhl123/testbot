@@ -267,7 +267,23 @@ def init_sqlite_db():
             VALUES (?, ?, 1, ?)
         """, (ADMIN_USERNAME, admin_hash, get_china_time()))
     
-    conn.commit()
+    # 创建索引以提高查询性能
+    logger.info("检查并创建索引以提高查询性能")
+    try:
+        # 为订单表的created_at字段添加索引，优化按时间查询和删除操作
+        c.execute("CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)")
+        
+        # 为订单表的status字段添加索引，优化按状态查询操作
+        c.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
+        
+        # 为用户ID添加索引，优化按用户查询订单操作
+        c.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)")
+        
+        conn.commit()
+        logger.info("数据库索引创建或更新完成")
+    except Exception as e:
+        logger.error(f"创建索引时出错: {str(e)}", exc_info=True)
+    
     conn.close()
     logger.info("SQLite数据库初始化完成")
 
@@ -456,6 +472,22 @@ def init_postgres_db():
             INSERT INTO users (username, password_hash, is_admin, created_at) 
             VALUES (%s, %s, 1, %s)
         """, (ADMIN_USERNAME, admin_hash, get_china_time()))
+    
+    # 创建索引以提高查询性能
+    logger.info("检查并创建索引以提高查询性能")
+    try:
+        # 为订单表的created_at字段添加索引，优化按时间查询和删除操作
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)")
+        
+        # 为订单表的status字段添加索引，优化按状态查询操作
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
+        
+        # 为用户ID添加索引，优化按用户查询订单操作
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)")
+        
+        logger.info("数据库索引创建或更新完成")
+    except Exception as e:
+        logger.error(f"创建索引时出错: {str(e)}", exc_info=True)
     
     conn.close()
 
@@ -1747,3 +1779,43 @@ def check_duplicate_remark(user_id, remark):
     except Exception as e:
         logger.error(f"检查备注重复失败: {str(e)}", exc_info=True)
         return False
+
+def delete_old_orders(days=3):
+    """
+    删除指定天数前的订单数据
+    
+    参数:
+    - days: 天数，默认为3天
+    
+    返回:
+    - 已删除的订单数量
+    """
+    try:
+        # 计算截止日期（当前时间减去指定天数）
+        cutoff_date = datetime.now() - timedelta(days=days)
+        cutoff_date_str = cutoff_date.strftime("%Y-%m-%d %H:%M:%S")
+        
+        logger.info(f"开始删除 {days} 天前的订单数据（截止日期：{cutoff_date_str}）")
+        
+        # 执行删除操作
+        if DATABASE_URL.startswith('postgres'):
+            result = execute_query(
+                "DELETE FROM orders WHERE created_at < %s RETURNING id",
+                (cutoff_date_str,),
+                fetch=True
+            )
+            deleted_count = len(result) if result else 0
+        else:
+            # SQLite
+            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM orders WHERE created_at < ?", (cutoff_date_str,))
+            deleted_count = cursor.rowcount
+            conn.commit()
+            conn.close()
+        
+        logger.info(f"已删除 {deleted_count} 条过期订单数据")
+        return deleted_count
+    except Exception as e:
+        logger.error(f"删除旧订单数据失败: {str(e)}", exc_info=True)
+        return 0

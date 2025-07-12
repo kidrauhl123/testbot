@@ -23,7 +23,7 @@ from modules.database import (
     get_seller_completed_orders, get_seller_pending_orders, check_seller_completed_orders,
     get_seller_today_confirmed_orders_by_user, get_admin_sellers,
     get_user_today_confirmed_count, get_all_today_confirmed_count, create_order_with_deduction_atomic,
-    add_seller, check_all_sellers_full
+    add_seller, check_all_sellers_full, delete_old_orders
 )
 import modules.constants as constants
 
@@ -303,7 +303,7 @@ def register_routes(app, notification_queue):
             logger.info(f"订单提交成功: 用户={username}, 套餐={package}")
             
             # 获取最新订单列表并格式化
-            orders_raw = execute_query("SELECT id, account, password, package, status, created_at, user_id FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
+            orders_raw = execute_query("SELECT id, account, password, package, status, created_at FROM orders ORDER BY id DESC LIMIT 5", fetch=True)
             orders = []
             
             # 获取新创建的订单ID
@@ -327,7 +327,7 @@ def register_routes(app, notification_queue):
                     "remark": "",
                     "creator": username, # Simplification, actual creator might differ if admin creates for others
                     "accepted_by": "",
-                    "can_cancel": o[4] == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == o[6])
+                    "can_cancel": o[4] == STATUS['SUBMITTED'] and (session.get('is_admin') or session.get('user_id') == o[0])
                 })
             
             # 触发立即通知卖家 - 获取新创建的订单ID并加入通知队列
@@ -1675,6 +1675,39 @@ def register_routes(app, notification_queue):
         except Exception as e:
             logger.error(f"调试订单数据失败: {str(e)}", exc_info=True)
             return jsonify({'success': False, 'error': str(e)}), 500
+
+    # 添加一个API接口用于手动清理旧订单
+    @app.route('/admin/api/cleanup-old-orders', methods=['POST'])
+    @login_required
+    @admin_required
+    def admin_cleanup_old_orders():
+        """手动清理旧订单"""
+        try:
+            data = request.get_json()
+            days = data.get('days', 3)  # 默认删除3天前的订单
+            
+            # 验证days参数
+            try:
+                days = int(days)
+                if days < 1:
+                    return jsonify({"success": False, "error": "天数必须大于0"}), 400
+            except (ValueError, TypeError):
+                return jsonify({"success": False, "error": "天数必须是有效的整数"}), 400
+            
+            # 执行删除操作
+            deleted_count = delete_old_orders(days)
+            
+            # 记录操作日志
+            logger.info(f"管理员 {session.get('username')} 手动清理了 {days} 天前的订单，共删除 {deleted_count} 条记录")
+            
+            return jsonify({
+                "success": True, 
+                "message": f"成功删除 {deleted_count} 条 {days} 天前的订单记录", 
+                "deleted_count": deleted_count
+            })
+        except Exception as e:
+            logger.error(f"手动清理旧订单时出错: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": f"服务器内部错误: {str(e)}"}), 500
 
 def ensure_orders_columns():
     """确保orders表包含所有必需的列，比如buyer_confirmed_at"""
