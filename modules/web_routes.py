@@ -835,12 +835,16 @@ def register_routes(app, notification_queue):
     @login_required
     @admin_required
     def admin_api_orders():
-        """获取所有订单列表"""
+        """获取所有订单列表，支持分页"""
         # 获取查询参数
-        limit = int(request.args.get('limit', 1000))  # 增加默认值以支持加载更多订单
-        offset = int(request.args.get('offset', 0))
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))  # 默认每页50条
+        offset = (page - 1) * per_page
+        limit = per_page
+        
         status = request.args.get('status')
         search = request.args.get('search', '')
+        seller_id = request.args.get('seller_id')  # 按接单人筛选
         
         # 构建查询条件
         conditions = []
@@ -851,49 +855,53 @@ def register_routes(app, notification_queue):
             params.append(status)
         
         if search:
-            conditions.append("(account LIKE ? OR web_user_id LIKE ? OR id LIKE ?)")
+            conditions.append("(account LIKE ? OR web_user_id LIKE ? OR id::text LIKE ? OR remark LIKE ?)")
             search_param = f"%{search}%"
-            params.extend([search_param, search_param, search_param])
+            params.extend([search_param, search_param, search_param, search_param])
+            
+        if seller_id:
+            conditions.append("accepted_by = ?")
+            params.append(seller_id)
         
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
         
+        # 查询订单总数(先查总数以提高分页性能)
+        count_query = f"SELECT COUNT(*) FROM orders{where_clause}"
+        if DATABASE_URL.startswith('postgres'):
+            count_query = count_query.replace('?', '%s')
+        count = execute_query(count_query, params, fetch=True)[0][0]
+        
         # 查询订单
         if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL查询，使用COALESCE获取web_user_id或从users表联查username
+            # PostgreSQL查询
+            query_params = params + [limit, offset]
             orders = execute_query(f"""
                 SELECT o.id, o.account, o.password, o.package, o.status, o.remark, o.created_at, o.accepted_at, o.completed_at, 
-                       COALESCE(o.web_user_id, u.username) as creator, o.accepted_by, o.accepted_by_username, o.accepted_by_first_name, o.accepted_by_nickname, o.refunded, o.buyer_confirmed
+                       COALESCE(o.web_user_id, u.username) as creator, o.accepted_by, o.accepted_by_username, o.accepted_by_first_name, o.accepted_by_nickname, o.refunded, o.buyer_confirmed,
+                       o.user_id
                 FROM orders o
                 LEFT JOIN users u ON o.user_id = u.id
                 {where_clause}
                 ORDER BY o.id DESC
                 LIMIT %s OFFSET %s
-            """, params + [limit, offset], fetch=True)
-            
-            # 查询订单总数
-            count = execute_query(f"""
-                SELECT COUNT(*) FROM orders {where_clause}
-            """, params, fetch=True)[0][0]
+            """, query_params, fetch=True)
         else:
             # SQLite查询
+            query_params = params + [limit, offset]
             orders = execute_query(f"""
                 SELECT id, account, password, package, status, remark, created_at, accepted_at, completed_at, 
-                       web_user_id as creator, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, refunded, buyer_confirmed
+                       web_user_id as creator, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, refunded, buyer_confirmed,
+                       user_id
                 FROM orders
                 {where_clause}
                 ORDER BY id DESC
                 LIMIT ? OFFSET ?
-            """, params + [limit, offset], fetch=True)
-            
-            # 查询订单总数
-            count = execute_query(f"""
-                SELECT COUNT(*) FROM orders {where_clause}
-            """, params, fetch=True)[0][0]
+            """, query_params, fetch=True)
         
         # 格式化订单数据
         formatted_orders = []
         for order in orders:
-            order_id, account, password, package, status, remark, created_at, accepted_at, completed_at, creator, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, refunded, buyer_confirmed = order
+            order_id, account, password, package, status, remark, created_at, accepted_at, completed_at, creator, accepted_by, accepted_by_username, accepted_by_first_name, accepted_by_nickname, refunded, buyer_confirmed, user_id = order
             
             # 格式化卖家信息
             seller_info = None
@@ -906,7 +914,7 @@ def register_routes(app, notification_queue):
                     "name": display_name
                 }
             
-            # 获取确认状态，如果没有则根据buyer_confirmed设置默认值
+            # 获取确认状态
             confirm_status_result = execute_query(
                 "SELECT confirm_status FROM orders WHERE id=?", 
                 (order_id,), 
@@ -931,15 +939,26 @@ def register_routes(app, notification_queue):
                 "accepted_at": accepted_at,
                 "completed_at": completed_at,
                 "creator": creator or "N/A",
+                "created_by": creator or "N/A",  # 保持前端兼容
+                "user_id": user_id,
                 "seller": seller_info,
+                "accepted_by": accepted_by,
+                "accepted_by_nickname": accepted_by_nickname,
                 "refunded": bool(refunded),
                 "buyer_confirmed": bool(buyer_confirmed),
                 "confirm_status": confirm_status
             })
         
+        # 计算是否有更多数据
+        has_more = (page * per_page) < count
+        
         return jsonify({
             "orders": formatted_orders,
-            "total": count
+            "total": count,
+            "page": page,
+            "per_page": per_page,
+            "has_more": has_more,
+            "total_pages": (count + per_page - 1) // per_page  # 向上取整
         })
         
     @app.route('/admin/api/sellers', methods=['GET'])
@@ -1166,64 +1185,146 @@ def register_routes(app, notification_queue):
     @admin_required
     def admin_api_batch_delete_orders():
         """管理员批量删除订单"""
-        data = request.json
-        order_ids = data.get('order_ids')
-
-        if not order_ids or not isinstance(order_ids, list):
-            return jsonify({"success": False, "error": "无效的订单ID列表"}), 400
-
         try:
+            data = request.json
+            if not data:
+                logger.error("批量删除订单失败：请求中没有JSON数据")
+                return jsonify({"success": False, "error": "无效的请求数据"}), 400
+                
+            order_ids = data.get('order_ids')
+            if not order_ids or not isinstance(order_ids, list):
+                logger.error(f"批量删除订单失败：无效的订单ID列表 {order_ids}")
+                return jsonify({"success": False, "error": "无效的订单ID列表"}), 400
+
             # 获取订单总数
             total_count = execute_query("SELECT COUNT(*) FROM orders", fetch=True)[0][0]
+            deleted_count = 0
+            
             if len(order_ids) == total_count:
                 # 全部删除，直接truncate并重置自增ID
-                if DATABASE_URL.startswith('postgres'):
-                    url = urlparse(DATABASE_URL)
-                    conn = psycopg2.connect(
-                        dbname=url.path[1:],
-                        user=url.username,
-                        password=url.password,
-                        host=url.hostname,
-                        port=url.port
-                    )
-                    cur = conn.cursor()
-                    # 先删除关联表数据，再删除主表数据
-                    cur.execute("TRUNCATE TABLE order_notifications, orders RESTART IDENTITY CASCADE;")
-                    conn.commit()
-                    cur.close()
-                    conn.close()
-                else:
-                    # SQLite等其他数据库的处理
-                    execute_query("DELETE FROM order_notifications")
-                    execute_query("DELETE FROM orders")
-                deleted_count = total_count
+                try:
+                    if DATABASE_URL.startswith('postgres'):
+                        url = urlparse(DATABASE_URL)
+                        conn = psycopg2.connect(
+                            dbname=url.path[1:],
+                            user=url.username,
+                            password=url.password,
+                            host=url.hostname,
+                            port=url.port
+                        )
+                        cur = conn.cursor()
+                        # 先删除关联表数据，再删除主表数据
+                        cur.execute("TRUNCATE TABLE order_notifications, orders RESTART IDENTITY CASCADE;")
+                        conn.commit()
+                        cur.close()
+                        conn.close()
+                    else:
+                        # SQLite等其他数据库的处理
+                        execute_query("DELETE FROM order_notifications")
+                        execute_query("DELETE FROM orders")
+                    deleted_count = total_count
+                except Exception as e:
+                    logger.error(f"全部删除订单时出错: {e}", exc_info=True)
+                    return jsonify({"success": False, "error": f"删除订单时出错: {str(e)}"}), 500
             else:
                 # 普通批量删除
-                order_ids_int = [int(oid) for oid in order_ids]
-                if DATABASE_URL.startswith('postgres'):
-                    result = execute_query(
-                        "DELETE FROM orders WHERE id = ANY(%s)",
-                        (order_ids_int,),
-                        fetch=False,
-                        return_cursor=True
-                    )
-                else:
-                    placeholders = ','.join(['?'] * len(order_ids_int))
-                    result = execute_query(
-                        f"DELETE FROM orders WHERE id IN ({placeholders})",
-                        order_ids_int,
-                        fetch=False,
-                        return_cursor=True
-                    )
-                    deleted_count = result.rowcount if result else 0
+                try:
+                    # 确保所有ID都是整数
+                    order_ids_int = []
+                    for oid in order_ids:
+                        try:
+                            order_ids_int.append(int(oid))
+                        except (ValueError, TypeError) as e:
+                            logger.warning(f"跳过无效的订单ID: {oid}, 错误: {e}")
+                            continue
+                    
+                    if not order_ids_int:
+                        return jsonify({"success": False, "error": "没有有效的订单ID"}), 400
+                    
+                    # 直接使用数据库连接执行删除操作
+                    deleted_count = 0    
+                    if DATABASE_URL.startswith('postgres'):
+                        try:
+                            # PostgreSQL处理
+                            url = urlparse(DATABASE_URL)
+                            conn = psycopg2.connect(
+                                dbname=url.path[1:],
+                                user=url.username,
+                                password=url.password,
+                                host=url.hostname,
+                                port=url.port
+                            )
+                            cursor = conn.cursor()
+                            # 使用IN语法，更兼容
+                            placeholders = ','.join(['%s'] * len(order_ids_int))
+                            query = f"DELETE FROM orders WHERE id IN ({placeholders})"
+                            cursor.execute(query, order_ids_int)
+                            deleted_count = cursor.rowcount
+                            conn.commit()
+                            cursor.close()
+                            conn.close()
+                            
+                            # 删除关联的通知记录
+                            try:
+                                conn = psycopg2.connect(
+                                    dbname=url.path[1:],
+                                    user=url.username,
+                                    password=url.password,
+                                    host=url.hostname,
+                                    port=url.port
+                                )
+                                cursor = conn.cursor()
+                                placeholders = ','.join(['%s'] * len(order_ids_int))
+                                query = f"DELETE FROM order_notifications WHERE order_id IN ({placeholders})"
+                                cursor.execute(query, order_ids_int)
+                                conn.commit()
+                                cursor.close()
+                                conn.close()
+                            except Exception as notif_err:
+                                logger.warning(f"删除通知记录时出错: {notif_err}")
+                                # 继续执行，不终止操作
+                        except Exception as e:
+                            logger.error(f"PostgreSQL批量删除错误: {e}", exc_info=True)
+                            return jsonify({"success": False, "error": f"删除订单时出错: {str(e)}"}), 500
+                    else:
+                        try:
+                            # SQLite处理
+                            db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db")
+                            conn = sqlite3.connect(db_path)
+                            cursor = conn.cursor()
+                            placeholders = ','.join(['?'] * len(order_ids_int))
+                            query = f"DELETE FROM orders WHERE id IN ({placeholders})"
+                            cursor.execute(query, order_ids_int)
+                            deleted_count = cursor.rowcount
+                            conn.commit()
+                            cursor.close()
+                            conn.close()
+                            
+                            # 删除关联的通知记录
+                            try:
+                                conn = sqlite3.connect(db_path)
+                                cursor = conn.cursor()
+                                placeholders = ','.join(['?'] * len(order_ids_int))
+                                query = f"DELETE FROM order_notifications WHERE order_id IN ({placeholders})"
+                                cursor.execute(query, order_ids_int)
+                                conn.commit()
+                                cursor.close()
+                                conn.close()
+                            except Exception as notif_err:
+                                logger.warning(f"删除通知记录时出错: {notif_err}")
+                                # 继续执行，不终止操作
+                        except Exception as e:
+                            logger.error(f"SQLite批量删除错误: {e}", exc_info=True)
+                            return jsonify({"success": False, "error": f"删除订单时出错: {str(e)}"}), 500
+                except Exception as e:
+                    logger.error(f"批量删除特定订单时出错: {e}", exc_info=True)
+                    return jsonify({"success": False, "error": f"删除订单时出错: {str(e)}"}), 500
 
             logger.info(f"管理员 {session.get('username')} 删除了 {deleted_count} 个订单: {order_ids}")
             return jsonify({"success": True, "deleted_count": deleted_count})
-        except (ValueError, TypeError):
-            return jsonify({"success": False, "error": "订单ID必须是有效的数字"}), 400
         except Exception as e:
-            logger.error(f"批量删除订单时出错: {e}", exc_info=True)
-            return jsonify({"success": False, "error": "服务器内部错误"}), 500 
+            logger.error(f"批量删除订单时出错(未捕获异常): {e}", exc_info=True)
+            return jsonify({"success": False, "error": f"服务器内部错误: {str(e)}"}), 500
 
     # 删除充值相关路由
 

@@ -448,6 +448,129 @@
         font-size: 12px;
       }
     }
+
+    /* 基本样式 */
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #333;
+      background-color: #f8f9fa;
+      margin: 0;
+      padding: 0;
+    }
+    
+    /* 表格容器 - 支持虚拟滚动 */
+    .table-container {
+      max-height: 70vh; /* 最大高度为视窗高度的70% */
+      overflow-y: auto;
+      position: relative;
+      border: 1px solid #e0e0e0;
+      border-radius: 5px;
+    }
+    
+    /* 虚拟滚动占位元素 */
+    .virtual-scroll-placeholder {
+      position: relative;
+      width: 100%;
+    }
+    
+    /* 分页控制 */
+    .pagination-container {
+      margin: 20px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .pagination {
+      display: flex;
+      justify-content: center;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    
+    .pagination-button {
+      padding: 6px 12px;
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      cursor: pointer;
+      min-width: 40px;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+    
+    .pagination-button:hover {
+      background-color: #f0f0f0;
+      border-color: #bbb;
+    }
+    
+    .pagination-button.active {
+      background-color: #007bff;
+      color: white;
+      border-color: #007bff;
+      font-weight: bold;
+    }
+    
+    /* 订单表格优化 */
+    #orders-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    
+    #orders-table th {
+      position: sticky;
+      top: 0;
+      background-color: #f8f9fa;
+      z-index: 10;
+      font-weight: 600;
+      padding: 12px 15px;
+      text-align: left;
+      border-bottom: 2px solid #dee2e6;
+    }
+    
+    #orders-table tbody tr {
+      border-bottom: 1px solid #e9ecef;
+    }
+    
+    #orders-table tbody tr:hover {
+      background-color: rgba(0,123,255,0.05);
+    }
+    
+    #orders-table td {
+      padding: 10px 15px;
+      vertical-align: middle;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    /* 顺序很重要，这些样式需要放在后面以覆盖之前的定义 */
+    .text-center {
+      text-align: center;
+    }
+    
+    .py-4 {
+      padding-top: 1.5rem;
+      padding-bottom: 1.5rem;
+    }
+    
+    /* 加载中指示器样式 */
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      margin: 20px auto;
+      border: 4px solid rgba(0, 123, 255, 0.1);
+      border-left-color: #007bff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
   </style>
 </head>
 <body>
@@ -566,33 +689,44 @@
         <div id="active-filters" class="active-filters" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px;"></div>
         
         <div id="orders-table-container">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th><input type="checkbox" id="select-all-orders"></th>
-                <th>ID</th>
-                <th>账号</th>
-                <th>状态</th>
-                <th>创建者</th>
-                <th>接单人</th>
-                <th>备注</th>
-                <th>创建时间</th>
-                <th>完成时间</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody id="orders-table-body">
-              <tr>
-                <td colspan="10" class="loading">加载中...</td>
-              </tr>
-            </tbody>
-          </table>
-          <!-- 加载更多区域 -->
-          <div id="load-more-area" style="text-align:center; margin-top: 20px; display:none;">
-            <button id="load-more-orders-btn" class="btn btn-primary" onclick="loadMoreOrders()">
-              加载更多订单 (<span id="loaded-count">0</span>/<span id="total-count">0</span>)
-            </button>
-        </div>
+          <div class="table-container">
+            <table class="data-table" id="orders-table">
+              <thead>
+                <tr>
+                  <th><input type="checkbox" id="select-all-orders"></th>
+                  <th>ID</th>
+                  <th>账号</th>
+                  <th>状态</th>
+                  <th>创建者</th>
+                  <th>接单人</th>
+                  <th>备注</th>
+                  <th>创建时间</th>
+                  <th>完成时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="orders-table-body">
+                <!-- 数据将通过JavaScript动态加载 -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 分页和加载更多 -->
+          <div class="pagination-container">
+            <!-- 分页导航 -->
+            <div id="orders-pagination" class="pagination"></div>
+            
+            <!-- 加载更多区域 -->
+            <div id="load-more-area" style="display: none; text-align: center; margin-top: 20px;">
+              <p>已加载 <span id="loaded-count">0</span> / <span id="total-count">0</span> 条记录</p>
+              <button id="load-more-btn" class="btn btn-outline-primary" onclick="loadMoreOrders()">加载更多</button>
+            </div>
+            
+            <!-- 虚拟滚动控制 -->
+            <div class="virtual-scroll-control" style="text-align: right; margin-top: 10px;">
+              <button id="toggle-virtual-scroll-btn" class="btn btn-sm btn-outline-secondary" onclick="toggleVirtualScroll()">禁用虚拟滚动</button>
+            </div>
+          </div>
         </div>
       </div>
       
@@ -768,7 +902,22 @@
   let ordersPerPage = 50;
   let totalOrders = 0;
   let hasMoreOrders = false;
-
+  let isLoadingOrders = false;
+  let activeFilters = {};
+  let virtualScrollEnabled = true; // 启用虚拟滚动
+  
+  // 虚拟滚动配置
+  const virtualScrollConfig = {
+    itemHeight: 60, // 每行高度(px)
+    overscan: 10,   // 额外渲染的项数
+    container: null, // 容器元素
+    isScrolling: false,
+    scrollTimeout: null,
+    lastScrollTop: 0,
+    visibleStartIndex: 0,
+    visibleEndIndex: 0
+  };
+  
   // 转义HTML
   function escapeHtml(str) {
     if (!str) return '';
@@ -908,27 +1057,45 @@
   }
 
   // 加载订单列表
-  async function loadOrders(page = 1) {
+  async function loadOrders(page = 1, resetList = true) {
     try {
-      currentPage = page;
+      isLoadingOrders = true;
       
-      // 如果是第一页，清空订单列表
-      if (page === 1) {
+      // 显示加载状态
+      const loadMoreBtn = document.getElementById('load-more-btn');
+      if (loadMoreBtn) {
+        loadMoreBtn.disabled = true;
+        loadMoreBtn.innerHTML = '加载中...';
+      }
+      
+      // 如果是第一页或重置，清空订单列表
+      if (page === 1 || resetList) {
         allOrders = [];
+        currentPage = 1;
+      } else {
+        currentPage = page;
       }
       
       const tbody = document.getElementById('orders-table-body');
       if (!tbody) return;
       
-      if (page === 1) {
-        tbody.innerHTML = '<tr><td colspan="10" class="loading">加载中...</td></tr>';
+      if (page === 1 || resetList) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4">加载中...</td></tr>';
       }
       
-      const response = await fetch(`/admin/api/orders?page=${page}&per_page=${ordersPerPage}`);
+      // 构建请求URL，添加筛选参数
+      let url = `/admin/api/orders?page=${page}&per_page=${ordersPerPage}`;
+      
+      // 添加筛选参数
+      if (activeFilters.status) url += `&status=${activeFilters.status}`;
+      if (activeFilters.search) url += `&search=${encodeURIComponent(activeFilters.search)}`;
+      if (activeFilters.seller_id) url += `&seller_id=${activeFilters.seller_id}`;
+      
+      const response = await fetch(url);
       const data = await response.json();
       
       // 合并订单数据
-      if (page === 1) {
+      if (page === 1 || resetList) {
         allOrders = data.orders;
       } else {
         allOrders = [...allOrders, ...data.orders];
@@ -948,86 +1115,84 @@
         totalCount.textContent = totalOrders;
       }
       
-      // 渲染订单列表
-      renderOrders(allOrders);
+      // 虚拟滚动相关
+      if (virtualScrollEnabled) {
+        updateVirtualScrollHeight();
+        renderVisibleRows();
+      } else {
+        // 传统渲染
+        renderOrders(allOrders);
+      }
       
       // 填充卖家筛选下拉框
       populateSellerFilter();
+      
+      // 更新页码显示
+      updatePagination(data.page, data.total_pages);
       
     } catch (error) {
       console.error('加载订单失败:', error);
       const tbody = document.getElementById('orders-table-body');
       if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="10" class="loading">加载失败，请刷新重试</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4">加载失败，请刷新重试</td></tr>';
+      }
+    } finally {
+      isLoadingOrders = false;
+      
+      // 恢复按钮状态
+      const loadMoreBtn = document.getElementById('load-more-btn');
+      if (loadMoreBtn) {
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.innerHTML = '加载更多';
       }
     }
   }
   
-  // 渲染订单列表
-  function renderOrders(orders) {
-    const tbody = document.getElementById('orders-table-body');
-    if (!tbody) return;
+  // 更新分页显示
+  function updatePagination(currentPage, totalPages) {
+    const paginationContainer = document.getElementById('orders-pagination');
+    if (!paginationContainer) return;
     
-    if (orders.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding: 40px;">暂无订单</td></tr>';
-      return;
+    paginationContainer.innerHTML = '';
+    
+    // 页码最多显示7个
+    let startPage = Math.max(1, currentPage - 3);
+    let endPage = Math.min(totalPages, startPage + 6);
+    
+    // 调整startPage，确保总是显示7个页码（如果有那么多页的话）
+    if (endPage - startPage < 6 && startPage > 1) {
+      startPage = Math.max(1, endPage - 6);
     }
     
-    tbody.innerHTML = '';
+    // 添加"首页"按钮
+    if (startPage > 1) {
+      addPaginationButton(paginationContainer, 1, '首页', currentPage === 1);
+    }
     
-    orders.forEach(order => {
-      // 根据订单状态设置样式
-      let statusClass = '';
-      switch (order.status) {
-        case 'submitted': statusClass = 'status-submitted'; break;
-        case 'accepted': statusClass = 'status-accepted'; break;
-        case 'completed': statusClass = 'status-completed'; break;
-        case 'failed': statusClass = 'status-failed'; break;
-        default: statusClass = '';
-      }
-      
-      // 状态文本映射
-      const statusText = {
-        'submitted': '待处理',
-        'accepted': '已接单',
-        'completed': '已完成',
-        'failed': '充值失败',
-        'cancelled': '已取消',
-        'disputing': '正在质疑'
-      }[order.status] || order.status;
-      
-      const row = document.createElement('tr');
-      row.dataset.orderId = order.id;
-      
-      row.innerHTML = `
-        <td><input type="checkbox" class="order-checkbox" value="${order.id}"></td>
-        <td>${order.id}</td>
-        <td>${order.account.includes('uploads') ? `<a href="/${order.account}" target="_blank">查看二维码</a>` : order.account}</td>
-        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-        <td>${escapeHtml(order.created_by || '')}</td>
-        <td>${escapeHtml(order.accepted_by_nickname || order.accepted_by || '-')}</td>
-        <td>
-          <div class="remark-container">
-            <span class="remark-text" data-order-id="${order.id}">${escapeHtml(order.remark || '')}</span>
-            <button class="edit-remark-btn small" onclick="editRemark(${order.id})"><i class="fas fa-pencil-alt"></i></button>
-          </div>
-        </td>
-        <td>${order.created_at}</td>
-        <td>${order.completed_at || '-'}</td>
-        <td>
-          <button class="btn btn-sm btn-primary" onclick="editOrder(${order.id})">编辑</button>
-          <button class="btn btn-sm btn-danger" onclick="deleteOrder(${order.id})">删除</button>
-        </td>
-      `;
-      
-      tbody.appendChild(row);
-    });
+    // 添加页码
+    for (let i = startPage; i <= endPage; i++) {
+      addPaginationButton(paginationContainer, i, i.toString(), i === currentPage);
+    }
+    
+    // 添加"末页"按钮
+    if (endPage < totalPages) {
+      addPaginationButton(paginationContainer, totalPages, '末页', currentPage === totalPages);
+    }
+  }
+  
+  // 添加分页按钮
+  function addPaginationButton(container, page, text, isActive) {
+    const button = document.createElement('button');
+    button.className = `pagination-button ${isActive ? 'active' : ''}`;
+    button.textContent = text;
+    button.addEventListener('click', () => loadOrders(page, true));
+    container.appendChild(button);
   }
   
   // 加载更多订单
   function loadMoreOrders() {
-    if (hasMoreOrders) {
-      loadOrders(currentPage + 1);
+    if (hasMoreOrders && !isLoadingOrders) {
+      loadOrders(currentPage + 1, false);
     }
   }
   
@@ -1924,21 +2089,31 @@
 
         if (confirm(`确定要永久删除这 ${orderIds.length} 个订单吗？此操作不可撤销！`)) {
           try {
+            // 显示加载状态
+            batchDeleteBtn.disabled = true;
+            batchDeleteBtn.innerHTML = '删除中...';
+            
             const resp = await fetch('/admin/api/orders/batch-delete', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ order_ids: orderIds })
             });
+            
             const result = await resp.json();
             if (resp.ok && result.success) {
-              alert(`成功删除了 ${result.deleted_count} 个订单`);
+              showToast(`成功删除了 ${result.deleted_count} 个订单`, 'success');
               loadOrders(); // 重新加载订单
             } else {
-              alert(result.error || '删除失败');
+              showToast(result.error || '删除失败', 'error');
+              console.error('删除失败:', result.error);
             }
           } catch (e) {
-            alert('请求失败，请检查网络');
-            console.error(e);
+            showToast('请求失败，请检查网络连接', 'error');
+            console.error('批量删除请求出错:', e);
+          } finally {
+            // 恢复按钮状态
+            batchDeleteBtn.disabled = false;
+            batchDeleteBtn.innerHTML = '批量删除';
           }
         }
       });
@@ -2151,6 +2326,241 @@
       console.error('设置定制价格失败', e);
       alert('设置定制价格失败: ' + e.message);
     }
+  });
+
+  // 设置虚拟滚动
+  function setupVirtualScroll() {
+    const tableContainer = document.querySelector('.table-container');
+    if (!tableContainer) return;
+    
+    virtualScrollConfig.container = tableContainer;
+    
+    // 绑定滚动事件
+    tableContainer.addEventListener('scroll', handleScroll);
+    
+    // 设置内容区高度
+    updateVirtualScrollHeight();
+  }
+  
+  // 处理滚动事件
+  function handleScroll() {
+    const { container } = virtualScrollConfig;
+    if (!container || !virtualScrollEnabled) return;
+    
+    // 标记正在滚动
+    virtualScrollConfig.isScrolling = true;
+    
+    // 清除之前的定时器
+    if (virtualScrollConfig.scrollTimeout) {
+      clearTimeout(virtualScrollConfig.scrollTimeout);
+    }
+    
+    // 如果滚动到底部附近，加载更多
+    const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (scrollBottom < 200 && !isLoadingOrders && hasMoreOrders) {
+      loadMoreOrders();
+    }
+    
+    // 计算可见项范围
+    const scrollTop = container.scrollTop;
+    const startIndex = Math.floor(scrollTop / virtualScrollConfig.itemHeight);
+    const visibleCount = Math.ceil(container.clientHeight / virtualScrollConfig.itemHeight);
+    const endIndex = startIndex + visibleCount + virtualScrollConfig.overscan;
+    
+    // 更新可见范围
+    virtualScrollConfig.visibleStartIndex = Math.max(0, startIndex - virtualScrollConfig.overscan);
+    virtualScrollConfig.visibleEndIndex = Math.min(allOrders.length, endIndex);
+    
+    // 只在滚动方向变化或大幅滚动时重新渲染
+    const scrollDelta = Math.abs(scrollTop - virtualScrollConfig.lastScrollTop);
+    const directionChanged = (scrollTop > virtualScrollConfig.lastScrollTop && 
+                            virtualScrollConfig.lastDirection === 'up') || 
+                           (scrollTop < virtualScrollConfig.lastScrollTop && 
+                            virtualScrollConfig.lastDirection === 'down');
+                            
+    if (scrollDelta > 50 || directionChanged) {
+      renderVisibleRows();
+      virtualScrollConfig.lastScrollTop = scrollTop;
+      virtualScrollConfig.lastDirection = scrollTop > virtualScrollConfig.lastScrollTop ? 'down' : 'up';
+    }
+    
+    // 滚动结束后的处理
+    virtualScrollConfig.scrollTimeout = setTimeout(() => {
+      virtualScrollConfig.isScrolling = false;
+      renderVisibleRows();
+    }, 100);
+  }
+  
+  // 更新虚拟滚动区域高度
+  function updateVirtualScrollHeight() {
+    const scrollContent = document.getElementById('orders-table-body');
+    if (!scrollContent || !allOrders.length) return;
+    
+    // 设置足够的高度以容纳所有项
+    const totalHeight = allOrders.length * virtualScrollConfig.itemHeight;
+    scrollContent.style.height = `${totalHeight}px`;
+  }
+  
+  // 只渲染可见行
+  function renderVisibleRows() {
+    if (!virtualScrollEnabled || allOrders.length === 0) return;
+    
+    const tbody = document.getElementById('orders-table-body');
+    if (!tbody) return;
+    
+    const { visibleStartIndex, visibleEndIndex, itemHeight } = virtualScrollConfig;
+    
+    // 获取当前可见的订单
+    const visibleOrders = allOrders.slice(visibleStartIndex, visibleEndIndex);
+    
+    // 清除现有的行
+    tbody.innerHTML = '';
+    
+    // 添加一个占位div来保持滚动位置
+    const placeholder = document.createElement('div');
+    placeholder.style.height = `${visibleStartIndex * itemHeight}px`;
+    placeholder.className = 'virtual-scroll-placeholder';
+    tbody.appendChild(placeholder);
+    
+    // 渲染可见的行
+    visibleOrders.forEach((order, index) => {
+      const row = createOrderRow(order);
+      tbody.appendChild(row);
+    });
+  }
+  
+  // 创建订单行
+  function createOrderRow(order) {
+    // 根据订单状态设置样式
+    let statusClass = '';
+    switch (order.status) {
+      case 'submitted': statusClass = 'status-submitted'; break;
+      case 'accepted': statusClass = 'status-accepted'; break;
+      case 'completed': statusClass = 'status-completed'; break;
+      case 'failed': statusClass = 'status-failed'; break;
+      default: statusClass = '';
+    }
+    
+    // 状态文本映射
+    const statusText = {
+      'submitted': '待处理',
+      'accepted': '已接单',
+      'completed': '已完成',
+      'failed': '充值失败',
+      'cancelled': '已取消',
+      'disputing': '正在质疑'
+    }[order.status] || order.status;
+    
+    const row = document.createElement('tr');
+    row.dataset.orderId = order.id;
+    
+    row.innerHTML = `
+      <td><input type="checkbox" class="order-checkbox" value="${order.id}"></td>
+      <td>${order.id}</td>
+      <td>${order.account.includes('uploads') ? `<a href="/${order.account}" target="_blank">查看二维码</a>` : order.account}</td>
+      <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+      <td>${escapeHtml(order.created_by || '')}</td>
+      <td>${escapeHtml(order.accepted_by_nickname || order.accepted_by || '-')}</td>
+      <td>
+        <div class="remark-container">
+          <span class="remark-text" data-order-id="${order.id}">${escapeHtml(order.remark || '')}</span>
+          <button class="edit-remark-btn small" onclick="editRemark(${order.id})"><i class="fas fa-pencil-alt"></i></button>
+        </div>
+      </td>
+      <td>${order.created_at}</td>
+      <td>${order.completed_at || '-'}</td>
+      <td>
+        <button class="btn btn-sm btn-primary" onclick="editOrder(${order.id})">编辑</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteOrder(${order.id})">删除</button>
+      </td>
+    `;
+    
+    return row;
+  }
+
+  // 设置过滤器
+  function setupFilters() {
+    // 状态过滤器
+    const statusFilter = document.getElementById('status-filter');
+    if (statusFilter) {
+      statusFilter.addEventListener('change', () => {
+        activeFilters.status = statusFilter.value || null;
+        loadOrders(1, true);
+      });
+    }
+    
+    // 搜索框
+    const searchInput = document.getElementById('order-search');
+    const searchButton = document.getElementById('order-search-btn');
+    if (searchInput && searchButton) {
+      searchButton.addEventListener('click', () => {
+        activeFilters.search = searchInput.value.trim() || null;
+        loadOrders(1, true);
+      });
+      
+      // 按回车键搜索
+      searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          activeFilters.search = searchInput.value.trim() || null;
+          loadOrders(1, true);
+        }
+      });
+    }
+    
+    // 卖家过滤器
+    const sellerFilter = document.getElementById('seller-filter');
+    if (sellerFilter) {
+      sellerFilter.addEventListener('change', () => {
+        activeFilters.seller_id = sellerFilter.value || null;
+        loadOrders(1, true);
+      });
+    }
+  }
+  
+  // 开关虚拟滚动
+  function toggleVirtualScroll() {
+    virtualScrollEnabled = !virtualScrollEnabled;
+    const toggleBtn = document.getElementById('toggle-virtual-scroll-btn');
+    if (toggleBtn) {
+      toggleBtn.textContent = virtualScrollEnabled ? '禁用虚拟滚动' : '启用虚拟滚动';
+    }
+    
+    if (virtualScrollEnabled) {
+      updateVirtualScrollHeight();
+      renderVisibleRows();
+    } else {
+      renderOrders(allOrders);
+    }
+  }
+  
+  // 渲染完整订单列表（非虚拟滚动模式）
+  function renderOrders(orders) {
+    const tbody = document.getElementById('orders-table-body');
+    if (!tbody) return;
+    
+    if (orders.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4">暂无订单</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = '';
+    tbody.style.height = 'auto'; // 重置虚拟滚动设置的高度
+    
+    orders.forEach(order => {
+      const row = createOrderRow(order);
+      tbody.appendChild(row);
+    });
+  }
+  
+  // 在页面加载完成后初始化虚拟滚动
+  document.addEventListener('DOMContentLoaded', function() {
+    // ... 原有代码 ...
+    
+    // 添加滚动监听
+    setupVirtualScroll();
+    
+    // 绑定过滤器事件
+    setupFilters();
   });
 </script>
 </body>
