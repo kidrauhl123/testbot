@@ -1810,6 +1810,79 @@ def register_routes(app, notification_queue):
             logger.error(f"手动清理旧订单时出错: {str(e)}", exc_info=True)
             return jsonify({"success": False, "error": f"服务器内部错误: {str(e)}"}), 500
 
+    @app.route('/api/quick-orders')
+    @login_required
+    def api_quick_orders():
+        """获取轻量级订单数据的API接口，优化首页加载性能"""
+        try:
+            # 获取参数
+            limit = int(request.args.get('limit', 20))
+            limit = min(limit, 100)  # 限制最大获取数量，避免过多数据
+            
+            # 根据用户权限决定查询范围
+            is_admin = session.get('is_admin')
+            user_id = session.get('user_id')
+            
+            # 精简SQL查询，只选择必要字段
+            fields = "id, account, status, created_at, remark, accepted_by, accepted_by_nickname"
+            
+            if DATABASE_URL.startswith('postgres'):
+                if is_admin:
+                    # 管理员查看所有订单
+                    orders = execute_query(f"""
+                        SELECT {fields}, web_user_id as username
+                        FROM orders 
+                        ORDER BY id DESC LIMIT %s
+                    """, (limit,), fetch=True)
+                else:
+                    # 普通用户只看自己的订单
+                    orders = execute_query(f"""
+                        SELECT {fields}, web_user_id as username
+                        FROM orders 
+                        WHERE user_id = %s 
+                        ORDER BY id DESC LIMIT %s
+                    """, (user_id, limit), fetch=True)
+            else:
+                if is_admin:
+                    orders = execute_query(f"""
+                        SELECT {fields}, web_user_id as username
+                        FROM orders 
+                        ORDER BY id DESC LIMIT ?
+                    """, (limit,), fetch=True)
+                else:
+                    orders = execute_query(f"""
+                        SELECT {fields}, web_user_id as username
+                        FROM orders 
+                        WHERE user_id = ? 
+                        ORDER BY id DESC LIMIT ?
+                    """, (user_id, limit), fetch=True)
+            
+            # 格式化数据，只返回必要字段
+            formatted_orders = []
+            for order in orders:
+                oid, account, status, created_at, remark, accepted_by, accepted_by_nickname, username = order
+                
+                order_data = {
+                    "id": oid,
+                    "account": account,
+                    "status": status,
+                    "status_text": STATUS_TEXT_ZH.get(status, status),
+                    "created_at": created_at,
+                    "remark": remark or "",
+                    "accepted_by": accepted_by_nickname or accepted_by or "",
+                    "username": username or ""
+                }
+                formatted_orders.append(order_data)
+            
+            return jsonify({
+                "success": True, 
+                "orders": formatted_orders,
+                "timestamp": int(time.time())
+            })
+        except Exception as e:
+            logger.error(f"获取快速订单数据失败: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "error": "服务器内部错误"}), 500
+
 def ensure_orders_columns():
     """确保orders表包含所有必需的列，比如buyer_confirmed_at"""
     try:

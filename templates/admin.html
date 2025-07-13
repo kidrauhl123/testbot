@@ -1056,95 +1056,41 @@
     document.getElementById('edit-custom-price-new').value = customPrice === '默认' ? '' : customPrice;
   }
 
-  // 加载订单列表
-  async function loadOrders(page = 1, resetList = true) {
+  // 优化index页面的loadOrders函数
+  async function loadOrders(isAutoRefresh = false) {
+    const tableBody = document.getElementById('orders-table-body');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    
     try {
-      isLoadingOrders = true;
-      
       // 显示加载状态
-      const loadMoreBtn = document.getElementById('load-more-btn');
-      if (loadMoreBtn) {
-        loadMoreBtn.disabled = true;
-        loadMoreBtn.innerHTML = '加载中...';
+      if (!isAutoRefresh) {
+        if (loadingIndicator) loadingIndicator.style.display = 'block';
+        if (tableBody) tableBody.innerHTML = '';
       }
       
-      // 如果是第一页或重置，清空订单列表
-      if (page === 1 || resetList) {
-        allOrders = [];
-        currentPage = 1;
-      } else {
-        currentPage = page;
-      }
+      // 添加请求超时处理
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
       
-      const tbody = document.getElementById('orders-table-body');
-      if (!tbody) return;
+      const response = await fetch('/api/recent-orders?limit=10', {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
       
-      if (page === 1 || resetList) {
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4">加载中...</td></tr>';
-      }
-      
-      // 构建请求URL，添加筛选参数
-      let url = `/admin/api/orders?page=${page}&per_page=${ordersPerPage}`;
-      
-      // 添加筛选参数
-      if (activeFilters.status) url += `&status=${activeFilters.status}`;
-      if (activeFilters.search) url += `&search=${encodeURIComponent(activeFilters.search)}`;
-      if (activeFilters.seller_id) url += `&seller_id=${activeFilters.seller_id}`;
-      
-      const response = await fetch(url);
+      if (!response.ok) throw new Error('网络请求失败');
       const data = await response.json();
       
-      // 合并订单数据
-      if (page === 1 || resetList) {
-        allOrders = data.orders;
-      } else {
-        allOrders = [...allOrders, ...data.orders];
-      }
+      // 隐藏加载状态
+      if (loadingIndicator) loadingIndicator.style.display = 'none';
       
-      totalOrders = data.total;
-      hasMoreOrders = data.has_more;
-      
-      // 更新加载更多按钮状态
-      const loadMoreArea = document.getElementById('load-more-area');
-      const loadedCount = document.getElementById('loaded-count');
-      const totalCount = document.getElementById('total-count');
-      
-      if (loadMoreArea && loadedCount && totalCount) {
-        loadMoreArea.style.display = hasMoreOrders ? 'block' : 'none';
-        loadedCount.textContent = allOrders.length;
-        totalCount.textContent = totalOrders;
-      }
-      
-      // 虚拟滚动相关
-      if (virtualScrollEnabled) {
-        updateVirtualScrollHeight();
-        renderVisibleRows();
-      } else {
-        // 传统渲染
-        renderOrders(allOrders);
-      }
-      
-      // 填充卖家筛选下拉框
-      populateSellerFilter();
-      
-      // 更新页码显示
-      updatePagination(data.page, data.total_pages);
-      
+      // 渲染订单
+      renderOrders(data.orders || []);
     } catch (error) {
       console.error('加载订单失败:', error);
-      const tbody = document.getElementById('orders-table-body');
-      if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4">加载失败，请刷新重试</td></tr>';
+      if (!isAutoRefresh) {
+        if (tableBody) tableBody.innerHTML = `<tr><td colspan="5" class="text-center">加载失败，<a href="#" onclick="loadOrders(); return false;">点击重试</a></td></tr>`;
       }
-    } finally {
-      isLoadingOrders = false;
-      
-      // 恢复按钮状态
-      const loadMoreBtn = document.getElementById('load-more-btn');
-      if (loadMoreBtn) {
-        loadMoreBtn.disabled = false;
-        loadMoreBtn.innerHTML = '加载更多';
-      }
+      if (loadingIndicator) loadingIndicator.style.display = 'none';
     }
   }
   

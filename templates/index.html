@@ -1308,6 +1308,52 @@
     .edit-btn:hover {
       background-color: #218838;
     }
+    
+    /* 骨架屏 */
+    .skeleton-loading {
+      width: 100%;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .skeleton-row {
+      height: 70px;
+      margin-bottom: 12px;
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: skeleton-loading 1.5s infinite;
+      border-radius: 6px;
+    }
+    
+    @keyframes skeleton-loading {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    
+    /* 简化loading指示器 */
+    .loading-indicator {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 30px 0;
+      font-size: 1rem;
+      color: #777;
+    }
+    
+    .loading-indicator:before {
+      content: '';
+      width: 20px;
+      height: 20px;
+      margin-right: 10px;
+      border: 2px solid #ddd;
+      border-top-color: #007bff;
+      border-radius: 50%;
+      animation: spinner 1s linear infinite;
+    }
+    
+    @keyframes spinner {
+      to {transform: rotate(360deg);}
+    }
   </style>
 </head>
 <body>
@@ -1530,6 +1576,13 @@
                       <button id="resetFiltersBtn" class="filter-btn filter-reset">重置筛选</button>
                     </div>
                   </div>
+                </div>
+                <div id="orders-skeleton" class="skeleton-loading" style="display:none;">
+                  <div class="skeleton-row"></div>
+                  <div class="skeleton-row"></div>
+                  <div class="skeleton-row"></div>
+                  <div class="skeleton-row"></div>
+                  <div class="skeleton-row"></div>
                 </div>
                 <div id="orders-container">加载中...</div>
                 <div id="load-more-container" style="text-align:center; margin-top: 20px; display:none;">
@@ -2049,12 +2102,67 @@
     }
   }
 
+  // 检查是否可以获取注册的验证码
+  function canGetVerificationCode() {
+    return true;
+  }
+
+  // 预加载订单数据
+  async function prefetchOrders() {
+    try {
+      console.log('预加载订单数据...');
+      const cachedData = sessionStorage.getItem('cachedOrders');
+      
+      // 如果有缓存且不超过10分钟，直接使用
+      if (cachedData) {
+        try {
+          const parsed = JSON.parse(cachedData);
+          if (parsed && parsed.timestamp) {
+            const now = Date.now() / 1000;
+            if (now - parsed.timestamp < 600) { // 10分钟内
+              console.log('使用缓存数据');
+              return parsed;
+            }
+          }
+        } catch (e) {
+          console.warn('解析缓存数据失败:', e);
+        }
+      }
+      
+      // 否则预加载新数据
+      const prefetchResponse = await fetch(`/api/quick-orders?limit=50&prefetch=1`, {
+        headers: {'X-Requested-With': 'Prefetch'}
+      });
+      
+      if (prefetchResponse.ok) {
+        const data = await prefetchResponse.json();
+        if (data.success) {
+          console.log('数据预加载成功');
+          sessionStorage.setItem('cachedOrders', JSON.stringify(data));
+          return data;
+        }
+      }
+    } catch (e) {
+      console.warn('预加载数据失败:', e);
+    }
+    return null;
+  }
+  
+  // 防抖函数
+  function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        func.apply(this, args);
+      }, wait);
+    };
+  }
+
   // 页面加载处理
   document.addEventListener('DOMContentLoaded', function() {
     // 初始化图片上传功能
     initImageUpload();
-    
-      // 删除加载用户定制价格
     
     // 加载活跃卖家列表
     loadActiveSellers();
@@ -2065,25 +2173,36 @@
     // 更新页面统计信息
     updatePageStats();
     
-    // 搜索功能初始化
+    // 搜索功能初始化 - 添加防抖功能
     const searchInput = document.getElementById('searchInput');
     const searchBtn = document.getElementById('searchBtn');
     const clearSearchBtn = document.getElementById('clearSearchBtn');
     
-    // 搜索按钮点击事件
-    searchBtn.addEventListener('click', function() {
-      searchKeyword = searchInput.value.trim();
+    // 创建防抖搜索函数
+    const debouncedSearch = debounce(function(value) {
+      searchKeyword = value.trim();
       displayedOrders = 5; // 重置显示数量
       
       if (searchKeyword) {
         const filteredOrders = allOrders.filter(order => 
           order.id.toString().includes(searchKeyword) || 
-          order.account.toLowerCase().includes(searchKeyword.toLowerCase())
+          (order.account && order.account.toLowerCase().includes(searchKeyword.toLowerCase())) ||
+          (order.remark && order.remark.toLowerCase().includes(searchKeyword.toLowerCase()))
         );
         renderOrders(filteredOrders);
       } else {
         renderOrders(allOrders);
       }
+    }, 300); // 300ms防抖
+    
+    // 搜索按钮点击事件
+    searchBtn.addEventListener('click', function() {
+      debouncedSearch(searchInput.value);
+    });
+    
+    // 输入框直接绑定防抖搜索
+    searchInput.addEventListener('input', function() {
+      debouncedSearch(this.value);
     });
     
     // 回车键搜索
@@ -2100,11 +2219,26 @@
       displayedOrders = 5;
       renderOrders(allOrders);
     });
-
-      // 删除套餐选择处理代码
     
-    // 加载订单
-    loadOrders();
+    // 预加载并快速展示订单
+    prefetchOrders().then(data => {
+      if (data && data.orders) {
+        console.log('使用预加载数据快速渲染');
+        allOrders = data.orders;
+        renderOrders(allOrders);
+        
+        // 隐藏骨架屏
+        const skeleton = document.getElementById('orders-skeleton');
+        if (skeleton) skeleton.style.display = 'none';
+        
+        // 显示订单容器
+        const ordersContainer = document.getElementById('orders-container');
+        if (ordersContainer) ordersContainer.style.display = 'block';
+      } else {
+        // 如果预加载失败，常规加载
+        loadOrders();
+      }
+    });
     
     // 启动自动刷新
     startAutoRefresh();
@@ -2132,8 +2266,6 @@
         const accountElem = item.querySelector('p:nth-child(2)');
         if (accountElem) accountElem.classList.add('account');
         
-              // 删除套餐相关代码
-        
         const statusElem = item.querySelector('p:nth-child(4)');
         if (statusElem) statusElem.classList.add('status');
         
@@ -2143,8 +2275,6 @@
         }
       });
     }, 1000);
-
-      // 删除余额badge点击事件
   });
   
   // 显示自定义提示框
@@ -2436,17 +2566,65 @@
 
   // 加载订单
   async function loadOrders(isAutoRefresh = false) {
-    // 只在手动刷新时显示加载指示器
-      if (!isAutoRefresh) {
-      showLoadingIndicator();
+    // 在自动刷新时不显示任何加载状态
+    if (!isAutoRefresh) {
+      // 显示骨架屏而非简单的加载指示器
+      const ordersContainer = document.getElementById('orders-container');
+      const skeleton = document.getElementById('orders-skeleton');
+      if (ordersContainer && skeleton) {
+        ordersContainer.style.display = 'none';
+        skeleton.style.display = 'block';
+      }
     }
     
+    // 设置请求超时
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+    
     try {
-      // 请求所有订单
-      const response = await fetch('/orders/recent?limit=1000');
+      // 首先尝试使用缓存数据快速显示
+      if (!isAutoRefresh) {
+        const cachedData = sessionStorage.getItem('cachedOrders');
+        if (cachedData) {
+          try {
+            const parsed = JSON.parse(cachedData);
+            if (parsed.success && parsed.orders && parsed.timestamp) {
+              // 检查缓存是否新鲜(10分钟内)
+              const now = Date.now() / 1000;
+              if (now - parsed.timestamp < 600) {
+                console.log('使用缓存数据快速渲染');
+                allOrders = parsed.orders;
+                let filteredOrders = filterOrders(allOrders);
+                renderOrders(filteredOrders);
+                
+                // 立即隐藏骨架屏，显示订单容器
+                const ordersContainer = document.getElementById('orders-container');
+                const skeleton = document.getElementById('orders-skeleton');
+                if (ordersContainer && skeleton) {
+                  skeleton.style.display = 'none';
+                  ordersContainer.style.display = 'block';
+                }
+              }
+            }
+          } catch (e) {
+            console.error('解析缓存数据失败:', e);
+          }
+        }
+      }
+      
+      // 请求轻量级订单数据
+      const url = isAutoRefresh ? 
+        `/api/quick-orders?limit=50&t=${Date.now()}` : 
+        `/api/quick-orders?limit=50`;
+        
+      const response = await fetch(url, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      
       if (!response.ok) {
         console.error('加载订单失败:', response.status);
-        return;
+        throw new Error(`服务器响应错误: ${response.status}`);
       }
       
       const result = await response.json();
@@ -2456,9 +2634,12 @@
         const newOrdersHash = generateOrdersHash(result.orders);
         if (newOrdersHash === lastOrdersHash && isAutoRefresh) {
           console.log('订单无变化，跳过更新');
-        return;
-      }
-      
+          return;
+        }
+        
+        // 缓存数据
+        sessionStorage.setItem('cachedOrders', JSON.stringify(result));
+        
         // 更新订单哈希值
         lastOrdersHash = newOrdersHash;
         
@@ -2477,7 +2658,8 @@
         if (searchKeyword) {
           filteredOrders = filteredOrders.filter(order => 
             order.id.toString().includes(searchKeyword) || 
-            order.account.toLowerCase().includes(searchKeyword.toLowerCase())
+            (order.account && order.account.toLowerCase().includes(searchKeyword.toLowerCase())) ||
+            (order.remark && order.remark.toLowerCase().includes(searchKeyword.toLowerCase()))
           );
         }
         
@@ -2496,10 +2678,28 @@
       
     } catch (error) {
       console.error('加载订单失败:', error);
-    } finally {
-      // 只在手动刷新时隐藏加载指示器
+      
+      // 显示错误信息
       if (!isAutoRefresh) {
-      hideLoadingIndicator();
+        const container = document.getElementById('orders-container');
+        if (container) {
+          container.innerHTML = `
+            <div class="alert alert-warning">
+              <i class="fas fa-exclamation-triangle"></i> 
+              加载失败，<a href="#" onclick="loadOrders(); return false;">点击重试</a>
+            </div>
+          `;
+        }
+      }
+    } finally {
+      // 关闭骨架屏，显示订单容器
+      if (!isAutoRefresh) {
+        const ordersContainer = document.getElementById('orders-container');
+        const skeleton = document.getElementById('orders-skeleton');
+        if (ordersContainer && skeleton) {
+          skeleton.style.display = 'none';
+          ordersContainer.style.display = 'block';
+        }
       }
     }
   }
