@@ -1643,13 +1643,26 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 valid_orders = seller_orders_result[0][0] if seller_orders_result else 0
                 total_orders += valid_orders
                 
-                # 优先显示 @username，如果没有username则显示昵称或其他备用名称
-                if username:
-                    username_display = f"@{username}"
-                else:
-                    # 如果没有username，使用昵称、名字或ID作为备用
-                    fallback_name = nickname or first_name or f"ID:{telegram_id}"
-                    username_display = fallback_name
+                # 实时获取最新的用户名，强制只显示@username格式
+                try:
+                    # 通过Telegram API获取最新用户信息
+                    current_user_info = await get_user_info(int(telegram_id))
+                    current_username = current_user_info.get('username')
+                    
+                    if current_username:
+                        username_display = f"@{current_username}"
+                        # 顺便更新数据库中的用户名
+                        if current_username != username:
+                            update_seller_info(str(telegram_id), current_username, current_user_info.get('first_name'))
+                    else:
+                        # 如果真的没有username，显示ID
+                        username_display = f"ID:{telegram_id}"
+                except Exception as e:
+                    # 如果API调用失败，使用数据库中的用户名或显示ID
+                    if username:
+                        username_display = f"@{username}"
+                    else:
+                        username_display = f"ID:{telegram_id}"
                 
                 # 添加状态标识
                 status_emoji = "🟢" if is_active else "🔴"
