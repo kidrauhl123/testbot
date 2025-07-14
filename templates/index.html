@@ -216,6 +216,15 @@
       width: 65%;
     }
     
+    /* 管理员界面的特殊样式 - 右侧拉宽以适应额外的提交者列 */
+    .admin-layout .left {
+      width: 25%;
+    }
+    
+    .admin-layout .right {
+      width: 75%;
+    }
+    
     .card {
       background: rgba(255,255,255,0.97);
       border-radius: 15px;
@@ -2192,6 +2201,14 @@
 
   // 页面加载处理
   document.addEventListener('DOMContentLoaded', function() {
+    // 如果是管理员，为container添加特殊类以调整布局宽度
+    if (isAdmin) {
+      const container = document.querySelector('.container');
+      if (container) {
+        container.classList.add('admin-layout');
+      }
+    }
+    
     // 初始化图片上传功能
     initImageUpload();
     
