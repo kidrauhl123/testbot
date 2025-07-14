@@ -1701,7 +1701,6 @@
   let viewMode = 'table'; // 默认视图模式：grid 或 table
   let page = 1; // 当前页码
   let orderPageSize = 10; // 每次加载的订单数量
-  let maxOrdersLimit = 1500; // 最大可显示的订单数量
   let fileInputClickCount = 0; // 记录文件选择器被触发的次数
   
   // 日志函数，用于调试
@@ -2161,8 +2160,8 @@
         }
       }
       
-      // 否则预加载新数据，第一页
-      const prefetchResponse = await fetch(`/api/quick-orders?page=1&limit=50&prefetch=1`, {
+      // 否则预加载新数据
+      const prefetchResponse = await fetch(`/api/quick-orders?limit=1000&prefetch=1`, {
         headers: {'X-Requested-With': 'Prefetch'}
       });
       
@@ -2644,10 +2643,10 @@
         }
       }
       
-      // 请求轻量级订单数据，指定页码为1（首页）
+      // 请求轻量级订单数据
       const url = isAutoRefresh ? 
-        `/api/quick-orders?page=1&limit=50&t=${Date.now()}` : 
-        `/api/quick-orders?page=1&limit=50`;
+        `/api/quick-orders?limit=1000&t=${Date.now()}` : 
+        `/api/quick-orders?limit=1000`;
         
       const response = await fetch(url, {
         signal: controller.signal
@@ -2675,14 +2674,8 @@
         // 更新订单哈希值
         lastOrdersHash = newOrdersHash;
         
-        // 更新全局订单数据，但只在非自动刷新时替换，或者在首次加载时
-        if (!isAutoRefresh || allOrders.length === 0) {
-          allOrders = result.orders;
-          console.log(`加载了${result.orders.length}条订单数据（总共${allOrders.length}条）`);
-        } else {
-          // 自动刷新时，只检查有没有新订单，不替换现有数据
-          console.log('自动刷新，保留已加载的数据');
-        }
+        // 更新全局订单数据
+        allOrders = result.orders;
         
         // 如果是管理员，更新提交者筛选
         if (isAdmin) {
@@ -2770,22 +2763,8 @@
     // 显示更多按钮
     const loadMoreContainer = document.getElementById('load-more-container');
     if (loadMoreContainer) {
-      // 只有当筛选后的订单数大于当前显示数且未达到最大限制时才显示"显示更多"按钮
-      const shouldShow = orders.length > displayedOrders && allOrders.length < maxOrdersLimit;
-      console.log(`[renderOrders] 显示更多按钮: ${shouldShow}, 订单数量: ${orders.length}, 显示数量: ${displayedOrders}, 总数据: ${allOrders.length}`);
-      
-      loadMoreContainer.style.display = shouldShow ? 'block' : 'none';
-      
-      // 如果应该显示按钮，确保按钮内容正确
-      if (shouldShow) {
-        if (loadMoreContainer.innerHTML.includes('loading-indicator') || 
-            !loadMoreContainer.innerHTML.includes('btn-primary')) {
-          loadMoreContainer.innerHTML = '<button onclick="loadMoreOrders()" class="btn btn-primary">显示更多</button>';
-        }
-      } else if (allOrders.length >= maxOrdersLimit) {
-        // 如果达到最大限制，显示提示
-        console.log('已达到最大显示限制');
-      }
+      // 只有当总订单数大于当前显示数时才显示"显示更多"按钮
+      loadMoreContainer.style.display = orders.length > displayedOrders ? 'block' : 'none';
     }
   }
   
@@ -2939,203 +2918,30 @@
 
   // 加载更多订单
   function loadMoreOrders() {
-    console.log('点击了显示更多按钮');
-    console.log(`当前显示数量: ${displayedOrders}, 已加载订单数: ${allOrders.length}, 最大限制: ${maxOrdersLimit}`);
+    // 每次多显示orderPageSize个，不再有总数限制
+    displayedOrders += orderPageSize; 
     
-    // 每次多显示orderPageSize个
-    displayedOrders += orderPageSize;
+    // 应用搜索和筛选
+    let filteredOrders = allOrders;
     
-    // 判断是否需要加载更多数据
-    if (displayedOrders > allOrders.length && allOrders.length < maxOrdersLimit) {
-      console.log('需要从服务器加载更多数据');
-      // 尝试直接获取所有数据
-      if (page === 1 && allOrders.length <= 50) {
-        console.log('首次加载更多，尝试一次性获取所有数据');
-        try {
-          const allDataResponse = await fetch(`/api/orders-all?limit=${maxOrdersLimit}&t=${Date.now()}`);
-          if (allDataResponse.ok) {
-            const allData = await allDataResponse.json();
-            if (allData.success && allData.orders && allData.orders.length > allOrders.length) {
-              // 成功获取更多数据
-              allOrders = allData.orders;
-              console.log(`成功一次性获取${allOrders.length}条数据`);
-              showCustomAlert(`已加载所有可用数据(${allOrders.length}条)`, 'success');
-              
-              // 应用筛选并渲染
-              let filteredOrders = searchKeyword ? 
-                allOrders.filter(order => order.id.toString().includes(searchKeyword) || 
-                  (order.account && order.account.toLowerCase().includes(searchKeyword.toLowerCase()))) : 
-                allOrders;
-              filteredOrders = filterOrders(filteredOrders);
-              renderOrders(filteredOrders);
-              return;
-            }
-          }
-        } catch (e) {
-          console.error('一次性获取所有数据失败:', e);
-        }
-      }
-      
-      // 常规分页加载方式
-      // 增加页码并加载更多数据
-      page++;
-      fetchMoreOrders(page);
-    } else {
-      console.log('本地数据足够，直接渲染更多');
-      
-      // 已有数据足够，直接渲染
-      // 应用搜索和筛选
-      let filteredOrders = allOrders;
-      
-      // 应用搜索
-      if (searchKeyword) {
-        filteredOrders = filteredOrders.filter(order => 
-          order.id.toString().includes(searchKeyword) || 
-          (order.account && order.account.toLowerCase().includes(searchKeyword.toLowerCase()))
-        );
-      }
-      
-      // 应用筛选
-      filteredOrders = filterOrders(filteredOrders);
-      
-      // 渲染订单
-      renderOrders(filteredOrders);
-      
-      // 如果当前显示数量小于筛选后总数且未达到最大限制，保持"显示更多"按钮可见
-      const loadMoreContainer = document.getElementById('load-more-container');
-      if (loadMoreContainer) {
-        // 这里使用filteredOrders.length而不是allOrders.length来比较
-        const shouldShow = filteredOrders.length > displayedOrders && allOrders.length < maxOrdersLimit;
-        console.log(`显示更多按钮应该${shouldShow ? '显示' : '隐藏'}, 筛选后订单数: ${filteredOrders.length}`);
-        
-        loadMoreContainer.style.display = shouldShow ? 'block' : 'none';
-        
-        // 确保按钮内容正确
-        if (shouldShow && loadMoreContainer.innerHTML.includes('loading-indicator')) {
-          loadMoreContainer.innerHTML = '<button onclick="loadMoreOrders()" class="btn btn-primary">显示更多</button>';
-        }
-      }
+    // 应用搜索
+    if (searchKeyword) {
+      filteredOrders = filteredOrders.filter(order => 
+        order.id.toString().includes(searchKeyword) || 
+        order.account.toLowerCase().includes(searchKeyword.toLowerCase())
+      );
     }
-  }
-
-        // 新增函数：从API获取更多订单
-  async function fetchMoreOrders(pageNum) {
-    console.log(`开始加载第${pageNum}页数据...`);
     
-    // 显示加载中状态
+    // 应用筛选
+    filteredOrders = filterOrders(filteredOrders);
+    
+    // 渲染订单
+    renderOrders(filteredOrders);
+    
+    // 如果当前显示数量小于总数，保持"显示更多"按钮可见
     const loadMoreContainer = document.getElementById('load-more-container');
     if (loadMoreContainer) {
-      loadMoreContainer.innerHTML = '<div class="loading-indicator">加载更多订单中...</div>';
-    }
-    
-    // 如果是第二次加载更多数据并且第一次加载失败，尝试使用备用方法获取所有数据
-    if (pageNum === 2 && allOrders.length <= 50) {
-      console.log("第一页加载后只有50条数据，尝试使用备用方法获取全部数据");
-      try {
-        const backupResponse = await fetch(`/api/all-orders?limit=1500&t=${Date.now()}`);
-        if (backupResponse.ok) {
-          const backupResult = await backupResponse.json();
-          if (backupResult.success && backupResult.orders && backupResult.orders.length > 50) {
-            console.log(`备用方法成功获取${backupResult.orders.length}条数据`);
-            showCustomAlert(`已加载全部订单数据(${backupResult.orders.length}条)`, 'success');
-            
-            // 将所有数据添加到allOrders，但避免重复
-            const existingIds = new Set(allOrders.map(o => o.id));
-            const newOrders = backupResult.orders.filter(o => !existingIds.has(o.id));
-            allOrders = [...allOrders, ...newOrders];
-            
-            // 渲染订单
-            let filteredOrders = filterOrders(allOrders);
-            renderOrders(filteredOrders);
-            return; // 成功获取全部数据，不再执行后续代码
-          }
-        }
-      } catch (e) {
-        console.error("备用方法获取数据失败:", e);
-        // 继续执行标准方法
-      }
-    }
-    
-    try {
-      // 尝试两种不同的API调用方式，以适应不同的后端实现
-      // 注意：尝试使用offset而不是page参数，许多后端使用offset实现分页
-      const offset = (pageNum - 1) * 50;
-      const url = `/api/quick-orders?offset=${offset}&page=${pageNum}&limit=50&load_more=1&t=${Date.now()}`;
-      console.log(`请求URL: ${url}`);
-      
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        console.error('加载更多订单失败:', response.status);
-        throw new Error(`服务器响应错误: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      console.log(`获取到第${pageNum}页数据:`, result);
-      
-      if (result.success && result.orders && result.orders.length > 0) {
-        // 记录当前数据量
-        const oldCount = allOrders.length;
-        
-        // 检查重复ID，避免重复添加
-        const existingIds = new Set(allOrders.map(o => o.id));
-        const newOrders = result.orders.filter(o => !existingIds.has(o.id));
-        
-        if (newOrders.length > 0) {
-          // 将新订单添加到现有订单中
-          allOrders = [...allOrders, ...newOrders];
-          console.log(`成功添加${newOrders.length}条新数据，当前共有${allOrders.length}条`);
-          
-          // 应用搜索关键词和筛选条件
-          let filteredOrders = allOrders;
-          
-          // 应用搜索
-          if (searchKeyword) {
-            filteredOrders = filteredOrders.filter(order => 
-              order.id.toString().includes(searchKeyword) || 
-              (order.account && order.account.toLowerCase().includes(searchKeyword.toLowerCase())) ||
-              (order.remark && order.remark.toLowerCase().includes(searchKeyword.toLowerCase()))
-            );
-          }
-          
-          // 应用筛选
-          filteredOrders = filterOrders(filteredOrders);
-          
-          // 渲染订单
-          renderOrders(filteredOrders);
-        } else {
-          console.log('没有新数据可添加，可能存在ID重复');
-          showCustomAlert('没有新的订单数据', 'info');
-          
-          // 重置"显示更多"按钮
-          if (loadMoreContainer) {
-            loadMoreContainer.innerHTML = '<button onclick="loadMoreOrders()" class="btn btn-primary">显示更多</button>';
-          }
-        }
-      } else {
-        // 如果没有更多订单或结果不成功
-        console.log('没有获取到更多订单数据');
-        if (loadMoreContainer) {
-          loadMoreContainer.style.display = 'none';
-          showCustomAlert('已加载全部订单', 'info');
-        }
-      }
-      
-      // 如果已达到最大显示限制
-      if (allOrders.length >= maxOrdersLimit) {
-        if (loadMoreContainer) {
-          loadMoreContainer.style.display = 'none';
-          showCustomAlert('已达到最大显示限制（1500条）', 'warning');
-        }
-      }
-    } catch (error) {
-      console.error('加载更多订单失败:', error);
-      // 恢复"显示更多"按钮（如果未达到最大限制）
-      if (loadMoreContainer && allOrders.length < maxOrdersLimit) {
-        loadMoreContainer.innerHTML = '<button onclick="loadMoreOrders()" class="btn btn-primary">显示更多</button>';
-      } else if (loadMoreContainer) {
-        loadMoreContainer.style.display = 'none';
-      }
+      loadMoreContainer.style.display = filteredOrders.length > displayedOrders ? 'block' : 'none';
     }
   }
 

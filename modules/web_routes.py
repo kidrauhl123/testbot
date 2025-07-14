@@ -1817,14 +1817,14 @@ def register_routes(app, notification_queue):
         try:
             # 获取参数
             limit = int(request.args.get('limit', 20))
-            limit = min(limit, 100)  # 限制最大获取数量，避免过多数据
+            limit = min(limit, 1000)  # 限制最大获取数量，支持显示更多订单
             
             # 根据用户权限决定查询范围
             is_admin = session.get('is_admin')
             user_id = session.get('user_id')
             
             # 精简SQL查询，只选择必要字段
-            fields = "id, account, status, created_at, remark, accepted_by, accepted_by_nickname, confirm_status"
+            fields = "id, account, status, created_at, remark, accepted_by, accepted_by_nickname, confirm_status, completed_at"
             
             if DATABASE_URL.startswith('postgres'):
                 if is_admin:
@@ -1860,7 +1860,7 @@ def register_routes(app, notification_queue):
             # 格式化数据，只返回必要字段
             formatted_orders = []
             for order in orders:
-                oid, account, status, created_at, remark, accepted_by, accepted_by_nickname, confirm_status, username = order
+                oid, account, status, created_at, remark, accepted_by, accepted_by_nickname, confirm_status, completed_at, username = order
                 
                 order_data = {
                     "id": oid,
@@ -1871,6 +1871,7 @@ def register_routes(app, notification_queue):
                     "remark": remark or "",
                     "accepted_by": accepted_by_nickname or accepted_by or "",
                     "confirm_status": confirm_status or "pending",
+                    "completed_at": completed_at or "",
                     "username": username or ""
                 }
                 formatted_orders.append(order_data)
