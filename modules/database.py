@@ -1176,6 +1176,7 @@ def get_today_valid_orders_count(user_id=None):
     有效订单数计算规则：
     - 充值成功的订单 (status = 'completed')
     - + 充值失败但已确认收到的订单 (status = 'failed' AND confirm_status = 'confirmed')  
+    - + 已接单且买家已确认收到的订单 (status = 'accepted' AND confirm_status = 'confirmed')
     - - 充值成功但被标记长时间未收到的订单 (status = 'completed' AND confirm_status = 'not_received')
     
     Args:
@@ -1199,6 +1200,9 @@ def get_today_valid_orders_count(user_id=None):
                     OR
                     -- 充值失败但已确认收到
                     (status = 'failed' AND confirm_status = 'confirmed')
+                    OR
+                    -- 已接单且买家已确认收到
+                    (status = 'accepted' AND confirm_status = 'confirmed')
                 )
                 AND to_char(created_at::timestamp, 'YYYY-MM-DD') = %s
             """
@@ -1218,6 +1222,9 @@ def get_today_valid_orders_count(user_id=None):
                     OR
                     -- 充值失败但已确认收到
                     (status = 'failed' AND confirm_status = 'confirmed')
+                    OR
+                    -- 已接单且买家已确认收到
+                    (status = 'accepted' AND confirm_status = 'confirmed')
                 )
                 AND substr(created_at, 1, 10) = ?
             """
