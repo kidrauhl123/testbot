@@ -200,6 +200,22 @@ def init_sqlite_db():
         c.execute("ALTER TABLE sellers ADD COLUMN activity_check_at TEXT")
         conn.commit()
     
+    # 检查sellers表是否需要添加nickname列
+    try:
+        c.execute("SELECT nickname FROM sellers LIMIT 1")
+    except sqlite3.OperationalError:
+        logger.info("为sellers表添加nickname列")
+        c.execute("ALTER TABLE sellers ADD COLUMN nickname TEXT")
+        conn.commit()
+    
+    # 检查sellers表是否需要添加is_admin列
+    try:
+        c.execute("SELECT is_admin FROM sellers LIMIT 1")
+    except sqlite3.OperationalError:
+        logger.info("为sellers表添加is_admin列")
+        c.execute("ALTER TABLE sellers ADD COLUMN is_admin INTEGER DEFAULT 0")
+        conn.commit()
+    
     # 检查sellers表是否需要添加distribution_level列
     try:
         c.execute("SELECT distribution_level FROM sellers LIMIT 1")
@@ -216,12 +232,12 @@ def init_sqlite_db():
         c.execute("ALTER TABLE sellers ADD COLUMN max_concurrent_orders INTEGER DEFAULT 5")
         conn.commit()
     
-    # 添加暂停状态字段
+    # 检查sellers表是否需要添加participate_in_distribution列
     try:
-        c.execute("SELECT is_paused FROM sellers LIMIT 1")
+        c.execute("SELECT participate_in_distribution FROM sellers LIMIT 1")
     except sqlite3.OperationalError:
-        logger.info("为sellers表添加is_paused列")
-        c.execute("ALTER TABLE sellers ADD COLUMN is_paused INTEGER DEFAULT 0")
+        logger.info("为sellers表添加participate_in_distribution列")
+        c.execute("ALTER TABLE sellers ADD COLUMN participate_in_distribution INTEGER DEFAULT 1")
         conn.commit()
     
     # 检查users表中是否需要添加新列
@@ -425,12 +441,28 @@ def init_postgres_db():
         cur.execute("ALTER TABLE sellers ADD COLUMN max_concurrent_orders INTEGER DEFAULT 5")
         conn.commit()
     
-    # 添加暂停状态字段
+    # 检查sellers表是否需要添加participate_in_distribution列
     try:
-        cur.execute("SELECT is_paused FROM sellers LIMIT 1")
+        cur.execute("SELECT participate_in_distribution FROM sellers LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
-        logger.info("为sellers表添加is_paused列")
-        cur.execute("ALTER TABLE sellers ADD COLUMN is_paused BOOLEAN DEFAULT FALSE")
+        logger.info("为sellers表添加participate_in_distribution列")
+        cur.execute("ALTER TABLE sellers ADD COLUMN participate_in_distribution BOOLEAN DEFAULT TRUE")
+        conn.commit()
+    
+    # 检查sellers表是否需要添加nickname列
+    try:
+        cur.execute("SELECT nickname FROM sellers LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为sellers表添加nickname列")
+        cur.execute("ALTER TABLE sellers ADD COLUMN nickname TEXT")
+        conn.commit()
+    
+    # 检查sellers表是否需要添加is_admin列
+    try:
+        cur.execute("SELECT is_admin FROM sellers LIMIT 1")
+    except psycopg2.errors.UndefinedColumn:
+        logger.info("为sellers表添加is_admin列")
+        cur.execute("ALTER TABLE sellers ADD COLUMN is_admin BOOLEAN DEFAULT FALSE")
         conn.commit()
     
     # 创建用户自定义价格表
@@ -601,7 +633,7 @@ def get_all_sellers():
                        COALESCE(is_admin, FALSE) as is_admin,
                        COALESCE(distribution_level, 1) as distribution_level,
                        COALESCE(max_concurrent_orders, 5) as max_concurrent_orders,
-                       COALESCE(is_paused, FALSE) as is_paused
+                       COALESCE(participate_in_distribution, TRUE) as participate_in_distribution
                 FROM sellers
                 ORDER BY added_at DESC
             """, fetch=True)
@@ -612,7 +644,7 @@ def get_all_sellers():
             c.execute("""
                 SELECT telegram_id, username, first_name, nickname, is_active, 
                       added_at, added_by, is_admin, distribution_level, max_concurrent_orders,
-                      COALESCE(is_paused, 0) as is_paused
+                      COALESCE(participate_in_distribution, 1) as participate_in_distribution
                 FROM sellers
                 ORDER BY added_at DESC
             """)
@@ -624,11 +656,11 @@ def get_all_sellers():
         return []
 
 def get_active_seller_ids():
-    """获取所有活跃且未暂停的卖家ID"""
+    """获取所有活跃的卖家ID"""
     if DATABASE_URL.startswith('postgres'):
-        sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = TRUE AND COALESCE(is_paused, FALSE) = FALSE", fetch=True)
+        sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = TRUE", fetch=True)
     else:
-        sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = 1 AND COALESCE(is_paused, 0) = 0", fetch=True)
+        sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = 1", fetch=True)
     
     return [seller[0] for seller in sellers] if sellers else []
 
@@ -679,20 +711,20 @@ def get_seller_info(telegram_id):
         return None
 
 def get_active_sellers():
-    """获取所有活跃且未暂停的卖家的ID和昵称"""
+    """获取所有活跃的卖家的ID和昵称"""
     if DATABASE_URL.startswith('postgres'):
         sellers = execute_query("""
             SELECT telegram_id, nickname, username, first_name, 
                    last_active_at
             FROM sellers 
-            WHERE is_active = TRUE AND COALESCE(is_paused, FALSE) = FALSE
+            WHERE is_active = TRUE
         """, fetch=True)
     else:
         sellers = execute_query("""
             SELECT telegram_id, nickname, username, first_name, 
                    last_active_at
             FROM sellers 
-            WHERE is_active = 1 AND COALESCE(is_paused, 0) = 0
+            WHERE is_active = 1
         """, fetch=True)
     
     result = []
@@ -721,37 +753,6 @@ def toggle_seller_status(telegram_id):
         execute_query("UPDATE sellers SET is_active = NOT is_active WHERE telegram_id = %s", (telegram_id,))
     else:
         execute_query("UPDATE sellers SET is_active = NOT is_active WHERE telegram_id = ?", (telegram_id,))
-
-def toggle_seller_pause_status(telegram_id):
-    """切换卖家暂停状态（用于start/stop命令和admin暂停功能）"""
-    if DATABASE_URL.startswith('postgres'):
-        execute_query("UPDATE sellers SET is_paused = NOT COALESCE(is_paused, FALSE) WHERE telegram_id = %s", (telegram_id,))
-    else:
-        execute_query("UPDATE sellers SET is_paused = NOT COALESCE(is_paused, 0) WHERE telegram_id = ?", (telegram_id,))
-
-def set_seller_pause_status(telegram_id, is_paused):
-    """设置卖家暂停状态"""
-    if DATABASE_URL.startswith('postgres'):
-        execute_query("UPDATE sellers SET is_paused = %s WHERE telegram_id = %s", (is_paused, telegram_id))
-    else:
-        execute_query("UPDATE sellers SET is_paused = ? WHERE telegram_id = ?", (1 if is_paused else 0, telegram_id))
-
-def get_seller_pause_status(telegram_id):
-    """获取卖家暂停状态"""
-    if DATABASE_URL.startswith('postgres'):
-        result = execute_query(
-            "SELECT COALESCE(is_paused, FALSE) FROM sellers WHERE telegram_id = %s", 
-            (telegram_id,), 
-            fetch=True
-        )
-    else:
-        result = execute_query(
-            "SELECT COALESCE(is_paused, 0) FROM sellers WHERE telegram_id = ?", 
-            (telegram_id,), 
-            fetch=True
-        )
-    
-    return bool(result[0][0]) if result else False
 
 def remove_seller(telegram_id):
     """移除卖家"""
@@ -1504,19 +1505,19 @@ def get_seller_current_orders_count(telegram_id):
 
 def check_all_sellers_full():
     """
-    检查是否所有活跃卖家都已达到最大接单量
+    检查是否所有活跃且参与分流的卖家都已达到最大接单量
     
     返回:
     - True: 所有卖家都已满
     - False: 至少有一个卖家未满
     """
     try:
-        # 获取所有活跃卖家
-        active_sellers = get_active_sellers()
+        # 获取所有活跃且参与分流的卖家
+        active_sellers = get_participating_sellers()
         
         if not active_sellers:
-            logger.warning("没有活跃卖家，订单提交受限")
-            return True  # 没有活跃卖家时返回True（不允许接单）
+            logger.warning("没有活跃且参与分流的卖家，订单提交受限")
+            return True  # 没有活跃且参与分流的卖家时返回True（不允许接单）
         
         for seller in active_sellers:
             seller_id = seller["id"]
@@ -1553,10 +1554,10 @@ def check_all_sellers_full():
 
 def select_active_seller():
     """
-    从所有活跃卖家中选择一个卖家接单
+    从所有活跃且参与分流的卖家中选择一个卖家接单
     
     选择逻辑：
-    1. 获取所有活跃的卖家
+    1. 获取所有活跃且参与分流的卖家
     2. 筛选出当前接单数小于最大接单量的卖家
     3. 基于分流等级进行加权随机选择，等级越高被选中的概率越大
     
@@ -1564,10 +1565,10 @@ def select_active_seller():
     - 卖家ID，如果没有可用卖家则返回None
     """
     try:
-        active_sellers = get_active_sellers()
+        active_sellers = get_participating_sellers()
         
         if not active_sellers:
-            logger.warning("没有活跃的卖家可用于选择")
+            logger.warning("没有活跃且参与分流的卖家可用于选择")
             return None
             
         available_sellers = []
@@ -1944,3 +1945,83 @@ def delete_old_orders(days=3):
     except Exception as e:
         logger.error(f"删除旧订单数据失败: {str(e)}", exc_info=True)
         return 0
+
+def toggle_seller_distribution_participation(telegram_id):
+    """切换卖家参与分流状态"""
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            execute_query("UPDATE sellers SET participate_in_distribution = NOT participate_in_distribution WHERE telegram_id = %s", (telegram_id,))
+        else:
+            execute_query("UPDATE sellers SET participate_in_distribution = NOT participate_in_distribution WHERE telegram_id = ?", (telegram_id,))
+        return True
+    except Exception as e:
+        logger.error(f"切换卖家参与分流状态失败: {e}")
+        return False
+
+def set_seller_distribution_participation(telegram_id, participate):
+    """设置卖家参与分流状态"""
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            execute_query("UPDATE sellers SET participate_in_distribution = %s WHERE telegram_id = %s", (participate, telegram_id))
+        else:
+            execute_query("UPDATE sellers SET participate_in_distribution = ? WHERE telegram_id = ?", (1 if participate else 0, telegram_id))
+        return True
+    except Exception as e:
+        logger.error(f"设置卖家参与分流状态失败: {e}")
+        return False
+
+def get_participating_sellers():
+    """获取所有活跃且参与分流的卖家的ID和昵称"""
+    if DATABASE_URL.startswith('postgres'):
+        sellers = execute_query("""
+            SELECT telegram_id, nickname, username, first_name, 
+                   last_active_at
+            FROM sellers 
+            WHERE is_active = TRUE AND participate_in_distribution = TRUE
+        """, fetch=True)
+    else:
+        sellers = execute_query("""
+            SELECT telegram_id, nickname, username, first_name, 
+                   last_active_at
+            FROM sellers 
+            WHERE is_active = 1 AND participate_in_distribution = 1
+        """, fetch=True)
+    
+    result = []
+    for seller in sellers:
+        telegram_id, nickname, username, first_name, last_active_at = seller
+        # 如果没有设置昵称，则使用first_name或username作为默认昵称
+        display_name = nickname or first_name or f"卖家 {telegram_id}"
+        result.append({
+            "id": telegram_id,
+            "name": display_name,
+            "last_active_at": last_active_at or ""
+        })
+    return result
+
+def get_seller_participation_status(telegram_id):
+    """获取卖家的参与分流状态"""
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            result = execute_query(
+                "SELECT participate_in_distribution, is_active FROM sellers WHERE telegram_id = %s", 
+                (str(telegram_id),), 
+                fetch=True
+            )
+        else:
+            result = execute_query(
+                "SELECT participate_in_distribution, is_active FROM sellers WHERE telegram_id = ?", 
+                (str(telegram_id),), 
+                fetch=True
+            )
+        
+        if result:
+            participate, active = result[0]
+            return {
+                "participate_in_distribution": bool(participate),
+                "is_active": bool(active)
+            }
+        return None
+    except Exception as e:
+        logger.error(f"获取卖家参与状态失败: {e}")
+        return None

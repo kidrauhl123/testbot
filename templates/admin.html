@@ -645,18 +645,19 @@
           </div>
         </div>
         <div class="alert alert-info" style="margin-bottom: 20px;">
-          <strong>提示：</strong> 分流等级决定卖家获得订单的优先级。等级越高，获得订单的机会越多。分流等级范围为1-10。<br>
-          <strong>状态说明：</strong><br>
-          • <span class="badge badge-success">接单中</span>：正常接收新订单<br>
-          • <span class="badge badge-warning">已暂停</span>：暂停接收新订单，但可完成现有订单（卖家可通过发送"start"恢复）<br>
-          • <span class="badge badge-danger">已停用</span>：完全停用，无法接收任何订单
+          <strong>功能说明：</strong><br/>
+          • <strong>账户状态：</strong>控制卖家是否能使用bot功能。停用后卖家无法使用任何bot命令。<br/>
+          • <strong>分流状态：</strong>控制卖家是否参与新订单分配。暂停后不会收到新订单，但可以处理已接订单。<br/>
+          • <strong>分流等级：</strong>决定卖家获得订单的优先级，等级越高机会越多（范围1-10）。<br/>
+          • <strong>卖家可通过发送 "start" 和 "stop" 命令控制自己的分流状态。</strong>
         </div>
         <div class="sellers-container">
           <table class="data-table">
             <thead class="thead-dark">
               <tr>
                 <th>昵称</th>
-                <th>状态</th>
+                <th>账户状态</th>
+                <th>分流状态</th>
                 <th>角色</th>
                 <th>分流等级</th>
                 <th>最大接单数</th>
@@ -939,25 +940,17 @@
       }
       
       sellers.forEach(seller => {
-        // 确定显示状态
-        let statusBadge, toggleButtonText, toggleButtonClass;
+        const accountStatusBadge = seller.is_active 
+          ? '<span class="badge badge-success">正常</span>' 
+          : '<span class="badge badge-secondary">停用</span>';
+        const toggleButtonText = seller.is_active ? '停用账户' : '启用账户';
+        const toggleButtonClass = seller.is_active ? 'btn-warning' : 'btn-success';
         
-        if (!seller.is_active) {
-          // 被管理员停用
-          statusBadge = '<span class="badge badge-danger">已停用</span>';
-          toggleButtonText = '启用';
-          toggleButtonClass = 'btn-success';
-        } else if (seller.is_paused) {
-          // 已暂停接单
-          statusBadge = '<span class="badge badge-warning">已暂停</span>';
-          toggleButtonText = '恢复';
-          toggleButtonClass = 'btn-success';
-        } else {
-          // 正常接单
-          statusBadge = '<span class="badge badge-success">接单中</span>';
-          toggleButtonText = '暂停';
-          toggleButtonClass = 'btn-warning';
-        }
+        const distributionStatusBadge = seller.participate_in_distribution 
+          ? '<span class="badge badge-info">参与分流</span>' 
+          : '<span class="badge badge-warning">暂停分流</span>';
+        const toggleDistributionButtonText = seller.participate_in_distribution ? '暂停分流' : '恢复分流';
+        const toggleDistributionButtonClass = seller.participate_in_distribution ? 'btn-warning' : 'btn-success';
         
         const adminBadge = seller.is_admin
           ? '<span class="badge badge-primary">管理员</span>'
@@ -968,7 +961,8 @@
         const row = `
           <tr data-id="${seller.telegram_id}" data-nickname="${escapeHtml(seller.nickname || 'N/A')}">
             <td>${escapeHtml(seller.nickname || '')}</td>
-            <td>${statusBadge}</td>
+            <td>${accountStatusBadge}</td>
+            <td>${distributionStatusBadge}</td>
             <td>${adminBadge}</td>
             <td>
               <input type="number" class="form-control form-control-sm level-input" 
@@ -990,6 +984,7 @@
             <td>${escapeHtml(seller.added_by || '')}</td>
             <td class="actions">
               <button class="btn btn-primary btn-sm" onclick="editSeller(${seller.telegram_id}, '${escapeHtml(seller.nickname || '')}')">编辑</button>
+              <button class="btn ${toggleDistributionButtonClass} btn-sm" onclick="toggleSellerDistribution(${seller.telegram_id})">${toggleDistributionButtonText}</button>
               <button class="btn ${toggleButtonClass} btn-sm" onclick="toggleSeller(${seller.telegram_id})">${toggleButtonText}</button>
               <button class="btn ${adminButtonClass} btn-sm" onclick="toggleSellerAdmin(${seller.telegram_id})">${adminButtonText}</button>
               <button class="btn btn-danger btn-sm" onclick="removeSeller(${seller.telegram_id})">删除</button>
@@ -1130,6 +1125,20 @@
   async function toggleSeller(telegramId) {
     await fetch(`/admin/api/sellers/${telegramId}/toggle`, {method: 'POST'});
       loadSellers();
+  }
+
+  async function toggleSellerDistribution(telegramId) {
+    try {
+      const response = await fetch(`/admin/api/sellers/${telegramId}/toggle_distribution`, {method: 'POST'});
+      if (response.ok) {
+        loadSellers();
+        showToast('分流状态已更新', 'success');
+      } else {
+        showToast('操作失败', 'error');
+      }
+    } catch (e) {
+      showToast('操作失败: ' + e.message, 'error');
+    }
   }
   
   async function toggleSellerAdmin(telegramId) {

@@ -37,8 +37,8 @@ from modules.database import (
     update_seller_nickname, get_seller_completed_orders, get_seller_pending_orders,
     check_seller_completed_orders, get_seller_today_confirmed_orders_by_user, get_admin_sellers,
     get_seller_current_orders_count, is_admin_seller, get_all_sellers, get_today_valid_orders_count,
-    toggle_seller_status, update_seller_info, toggle_seller_pause_status, 
-    set_seller_pause_status, get_seller_pause_status
+    toggle_seller_status, update_seller_info,
+    set_seller_distribution_participation, get_seller_participation_status
 )
 
 # 设置日志
@@ -313,53 +313,44 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 获取卖家状态
         if DATABASE_URL.startswith('postgres'):
             result = execute_query(
-                "SELECT is_active, desired_orders, COALESCE(is_paused, FALSE) FROM sellers WHERE telegram_id = %s", 
+                "SELECT is_active, desired_orders FROM sellers WHERE telegram_id = %s", 
                 (str(user_id),), 
                 fetch=True
             )
         else:
             result = execute_query(
-                "SELECT is_active, desired_orders, COALESCE(is_paused, 0) FROM sellers WHERE telegram_id = ?", 
+                "SELECT is_active, desired_orders FROM sellers WHERE telegram_id = ?", 
                 (str(user_id),), 
                 fetch=True
             )
         
-        if result:
-            is_active = result[0][0]
-            desired_orders = result[0][1] if result[0][1] is not None else 0
-            is_paused = bool(result[0][2])
-            
-            # 确定状态文本
-            if not is_active:
-                status_text = "Inactive (被管理员停用)"
-                status_emoji = "🔴"
-            elif is_paused:
-                status_text = "Paused (已暂停接单)"
-                status_emoji = "🟡"
-            else:
-                status_text = "Active (正在接单)"
-                status_emoji = "🟢"
-        else:
-            status_text = "Unknown"
-            status_emoji = "⚪"
-            desired_orders = 0
+        is_active = "Active" if result and result[0][0] else "Inactive"
+        desired_orders = result[0][1] if result and result[0][1] is not None else 0
         
         # 检查是否为管理员来显示不同的帮助信息
         stats_help = "/stats - View all sellers' today's valid orders" if is_admin_seller(user_id) else "/stats - View your today's completed orders"
         admin_help = "\n/update_usernames - Update all sellers' usernames" if is_admin_seller(user_id) else ""
         
+        # 获取参与分流状态
+        from modules.database import get_seller_participation_status
+        participation_status = get_seller_participation_status(user_id)
+        participate_text = "参与分流" if participation_status and participation_status.get("participate_in_distribution") else "暂停分流"
+        
         await update.message.reply_text(
             f"👋 Hello, {first_name}! You are a seller in our system.\n\n"
-            f"{status_emoji} Current status: {status_text}\n"
+            f"🔹 Account status: {is_active}\n"
+            f"🔹 Distribution status: {participate_text}\n"
             f"🔹 Max order capacity: {desired_orders}\n\n"
             f"Available commands:\n"
             f"/seller - View available and active orders\n"
             f"/orders <number> - Set your maximum order capacity\n"
-            f"/start - Resume receiving orders (if paused)\n"
-            f"/stop - Pause receiving new orders\n"
+            f"/active - Toggle your active status\n"
             f"/test - Test bot status\n"
             f"/test_notify - Test notification feature\n"
-            f"{stats_help}{admin_help}"
+            f"{stats_help}{admin_help}\n\n"
+            f"📝 Quick commands:\n"
+            f"• Send `start` to begin receiving orders\n"
+            f"• Send `stop` to pause receiving orders"
         )
     else:
         await update.message.reply_text(
@@ -550,11 +541,6 @@ async def bot_main(queue):
         bot_application.add_handler(CommandHandler("test_notify", on_test_notify))
         bot_application.add_handler(CommandHandler("stats", on_stats))
         bot_application.add_handler(CommandHandler("update_usernames", on_update_usernames))
-        
-        # 添加start和stop订单命令（使用不同的处理函数避免冲突）
-        bot_application.add_handler(MessageHandler(filters.Regex(r'^(start|START)$'), on_start_orders))
-        bot_application.add_handler(MessageHandler(filters.Regex(r'^(stop|STOP)$'), on_stop_orders))
-        
         print("DEBUG: 已添加测试命令处理程序")
         
         # 添加通用回调处理程序，处理所有回调查询
@@ -697,14 +683,15 @@ async def send_notification_from_queue(data):
                 logger.warning(f"订单 {order_id} 已经被卖家 {order.get('accepted_by')} 接单，不再发送通知")
                 return
             
-            # 获取活跃卖家列表
-            active_sellers = get_active_sellers()
-            logger.info(f"获取到活跃卖家列表: {active_sellers}")
-            print(f"DEBUG: 获取到活跃卖家列表: {active_sellers}")
+            # 获取活跃且参与分流的卖家列表
+            from modules.database import get_participating_sellers
+            active_sellers = get_participating_sellers()
+            logger.info(f"获取到参与分流的卖家列表: {active_sellers}")
+            print(f"DEBUG: 获取到参与分流的卖家列表: {active_sellers}")
             
             if not active_sellers:
-                logger.warning(f"没有活跃的卖家可以接收订单通知: {order_id}")
-                print(f"WARNING: 没有活跃的卖家可以接收订单通知: {order_id}")
+                logger.warning(f"没有参与分流的卖家可以接收订单通知: {order_id}")
+                print(f"WARNING: 没有参与分流的卖家可以接收订单通知: {order_id}")
                 return
                 
             image_path = account # 路径现在是相对的
@@ -1572,16 +1559,24 @@ async def check_and_push_orders():
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Process regular text messages"""
     user_id = update.effective_user.id
-    text = update.message.text
+    text = update.message.text.strip().lower()
     
     # 记录接收到的消息
     logger.info(f"收到来自用户 {user_id} 的文本消息: {text}")
     print(f"DEBUG: 收到来自用户 {user_id} 的文本消息: {text}")
     
-    # 如果是卖家，可以提供一些帮助信息
+    # 如果是卖家，处理特殊命令
     if is_seller(user_id):
         # 更新卖家信息
         update_seller_info(str(user_id), update.effective_user.username, update.effective_user.first_name)
+        
+        # 处理start和stop命令
+        if text == "start":
+            await on_start_distribution(update, context)
+            return
+        elif text == "stop":
+            await on_stop_distribution(update, context)
+            return
         
         # 只回复第一条消息，避免重复打扰
         if not hasattr(context.user_data, 'welcomed'):
@@ -1596,7 +1591,10 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "/active - Toggle your active status\n"
                 "/test - Test bot status\n"
                 "/test_notify - Test notification feature\n"
-                f"{stats_help}{admin_help}"
+                f"{stats_help}{admin_help}\n\n"
+                "💡 Quick commands:\n"
+                "• Send `start` to begin receiving orders\n"
+                "• Send `stop` to pause receiving orders"
             )
             context.user_data['welcomed'] = True
 
@@ -1774,8 +1772,8 @@ async def on_update_usernames(update: Update, context: ContextTypes.DEFAULT_TYPE
         logger.error(f"批量更新卖家用户名时出错: {e}", exc_info=True)
         await update.message.reply_text("Failed to update usernames. Please try again later.")
 
-async def on_start_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理 start 命令，让卖家恢复接单"""
+async def on_start_distribution(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 start 命令 - 开始参与分流"""
     user_id = update.effective_user.id
     
     if not is_seller(user_id):
@@ -1785,38 +1783,40 @@ async def on_start_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 更新卖家信息
     update_seller_info(str(user_id), update.effective_user.username, update.effective_user.first_name)
     
-    # 检查卖家是否被管理员停用
-    if DATABASE_URL.startswith('postgres'):
-        result = execute_query(
-            "SELECT is_active FROM sellers WHERE telegram_id = %s", 
-            (str(user_id),), 
-            fetch=True
+    # 导入新的函数
+    from modules.database import set_seller_distribution_participation, get_seller_participation_status
+    
+    # 获取当前状态
+    status = get_seller_participation_status(user_id)
+    if not status:
+        await update.message.reply_text("无法获取您的状态信息，请联系管理员")
+        return
+    
+    if not status["is_active"]:
+        await update.message.reply_text("❌ 您的账户已被管理员停用，无法参与接单")
+        return
+    
+    if status["participate_in_distribution"]:
+        await update.message.reply_text("✅ 您已经在参与接单分流中")
+        return
+    
+    # 设置参与分流状态
+    if set_seller_distribution_participation(str(user_id), True):
+        # 更新最后活跃时间
+        update_seller_last_active(user_id)
+        
+        await update.message.reply_text(
+            "🚀 *开始参与接单*\n\n"
+            "您现在可以接收新订单通知了！\n\n"
+            "📝 使用 `stop` 命令可以暂停参与接单",
+            parse_mode='Markdown'
         )
+        logger.info(f"卖家 {user_id} 开始参与分流")
     else:
-        result = execute_query(
-            "SELECT is_active FROM sellers WHERE telegram_id = ?", 
-            (str(user_id),), 
-            fetch=True
-        )
-    
-    if not result or not result[0][0]:
-        await update.message.reply_text("⚠️ 您已被管理员停用，无法恢复接单。请联系管理员。")
-        return
-    
-    # 设置为未暂停状态
-    set_seller_pause_status(str(user_id), False)
-    
-    # 更新最后活跃时间
-    update_seller_last_active(user_id)
-    
-    await update.message.reply_text(
-        "🟢 已恢复接单！\n\n"
-        "您现在将开始接收新订单通知。"
-    )
-    logger.info(f"卖家 {user_id} 恢复接单")
+        await update.message.reply_text("❌ 操作失败，请稍后重试或联系管理员")
 
-async def on_stop_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理 stop 命令，让卖家暂停接单"""
+async def on_stop_distribution(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 stop 命令 - 停止参与分流"""
     user_id = update.effective_user.id
     
     if not is_seller(user_id):
@@ -1826,15 +1826,31 @@ async def on_stop_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 更新卖家信息
     update_seller_info(str(user_id), update.effective_user.username, update.effective_user.first_name)
     
-    # 设置为暂停状态
-    set_seller_pause_status(str(user_id), True)
+    # 导入新的函数
+    from modules.database import set_seller_distribution_participation, get_seller_participation_status
     
-    # 更新最后活跃时间
-    update_seller_last_active(user_id)
+    # 获取当前状态
+    status = get_seller_participation_status(user_id)
+    if not status:
+        await update.message.reply_text("无法获取您的状态信息，请联系管理员")
+        return
     
-    await update.message.reply_text(
-        "🟡 已暂停接单！\n\n"
-        "您将不再接收新订单，但仍可完成现有订单。\n"
-        "发送 /start 可以恢复接单。"
-    )
-    logger.info(f"卖家 {user_id} 暂停接单")
+    if not status["participate_in_distribution"]:
+        await update.message.reply_text("⏸️ 您已经暂停参与接单分流")
+        return
+    
+    # 设置不参与分流状态
+    if set_seller_distribution_participation(str(user_id), False):
+        # 更新最后活跃时间
+        update_seller_last_active(user_id)
+        
+        await update.message.reply_text(
+            "⏸️ *暂停参与接单*\n\n"
+            "您将不再接收新订单通知\n"
+            "但您仍可以处理已接收的订单\n\n"
+            "📝 使用 `start` 命令可以重新参与接单",
+            parse_mode='Markdown'
+        )
+        logger.info(f"卖家 {user_id} 暂停参与分流")
+    else:
+        await update.message.reply_text("❌ 操作失败，请稍后重试或联系管理员")
