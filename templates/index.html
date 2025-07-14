@@ -2948,6 +2948,35 @@
     // 判断是否需要加载更多数据
     if (displayedOrders > allOrders.length && allOrders.length < maxOrdersLimit) {
       console.log('需要从服务器加载更多数据');
+      // 尝试直接获取所有数据
+      if (page === 1 && allOrders.length <= 50) {
+        console.log('首次加载更多，尝试一次性获取所有数据');
+        try {
+          const allDataResponse = await fetch(`/api/orders-all?limit=${maxOrdersLimit}&t=${Date.now()}`);
+          if (allDataResponse.ok) {
+            const allData = await allDataResponse.json();
+            if (allData.success && allData.orders && allData.orders.length > allOrders.length) {
+              // 成功获取更多数据
+              allOrders = allData.orders;
+              console.log(`成功一次性获取${allOrders.length}条数据`);
+              showCustomAlert(`已加载所有可用数据(${allOrders.length}条)`, 'success');
+              
+              // 应用筛选并渲染
+              let filteredOrders = searchKeyword ? 
+                allOrders.filter(order => order.id.toString().includes(searchKeyword) || 
+                  (order.account && order.account.toLowerCase().includes(searchKeyword.toLowerCase()))) : 
+                allOrders;
+              filteredOrders = filterOrders(filteredOrders);
+              renderOrders(filteredOrders);
+              return;
+            }
+          }
+        } catch (e) {
+          console.error('一次性获取所有数据失败:', e);
+        }
+      }
+      
+      // 常规分页加载方式
       // 增加页码并加载更多数据
       page++;
       fetchMoreOrders(page);
@@ -2989,7 +3018,7 @@
     }
   }
 
-  // 新增函数：从API获取更多订单
+        // 新增函数：从API获取更多订单
   async function fetchMoreOrders(pageNum) {
     console.log(`开始加载第${pageNum}页数据...`);
     
@@ -2999,9 +3028,39 @@
       loadMoreContainer.innerHTML = '<div class="loading-indicator">加载更多订单中...</div>';
     }
     
+    // 如果是第二次加载更多数据并且第一次加载失败，尝试使用备用方法获取所有数据
+    if (pageNum === 2 && allOrders.length <= 50) {
+      console.log("第一页加载后只有50条数据，尝试使用备用方法获取全部数据");
+      try {
+        const backupResponse = await fetch(`/api/all-orders?limit=1500&t=${Date.now()}`);
+        if (backupResponse.ok) {
+          const backupResult = await backupResponse.json();
+          if (backupResult.success && backupResult.orders && backupResult.orders.length > 50) {
+            console.log(`备用方法成功获取${backupResult.orders.length}条数据`);
+            showCustomAlert(`已加载全部订单数据(${backupResult.orders.length}条)`, 'success');
+            
+            // 将所有数据添加到allOrders，但避免重复
+            const existingIds = new Set(allOrders.map(o => o.id));
+            const newOrders = backupResult.orders.filter(o => !existingIds.has(o.id));
+            allOrders = [...allOrders, ...newOrders];
+            
+            // 渲染订单
+            let filteredOrders = filterOrders(allOrders);
+            renderOrders(filteredOrders);
+            return; // 成功获取全部数据，不再执行后续代码
+          }
+        }
+      } catch (e) {
+        console.error("备用方法获取数据失败:", e);
+        // 继续执行标准方法
+      }
+    }
+    
     try {
-      // 确保分页参数正确传递，并添加时间戳避免缓存
-      const url = `/api/quick-orders?page=${pageNum}&limit=50&load_more=1&t=${Date.now()}`;
+      // 尝试两种不同的API调用方式，以适应不同的后端实现
+      // 注意：尝试使用offset而不是page参数，许多后端使用offset实现分页
+      const offset = (pageNum - 1) * 50;
+      const url = `/api/quick-orders?offset=${offset}&page=${pageNum}&limit=50&load_more=1&t=${Date.now()}`;
       console.log(`请求URL: ${url}`);
       
       const response = await fetch(url);
