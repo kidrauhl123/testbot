@@ -1817,14 +1817,16 @@ def register_routes(app, notification_queue):
         try:
             # 获取参数
             limit = int(request.args.get('limit', 20))
-            limit = min(limit, 1000)  # 限制最大获取数量，支持显示更多订单
+            limit = min(limit, 1000)  # 增加最大限制到1000，支持显示更多订单
+            page = int(request.args.get('page', 1))  # 添加分页支持
+            offset = (page - 1) * limit
             
             # 根据用户权限决定查询范围
             is_admin = session.get('is_admin')
             user_id = session.get('user_id')
             
-            # 精简SQL查询，只选择必要字段
-            fields = "id, account, status, created_at, remark, accepted_by, accepted_by_nickname, confirm_status, completed_at"
+            # 精简SQL查询，添加completed_at字段
+            fields = "id, account, status, created_at, completed_at, remark, accepted_by, accepted_by_nickname, confirm_status"
             
             if DATABASE_URL.startswith('postgres'):
                 if is_admin:
@@ -1832,35 +1834,35 @@ def register_routes(app, notification_queue):
                     orders = execute_query(f"""
                         SELECT {fields}, web_user_id as username
                         FROM orders 
-                        ORDER BY id DESC LIMIT %s
-                    """, (limit,), fetch=True)
+                        ORDER BY id DESC LIMIT %s OFFSET %s
+                    """, (limit, offset), fetch=True)
                 else:
                     # 普通用户只看自己的订单
                     orders = execute_query(f"""
                         SELECT {fields}, web_user_id as username
                         FROM orders 
                         WHERE user_id = %s 
-                        ORDER BY id DESC LIMIT %s
-                    """, (user_id, limit), fetch=True)
+                        ORDER BY id DESC LIMIT %s OFFSET %s
+                    """, (user_id, limit, offset), fetch=True)
             else:
                 if is_admin:
                     orders = execute_query(f"""
                         SELECT {fields}, web_user_id as username
                         FROM orders 
-                        ORDER BY id DESC LIMIT ?
-                    """, (limit,), fetch=True)
+                        ORDER BY id DESC LIMIT ? OFFSET ?
+                    """, (limit, offset), fetch=True)
                 else:
                     orders = execute_query(f"""
                         SELECT {fields}, web_user_id as username
                         FROM orders 
                         WHERE user_id = ? 
-                        ORDER BY id DESC LIMIT ?
-                    """, (user_id, limit), fetch=True)
+                        ORDER BY id DESC LIMIT ? OFFSET ?
+                    """, (user_id, limit, offset), fetch=True)
             
             # 格式化数据，只返回必要字段
             formatted_orders = []
             for order in orders:
-                oid, account, status, created_at, remark, accepted_by, accepted_by_nickname, confirm_status, completed_at, username = order
+                oid, account, status, created_at, completed_at, remark, accepted_by, accepted_by_nickname, confirm_status, username = order
                 
                 order_data = {
                     "id": oid,
@@ -1868,10 +1870,10 @@ def register_routes(app, notification_queue):
                     "status": status,
                     "status_text": STATUS_TEXT_ZH.get(status, status),
                     "created_at": created_at,
+                    "completed_at": completed_at or "",  # 添加completed_at
                     "remark": remark or "",
                     "accepted_by": accepted_by_nickname or accepted_by or "",
                     "confirm_status": confirm_status or "pending",
-                    "completed_at": completed_at or "",
                     "username": username or ""
                 }
                 formatted_orders.append(order_data)
@@ -1879,7 +1881,9 @@ def register_routes(app, notification_queue):
             return jsonify({
                 "success": True, 
                 "orders": formatted_orders,
-                "timestamp": int(time.time())
+                "timestamp": int(time.time()),
+                "page": page,
+                "limit": limit
             })
         except Exception as e:
             logger.error(f"获取快速订单数据失败: {str(e)}", exc_info=True)
