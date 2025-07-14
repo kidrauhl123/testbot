@@ -1121,6 +1121,37 @@ def update_seller_last_active(telegram_id):
         (timestamp, telegram_id)
     )
 
+def update_seller_info(telegram_id, username=None, first_name=None):
+    """更新卖家的Telegram信息（用户名和昵称）"""
+    try:
+        fields_to_update = []
+        params = []
+        
+        # 根据数据库类型选择占位符
+        placeholder = "%s" if DATABASE_URL.startswith('postgres') else "?"
+        
+        if username is not None:
+            fields_to_update.append(f"username = {placeholder}")
+            params.append(username)
+            
+        if first_name is not None:
+            fields_to_update.append(f"first_name = {placeholder}")
+            params.append(first_name)
+            
+        if not fields_to_update:
+            return  # 没有需要更新的字段
+            
+        # 添加telegram_id到参数末尾
+        params.append(telegram_id)
+        
+        # 构建SQL语句
+        sql = f"UPDATE sellers SET {', '.join(fields_to_update)} WHERE telegram_id = {placeholder}"
+        
+        execute_query(sql, params)
+        logger.info(f"已更新卖家 {telegram_id} 的信息: username={username}, first_name={first_name}")
+    except Exception as e:
+        logger.error(f"更新卖家 {telegram_id} 信息失败: {str(e)}", exc_info=True)
+
 def get_seller_completed_orders(telegram_id):
     """获取卖家已完成的订单数（以买家已确认为准）"""
     if DATABASE_URL.startswith('postgres'):

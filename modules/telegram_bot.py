@@ -37,7 +37,7 @@ from modules.database import (
     update_seller_nickname, get_seller_completed_orders, get_seller_pending_orders,
     check_seller_completed_orders, get_seller_today_confirmed_orders_by_user, get_admin_sellers,
     get_seller_current_orders_count, is_admin_seller, get_all_sellers, get_today_valid_orders_count,
-    toggle_seller_status
+    toggle_seller_status, update_seller_info
 )
 
 # 设置日志
@@ -282,6 +282,9 @@ async def on_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_seller(user_id):
         await update.message.reply_text("⚠️ You do not have permission to use this command.")
         return
+        
+    # 更新卖家信息
+    update_seller_info(str(user_id), update.effective_user.username, update.effective_user.first_name)
     
     await update.message.reply_text(
         "✅ Bot is running normally!\n\n"
@@ -302,8 +305,9 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"DEBUG: 收到 /start 命令 用户: {user_id}, 用户名: {username}, 名字: {first_name}")
     
     if is_seller(user_id):
-        # 更新卖家的活跃时间
+        # 更新卖家的活跃时间和用户信息
         update_seller_last_active(user_id)
+        update_seller_info(str(user_id), username, first_name)
         
         # 获取卖家状态
         if DATABASE_URL.startswith('postgres'):
@@ -324,6 +328,7 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 检查是否为管理员来显示不同的帮助信息
         stats_help = "/stats - View all sellers' today's valid orders" if is_admin_seller(user_id) else "/stats - View your today's completed orders"
+        admin_help = "\n/update_usernames - Update all sellers' usernames" if is_admin_seller(user_id) else ""
         
         await update.message.reply_text(
             f"👋 Hello, {first_name}! You are a seller in our system.\n\n"
@@ -335,7 +340,7 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"/active - Toggle your active status\n"
             f"/test - Test bot status\n"
             f"/test_notify - Test notification feature\n"
-            f"{stats_help}"
+            f"{stats_help}{admin_help}"
         )
     else:
         await update.message.reply_text(
@@ -349,6 +354,9 @@ async def on_seller_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_seller(user_id):
         await update.message.reply_text("You don't have permission to use this command.")
         return
+        
+    # 更新卖家信息
+    update_seller_info(str(user_id), update.effective_user.username, update.effective_user.first_name)
     
     # 获取卖家自己的活动订单
     active_orders = execute_query(
@@ -391,6 +399,9 @@ async def on_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_seller(user_id):
         await update.message.reply_text("You are not a seller, cannot use this command")
         return
+        
+    # 更新卖家信息
+    update_seller_info(str(user_id), update.effective_user.username, update.effective_user.first_name)
     
     # 获取卖家当前的活跃订单数
     active_orders = execute_query(
@@ -421,6 +432,9 @@ async def on_active_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_seller(user_id):
         await update.message.reply_text("You are not a seller, cannot use this command")
         return
+        
+    # 更新卖家信息
+    update_seller_info(str(user_id), update.effective_user.username, update.effective_user.first_name)
     
     # 获取当前卖家状态
     if DATABASE_URL.startswith('postgres'):
@@ -516,6 +530,7 @@ async def bot_main(queue):
         bot_application.add_handler(CommandHandler("test", on_test))
         bot_application.add_handler(CommandHandler("test_notify", on_test_notify))
         bot_application.add_handler(CommandHandler("stats", on_stats))
+        bot_application.add_handler(CommandHandler("update_usernames", on_update_usernames))
         print("DEBUG: 已添加测试命令处理程序")
         
         # 添加通用回调处理程序，处理所有回调查询
@@ -1426,6 +1441,9 @@ async def on_test_notify(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ You don't have permission to use this command.")
         return
         
+    # 更新卖家信息
+    update_seller_info(str(user_id), update.effective_user.username, update.effective_user.first_name)
+        
     try:
         await update.message.reply_text("Testing notification feature, will send test notification...")
         
@@ -1538,10 +1556,14 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 如果是卖家，可以提供一些帮助信息
     if is_seller(user_id):
+        # 更新卖家信息
+        update_seller_info(str(user_id), update.effective_user.username, update.effective_user.first_name)
+        
         # 只回复第一条消息，避免重复打扰
         if not hasattr(context.user_data, 'welcomed'):
             # 检查是否为管理员来显示不同的帮助信息
             stats_help = "/stats - View all sellers' today's valid orders" if is_admin_seller(user_id) else "/stats - View your today's completed orders"
+            admin_help = "\n/update_usernames - Update all sellers' usernames" if is_admin_seller(user_id) else ""
             
             await update.message.reply_text(
                 "👋 Hello! To use the bot features, please use the following commands:\n"
@@ -1550,7 +1572,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "/active - Toggle your active status\n"
                 "/test - Test bot status\n"
                 "/test_notify - Test notification feature\n"
-                f"{stats_help}"
+                f"{stats_help}{admin_help}"
             )
             context.user_data['welcomed'] = True
 
@@ -1560,6 +1582,9 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_seller(user_id):
         await update.message.reply_text("You are not a seller and cannot use this command.")
         return
+        
+    # 更新卖家信息
+    update_seller_info(str(user_id), update.effective_user.username, update.effective_user.first_name)
 
     try:
         # 检查是否为管理员
@@ -1580,10 +1605,7 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 nickname = seller[3]
                 is_active = seller[4]
                 
-                # 优先显示昵称，其次是名字，最后是用户名或ID
-                display_name = nickname or first_name or username or f"ID:{telegram_id}"
-                
-                # 获取该卖家今日有效订单数
+                                # 获取该卖家今日有效订单数
                 # 这里我们需要通过接单人来统计，而不是用户ID
                 if DATABASE_URL.startswith('postgres'):
                     seller_orders_result = execute_query("""
@@ -1600,7 +1622,7 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             (status = 'accepted' AND confirm_status = 'confirmed')
                         )
                         AND to_char(created_at::timestamp, 'YYYY-MM-DD') = %s
-                                         """, (str(telegram_id), datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")), fetch=True)
+                                          """, (str(telegram_id), datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")), fetch=True)
                 else:
                     seller_orders_result = execute_query("""
                         SELECT COUNT(*) FROM orders 
@@ -1621,9 +1643,16 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 valid_orders = seller_orders_result[0][0] if seller_orders_result else 0
                 total_orders += valid_orders
                 
+                # 优先显示 @username，如果没有username则显示昵称或其他备用名称
+                if username:
+                    username_display = f"@{username}"
+                else:
+                    # 如果没有username，使用昵称、名字或ID作为备用
+                    fallback_name = nickname or first_name or f"ID:{telegram_id}"
+                    username_display = fallback_name
+                
                 # 添加状态标识
                 status_emoji = "🟢" if is_active else "🔴"
-                username_display = f"@{username}" if username else display_name
                 
                 message_parts.append(f"{status_emoji} {username_display}: *{valid_orders}*")
             
@@ -1651,3 +1680,59 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"获取统计信息时出错 (用户: {user_id}): {e}", exc_info=True)
         await update.message.reply_text("Failed to retrieve stats. Please try again later.")
+
+async def on_update_usernames(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """管理员命令：更新所有卖家的用户名信息"""
+    user_id = update.effective_user.id
+    
+    if not is_seller(user_id):
+        await update.message.reply_text("You are not a seller and cannot use this command.")
+        return
+        
+    if not is_admin_seller(user_id):
+        await update.message.reply_text("Only admin sellers can use this command.")
+        return
+        
+    # 更新当前管理员的信息
+    update_seller_info(str(user_id), update.effective_user.username, update.effective_user.first_name)
+    
+    try:
+        await update.message.reply_text("🔄 Starting to update all sellers' usernames...")
+        
+        # 获取所有卖家
+        sellers = get_all_sellers()
+        if not sellers:
+            await update.message.reply_text("No sellers found in database.")
+            return
+            
+        updated_count = 0
+        for seller in sellers:
+            telegram_id = seller[0]
+            old_username = seller[1]
+            
+            try:
+                # 尝试通过Telegram API获取最新的用户信息
+                user_info = await get_user_info(int(telegram_id))
+                new_username = user_info.get('username')
+                new_first_name = user_info.get('first_name')
+                
+                # 只有当用户名确实发生变化时才更新
+                if new_username != old_username or new_first_name:
+                    update_seller_info(str(telegram_id), new_username, new_first_name)
+                    updated_count += 1
+                    logger.info(f"Updated seller {telegram_id}: username {old_username} -> {new_username}")
+                    
+            except Exception as e:
+                logger.error(f"Failed to update seller {telegram_id}: {e}")
+                continue
+                
+        await update.message.reply_text(
+            f"✅ Update completed!\n\n"
+            f"📊 Total sellers: {len(sellers)}\n"
+            f"🔄 Updated: {updated_count}\n\n"
+            f"All sellers' username information has been refreshed."
+        )
+        
+    except Exception as e:
+        logger.error(f"批量更新卖家用户名时出错: {e}", exc_info=True)
+        await update.message.reply_text("Failed to update usernames. Please try again later.")
