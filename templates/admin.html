@@ -645,7 +645,11 @@
           </div>
         </div>
         <div class="alert alert-info" style="margin-bottom: 20px;">
-          <strong>提示：</strong> 分流等级决定卖家获得订单的优先级。等级越高，获得订单的机会越多。分流等级范围为1-10。
+          <strong>提示：</strong> 分流等级决定卖家获得订单的优先级。等级越高，获得订单的机会越多。分流等级范围为1-10。<br>
+          <strong>状态说明：</strong><br>
+          • <span class="badge badge-success">接单中</span>：正常接收新订单<br>
+          • <span class="badge badge-warning">已暂停</span>：暂停接收新订单，但可完成现有订单（卖家可通过发送"start"恢复）<br>
+          • <span class="badge badge-danger">已停用</span>：完全停用，无法接收任何订单
         </div>
         <div class="sellers-container">
           <table class="data-table">
@@ -935,11 +939,25 @@
       }
       
       sellers.forEach(seller => {
-        const statusBadge = seller.is_active 
-          ? '<span class="badge badge-success">活跃</span>' 
-          : '<span class="badge badge-secondary">停用</span>';
-        const toggleButtonText = seller.is_active ? '停用' : '启用';
-        const toggleButtonClass = seller.is_active ? 'btn-warning' : 'btn-success';
+        // 确定显示状态
+        let statusBadge, toggleButtonText, toggleButtonClass;
+        
+        if (!seller.is_active) {
+          // 被管理员停用
+          statusBadge = '<span class="badge badge-danger">已停用</span>';
+          toggleButtonText = '启用';
+          toggleButtonClass = 'btn-success';
+        } else if (seller.is_paused) {
+          // 已暂停接单
+          statusBadge = '<span class="badge badge-warning">已暂停</span>';
+          toggleButtonText = '恢复';
+          toggleButtonClass = 'btn-success';
+        } else {
+          // 正常接单
+          statusBadge = '<span class="badge badge-success">接单中</span>';
+          toggleButtonText = '暂停';
+          toggleButtonClass = 'btn-warning';
+        }
         
         const adminBadge = seller.is_admin
           ? '<span class="badge badge-primary">管理员</span>'

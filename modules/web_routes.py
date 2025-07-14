@@ -23,7 +23,18 @@ from modules.database import (
     get_seller_completed_orders, get_seller_pending_orders, check_seller_completed_orders,
     get_seller_today_confirmed_orders_by_user, get_admin_sellers,
     get_user_today_confirmed_count, get_all_today_confirmed_count, create_order_with_deduction_atomic,
-    add_seller, check_all_sellers_full, delete_old_orders, get_today_valid_orders_count
+    add_seller, check_all_sellers_full, delete_old_orders, get_today_valid_orders_count,
+    init_db, get_all_orders, get_order_by_id,
+    get_active_seller_ids, get_active_sellers,
+    get_user_balance_and_credit, get_all_sellers, create_user,
+    get_user_by_username, update_user_password, delete_user_by_id,
+    add_seller, remove_seller, get_seller_info, update_seller_nickname,
+    get_all_users, update_user_balance, update_user_credit_limit,
+    create_order_with_deduction_atomic, toggle_seller_admin,
+    get_seller_completed_orders, get_seller_pending_orders,
+    get_user_orders, get_todays_orders, get_todays_revenue, get_user_total_recharge_today,
+    check_seller_activity, toggle_seller_status, update_seller_last_active, update_seller_info,
+    toggle_seller_pause_status, get_seller_pause_status
 )
 import modules.constants as constants
 
@@ -982,7 +993,8 @@ def register_routes(app, notification_queue):
                 "added_by": s[6],
                 "is_admin": bool(s[7]),
                 "distribution_level": s[8] if len(s) > 8 and s[8] is not None else 1,
-                "max_concurrent_orders": s[9] if len(s) > 9 and s[9] is not None else 5
+                "max_concurrent_orders": s[9] if len(s) > 9 and s[9] is not None else 5,
+                "is_paused": bool(s[10]) if len(s) > 10 and s[10] is not None else False
             }
             
             # 获取已完成订单数和未完成订单数
@@ -1027,7 +1039,7 @@ def register_routes(app, notification_queue):
     @login_required
     @admin_required
     def admin_api_toggle_seller(telegram_id):
-        toggle_seller_status(telegram_id)
+        toggle_seller_pause_status(telegram_id)
         return jsonify({"success": True})
 
     @app.route('/admin/api/sellers/toggle_admin', methods=['POST'])
@@ -1341,7 +1353,7 @@ def register_routes(app, notification_queue):
     @app.route('/api/active-sellers')
     @login_required
     def api_active_sellers():
-        """获取活跃的卖家列表，供下单时选择接单人使用"""
+        """获取活跃且未暂停的卖家列表，供下单时选择接单人使用"""
         sellers = get_active_sellers()
         
         # 格式化最后活跃时间
@@ -1399,22 +1411,22 @@ def register_routes(app, notification_queue):
     def check_seller_activity_api(seller_id):
         """发送卖家活跃度检查请求"""
         try:
-            # 检查卖家是否存在且活跃
+            # 检查卖家是否存在且活跃且未暂停
             if DATABASE_URL.startswith('postgres'):
                 seller = execute_query(
-                    "SELECT telegram_id FROM sellers WHERE telegram_id = ? AND is_active = TRUE", 
+                    "SELECT telegram_id FROM sellers WHERE telegram_id = %s AND is_active = TRUE AND COALESCE(is_paused, FALSE) = FALSE", 
                     (seller_id,), 
                     fetch=True
                 )
             else:
                 seller = execute_query(
-                    "SELECT telegram_id FROM sellers WHERE telegram_id = ? AND is_active = 1", 
+                    "SELECT telegram_id FROM sellers WHERE telegram_id = ? AND is_active = 1 AND COALESCE(is_paused, 0) = 0", 
                     (seller_id,), 
                     fetch=True
                 )
             
             if not seller:
-                return jsonify({"success": False, "message": "卖家不存在或未激活"}), 404
+                return jsonify({"success": False, "message": "卖家不存在、未激活或已暂停"}), 404
             
             # 记录检查请求
             check_seller_activity(str(seller_id))

@@ -37,7 +37,8 @@ from modules.database import (
     update_seller_nickname, get_seller_completed_orders, get_seller_pending_orders,
     check_seller_completed_orders, get_seller_today_confirmed_orders_by_user, get_admin_sellers,
     get_seller_current_orders_count, is_admin_seller, get_all_sellers, get_today_valid_orders_count,
-    toggle_seller_status, update_seller_info
+    toggle_seller_status, update_seller_info, toggle_seller_pause_status, 
+    set_seller_pause_status, get_seller_pause_status
 )
 
 # 设置日志
@@ -312,19 +313,36 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 获取卖家状态
         if DATABASE_URL.startswith('postgres'):
             result = execute_query(
-                "SELECT is_active, desired_orders FROM sellers WHERE telegram_id = %s", 
+                "SELECT is_active, desired_orders, COALESCE(is_paused, FALSE) FROM sellers WHERE telegram_id = %s", 
                 (str(user_id),), 
                 fetch=True
             )
         else:
             result = execute_query(
-                "SELECT is_active, desired_orders FROM sellers WHERE telegram_id = ?", 
+                "SELECT is_active, desired_orders, COALESCE(is_paused, 0) FROM sellers WHERE telegram_id = ?", 
                 (str(user_id),), 
                 fetch=True
             )
         
-        is_active = "Active" if result and result[0][0] else "Inactive"
-        desired_orders = result[0][1] if result and result[0][1] is not None else 0
+        if result:
+            is_active = result[0][0]
+            desired_orders = result[0][1] if result[0][1] is not None else 0
+            is_paused = bool(result[0][2])
+            
+            # 确定状态文本
+            if not is_active:
+                status_text = "Inactive (被管理员停用)"
+                status_emoji = "🔴"
+            elif is_paused:
+                status_text = "Paused (已暂停接单)"
+                status_emoji = "🟡"
+            else:
+                status_text = "Active (正在接单)"
+                status_emoji = "🟢"
+        else:
+            status_text = "Unknown"
+            status_emoji = "⚪"
+            desired_orders = 0
         
         # 检查是否为管理员来显示不同的帮助信息
         stats_help = "/stats - View all sellers' today's valid orders" if is_admin_seller(user_id) else "/stats - View your today's completed orders"
@@ -332,12 +350,13 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await update.message.reply_text(
             f"👋 Hello, {first_name}! You are a seller in our system.\n\n"
-            f"🔹 Current status: {is_active}\n"
+            f"{status_emoji} Current status: {status_text}\n"
             f"🔹 Max order capacity: {desired_orders}\n\n"
             f"Available commands:\n"
             f"/seller - View available and active orders\n"
             f"/orders <number> - Set your maximum order capacity\n"
-            f"/active - Toggle your active status\n"
+            f"/start - Resume receiving orders (if paused)\n"
+            f"/stop - Pause receiving new orders\n"
             f"/test - Test bot status\n"
             f"/test_notify - Test notification feature\n"
             f"{stats_help}{admin_help}"
@@ -531,6 +550,11 @@ async def bot_main(queue):
         bot_application.add_handler(CommandHandler("test_notify", on_test_notify))
         bot_application.add_handler(CommandHandler("stats", on_stats))
         bot_application.add_handler(CommandHandler("update_usernames", on_update_usernames))
+        
+        # 添加start和stop订单命令（使用不同的处理函数避免冲突）
+        bot_application.add_handler(MessageHandler(filters.Regex(r'^(start|START)$'), on_start_orders))
+        bot_application.add_handler(MessageHandler(filters.Regex(r'^(stop|STOP)$'), on_stop_orders))
+        
         print("DEBUG: 已添加测试命令处理程序")
         
         # 添加通用回调处理程序，处理所有回调查询
@@ -1749,3 +1773,68 @@ async def on_update_usernames(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         logger.error(f"批量更新卖家用户名时出错: {e}", exc_info=True)
         await update.message.reply_text("Failed to update usernames. Please try again later.")
+
+async def on_start_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 start 命令，让卖家恢复接单"""
+    user_id = update.effective_user.id
+    
+    if not is_seller(user_id):
+        await update.message.reply_text("您不是卖家，无法使用此命令")
+        return
+        
+    # 更新卖家信息
+    update_seller_info(str(user_id), update.effective_user.username, update.effective_user.first_name)
+    
+    # 检查卖家是否被管理员停用
+    if DATABASE_URL.startswith('postgres'):
+        result = execute_query(
+            "SELECT is_active FROM sellers WHERE telegram_id = %s", 
+            (str(user_id),), 
+            fetch=True
+        )
+    else:
+        result = execute_query(
+            "SELECT is_active FROM sellers WHERE telegram_id = ?", 
+            (str(user_id),), 
+            fetch=True
+        )
+    
+    if not result or not result[0][0]:
+        await update.message.reply_text("⚠️ 您已被管理员停用，无法恢复接单。请联系管理员。")
+        return
+    
+    # 设置为未暂停状态
+    set_seller_pause_status(str(user_id), False)
+    
+    # 更新最后活跃时间
+    update_seller_last_active(user_id)
+    
+    await update.message.reply_text(
+        "🟢 已恢复接单！\n\n"
+        "您现在将开始接收新订单通知。"
+    )
+    logger.info(f"卖家 {user_id} 恢复接单")
+
+async def on_stop_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 stop 命令，让卖家暂停接单"""
+    user_id = update.effective_user.id
+    
+    if not is_seller(user_id):
+        await update.message.reply_text("您不是卖家，无法使用此命令")
+        return
+        
+    # 更新卖家信息
+    update_seller_info(str(user_id), update.effective_user.username, update.effective_user.first_name)
+    
+    # 设置为暂停状态
+    set_seller_pause_status(str(user_id), True)
+    
+    # 更新最后活跃时间
+    update_seller_last_active(user_id)
+    
+    await update.message.reply_text(
+        "🟡 已暂停接单！\n\n"
+        "您将不再接收新订单，但仍可完成现有订单。\n"
+        "发送 /start 可以恢复接单。"
+    )
+    logger.info(f"卖家 {user_id} 暂停接单")

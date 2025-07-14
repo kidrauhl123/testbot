@@ -200,22 +200,6 @@ def init_sqlite_db():
         c.execute("ALTER TABLE sellers ADD COLUMN activity_check_at TEXT")
         conn.commit()
     
-    # 检查sellers表是否需要添加nickname列
-    try:
-        c.execute("SELECT nickname FROM sellers LIMIT 1")
-    except sqlite3.OperationalError:
-        logger.info("为sellers表添加nickname列")
-        c.execute("ALTER TABLE sellers ADD COLUMN nickname TEXT")
-        conn.commit()
-    
-    # 检查sellers表是否需要添加is_admin列
-    try:
-        c.execute("SELECT is_admin FROM sellers LIMIT 1")
-    except sqlite3.OperationalError:
-        logger.info("为sellers表添加is_admin列")
-        c.execute("ALTER TABLE sellers ADD COLUMN is_admin INTEGER DEFAULT 0")
-        conn.commit()
-    
     # 检查sellers表是否需要添加distribution_level列
     try:
         c.execute("SELECT distribution_level FROM sellers LIMIT 1")
@@ -230,6 +214,14 @@ def init_sqlite_db():
     except sqlite3.OperationalError:
         logger.info("为sellers表添加max_concurrent_orders列")
         c.execute("ALTER TABLE sellers ADD COLUMN max_concurrent_orders INTEGER DEFAULT 5")
+        conn.commit()
+    
+    # 添加暂停状态字段
+    try:
+        c.execute("SELECT is_paused FROM sellers LIMIT 1")
+    except sqlite3.OperationalError:
+        logger.info("为sellers表添加is_paused列")
+        c.execute("ALTER TABLE sellers ADD COLUMN is_paused INTEGER DEFAULT 0")
         conn.commit()
     
     # 检查users表中是否需要添加新列
@@ -433,20 +425,12 @@ def init_postgres_db():
         cur.execute("ALTER TABLE sellers ADD COLUMN max_concurrent_orders INTEGER DEFAULT 5")
         conn.commit()
     
-    # 检查sellers表是否需要添加nickname列
+    # 添加暂停状态字段
     try:
-        cur.execute("SELECT nickname FROM sellers LIMIT 1")
+        cur.execute("SELECT is_paused FROM sellers LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
-        logger.info("为sellers表添加nickname列")
-        cur.execute("ALTER TABLE sellers ADD COLUMN nickname TEXT")
-        conn.commit()
-    
-    # 检查sellers表是否需要添加is_admin列
-    try:
-        cur.execute("SELECT is_admin FROM sellers LIMIT 1")
-    except psycopg2.errors.UndefinedColumn:
-        logger.info("为sellers表添加is_admin列")
-        cur.execute("ALTER TABLE sellers ADD COLUMN is_admin BOOLEAN DEFAULT FALSE")
+        logger.info("为sellers表添加is_paused列")
+        cur.execute("ALTER TABLE sellers ADD COLUMN is_paused BOOLEAN DEFAULT FALSE")
         conn.commit()
     
     # 创建用户自定义价格表
@@ -616,7 +600,8 @@ def get_all_sellers():
                        added_at, added_by, 
                        COALESCE(is_admin, FALSE) as is_admin,
                        COALESCE(distribution_level, 1) as distribution_level,
-                       COALESCE(max_concurrent_orders, 5) as max_concurrent_orders
+                       COALESCE(max_concurrent_orders, 5) as max_concurrent_orders,
+                       COALESCE(is_paused, FALSE) as is_paused
                 FROM sellers
                 ORDER BY added_at DESC
             """, fetch=True)
@@ -626,7 +611,8 @@ def get_all_sellers():
             c = conn.cursor()
             c.execute("""
                 SELECT telegram_id, username, first_name, nickname, is_active, 
-                      added_at, added_by, is_admin, distribution_level, max_concurrent_orders
+                      added_at, added_by, is_admin, distribution_level, max_concurrent_orders,
+                      COALESCE(is_paused, 0) as is_paused
                 FROM sellers
                 ORDER BY added_at DESC
             """)
@@ -638,11 +624,11 @@ def get_all_sellers():
         return []
 
 def get_active_seller_ids():
-    """获取所有活跃的卖家ID"""
+    """获取所有活跃且未暂停的卖家ID"""
     if DATABASE_URL.startswith('postgres'):
-        sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = TRUE", fetch=True)
+        sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = TRUE AND COALESCE(is_paused, FALSE) = FALSE", fetch=True)
     else:
-        sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = 1", fetch=True)
+        sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = 1 AND COALESCE(is_paused, 0) = 0", fetch=True)
     
     return [seller[0] for seller in sellers] if sellers else []
 
@@ -693,20 +679,20 @@ def get_seller_info(telegram_id):
         return None
 
 def get_active_sellers():
-    """获取所有活跃的卖家的ID和昵称"""
+    """获取所有活跃且未暂停的卖家的ID和昵称"""
     if DATABASE_URL.startswith('postgres'):
         sellers = execute_query("""
             SELECT telegram_id, nickname, username, first_name, 
                    last_active_at
             FROM sellers 
-            WHERE is_active = TRUE
+            WHERE is_active = TRUE AND COALESCE(is_paused, FALSE) = FALSE
         """, fetch=True)
     else:
         sellers = execute_query("""
             SELECT telegram_id, nickname, username, first_name, 
                    last_active_at
             FROM sellers 
-            WHERE is_active = 1
+            WHERE is_active = 1 AND COALESCE(is_paused, 0) = 0
         """, fetch=True)
     
     result = []
@@ -731,7 +717,41 @@ def add_seller(telegram_id, username, first_name, nickname, added_by):
 
 def toggle_seller_status(telegram_id):
     """切换卖家活跃状态"""
-    execute_query("UPDATE sellers SET is_active = NOT is_active WHERE telegram_id = ?", (telegram_id,))
+    if DATABASE_URL.startswith('postgres'):
+        execute_query("UPDATE sellers SET is_active = NOT is_active WHERE telegram_id = %s", (telegram_id,))
+    else:
+        execute_query("UPDATE sellers SET is_active = NOT is_active WHERE telegram_id = ?", (telegram_id,))
+
+def toggle_seller_pause_status(telegram_id):
+    """切换卖家暂停状态（用于start/stop命令和admin暂停功能）"""
+    if DATABASE_URL.startswith('postgres'):
+        execute_query("UPDATE sellers SET is_paused = NOT COALESCE(is_paused, FALSE) WHERE telegram_id = %s", (telegram_id,))
+    else:
+        execute_query("UPDATE sellers SET is_paused = NOT COALESCE(is_paused, 0) WHERE telegram_id = ?", (telegram_id,))
+
+def set_seller_pause_status(telegram_id, is_paused):
+    """设置卖家暂停状态"""
+    if DATABASE_URL.startswith('postgres'):
+        execute_query("UPDATE sellers SET is_paused = %s WHERE telegram_id = %s", (is_paused, telegram_id))
+    else:
+        execute_query("UPDATE sellers SET is_paused = ? WHERE telegram_id = ?", (1 if is_paused else 0, telegram_id))
+
+def get_seller_pause_status(telegram_id):
+    """获取卖家暂停状态"""
+    if DATABASE_URL.startswith('postgres'):
+        result = execute_query(
+            "SELECT COALESCE(is_paused, FALSE) FROM sellers WHERE telegram_id = %s", 
+            (telegram_id,), 
+            fetch=True
+        )
+    else:
+        result = execute_query(
+            "SELECT COALESCE(is_paused, 0) FROM sellers WHERE telegram_id = ?", 
+            (telegram_id,), 
+            fetch=True
+        )
+    
+    return bool(result[0][0]) if result else False
 
 def remove_seller(telegram_id):
     """移除卖家"""
