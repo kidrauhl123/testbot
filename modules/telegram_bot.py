@@ -331,10 +331,10 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stats_help = "/stats - View all sellers' today's valid orders" if is_admin_seller(user_id) else "/stats - View your today's completed orders"
         admin_help = "\n/update_usernames - Update all sellers' usernames" if is_admin_seller(user_id) else ""
         
-        # 获取参与分流状态
+        # Get participation status
         from modules.database import get_seller_participation_status
         participation_status = get_seller_participation_status(user_id)
-        participate_text = "参与分流" if participation_status and participation_status.get("participate_in_distribution") else "暂停分流"
+        participate_text = "Participating" if participation_status and participation_status.get("participate_in_distribution") else "Paused"
         
         await update.message.reply_text(
             f"👋 Hello, {first_name}! You are a seller in our system.\n\n"
@@ -1599,13 +1599,13 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['welcomed'] = True
 
 async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """显示统计信息：管理员查看所有卖家的今日有效订单数，普通卖家查看自己的"""
+    """Display statistics: Admins view all sellers' today's valid orders, regular sellers view their own"""
     user_id = update.effective_user.id
     if not is_seller(user_id):
         await update.message.reply_text("You are not a seller and cannot use this command.")
         return
         
-    # 更新卖家信息
+    # Update seller info
     update_seller_info(str(user_id), update.effective_user.username, update.effective_user.first_name)
 
     try:
@@ -1717,7 +1717,7 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Failed to retrieve stats. Please try again later.")
 
 async def on_update_usernames(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """管理员命令：更新所有卖家的用户名信息"""
+    """Admin command: Update all sellers' username information"""
     user_id = update.effective_user.id
     
     if not is_seller(user_id):
@@ -1728,13 +1728,13 @@ async def on_update_usernames(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("Only admin sellers can use this command.")
         return
         
-    # 更新当前管理员的信息
+    # Update current admin info
     update_seller_info(str(user_id), update.effective_user.username, update.effective_user.first_name)
     
     try:
         await update.message.reply_text("🔄 Starting to update all sellers' usernames...")
         
-        # 获取所有卖家
+        # Get all sellers
         sellers = get_all_sellers()
         if not sellers:
             await update.message.reply_text("No sellers found in database.")
@@ -1746,12 +1746,12 @@ async def on_update_usernames(update: Update, context: ContextTypes.DEFAULT_TYPE
             old_username = seller[1]
             
             try:
-                # 尝试通过Telegram API获取最新的用户信息
+                # Try to get latest user info through Telegram API
                 user_info = await get_user_info(int(telegram_id))
                 new_username = user_info.get('username')
                 new_first_name = user_info.get('first_name')
                 
-                # 只有当用户名确实发生变化时才更新
+                # Only update when username actually changed
                 if new_username != old_username or new_first_name:
                     update_seller_info(str(telegram_id), new_username, new_first_name)
                     updated_count += 1
@@ -1773,84 +1773,84 @@ async def on_update_usernames(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("Failed to update usernames. Please try again later.")
 
 async def on_start_distribution(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理 start 命令 - 开始参与分流"""
+    """Handle start command - begin participating in distribution"""
     user_id = update.effective_user.id
     
     if not is_seller(user_id):
-        await update.message.reply_text("您不是卖家，无法使用此命令")
+        await update.message.reply_text("You are not a seller, cannot use this command")
         return
         
-    # 更新卖家信息
+    # Update seller info
     update_seller_info(str(user_id), update.effective_user.username, update.effective_user.first_name)
     
-    # 导入新的函数
+    # Import new functions
     from modules.database import set_seller_distribution_participation, get_seller_participation_status
     
-    # 获取当前状态
+    # Get current status
     status = get_seller_participation_status(user_id)
     if not status:
-        await update.message.reply_text("无法获取您的状态信息，请联系管理员")
+        await update.message.reply_text("Unable to get your status information, please contact admin")
         return
     
     if not status["is_active"]:
-        await update.message.reply_text("❌ 您的账户已被管理员停用，无法参与接单")
+        await update.message.reply_text("❌ Your account has been disabled by admin, cannot participate in orders")
         return
     
     if status["participate_in_distribution"]:
-        await update.message.reply_text("✅ 您已经在参与接单分流中")
+        await update.message.reply_text("✅ You are already participating in order distribution")
         return
     
-    # 设置参与分流状态
+    # Set participation status
     if set_seller_distribution_participation(str(user_id), True):
-        # 更新最后活跃时间
+        # Update last active time
         update_seller_last_active(user_id)
         
         await update.message.reply_text(
-            "🚀 *开始参与接单*\n\n"
-            "您现在可以接收新订单通知了！\n\n"
-            "📝 使用 `stop` 命令可以暂停参与接单",
+            "🚀 *Started receiving orders*\n\n"
+            "You will now receive new order notifications!\n\n"
+            "📝 Use `stop` command to pause receiving orders",
             parse_mode='Markdown'
         )
         logger.info(f"卖家 {user_id} 开始参与分流")
     else:
-        await update.message.reply_text("❌ 操作失败，请稍后重试或联系管理员")
+        await update.message.reply_text("❌ Operation failed, please try again later or contact admin")
 
 async def on_stop_distribution(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理 stop 命令 - 停止参与分流"""
+    """Handle stop command - stop participating in distribution"""
     user_id = update.effective_user.id
     
     if not is_seller(user_id):
-        await update.message.reply_text("您不是卖家，无法使用此命令")
+        await update.message.reply_text("You are not a seller, cannot use this command")
         return
         
-    # 更新卖家信息
+    # Update seller info
     update_seller_info(str(user_id), update.effective_user.username, update.effective_user.first_name)
     
-    # 导入新的函数
+    # Import new functions
     from modules.database import set_seller_distribution_participation, get_seller_participation_status
     
-    # 获取当前状态
+    # Get current status
     status = get_seller_participation_status(user_id)
     if not status:
-        await update.message.reply_text("无法获取您的状态信息，请联系管理员")
+        await update.message.reply_text("Unable to get your status information, please contact admin")
         return
     
     if not status["participate_in_distribution"]:
-        await update.message.reply_text("⏸️ 您已经暂停参与接单分流")
+        await update.message.reply_text("⏸️ You have already paused participating in order distribution")
         return
     
-    # 设置不参与分流状态
+    # Set non-participation status
     if set_seller_distribution_participation(str(user_id), False):
-        # 更新最后活跃时间
+        # Update last active time
         update_seller_last_active(user_id)
         
         await update.message.reply_text(
-            "⏸️ *暂停参与接单*\n\n"
-            "您将不再接收新订单通知\n"
-            "但您仍可以处理已接收的订单\n\n"
-            "📝 使用 `start` 命令可以重新参与接单",
+            "⏸️ *Paused receiving orders*\n\n"
+            "You will no longer receive new order notifications\n"
+            "but you can still handle accepted orders\n\n"
+            "📝 Use `start` command to resume receiving orders",
             parse_mode='Markdown'
         )
         logger.info(f"卖家 {user_id} 暂停参与分流")
     else:
-        await update.message.reply_text("❌ 操作失败，请稍后重试或联系管理员")
+        await update.message.reply_text("❌ Operation failed, please try again later or contact admin")
