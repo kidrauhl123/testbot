@@ -533,7 +533,9 @@ async def bot_main(queue):
         print(f"DEBUG: 使用的BOT_TOKEN: {BOT_TOKEN[:5]}...{BOT_TOKEN[-5:]}")
         
         # 添加处理程序
-        bot_application.add_handler(CommandHandler("start", on_start))
+        bot_application.add_handler(CommandHandler("help", on_start))  # 改为help命令
+        bot_application.add_handler(CommandHandler("start", on_start_distribution))  # start用于开始分流
+        bot_application.add_handler(CommandHandler("stop", on_stop_distribution))   # stop用于停止分流
         bot_application.add_handler(CommandHandler("seller", on_seller_command))
         bot_application.add_handler(CommandHandler("orders", on_orders))
         bot_application.add_handler(CommandHandler("active", on_active_command))

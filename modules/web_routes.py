@@ -1380,6 +1380,19 @@ def register_routes(app, notification_queue):
             "success": True,
             "sellers": sellers
         })
+    
+    @app.route('/api/participating-sellers')
+    @login_required
+    def api_participating_sellers():
+        """获取参与分流的卖家数量"""
+        from modules.database import get_participating_sellers
+        participating_sellers = get_participating_sellers()
+        
+        return jsonify({
+            "success": True,
+            "count": len(participating_sellers),
+            "sellers": participating_sellers
+        })
         
     @app.route('/api/all-sellers')
     @login_required

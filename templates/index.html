@@ -2431,25 +2431,25 @@
     }
   }
   
-  // 更新活跃卖家数量
+  // 更新参与分流的卖家数量
   async function updateActiveSellersCount() {
     try {
-        const response = await fetch('/api/active-sellers');
+        const response = await fetch('/api/participating-sellers');
         if (!response.ok) {
-            console.error('获取卖家列表失败:', response.status);
+            console.error('获取参与分流卖家列表失败:', response.status);
             return;
         }
         
         const data = await response.json();
         
-        if (data.success && data.sellers) {
+        if (data.success) {
             const activeSellersCount = document.getElementById('active-sellers-count');
             if (activeSellersCount) {
-                activeSellersCount.textContent = data.sellers.length;
+                activeSellersCount.textContent = data.count;
             }
         }
     } catch (error) {
-        console.error('获取卖家列表失败:', error);
+        console.error('获取参与分流卖家列表失败:', error);
     }
   }
   
