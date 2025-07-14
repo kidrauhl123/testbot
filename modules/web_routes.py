@@ -454,7 +454,7 @@ def register_routes(app, notification_queue):
             offset = int(request.args.get('offset', 0))
             
             # 限制最大获取数量，但允许设置更大的值以支持加载所有订单
-            limit = min(limit, 1000)
+            limit = min(limit, 1500)
             
             # 根据用户权限，决定查询所有订单还是仅当前用户的订单
             is_admin = session.get('is_admin')
@@ -1817,7 +1817,7 @@ def register_routes(app, notification_queue):
         try:
             # 获取参数
             limit = int(request.args.get('limit', 20))
-            limit = min(limit, 1000)  # 增加最大限制到1000，支持显示更多订单
+            limit = min(limit, 1500)  # 增加最大限制到1500，支持显示更多订单
             page = int(request.args.get('page', 1))  # 添加分页支持
             offset = (page - 1) * limit
             

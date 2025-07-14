@@ -588,7 +588,7 @@
   async function loadOrdersAndStats() {
     try {
       console.log('开始加载订单数据');
-      const resp = await fetch('/orders/recent?limit=100');
+      const resp = await fetch('/orders/recent?limit=1500');
       console.log('API响应状态:', resp.status);
       
       if (!resp.ok) {
