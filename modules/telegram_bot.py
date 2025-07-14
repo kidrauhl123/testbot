@@ -36,7 +36,8 @@ from modules.database import (
     get_user_custom_prices, set_user_custom_price, delete_user_custom_price,
     update_seller_nickname, get_seller_completed_orders, get_seller_pending_orders,
     check_seller_completed_orders, get_seller_today_confirmed_orders_by_user, get_admin_sellers,
-    get_seller_current_orders_count
+    get_seller_current_orders_count, is_admin_seller, get_all_sellers, get_today_valid_orders_count,
+    toggle_seller_status
 )
 
 # 设置日志
@@ -321,6 +322,9 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_active = "Active" if result and result[0][0] else "Inactive"
         desired_orders = result[0][1] if result and result[0][1] is not None else 0
         
+        # 检查是否为管理员来显示不同的帮助信息
+        stats_help = "/stats - View all sellers' today's valid orders" if is_admin_seller(user_id) else "/stats - View your today's completed orders"
+        
         await update.message.reply_text(
             f"👋 Hello, {first_name}! You are a seller in our system.\n\n"
             f"🔹 Current status: {is_active}\n"
@@ -331,7 +335,7 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"/active - Toggle your active status\n"
             f"/test - Test bot status\n"
             f"/test_notify - Test notification feature\n"
-            f"/stats - View today's completed orders"
+            f"{stats_help}"
         )
     else:
         await update.message.reply_text(
@@ -1536,6 +1540,9 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_seller(user_id):
         # 只回复第一条消息，避免重复打扰
         if not hasattr(context.user_data, 'welcomed'):
+            # 检查是否为管理员来显示不同的帮助信息
+            stats_help = "/stats - View all sellers' today's valid orders" if is_admin_seller(user_id) else "/stats - View your today's completed orders"
+            
             await update.message.reply_text(
                 "👋 Hello! To use the bot features, please use the following commands:\n"
                 "/seller - View available and active orders\n"
@@ -1543,33 +1550,104 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "/active - Toggle your active status\n"
                 "/test - Test bot status\n"
                 "/test_notify - Test notification feature\n"
-                "/stats - View today's completed orders"
+                f"{stats_help}"
             )
             context.user_data['welcomed'] = True
 
 async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """显示卖家今日完成的订单数"""
+    """显示统计信息：管理员查看所有卖家的今日有效订单数，普通卖家查看自己的"""
     user_id = update.effective_user.id
     if not is_seller(user_id):
         await update.message.reply_text("You are not a seller and cannot use this command.")
         return
 
     try:
-        stats_by_user = get_seller_today_confirmed_orders_by_user(user_id)
-        
-        total_completed = sum(count for _, count in stats_by_user)
-        
-        message_parts = [f"You have completed {total_completed} order{'s' if total_completed != 1 else ''} today."]
-        
-        if stats_by_user:
-            message_parts.append("\nBreakdown by user:")
-            for user, count in stats_by_user:
-                user_display = user if user else "Unknown"
-                message_parts.append(f"- {user_display}: {count} order{'s' if count != 1 else ''}")
-        
-        message = "\n".join(message_parts)
-        await update.message.reply_text(message)
+        # 检查是否为管理员
+        if is_admin_seller(user_id):
+            # 管理员：显示所有卖家的今日有效订单数
+            sellers = get_all_sellers()
+            if not sellers:
+                await update.message.reply_text("📊 *Today's Valid Orders (All Sellers)*\n\nNo sellers found.", parse_mode='Markdown')
+                return
+            
+            message_parts = ["📊 *Today's Valid Orders (All Sellers)*\n"]
+            total_orders = 0
+            
+            for seller in sellers:
+                telegram_id = seller[0]
+                username = seller[1] 
+                first_name = seller[2]
+                nickname = seller[3]
+                is_active = seller[4]
+                
+                # 优先显示昵称，其次是名字，最后是用户名或ID
+                display_name = nickname or first_name or username or f"ID:{telegram_id}"
+                
+                # 获取该卖家今日有效订单数
+                # 这里我们需要通过接单人来统计，而不是用户ID
+                if DATABASE_URL.startswith('postgres'):
+                    seller_orders_result = execute_query("""
+                        SELECT COUNT(*) FROM orders 
+                        WHERE accepted_by = %s
+                        AND (
+                            -- 充值成功且非长时间未收到
+                            (status = 'completed' AND (confirm_status IS NULL OR confirm_status != 'not_received'))
+                            OR
+                            -- 充值失败但已确认收到
+                            (status = 'failed' AND confirm_status = 'confirmed')
+                            OR
+                            -- 已接单且买家已确认收到
+                            (status = 'accepted' AND confirm_status = 'confirmed')
+                        )
+                        AND to_char(created_at::timestamp, 'YYYY-MM-DD') = %s
+                                         """, (str(telegram_id), datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")), fetch=True)
+                else:
+                    seller_orders_result = execute_query("""
+                        SELECT COUNT(*) FROM orders 
+                        WHERE accepted_by = ?
+                        AND (
+                            -- 充值成功且非长时间未收到
+                            (status = 'completed' AND (confirm_status IS NULL OR confirm_status != 'not_received'))
+                            OR
+                            -- 充值失败但已确认收到
+                            (status = 'failed' AND confirm_status = 'confirmed')
+                            OR
+                            -- 已接单且买家已确认收到
+                            (status = 'accepted' AND confirm_status = 'confirmed')
+                        )
+                        AND substr(created_at, 1, 10) = ?
+                    """, (str(telegram_id), datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")), fetch=True)
+                
+                valid_orders = seller_orders_result[0][0] if seller_orders_result else 0
+                total_orders += valid_orders
+                
+                # 添加状态标识
+                status_emoji = "🟢" if is_active else "🔴"
+                username_display = f"@{username}" if username else display_name
+                
+                message_parts.append(f"{status_emoji} {username_display}: *{valid_orders}*")
+            
+            message_parts.append(f"\n*Total: {total_orders}* valid orders today")
+            message = "\n".join(message_parts)
+            
+        else:
+            # 普通卖家：显示自己的统计信息
+            stats_by_user = get_seller_today_confirmed_orders_by_user(user_id)
+            
+            total_completed = sum(count for _, count in stats_by_user)
+            
+            message_parts = [f"📊 *Your Today's Stats*\n\nYou have completed *{total_completed}* order{'s' if total_completed != 1 else ''} today."]
+            
+            if stats_by_user:
+                message_parts.append("\nBreakdown by user:")
+                for user, count in stats_by_user:
+                    user_display = user if user else "Unknown"
+                    message_parts.append(f"- {user_display}: {count} order{'s' if count != 1 else ''}")
+            
+            message = "\n".join(message_parts)
+
+        await update.message.reply_text(message, parse_mode='Markdown')
 
     except Exception as e:
-        logger.error(f"获取卖家 {user_id} 统计信息时出错: {e}", exc_info=True)
-        await update.message.reply_text("Failed to retrieve your stats. Please try again later.")
+        logger.error(f"获取统计信息时出错 (用户: {user_id}): {e}", exc_info=True)
+        await update.message.reply_text("Failed to retrieve stats. Please try again later.")
