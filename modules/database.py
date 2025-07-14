@@ -1170,6 +1170,73 @@ def get_user_today_confirmed_count(user_id):
         logger.error(f"获取用户今日确认订单数失败: {str(e)}", exc_info=True)
         return 0
 
+def get_today_valid_orders_count(user_id=None):
+    """获取今日有效订单数
+    
+    有效订单数计算规则：
+    - 充值成功的订单 (status = 'completed')
+    - + 充值失败但已确认收到的订单 (status = 'failed' AND confirm_status = 'confirmed')  
+    - - 充值成功但被标记长时间未收到的订单 (status = 'completed' AND confirm_status = 'not_received')
+    
+    Args:
+        user_id: 如果指定，只计算该用户的订单；否则计算所有订单
+    """
+    from datetime import datetime
+    import pytz
+    
+    today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
+    logger.info(f"查询今日({today})有效订单...")
+    
+    try:
+        # 根据数据库类型构建查询
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL版本
+            base_query = """
+                SELECT COUNT(*) FROM orders 
+                WHERE (
+                    -- 充值成功且非长时间未收到
+                    (status = 'completed' AND (confirm_status IS NULL OR confirm_status != 'not_received'))
+                    OR
+                    -- 充值失败但已确认收到
+                    (status = 'failed' AND confirm_status = 'confirmed')
+                )
+                AND to_char(created_at::timestamp, 'YYYY-MM-DD') = %s
+            """
+            if user_id:
+                query = base_query + " AND user_id = %s"
+                params = (today, user_id)
+            else:
+                query = base_query
+                params = (today,)
+        else:
+            # SQLite版本
+            base_query = """
+                SELECT COUNT(*) FROM orders 
+                WHERE (
+                    -- 充值成功且非长时间未收到
+                    (status = 'completed' AND (confirm_status IS NULL OR confirm_status != 'not_received'))
+                    OR
+                    -- 充值失败但已确认收到
+                    (status = 'failed' AND confirm_status = 'confirmed')
+                )
+                AND substr(created_at, 1, 10) = ?
+            """
+            if user_id:
+                query = base_query + " AND user_id = ?"
+                params = (today, user_id)
+            else:
+                query = base_query
+                params = (today,)
+                
+        result = execute_query(query, params, fetch=True)
+        count = result[0][0] if result and result[0] else 0
+        
+        logger.info(f"今日有效订单数: {count} (用户ID: {user_id if user_id else '全站'})")
+        return count
+    except Exception as e:
+        logger.error(f"获取今日有效订单数失败: {str(e)}", exc_info=True)
+        return 0
+
 def get_all_today_confirmed_count():
     """获取所有用户今天已确认的订单总数"""
     from datetime import datetime

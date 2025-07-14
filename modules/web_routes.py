@@ -23,7 +23,7 @@ from modules.database import (
     get_seller_completed_orders, get_seller_pending_orders, check_seller_completed_orders,
     get_seller_today_confirmed_orders_by_user, get_admin_sellers,
     get_user_today_confirmed_count, get_all_today_confirmed_count, create_order_with_deduction_atomic,
-    add_seller, check_all_sellers_full, delete_old_orders
+    add_seller, check_all_sellers_full, delete_old_orders, get_today_valid_orders_count
 )
 import modules.constants as constants
 
@@ -1592,18 +1592,18 @@ def register_routes(app, notification_queue):
             user_id = session.get('user_id')
             username = session.get('username')
             
-            # 获取用户今日确认订单数
-            user_confirmed_count = get_user_today_confirmed_count(user_id)
+            # 获取用户今日有效订单数
+            user_valid_count = get_today_valid_orders_count(user_id)
             
-            # 如果是管理员，还要获取全站今日确认订单数
-            all_confirmed_count = 0
+            # 如果是管理员，还要获取全站今日有效订单数
+            all_valid_count = 0
             if session.get('is_admin'):
-                all_confirmed_count = get_all_today_confirmed_count()
+                all_valid_count = get_today_valid_orders_count()  # 不传user_id，获取全站数据
                 
             return jsonify({
                 'success': True,
-                'user_today_confirmed': user_confirmed_count,
-                'all_today_confirmed': all_confirmed_count
+                'user_today_confirmed': user_valid_count,  # 保持字段名以兼容前端
+                'all_today_confirmed': all_valid_count    # 保持字段名以兼容前端
             })
         except Exception as e:
             logger.error(f"获取今日统计失败: {str(e)}", exc_info=True)
