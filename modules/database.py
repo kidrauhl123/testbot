@@ -279,7 +279,7 @@ def init_sqlite_db():
         # 为用户ID添加索引，优化按用户查询订单操作
         c.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)")
         
-    conn.commit()
+        conn.commit()
         logger.info("数据库索引创建或更新完成")
     except Exception as e:
         logger.error(f"创建索引时出错: {str(e)}", exc_info=True)
