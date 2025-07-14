@@ -1824,7 +1824,7 @@ def register_routes(app, notification_queue):
             user_id = session.get('user_id')
             
             # 精简SQL查询，只选择必要字段
-            fields = "id, account, status, created_at, remark, accepted_by, accepted_by_nickname"
+            fields = "id, account, status, created_at, remark, accepted_by, accepted_by_nickname, confirm_status"
             
             if DATABASE_URL.startswith('postgres'):
                 if is_admin:
@@ -1860,7 +1860,7 @@ def register_routes(app, notification_queue):
             # 格式化数据，只返回必要字段
             formatted_orders = []
             for order in orders:
-                oid, account, status, created_at, remark, accepted_by, accepted_by_nickname, username = order
+                oid, account, status, created_at, remark, accepted_by, accepted_by_nickname, confirm_status, username = order
                 
                 order_data = {
                     "id": oid,
@@ -1870,6 +1870,7 @@ def register_routes(app, notification_queue):
                     "created_at": created_at,
                     "remark": remark or "",
                     "accepted_by": accepted_by_nickname or accepted_by or "",
+                    "confirm_status": confirm_status or "pending",
                     "username": username or ""
                 }
                 formatted_orders.append(order_data)

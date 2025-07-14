@@ -355,6 +355,25 @@
       border-color: #5a6fd6;
     }
     
+    /* 批量操作相关样式 */
+    .order-checkbox {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+    
+    #selectAllOrders {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+    
+    .btn-danger.btn-sm {
+      padding: 5px 10px;
+      font-size: 12px;
+      border-radius: 4px;
+    }
+    
     .filter-panel {
       background: #f8f9ff;
       border: 1px solid #e1e5f5;
@@ -1524,6 +1543,9 @@
                       <button id="gridViewBtn" class="view-btn" title="网格视图"><i class="fas fa-th"></i></button>
                       <button id="tableViewBtn" class="view-btn active" title="表格视图"><i class="fas fa-list"></i></button>
                     </div>
+                    {% if session.is_admin %}
+                    <button id="batchDeleteBtn" class="btn btn-danger btn-sm" style="margin-left: 10px; display: none;"><i class="fas fa-trash"></i> 批量删除</button>
+                    {% endif %}
                   </div>
                 </div>
                 <div class="search-container">
@@ -1561,6 +1583,15 @@
                         <option value="accepted">已接单</option>
                         <option value="completed">充值成功</option>
                         <option value="failed">充值失败</option>
+                      </select>
+                    </div>
+                    <div class="filter-section">
+                      <h4>确认状态</h4>
+                      <select id="confirmStatusFilter" class="filter-select">
+                        <option value="">全部确认状态</option>
+                        <option value="pending">待确认</option>
+                        <option value="confirmed">确认收到</option>
+                        <option value="not_received">长时间未收到</option>
                       </select>
                     </div>
                     <div class="filter-section">
@@ -2810,6 +2841,7 @@
       <table class="orders-table">
         <thead>
           <tr>
+            ${isAdmin ? '<th><input type="checkbox" id="selectAllOrders" title="全选/取消全选"></th>' : ''}
             <th>ID</th>
             <th>YouTube</th>
             <th>状态</th>
@@ -2829,6 +2861,7 @@
       
       html += `
         <tr data-order-id="${o.id}">
+          ${isAdmin ? `<td><input type="checkbox" class="order-checkbox" data-id="${o.id}"></td>` : ''}
           <td>${o.id}</td>
           <td>${o.account.includes('uploads') ? `<a href="/${o.account}" target="_blank">查看二维码</a>` : '未上传二维码'}</td>
           <td><span class="status-badge ${cls}">${o.status_text}</span></td>
@@ -2876,6 +2909,11 @@
         confirmBtn.classList.add(status);
       }
     });
+    
+    // 如果是管理员，初始化批量选择功能
+    if (isAdmin) {
+      initBatchOperations();
+    }
   }
 
   // 加载更多订单
@@ -3023,6 +3061,92 @@
     // 重新渲染订单
     renderOrders(allOrders);
   }
+  
+  // 初始化批量操作
+  function initBatchOperations() {
+    // 全选/取消全选
+    const selectAllCheckbox = document.getElementById('selectAllOrders');
+    if (selectAllCheckbox) {
+      selectAllCheckbox.addEventListener('change', function() {
+        const isChecked = this.checked;
+        const checkboxes = document.querySelectorAll('.order-checkbox');
+        checkboxes.forEach(checkbox => {
+          checkbox.checked = isChecked;
+        });
+        updateBatchDeleteButton();
+      });
+    }
+    
+    // 个别复选框点击事件
+    const checkboxes = document.querySelectorAll('.order-checkbox');
+    checkboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', updateBatchDeleteButton);
+    });
+    
+    // 初始化批量删除按钮
+    const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+    if (batchDeleteBtn) {
+      batchDeleteBtn.addEventListener('click', batchDeleteOrders);
+    }
+    
+    // 更新批量删除按钮状态
+    updateBatchDeleteButton();
+  }
+  
+  // 更新批量删除按钮的显示/隐藏状态
+  function updateBatchDeleteButton() {
+    const selectedCount = document.querySelectorAll('.order-checkbox:checked').length;
+    const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+    
+    if (batchDeleteBtn) {
+      if (selectedCount > 0) {
+        batchDeleteBtn.style.display = 'inline-block';
+        batchDeleteBtn.textContent = `批量删除(${selectedCount})`;
+      } else {
+        batchDeleteBtn.style.display = 'none';
+      }
+    }
+  }
+  
+  // 执行批量删除操作
+  async function batchDeleteOrders() {
+    const selectedCheckboxes = document.querySelectorAll('.order-checkbox:checked');
+    const orderIds = Array.from(selectedCheckboxes).map(checkbox => parseInt(checkbox.dataset.id));
+    
+    if (!orderIds.length) return;
+    
+    if (!confirm(`确定要删除选中的 ${orderIds.length} 个订单吗？此操作不可恢复！`)) {
+      return;
+    }
+    
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    loadingOverlay.style.display = 'flex';
+    
+    try {
+      const response = await fetch('/admin/api/orders/batch-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ order_ids: orderIds })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        showCustomAlert(`成功删除 ${result.deleted_count} 个订单`, 'success');
+        // 重新加载订单列表
+        await loadOrders();
+      } else {
+        showCustomAlert(result.error || '删除失败，请重试', 'error');
+      }
+    } catch (error) {
+      console.error('批量删除订单失败:', error);
+      showCustomAlert('网络错误，批量删除失败', 'error');
+    } finally {
+      loadingOverlay.style.display = 'none';
+    }
+  }
 
   // 当用户离开页面时停止自动刷新
   window.addEventListener('beforeunload', function() {
@@ -3114,6 +3238,12 @@
       if (result.success) {
         showCustomAlert(`订单状态已更新为：${result.confirm_text}`, 'success');
         
+        // 更新本地订单数据
+        const orderIndex = allOrders.findIndex(o => o.id === orderId);
+        if (orderIndex !== -1) {
+          allOrders[orderIndex].confirm_status = status;
+        }
+        
         // 更新订单状态
         const orderElem = document.querySelector(`.order-list-item[data-order-id="${orderId}"]`) || 
                          document.querySelector(`tr[data-order-id="${orderId}"]`);
@@ -3123,7 +3253,7 @@
           const optionsElem = document.getElementById(`confirm-options-${orderId}`);
           
           if (confirmBtn) {
-            // 更新按钮状态
+            // 更新按钮文本
             confirmBtn.textContent = result.confirm_text;
             
             // 移除之前的状态类
@@ -3138,8 +3268,8 @@
           }
         }
         
-        // 重新加载订单列表，确保所有数据都是最新的
-        await loadOrders();
+        // 不再重新加载订单列表，避免丢失确认状态
+        // setTimeout(() => loadOrders(), 500);
       } else {
         showCustomAlert(result.error || '确认失败，请重试', 'error');
       }
@@ -3430,6 +3560,7 @@
     const sellerFilter = document.getElementById('sellerFilter');
     const submitterFilter = document.getElementById('submitterFilter');
     const statusFilter = document.getElementById('statusFilter');
+    const confirmStatusFilter = document.getElementById('confirmStatusFilter');
     const startDateFilter = document.getElementById('startDateFilter');
     const endDateFilter = document.getElementById('endDateFilter');
     
@@ -3438,6 +3569,7 @@
       seller: sellerFilter ? sellerFilter.value : '',
       submitter: submitterFilter && isAdmin ? submitterFilter.value : '', // 只有管理员才能使用提交者筛选
       status: statusFilter ? statusFilter.value : '',
+      confirmStatus: confirmStatusFilter ? confirmStatusFilter.value : '',
       startDate: startDateFilter ? startDateFilter.value : '',
       endDate: endDateFilter ? endDateFilter.value : ''
     };
@@ -3525,6 +3657,23 @@
       }
     }
     
+    // 添加确认状态筛选标签
+    if (filters.confirmStatus) {
+      const confirmStatusFilter = document.getElementById('confirmStatusFilter');
+      const confirmStatusName = confirmStatusFilter ? confirmStatusFilter.options[confirmStatusFilter.selectedIndex].text : '';
+      
+      if (confirmStatusName) {
+        const tag = createFilterTag('确认状态: ' + confirmStatusName, () => {
+          filters.confirmStatus = '';
+          document.getElementById('confirmStatusFilter').value = '';
+          updateActiveFilters();
+          const filteredOrders = filterOrders(allOrders);
+          renderOrders(filteredOrders);
+        });
+        activeFilters.appendChild(tag);
+      }
+    }
+    
     // 添加日期筛选标签
     if (filters.startDate || filters.endDate) {
       let dateText = '日期: ';
@@ -3570,12 +3719,14 @@
     const sellerFilter = document.getElementById('sellerFilter');
     const submitterFilter = document.getElementById('submitterFilter');
     const statusFilter = document.getElementById('statusFilter');
+    const confirmStatusFilter = document.getElementById('confirmStatusFilter');
     const startDateFilter = document.getElementById('startDateFilter');
     const endDateFilter = document.getElementById('endDateFilter');
     
     if (sellerFilter) sellerFilter.value = '';
     if (submitterFilter) submitterFilter.value = '';
     if (statusFilter) statusFilter.value = '';
+    if (confirmStatusFilter) confirmStatusFilter.value = '';
     if (startDateFilter) startDateFilter.value = today;
     if (endDateFilter) endDateFilter.value = today;
     
@@ -3584,6 +3735,7 @@
       seller: '',
       submitter: '',
       status: '',
+      confirmStatus: '',
       startDate: today,
       endDate: today
     };
@@ -3661,6 +3813,11 @@
       };
       const statusText = statusMap[filters.status];
       result = result.filter(order => order.status_text === statusText);
+    }
+    
+    // 应用确认状态筛选
+    if (filters.confirmStatus) {
+      result = result.filter(order => order.confirm_status === filters.confirmStatus);
     }
     
     if (filters.startDate) {

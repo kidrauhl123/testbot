@@ -602,7 +602,6 @@
     <div class="sidebar">
       <ul class="sidebar-menu">
         <li><a href="#users" class="active" onclick="showTab('users'); return false;"><i class="fas fa-users"></i> 用户管理</a></li>
-        <li><a href="#orders" onclick="showTab('orders'); return false;"><i class="fas fa-file-invoice-dollar"></i> 订单管理</a></li>
         <li><a href="#sellers" onclick="showTab('sellers'); return false;"><i class="fas fa-user-tie"></i> 卖家管理</a></li>
       </ul>
     </div>
@@ -635,100 +634,7 @@
         </div>
       </div>
       
-      <!-- 订单管理 -->
-      <div id="orders" class="tab-content">
-        <div class="content-header">
-          <h2><i class="fas fa-file-invoice-dollar"></i> 订单管理</h2>
-          <div class="header-actions">
-            <input type="text" id="order-search" class="form-control" placeholder="搜索订单ID、账号、创建者..." style="width: 250px;">
-            <button id="filter-toggle-btn" class="btn btn-primary">
-              <i class="fas fa-filter"></i> 筛选
-            </button>
-            <button id="batch-delete-btn" class="btn btn-danger">批量删除</button>
-            <button id="cleanup-old-orders-btn" class="btn btn-warning">
-              <i class="fas fa-broom"></i> 清理旧订单
-            </button>
-          </div>
-        </div>
-        
-        <!-- 筛选面板 -->
-        <div id="filter-panel" class="filter-panel" style="display: none; margin-bottom: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
-          <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 15px;">
-            <div style="flex: 1; min-width: 200px;">
-              <label for="seller-filter">接单人</label>
-              <select id="seller-filter" class="form-control">
-                <option value="">全部接单人</option>
-              </select>
-            </div>
-            <div style="flex: 1; min-width: 200px;">
-              <label for="status-filter">状态</label>
-              <select id="status-filter" class="form-control">
-                <option value="">全部状态</option>
-                <option value="submitted">待处理</option>
-                <option value="accepted">已接单</option>
-                <option value="completed">已完成</option>
-                <option value="failed">充值失败</option>
-              </select>
-            </div>
-            <div style="flex: 1; min-width: 200px;">
-              <label for="start-date-filter">开始日期</label>
-              <input type="date" id="start-date-filter" class="form-control">
-            </div>
-            <div style="flex: 1; min-width: 200px;">
-              <label for="end-date-filter">结束日期</label>
-              <input type="date" id="end-date-filter" class="form-control">
-            </div>
-          </div>
-          <div style="display: flex; justify-content: flex-end; gap: 10px;">
-            <button id="reset-filters-btn" class="btn btn-secondary">重置</button>
-            <button id="apply-filters-btn" class="btn btn-primary">应用筛选</button>
-          </div>
-        </div>
-        
-        <!-- 活动筛选标签 -->
-        <div id="active-filters" class="active-filters" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px;"></div>
-        
-        <div id="orders-table-container">
-          <div class="table-container">
-            <table class="data-table" id="orders-table">
-              <thead>
-                <tr>
-                  <th><input type="checkbox" id="select-all-orders"></th>
-                  <th>ID</th>
-                  <th>账号</th>
-                  <th>状态</th>
-                  <th>创建者</th>
-                  <th>接单人</th>
-                  <th>备注</th>
-                  <th>创建时间</th>
-                  <th>完成时间</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody id="orders-table-body">
-                <!-- 数据将通过JavaScript动态加载 -->
-              </tbody>
-            </table>
-          </div>
 
-          <!-- 分页和加载更多 -->
-          <div class="pagination-container">
-            <!-- 分页导航 -->
-            <div id="orders-pagination" class="pagination"></div>
-            
-            <!-- 加载更多区域 -->
-            <div id="load-more-area" style="display: none; text-align: center; margin-top: 20px;">
-              <p>已加载 <span id="loaded-count">0</span> / <span id="total-count">0</span> 条记录</p>
-              <button id="load-more-btn" class="btn btn-outline-primary" onclick="loadMoreOrders()">加载更多</button>
-            </div>
-            
-            <!-- 虚拟滚动控制 -->
-            <div class="virtual-scroll-control" style="text-align: right; margin-top: 10px;">
-              <button id="toggle-virtual-scroll-btn" class="btn btn-sm btn-outline-secondary" onclick="toggleVirtualScroll()">禁用虚拟滚动</button>
-            </div>
-          </div>
-        </div>
-      </div>
       
       <!-- 卖家管理 -->
       <div id="sellers" class="tab-content">
@@ -866,186 +772,6 @@
 </div>
 
 <script>
-  // 显示指定标签页
-  function showTab(tabId) {
-    document.querySelectorAll('.tab-content').forEach(tab => {
-      tab.classList.remove('active');
-    });
-    document.querySelectorAll('.sidebar-menu a').forEach(link => {
-      link.classList.remove('active');
-    });
-    document.getElementById(tabId).classList.add('active');
-    document.querySelector(`.sidebar-menu a[href="#${tabId}"]`).classList.add('active');
-    
-    // 加载对应标签页的数据
-    if (tabId === 'users' && !userDataLoaded) {
-      loadUsers();
-      userDataLoaded = true;
-    }
-    else if (tabId === 'orders' && !orderDataLoaded) {
-      loadOrders();
-      orderDataLoaded = true;
-    }
-    else if (tabId === 'sellers' && !sellerDataLoaded) {
-      loadSellers();
-      sellerDataLoaded = true;
-    }
-  }
-  
-  // 全局变量
-  let userDataLoaded = false;
-  let orderDataLoaded = false;
-  let sellerDataLoaded = false;
-  let allUsers = []; // 存储所有用户数据
-  let allOrders = [];
-  let currentPage = 1;
-  let ordersPerPage = 50;
-  let totalOrders = 0;
-  let hasMoreOrders = false;
-  let isLoadingOrders = false;
-  let activeFilters = {};
-  let virtualScrollEnabled = true; // 启用虚拟滚动
-  
-  // 虚拟滚动配置
-  const virtualScrollConfig = {
-    itemHeight: 60, // 每行高度(px)
-    overscan: 10,   // 额外渲染的项数
-    container: null, // 容器元素
-    isScrolling: false,
-    scrollTimeout: null,
-    lastScrollTop: 0,
-    visibleStartIndex: 0,
-    visibleEndIndex: 0
-  };
-  
-  // 转义HTML
-  function escapeHtml(str) {
-    if (!str) return '';
-    return str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
-  // 显示加载中
-  function renderLoading(elementId) {
-    document.getElementById(elementId).innerHTML = '<tr><td colspan="12" class="loading">加载中...</td></tr>';
-  }
-
-  // 用户管理
-  async function loadUsers() {
-    try {
-      console.log("开始加载用户数据...");
-    const tbody = document.getElementById('users-table-body');
-      if (!tbody) {
-        console.error("找不到users-table-body元素");
-        return;
-      }
-      
-      tbody.innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
-      
-      const resp = await fetch('/admin/api/users');
-      if (!resp.ok) {
-        console.error("加载用户数据失败:", resp.status, resp.statusText);
-        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
-        return;
-      }
-      
-      const users = await resp.json();
-      console.log("成功获取用户数据:", users);
-      
-    tbody.innerHTML = '';
-      
-      if (users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="loading">暂无用户数据</td></tr>';
-        return;
-      }
-      
-    users.forEach(user => {
-        const tr = document.createElement('tr');
-        
-        // 格式化日期
-        const createdAt = user.created_at ? new Date(user.created_at).toLocaleString() : '未知';
-        const lastLogin = user.last_login ? new Date(user.last_login).toLocaleString() : '未登录';
-        
-        tr.innerHTML = `
-          <td>${user.id}</td>
-          <td>${user.username}</td>
-          <td>${createdAt}</td>
-          <td>${lastLogin}</td>
-          <td class="user-consumption">${user.today_consumption ? user.today_consumption.toFixed(2) : '0.00'} 元</td>
-          <td>${user.is_admin ? '<span class="badge badge-warning">管理员</span>' : '<span class="badge badge-secondary">普通用户</span>'}</td>
-          <td>
-            <button class="btn btn-sm btn-info" onclick="editUserCustomPrice(${user.id}, '${user.username}')">
-              定制价格
-            </button>
-          </td>
-        `;
-        
-        tbody.appendChild(tr);
-      });
-      
-      console.log("用户数据渲染完成");
-      console.log("用户管理加载完成");
-    } catch (e) {
-      console.error('加载用户失败', e);
-      const tbody = document.getElementById('users-table-body');
-      if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
-      }
-    }
-  }
-
-  // 修改用户定制价格函数
-  async function editUserCustomPrice(userId, username) {
-    console.log("修改用户定制价格:", userId, username);
-    
-    // 设置基本信息
-    document.getElementById('edit-custom-price-user-id').value = userId;
-    document.getElementById('edit-custom-price-username').value = username;
-    
-    try {
-      // 获取用户的定制价格
-      const response = await fetch(`/admin/api/users/${userId}/custom-prices`);
-      
-      if (!response.ok) {
-        throw new Error(`获取定制价格失败: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.error || '获取定制价格失败');
-      }
-      
-      // 获取默认价格和定制价格
-      const defaultPrices = data.default_prices;
-      const customPrices = data.custom_prices;
-      
-      // 获取套餐选择器
-      const packageSelect = document.getElementById('edit-custom-price-package');
-      
-      // 设置默认选中的套餐为1个月
-      packageSelect.value = '1';
-      
-      // 更新价格显示
-      updateCustomPriceDisplay(packageSelect.value, defaultPrices, customPrices);
-      
-      // 为套餐选择器添加事件监听器
-      packageSelect.onchange = function() {
-        updateCustomPriceDisplay(this.value, defaultPrices, customPrices);
-      };
-      
-      // 打开模态框
-      openModal('editCustomPriceModal');
-    } catch (error) {
-      console.error('获取用户定制价格失败:', error);
-      alert(`获取用户定制价格失败: ${error.message}`);
-    }
-  }
-  
   // 更新定制价格显示
   function updateCustomPriceDisplay(package, defaultPrices, customPrices) {
     const defaultPrice = defaultPrices[package] || '未知';
@@ -1056,528 +782,154 @@
     document.getElementById('edit-custom-price-new').value = customPrice === '默认' ? '' : customPrice;
   }
 
-  // 优化index页面的loadOrders函数
-  async function loadOrders(isAutoRefresh = false) {
-    const tableBody = document.getElementById('orders-table-body');
-    const loadingIndicator = document.getElementById('loading-indicator');
+  // 标签页切换
+  function showTab(tabId) {
+    // 隐藏所有标签页内容
+    document.querySelectorAll('.tab-content').forEach(tab => {
+      tab.classList.remove('active');
+    });
     
-    try {
-      // 显示加载状态
-      if (!isAutoRefresh) {
-        if (loadingIndicator) loadingIndicator.style.display = 'block';
-        if (tableBody) tableBody.innerHTML = '';
-      }
-      
-      // 添加请求超时处理
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
-      
-      const response = await fetch('/api/recent-orders?limit=10', {
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) throw new Error('网络请求失败');
-      const data = await response.json();
-      
-      // 隐藏加载状态
-      if (loadingIndicator) loadingIndicator.style.display = 'none';
-      
-      // 渲染订单
-      renderOrders(data.orders || []);
-    } catch (error) {
-      console.error('加载订单失败:', error);
-      if (!isAutoRefresh) {
-        if (tableBody) tableBody.innerHTML = `<tr><td colspan="5" class="text-center">加载失败，<a href="#" onclick="loadOrders(); return false;">点击重试</a></td></tr>`;
-      }
-      if (loadingIndicator) loadingIndicator.style.display = 'none';
+    // 取消所有导航项的活动状态
+    document.querySelectorAll('.sidebar-menu a').forEach(link => {
+      link.classList.remove('active');
+    });
+    
+    // 显示选中的标签页内容
+    const selectedTab = document.getElementById(tabId);
+    if (selectedTab) {
+      selectedTab.classList.add('active');
+    }
+    
+    // 高亮导航项
+    const activeLink = document.querySelector(`.sidebar-menu a[href="#${tabId}"]`);
+    if (activeLink) {
+      activeLink.classList.add('active');
     }
   }
   
-  // 更新分页显示
-  function updatePagination(currentPage, totalPages) {
-    const paginationContainer = document.getElementById('orders-pagination');
-    if (!paginationContainer) return;
+  // 初始化标签页切换
+  function initTabSwitching() {
+    document.querySelector('.sidebar-menu a[href="#users"]').addEventListener('click', function() {
+      loadUsers();
+      showTab('users');
+      return false;
+    });
     
-    paginationContainer.innerHTML = '';
-    
-    // 页码最多显示7个
-    let startPage = Math.max(1, currentPage - 3);
-    let endPage = Math.min(totalPages, startPage + 6);
-    
-    // 调整startPage，确保总是显示7个页码（如果有那么多页的话）
-    if (endPage - startPage < 6 && startPage > 1) {
-      startPage = Math.max(1, endPage - 6);
-    }
-    
-    // 添加"首页"按钮
-    if (startPage > 1) {
-      addPaginationButton(paginationContainer, 1, '首页', currentPage === 1);
-    }
-    
-    // 添加页码
-    for (let i = startPage; i <= endPage; i++) {
-      addPaginationButton(paginationContainer, i, i.toString(), i === currentPage);
-    }
-    
-    // 添加"末页"按钮
-    if (endPage < totalPages) {
-      addPaginationButton(paginationContainer, totalPages, '末页', currentPage === totalPages);
-    }
+    document.querySelector('.sidebar-menu a[href="#sellers"]').addEventListener('click', function() {
+      loadSellers();
+      showTab('sellers');
+      return false;
+    });
   }
   
-  // 添加分页按钮
-  function addPaginationButton(container, page, text, isActive) {
-    const button = document.createElement('button');
-    button.className = `pagination-button ${isActive ? 'active' : ''}`;
-    button.textContent = text;
-    button.addEventListener('click', () => loadOrders(page, true));
-    container.appendChild(button);
-  }
-  
-  // 加载更多订单
-  function loadMoreOrders() {
-    if (hasMoreOrders && !isLoadingOrders) {
-      loadOrders(currentPage + 1, false);
-    }
-  }
-  
-  // 删除订单
-  async function deleteOrder(orderId) {
-    if (!confirm('确定要删除此订单吗？此操作不可撤销！')) {
-      return;
-    }
-    
-    try {
-      const response = await fetch(`/admin/api/orders/${orderId}`, { method: 'DELETE' });
-      
-      if (response.ok) {
-        // 从本地数据中删除
-        allOrders = allOrders.filter(order => order.id !== orderId);
-        
-        // 重新渲染列表
-        renderOrders(allOrders);
-        
-        showToast('订单已删除', 'success');
-      } else {
-        const result = await response.json();
-        showToast(result.error || '删除失败', 'error');
-      }
-    } catch (error) {
-      console.error('删除订单失败:', error);
-      showToast('网络错误，删除失败', 'error');
-    }
-  }
-  
-  // 编辑备注
-  async function editRemark(orderId) {
-    const order = allOrders.find(o => o.id === orderId);
-    if (!order) return;
-    
-    const newRemark = prompt('请输入新的备注', order.remark || '');
-    if (newRemark === null) return; // 用户取消
-    
-    try {
-      const resp = await fetch(`/orders/update-remark/${orderId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ remark: newRemark })
-      });
-      
-      const result = await resp.json();
-      if (result.success) {
-        // 更新本地数据和显示
-        order.remark = newRemark;
-        
-        // 更新所有显示备注的元素
-        document.querySelectorAll(`.remark-text[data-order-id="${orderId}"]`).forEach(el => {
-          el.textContent = newRemark;
-        });
-        
-        showToast('备注已更新', 'success');
-      } else {
-        showToast(result.error || '更新备注失败', 'error');
-      }
-    } catch (e) {
-      console.error('更新备注失败', e);
-      showToast('更新备注失败，请重试', 'error');
-    }
-  }
-  
-  // 填充卖家筛选下拉框
-  async function populateSellerFilter() {
-    try {
-      const response = await fetch('/api/active-sellers');
-      if (!response.ok) {
-        console.error('获取卖家列表失败:', response.status);
-        return;
-      }
-      
-      const data = await response.json();
-      
-      if (data.success && data.sellers && data.sellers.length > 0) {
-        const sellerFilter = document.getElementById('seller-filter');
-        if (!sellerFilter) return;
-        
-        // 保留默认选项
-        const defaultOption = sellerFilter.options[0];
-        sellerFilter.innerHTML = '';
-        sellerFilter.appendChild(defaultOption);
-        
-        // 添加卖家选项
-        data.sellers.forEach(seller => {
-          const option = document.createElement('option');
-          option.value = seller.name;
-          option.textContent = seller.name;
-          sellerFilter.appendChild(option);
-        });
-        
-        // 从订单中提取其他接单人
-        const allAcceptedBy = new Set();
-        allOrders.forEach(order => {
-          if (order.accepted_by_nickname) {
-            allAcceptedBy.add(order.accepted_by_nickname);
-          } else if (order.accepted_by) {
-            allAcceptedBy.add(order.accepted_by);
-          }
-        });
-        
-        // 添加从订单中提取的接单人（如果不在卖家列表中）
-        allAcceptedBy.forEach(name => {
-          if (name) {
-            // 检查是否已经在下拉框中
-            let exists = false;
-            for (let i = 0; i < sellerFilter.options.length; i++) {
-              if (sellerFilter.options[i].value === name) {
-                exists = true;
-                break;
-              }
-            }
-            
-            // 如果不存在，添加到下拉框
-            if (!exists) {
-              const option = document.createElement('option');
-              option.value = name;
-              option.textContent = name;
-              sellerFilter.appendChild(option);
-            }
-          }
-        });
-      }
-    } catch (error) {
-      console.error('获取卖家列表失败:', error);
-    }
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    // ... existing code ...
-
-    // 初始化筛选功能
-    const filterToggleBtn = document.getElementById('filter-toggle-btn');
-    const filterPanel = document.getElementById('filter-panel');
-    const applyFiltersBtn = document.getElementById('apply-filters-btn');
-    const resetFiltersBtn = document.getElementById('reset-filters-btn');
-    
-    if (filterToggleBtn && filterPanel) {
-      filterToggleBtn.addEventListener('click', () => {
-        const isVisible = filterPanel.style.display !== 'none';
-        filterPanel.style.display = isVisible ? 'none' : 'block';
-        filterToggleBtn.classList.toggle('active', !isVisible);
-      });
-    }
-    
-    if (applyFiltersBtn) {
-      applyFiltersBtn.addEventListener('click', applyFilters);
-    }
-    
-    if (resetFiltersBtn) {
-      resetFiltersBtn.addEventListener('click', resetFilters);
-    }
-    
-    // 搜索功能
-    const orderSearchInput = document.getElementById('order-search');
-    if (orderSearchInput) {
-      orderSearchInput.addEventListener('input', function() {
-        const searchTerm = this.value.toLowerCase();
-        
-        // 筛选订单
-        const filteredOrders = allOrders.filter(order => 
-          order.id.toString().includes(searchTerm) || 
-          (order.account && order.account.toLowerCase().includes(searchTerm)) ||
-          (order.created_by && order.created_by.toLowerCase().includes(searchTerm))
-        );
-        
-        // 渲染筛选后的订单
-        renderOrders(filteredOrders);
-      });
-    }
-  });
-  
-  // 全局筛选变量
-  let filters = {
-    seller: '',
-    status: '',
-    startDate: '',
-    endDate: ''
-  };
-  
-  // 应用筛选
-  function applyFilters() {
-    const sellerFilter = document.getElementById('seller-filter');
-    const statusFilter = document.getElementById('status-filter');
-    const startDateFilter = document.getElementById('start-date-filter');
-    const endDateFilter = document.getElementById('end-date-filter');
-    
-    // 更新筛选条件
-    filters = {
-      seller: sellerFilter ? sellerFilter.value : '',
-      status: statusFilter ? statusFilter.value : '',
-      startDate: startDateFilter ? startDateFilter.value : '',
-      endDate: endDateFilter ? endDateFilter.value : ''
-    };
-    
-    // 更新活动筛选标签
-    updateActiveFilters();
-    
-    // 应用筛选并渲染
-    const filteredOrders = filterOrders(allOrders);
-    renderOrders(filteredOrders);
-    
-    // 关闭筛选面板
-    const filterPanel = document.getElementById('filter-panel');
-    if (filterPanel) {
-      filterPanel.style.display = 'none';
-    }
-    
-    // 更新筛选按钮状态
-    const filterToggleBtn = document.getElementById('filter-toggle-btn');
-    if (filterToggleBtn) {
-      // 如果有筛选条件，保持按钮高亮
-      const hasActiveFilters = Object.values(filters).some(val => val !== '');
-      filterToggleBtn.classList.toggle('active', hasActiveFilters);
-    }
-  }
-  
-  // 更新活动筛选标签
-  function updateActiveFilters() {
-    const activeFilters = document.getElementById('active-filters');
-    if (!activeFilters) return;
-    
-    activeFilters.innerHTML = '';
-    
-    // 添加接单人筛选标签
-    if (filters.seller) {
-      const sellerFilter = document.getElementById('seller-filter');
-      const sellerName = sellerFilter ? sellerFilter.options[sellerFilter.selectedIndex].text : '';
-      
-      if (sellerName) {
-        const tag = createFilterTag('接单人: ' + sellerName, () => {
-          filters.seller = '';
-          document.getElementById('seller-filter').value = '';
-          updateActiveFilters();
-          const filteredOrders = filterOrders(allOrders);
-          renderOrders(filteredOrders);
-        });
-        activeFilters.appendChild(tag);
-      }
-    }
-    
-    // 添加状态筛选标签
-    if (filters.status) {
-      const statusFilter = document.getElementById('status-filter');
-      const statusName = statusFilter ? statusFilter.options[statusFilter.selectedIndex].text : '';
-      
-      if (statusName) {
-        const tag = createFilterTag('状态: ' + statusName, () => {
-          filters.status = '';
-          document.getElementById('status-filter').value = '';
-          updateActiveFilters();
-          const filteredOrders = filterOrders(allOrders);
-          renderOrders(filteredOrders);
-        });
-        activeFilters.appendChild(tag);
-      }
-    }
-    
-    // 添加日期筛选标签
-    if (filters.startDate || filters.endDate) {
-      let dateText = '日期: ';
-      
-      if (filters.startDate && filters.endDate) {
-        dateText += `${filters.startDate} 至 ${filters.endDate}`;
-      } else if (filters.startDate) {
-        dateText += `${filters.startDate} 起`;
-      } else if (filters.endDate) {
-        dateText += `截至 ${filters.endDate}`;
-      }
-      
-      const tag = createFilterTag(dateText, () => {
-        filters.startDate = '';
-        filters.endDate = '';
-        document.getElementById('start-date-filter').value = '';
-        document.getElementById('end-date-filter').value = '';
-        updateActiveFilters();
-        const filteredOrders = filterOrders(allOrders);
-        renderOrders(filteredOrders);
-      });
-      activeFilters.appendChild(tag);
-    }
-  }
-  
-  // 创建筛选标签元素
-  function createFilterTag(text, removeCallback) {
-    const tag = document.createElement('div');
-    tag.className = 'filter-tag';
-    tag.style.display = 'inline-flex';
-    tag.style.alignItems = 'center';
-    tag.style.padding = '5px 10px';
-    tag.style.background = '#e9ecef';
-    tag.style.borderRadius = '20px';
-    tag.style.fontSize = '12px';
-    tag.style.marginRight = '8px';
-    
-    tag.innerHTML = `
-      <span>${text}</span>
-      <span class="remove-filter" style="margin-left:5px; cursor:pointer; font-weight:bold;">×</span>
-    `;
-    
-    tag.querySelector('.remove-filter').addEventListener('click', removeCallback);
-    
-    return tag;
-  }
-  
-  // 重置筛选
-  function resetFilters() {
-    // 重置所有筛选控件
-    const sellerFilter = document.getElementById('seller-filter');
-    const statusFilter = document.getElementById('status-filter');
-    const startDateFilter = document.getElementById('start-date-filter');
-    const endDateFilter = document.getElementById('end-date-filter');
-    
-    if (sellerFilter) sellerFilter.value = '';
-    if (statusFilter) statusFilter.value = '';
-    if (startDateFilter) startDateFilter.value = '';
-    if (endDateFilter) endDateFilter.value = '';
-    
-    // 重置筛选条件
-    filters = {
-      seller: '',
-      status: '',
-      startDate: '',
-      endDate: ''
-    };
-    
-    // 清空活动筛选标签
-    const activeFilters = document.getElementById('active-filters');
-    if (activeFilters) activeFilters.innerHTML = '';
-    
-    // 重新渲染原始订单列表
-    renderOrders(allOrders);
-    
-    // 更新筛选按钮状态
-    const filterToggleBtn = document.getElementById('filter-toggle-btn');
-    if (filterToggleBtn) {
-      filterToggleBtn.classList.remove('active');
-    }
-  }
-  
-  // 筛选订单
-  function filterOrders(orders) {
-    let result = orders;
-    
-    // 应用筛选条件
-    if (filters.seller) {
-      result = result.filter(order => {
-        // 查找订单的接单人（名称或ID）
-        const orderSeller = order.accepted_by_nickname || order.accepted_by;
-        const filterSeller = filters.seller;
-        
-        // 检查接单人名称是否匹配
-        if (typeof orderSeller === 'string' && typeof filterSeller === 'string') {
-          return orderSeller.includes(filterSeller) || filterSeller.includes(orderSeller);
+  // 初始化模态框
+  function initModals() {
+    // 为所有关闭按钮添加事件
+    document.querySelectorAll('[data-dismiss="modal"]').forEach(button => {
+      button.addEventListener('click', function() {
+        const modal = this.closest('.modal-backdrop');
+        if (modal) {
+          closeModal(modal.id);
         }
-        
-        // 如果不是字符串，尝试直接比较
-        return orderSeller == filterSeller; // 使用==而不是===，允许类型转换
       });
+    });
+  }
+  
+  // 打开模态框
+  function openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    
+    modal.style.display = 'flex';
+    setTimeout(() => {
+      modal.classList.add('show');
+    }, 10);
+  }
+  
+  // 关闭模态框
+  function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    
+    modal.classList.remove('show');
+    setTimeout(() => {
+      modal.style.display = 'none';
+    }, 300);
+  }
+  
+  // 显示消息提示
+  function showToast(message, type = 'info') {
+    // 创建toast容器
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+      toastContainer = document.createElement('div');
+      toastContainer.id = 'toast-container';
+      toastContainer.style.position = 'fixed';
+      toastContainer.style.top = '20px';
+      toastContainer.style.right = '20px';
+      toastContainer.style.zIndex = '9999';
+      document.body.appendChild(toastContainer);
     }
     
-    if (filters.status) {
-      result = result.filter(order => order.status === filters.status);
+    // 创建toast元素
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.style.minWidth = '250px';
+    toast.style.margin = '10px';
+    toast.style.padding = '15px';
+    toast.style.borderRadius = '4px';
+    toast.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+    toast.style.animation = 'fadeIn 0.3s, fadeOut 0.3s 2.7s';
+    toast.style.animationFillMode = 'forwards';
+    
+    // 根据类型设置背景色
+    switch(type) {
+      case 'success':
+        toast.style.backgroundColor = '#4CAF50';
+        toast.style.color = 'white';
+        break;
+      case 'error':
+        toast.style.backgroundColor = '#F44336';
+        toast.style.color = 'white';
+        break;
+      case 'warning':
+        toast.style.backgroundColor = '#FF9800';
+        toast.style.color = 'white';
+        break;
+      default:
+        toast.style.backgroundColor = '#2196F3';
+        toast.style.color = 'white';
     }
     
-    if (filters.startDate) {
-      const startDate = new Date(filters.startDate);
-      startDate.setHours(0, 0, 0, 0);
-      result = result.filter(order => {
-        const orderDate = new Date(order.created_at.replace(' ', 'T'));
-        return orderDate >= startDate;
-      });
-    }
+    toast.textContent = message;
+    toastContainer.appendChild(toast);
     
-    if (filters.endDate) {
-      const endDate = new Date(filters.endDate);
-      endDate.setHours(23, 59, 59, 999);
-      result = result.filter(order => {
-        const orderDate = new Date(order.created_at.replace(' ', 'T'));
-        return orderDate <= endDate;
-      });
-    }
-    
-    return result;
+    // 3秒后移除
+    setTimeout(() => {
+      toast.remove();
+    }, 3000);
   }
 
-  function showAddSellerModal() {
-    console.log("点击了添加卖家按钮");
-    // Clear previous input
-    const idInput = document.getElementById('new-seller-id');
-    const usernameInput = document.getElementById('new-seller-username');
-    const firstnameInput = document.getElementById('new-seller-firstname');
-    const errorDiv = document.getElementById('add-seller-error');
-    
-    if (!idInput || !usernameInput || !firstnameInput || !errorDiv) {
-      console.error("找不到模态框内的输入元素");
-      alert("模态框元素加载失败，请检查控制台");
-      return;
-    }
-    
-    idInput.value = '';
-    usernameInput.value = '';
-    firstnameInput.value = '';
-    errorDiv.style.display = 'none';
-    
-    // 这里直接添加卖家，不使用模态框
-    // openModal('add-seller-modal');
-    openModal('add-seller-modal');
-  }
-
+  // 异步加载卖家数据
   async function loadSellers() {
     try {
-      console.log("开始加载卖家数据...");
       const tbody = document.getElementById('sellers-table-body');
-      if (!tbody) {
-        console.error("找不到sellers-table-body元素");
-        return;
-      }
+      if (!tbody) return;
       
-      tbody.innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="loading">加载中...</td></tr>';
       
       const response = await fetch('/admin/api/sellers');
       if (!response.ok) {
-        console.error("加载卖家数据失败:", response.status, response.statusText);
-        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
         return;
       }
       
       const sellers = await response.json();
-      console.log("成功获取卖家数据:", sellers);
       
       tbody.innerHTML = '';
       
       if (sellers.length === 0) {
-        const colCount = tbody.parentElement.querySelector('thead tr').childElementCount || 7;
+        const colCount = tbody.parentElement.querySelector('thead tr').childElementCount || 8;
         tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding: 40px;">暂无卖家</td></tr>`;
         return;
       }
@@ -1629,516 +981,250 @@
         tbody.innerHTML += row;
       });
       
-      console.log("卖家数据加载完成");
+      sellerDataLoaded = true;
     } catch (e) {
       console.error('加载卖家失败', e);
       const tbody = document.getElementById('sellers-table-body');
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
+      }
+    }
+  }
+  
+  // 异步加载用户数据
+  async function loadUsers() {
+    try {
+      const tbody = document.getElementById('users-table-body');
+      if (!tbody) return;
+      
+      tbody.innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
+      
+      const response = await fetch('/admin/api/users');
+      if (!response.ok) {
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
+        return;
+      }
+      
+      const result = await response.json();
+      const users = result.users || [];
+      
+      tbody.innerHTML = '';
+      
+      if (users.length === 0) {
+        const colCount = tbody.parentElement.querySelector('thead tr').childElementCount || 7;
+        tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding: 40px;">暂无用户</td></tr>`;
+        return;
+      }
+      
+      users.forEach(user => {
+        const roleBadge = user.is_admin 
+          ? '<span class="badge badge-primary">管理员</span>' 
+          : '<span class="badge badge-info">普通用户</span>';
+        
+        const row = `
+          <tr data-id="${user.id}">
+            <td>${user.id}</td>
+            <td>${escapeHtml(user.username)}</td>
+            <td>${user.created_at || '-'}</td>
+            <td>${user.last_login || '-'}</td>
+            <td>${user.today_consumption || '0'}</td>
+            <td>${roleBadge}</td>
+            <td class="actions">
+              <button class="btn btn-primary btn-sm" onclick="editUser(${user.id})">编辑</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id})">删除</button>
+            </td>
+          </tr>
+        `;
+        tbody.innerHTML += row;
+      });
+    } catch (e) {
+      console.error('加载用户失败', e);
+      const tbody = document.getElementById('users-table-body');
       if (tbody) {
         tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
       }
     }
   }
+  
+  // HTML转义函数
+  function escapeHtml(unsafe) {
+    if (unsafe === undefined || unsafe === null) return '';
+    return String(unsafe)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+  
+  // 编辑用户
+  async function editUser(userId) {
+    alert('编辑用户功能尚未实现');
+    // 这里可以添加编辑用户的代码
+  }
+  
+  // 删除用户
+  async function deleteUser(userId) {
+    if (!confirm(`确定要删除ID为 ${userId} 的用户吗？此操作不可恢复！`)) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/admin/api/users/${userId}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        showToast('用户已成功删除', 'success');
+        loadUsers(); // 重新加载用户列表
+      } else {
+        const result = await response.json();
+        showToast(result.error || '删除用户失败', 'error');
+      }
+    } catch (e) {
+      console.error('删除用户失败', e);
+      showToast('网络错误，删除失败', 'error');
+    }
+  }
+  
+  // 卖家相关操作函数
+  async function editSeller(telegramId, currentNickname) {
+    const newNickname = prompt('请输入新的显示昵称', currentNickname || '');
+    if (newNickname === null) return;
+    
+    try {
+      const response = await fetch(`/admin/api/sellers/${telegramId}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({nickname: newNickname})
+      });
+      
+      if (!response.ok) throw new Error('更新失败');
+      
+      showToast('卖家昵称已更新', 'success');
+      await loadSellers();
+    } catch (e) {
+      console.error('更新卖家昵称失败', e);
+      showToast('更新失败: ' + e.message, 'error');
+    }
+  }
+  
+  async function toggleSeller(telegramId) {
+    await fetch(`/admin/api/sellers/${telegramId}/toggle`, {method: 'POST'});
+      loadSellers();
+  }
+  
+  async function toggleSellerAdmin(telegramId) {
+    if (!confirm('确定要切换此卖家的管理员身份吗？')) return;
+    
+    try {
+      const response = await fetch('/admin/api/sellers/toggle_admin', {
+              method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({telegram_id: telegramId})
+      });
+      
+      if (!response.ok) throw new Error('操作失败');
+      
+      await loadSellers();
+      showToast('操作成功', 'success');
+    } catch (e) {
+      showToast('操作失败: ' + e.message, 'error');
+    }
+  }
+  
+  async function removeSeller(telegramId) {
+    const sellerRow = document.querySelector(`tr[data-id='${telegramId}']`);
+    const nickname = sellerRow ? sellerRow.dataset.nickname : `ID ${telegramId}`;
+    
+    if (!confirm(`确认要删除卖家 ${nickname} 吗？此操作不可逆。`)) return;
+    
+    await fetch(`/admin/api/sellers/${telegramId}`, {method: 'DELETE'});
+    loadSellers();
+  }
+  
+  async function updateSellerLevel(telegramId, newLevel) {
+    try {
+      const response = await fetch(`/admin/api/sellers/${telegramId}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({distribution_level: parseInt(newLevel)})
+      });
+      
+      if (!response.ok) throw new Error('更新分流等级失败');
+      
+      showToast('分流等级已更新', 'success');
+    } catch (e) {
+      showToast('更新分流等级失败: ' + e.message, 'error');
+    }
+  }
 
+  async function updateSellerMaxOrders(telegramId, newMaxOrders) {
+    try {
+      const response = await fetch(`/admin/api/sellers/${telegramId}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({max_concurrent_orders: parseInt(newMaxOrders)})
+      });
+      
+      if (!response.ok) throw new Error('更新最大接单数失败');
+      
+      showToast('最大接单数已更新', 'success');
+    } catch (e) {
+      showToast('更新最大接单数失败: ' + e.message, 'error');
+    }
+  }
+
+  async function showAddSellerModal() {
+    openModal('add-seller-modal');
+  }
+  
   async function addSeller() {
     const errorDiv = document.getElementById('add-seller-error');
     const telegramId = document.getElementById('new-seller-id').value;
+    
     if (!telegramId) {
       errorDiv.textContent = 'Telegram ID 不能为空。';
       errorDiv.style.display = 'block';
       return;
     }
-
+    
     const data = {
       telegram_id: parseInt(telegramId),
       username: document.getElementById('new-seller-username').value,
       first_name: document.getElementById('new-seller-firstname').value,
-      nickname: document.getElementById('new-seller-nickname').value,
+      nickname: document.getElementById('new-seller-nickname').value
     };
-
+    
     try {
       const response = await fetch('/admin/api/sellers', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
       });
-
+      
       if (response.ok) {
-        // 清空输入框
+        // 清空输入
         document.getElementById('new-seller-id').value = '';
         document.getElementById('new-seller-username').value = '';
         document.getElementById('new-seller-firstname').value = '';
         document.getElementById('new-seller-nickname').value = '';
         errorDiv.style.display = 'none';
         
-        // 显示成功消息
-        alert('卖家添加成功！');
-        
-        // 重新加载卖家列表
+        showToast('卖家添加成功！', 'success');
+        closeModal('add-seller-modal');
         loadSellers();
       } else {
-        const result = await response.json();
+      const result = await response.json();
         errorDiv.textContent = result.error || '添加失败，请重试。';
         errorDiv.style.display = 'block';
       }
     } catch (error) {
-      console.error('添加卖家出错:', error);
       errorDiv.textContent = '网络错误，请重试。';
       errorDiv.style.display = 'block';
     }
   }
-
-  async function removeSeller(telegramId) {
-    const sellerRow = document.querySelector(`tr[data-id='${telegramId}']`);
-    const nickname = sellerRow ? sellerRow.dataset.nickname : `ID ${telegramId}`;
-    
-    if (!confirm(`确认要删除卖家 ${nickname} 吗？此操作不可逆。`)) return;
-
-    await fetch(`/admin/api/sellers/${telegramId}`, { method: 'DELETE' });
-    loadSellers();
-  }
-
-  async function toggleSeller(telegramId) {
-    await fetch(`/admin/api/sellers/${telegramId}/toggle`, { method: 'POST' });
-    loadSellers();
-  }
-
-  async function toggleSellerAdmin(telegramId) {
-    if (!confirm('确定要切换此卖家的管理员身份吗？')) {
-      return;
-    }
-    
-    try {
-      const response = await fetch('/admin/api/sellers/toggle_admin', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ telegram_id: telegramId })
-      });
-      
-      if (!response.ok) {
-        throw new Error('操作失败');
-      }
-      
-      await loadSellers();
-      showToast('操作成功', 'success');
-    } catch (e) {
-      console.error('切换卖家管理员状态失败:', e);
-      showToast('操作失败: ' + e.message, 'error');
-    }
-  }
   
-  // 移除了最大接单数相关功能
-
-  // 编辑订单
-  async function editOrder(orderId) {
-    try {
-      // 加载订单详情
-      const response = await fetch(`/admin/api/orders/${orderId}`);
-      
-      if (!response.ok) {
-        alert('加载订单详情失败');
-        return;
-      }
-      
-      const order = await response.json();
-      
-      // 填充表单
-      document.getElementById('edit-order-id').value = order.id;
-      document.getElementById('edit-order-account').value = order.account;
-      document.getElementById('edit-order-status').value = order.status;
-      
-      // 显示模态框
-      openModal('edit-order-modal');
-    } catch (error) {
-      console.error('获取订单详情失败:', error);
-      alert('获取订单详情失败');
-    }
-  }
-  
-  // 保存订单编辑
-  async function saveOrderEdit() {
-    const orderId = document.getElementById('edit-order-id').value;
-    const errorDiv = document.getElementById('edit-order-error');
-    
-    try {
-      // 获取当前编辑的订单数据，以保留原有的package值
-      const currentOrder = allOrders.find(o => o.id == orderId);
-      
-      const data = {
-        account: document.getElementById('edit-order-account').value,
-        status: document.getElementById('edit-order-status').value,
-        package: currentOrder ? currentOrder.package : '12' // 保留原有套餐值，如果找不到则默认为12个月
-      };
-      
-      if (!data.account) {
-        errorDiv.textContent = '账号不能为空';
-        errorDiv.style.display = 'block';
-        return;
-      }
-      
-      const response = await fetch(`/admin/api/orders/${orderId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      
-      if (response.ok) {
-        closeModal('edit-order-modal');
-        loadOrders(); // 重新加载订单列表
-        alert('订单更新成功');
-      } else {
-        const result = await response.json();
-        errorDiv.textContent = result.error || '更新失败，请重试';
-        errorDiv.style.display = 'block';
-      }
-    } catch (error) {
-      console.error('保存订单编辑失败:', error);
-      errorDiv.textContent = '网络错误，请重试';
-      errorDiv.style.display = 'block';
-    }
-  }
-
-  // 模态框操作函数
-  function openModal(modalId) {
-    console.log("显示模态框:", modalId);
-    const modal = document.getElementById(modalId);
-    if (!modal) {
-      console.error("找不到模态框元素:", modalId);
-      alert(`找不到ID为${modalId}的模态框元素，请检查HTML`);
-      return;
-    }
-    
-    // 强制显示模态框
-    modal.style.display = 'flex';
-    setTimeout(() => {
-      modal.classList.add('show');
-      console.log("模态框已添加show类，当前样式:", modal.style.display, modal.className);
-    }, 10);
-  }
-  
-  function closeModal(modalId) {
-    console.log("隐藏模态框:", modalId);
-    const modal = document.getElementById(modalId);
-    if (!modal) {
-      console.error("找不到模态框元素:", modalId);
-      return;
-    }
-    modal.classList.remove('show');
-    
-    // 延迟隐藏，以便动画效果
-    setTimeout(() => {
-      modal.style.display = 'none';
-    }, 300);
-  }
-  
-  // 为所有关闭按钮添加事件
-  document.querySelectorAll('[data-dismiss="modal"]').forEach(button => {
-    button.addEventListener('click', function() {
-      const modal = this.closest('.modal-backdrop');
-      if (modal) {
-        console.log("关闭模态框:", modal.id);
-        modal.classList.remove('show');
-        
-        // 延迟隐藏，以便动画效果
-        setTimeout(() => {
-          modal.style.display = 'none';
-        }, 300);
-      } else {
-        console.error("未找到父级模态框元素");
-      }
-    });
-  });
-
-  // 清理旧订单函数
-  function showCleanupOrdersModal() {
-    const modal = document.getElementById('cleanup-orders-modal');
-    if (modal) {
-      modal.style.display = 'flex';
-      modal.classList.add('show');
-      document.getElementById('cleanup-days').value = 3;
-      document.getElementById('cleanup-orders-error').style.display = 'none';
-    }
-  }
-  
-  // 执行清理旧订单
-  async function cleanupOldOrders() {
-    const daysInput = document.getElementById('cleanup-days');
-    const days = parseInt(daysInput.value);
-    const errorElement = document.getElementById('cleanup-orders-error');
-    
-    if (isNaN(days) || days < 1) {
-      errorElement.textContent = '请输入有效的天数（至少为1）';
-      errorElement.style.display = 'block';
-      return;
-    }
-    
-    if (!confirm(`确定要删除 ${days} 天前的所有订单吗？此操作不可撤销！`)) {
-      return;
-    }
-    
-    try {
-      const response = await fetch('/admin/api/cleanup-old-orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ days })
-      });
-      
-      const result = await response.json();
-      
-      if (response.ok && result.success) {
-        // 关闭模态框
-        const modal = document.getElementById('cleanup-orders-modal');
-        modal.classList.remove('show');
-        setTimeout(() => { modal.style.display = 'none'; }, 300);
-        
-        // 显示成功消息
-        showToast(`成功清理了 ${result.deleted_count} 条旧订单记录！`, 'success');
-        
-        // 重新加载订单列表
-        loadOrders();
-      } else {
-        errorElement.textContent = result.error || '清理失败';
-        errorElement.style.display = 'block';
-      }
-    } catch (e) {
-      errorElement.textContent = '请求失败，请检查网络连接';
-      errorElement.style.display = 'block';
-      console.error('清理旧订单请求出错:', e);
-    }
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    // 检查页面上的所有模态框元素
-    console.log("检查模态框元素:");
-    console.log("edit-order-modal:", document.getElementById('edit-order-modal'));
-    console.log("cleanup-orders-modal:", document.getElementById('cleanup-orders-modal'));
-    
-    // 检查标签页元素
-    console.log("检查标签页元素:");
-    console.log("users标签页:", document.getElementById('users'));
-    console.log("orders标签页:", document.getElementById('orders'));
-    console.log("sellers标签页:", document.getElementById('sellers'));
-    
-    // 检查订单编辑表单元素
-    console.log("检查订单编辑表单元素:");
-    console.log("edit-order-id:", document.getElementById('edit-order-id'));
-    console.log("edit-order-account:", document.getElementById('edit-order-account'));
-    console.log("edit-order-status:", document.getElementById('edit-order-status'));
-    
-    try {
-    showTab('users');
-      console.log("显示用户标签页成功");
-    } catch (e) {
-      console.error("显示用户标签页失败:", e);
-    }
-    
-    try {
-    loadUsers();
-      console.log("加载用户数据成功");
-    } catch (e) {
-      console.error("加载用户数据失败:", e);
-    }
-    
-    try {
-    loadOrders();
-      console.log("加载订单数据成功");
-    } catch (e) {
-      console.error("加载订单数据失败:", e);
-    }
-    
-    try {
-    loadSellers();
-      console.log("加载卖家数据成功");
-    } catch (e) {
-      console.error("加载卖家数据失败:", e);
-    }
-
-    document.querySelector('.sidebar-menu a[href="#users"]').addEventListener('click', function() {
-      loadUsers();
-      showTab('users');
-    });
-    document.querySelector('.sidebar-menu a[href="#orders"]').addEventListener('click', function() {
-      loadOrders();
-      showTab('orders');
-    });
-    document.querySelector('.sidebar-menu a[href="#sellers"]').addEventListener('click', function() {
-      loadSellers();
-      showTab('sellers');
-    });
-    
-    // 手动测试绑定事件是否有效
-    window.testEditOrder = function() {
-      console.log("测试编辑订单");
-      editOrder(1);
-    };
-    
-    // 添加手动打开模态框的函数
-    window.testOpenModal = function(modalId) {
-      console.log("手动打开模态框:", modalId);
-      const modal = document.getElementById(modalId);
-      if (modal) {
-        modal.style.display = 'flex';
-        modal.classList.add('show');
-        console.log("模态框已打开");
-      } else {
-        console.error("找不到模态框:", modalId);
-      }
-    };
-    
-    // 添加手动关闭模态框的函数
-    window.testCloseModal = function(modalId) {
-      console.log("手动关闭模态框:", modalId);
-      const modal = document.getElementById(modalId);
-      if (modal) {
-        modal.classList.remove('show');
-        modal.style.display = 'none';
-        console.log("模态框已关闭");
-      } else {
-        console.error("找不到模态框:", modalId);
-      }
-    };
-    
-    console.log("页面初始化完成，绑定了测试函数 testEditOrder()、testOpenModal() 和 testCloseModal()");
-
-    // --- 订单管理 ---
-    const selectAllCheckbox = document.getElementById('select-all-orders');
-    const batchDeleteBtn = document.getElementById('batch-delete-btn');
-    const ordersTableContainer = document.getElementById('orders-table-container');
-
-    if (selectAllCheckbox) {
-      selectAllCheckbox.addEventListener('change', (e) => {
-        const checkboxes = document.querySelectorAll('.order-checkbox');
-        checkboxes.forEach(checkbox => {
-          checkbox.checked = e.target.checked;
-        });
-      });
-    }
-
-    // 绑定清理旧订单按钮事件
-    const cleanupOldOrdersBtn = document.getElementById('cleanup-old-orders-btn');
-    if (cleanupOldOrdersBtn) {
-      cleanupOldOrdersBtn.addEventListener('click', () => {
-        showCleanupOrdersModal();
-      });
-    }
-    
-    if (batchDeleteBtn) {
-      batchDeleteBtn.addEventListener('click', async () => {
-        const selectedCheckboxes = document.querySelectorAll('.order-checkbox:checked');
-        const orderIds = Array.from(selectedCheckboxes).map(cb => cb.value);
-
-        if (orderIds.length === 0) {
-          alert('请至少选择一个订单');
-          return;
-        }
-
-        if (confirm(`确定要永久删除这 ${orderIds.length} 个订单吗？此操作不可撤销！`)) {
-          try {
-            // 显示加载状态
-            batchDeleteBtn.disabled = true;
-            batchDeleteBtn.innerHTML = '删除中...';
-            
-            const resp = await fetch('/admin/api/orders/batch-delete', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ order_ids: orderIds })
-            });
-            
-            const result = await resp.json();
-            if (resp.ok && result.success) {
-              showToast(`成功删除了 ${result.deleted_count} 个订单`, 'success');
-              loadOrders(); // 重新加载订单
-            } else {
-              showToast(result.error || '删除失败', 'error');
-              console.error('删除失败:', result.error);
-            }
-          } catch (e) {
-            showToast('请求失败，请检查网络连接', 'error');
-            console.error('批量删除请求出错:', e);
-          } finally {
-            // 恢复按钮状态
-            batchDeleteBtn.disabled = false;
-            batchDeleteBtn.innerHTML = '批量删除';
-          }
-        }
-      });
-    }
-
-    if (ordersTableContainer) {
-      ordersTableContainer.addEventListener('change', (e) => {
-        if (e.target.classList.contains('order-checkbox')) {
-          const allCheckboxes = document.querySelectorAll('.order-checkbox');
-          const allChecked = Array.from(allCheckboxes).every(cb => cb.checked);
-          selectAllCheckbox.checked = allChecked;
-        }
-      });
-    }
-
-    // --- 用户管理 ---
-    const userSearchInput = document.getElementById('user-search');
-    if (userSearchInput) {
-      // ... existing code ...
-    }
-  });
-
-  // 显示消息提示
-  function showToast(message, type = 'info') {
-    // 检查是否已存在toast容器
-    let toastContainer = document.getElementById('toast-container');
-    if (!toastContainer) {
-      // 创建toast容器
-      toastContainer = document.createElement('div');
-      toastContainer.id = 'toast-container';
-      toastContainer.style.position = 'fixed';
-      toastContainer.style.top = '20px';
-      toastContainer.style.right = '20px';
-      toastContainer.style.zIndex = '9999';
-      document.body.appendChild(toastContainer);
-    }
-    
-    // 创建toast元素
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.style.minWidth = '250px';
-    toast.style.margin = '10px';
-    toast.style.padding = '15px';
-    toast.style.borderRadius = '4px';
-    toast.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
-    toast.style.animation = 'fadeIn 0.3s, fadeOut 0.3s 2.7s';
-    toast.style.animationFillMode = 'forwards';
-    
-    // 根据类型设置背景色
-    switch(type) {
-      case 'success':
-        toast.style.backgroundColor = '#4CAF50';
-        toast.style.color = 'white';
-        break;
-      case 'error':
-        toast.style.backgroundColor = '#F44336';
-        toast.style.color = 'white';
-        break;
-      case 'warning':
-        toast.style.backgroundColor = '#FF9800';
-        toast.style.color = 'white';
-        break;
-      default:
-        toast.style.backgroundColor = '#2196F3';
-        toast.style.color = 'white';
-    }
-    
-    // 设置消息内容
-    toast.textContent = message;
-    
-    // 添加到容器
-    toastContainer.appendChild(toast);
-    
-    // 3秒后移除
-    setTimeout(() => {
-      toast.remove();
-    }, 3000);
-  }
-
   // 添加CSS动画
   const style = document.createElement('style');
   style.textContent = `
@@ -2153,360 +1239,17 @@
   `;
   document.head.appendChild(style);
 
-  async function editSeller(telegramId, currentNickname) {
-    const newNickname = prompt('请输入新的显示昵称', currentNickname || '');
-    if (newNickname === null) {
-      return; // 用户取消
-    }
-    try {
-      const response = await fetch(`/admin/api/sellers/${telegramId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ nickname: newNickname })
-      });
-      if (!response.ok) {
-        throw new Error('更新失败');
-      }
-      showToast('卖家昵称已更新', 'success');
-      await loadSellers();
-    } catch (e) {
-      console.error('更新卖家昵称失败', e);
-      showToast('更新失败: ' + e.message, 'error');
-    }
-  }
-
-  // 在loadSellers函数后添加如下JS方法：
-  async function updateSellerLevel(telegramId, newLevel) {
-    try {
-      const response = await fetch(`/admin/api/sellers/${telegramId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ distribution_level: parseInt(newLevel) })
-      });
-      
-      if (!response.ok) {
-        throw new Error('更新分流等级失败');
-      }
-      
-      showToast('分流等级已更新', 'success');
-    } catch (e) {
-      console.error('更新分流等级失败:', e);
-      showToast('更新分流等级失败: ' + e.message, 'error');
-    }
-  }
-
-  async function updateSellerMaxOrders(telegramId, newMaxOrders) {
-    try {
-      const response = await fetch(`/admin/api/sellers/${telegramId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ max_concurrent_orders: parseInt(newMaxOrders) })
-      });
-      
-      if (!response.ok) {
-        throw new Error('更新最大接单数失败');
-      }
-      
-      showToast('最大接单数已更新', 'success');
-    } catch (e) {
-      console.error('更新最大接单数失败:', e);
-      showToast('更新最大接单数失败: ' + e.message, 'error');
-    }
-  }
-
-  // 为"保存定制价格"按钮添加点击事件
-  document.getElementById('saveCustomPriceBtn').addEventListener('click', async function() {
-    const userId = document.getElementById('edit-custom-price-user-id').value;
-    const package = document.getElementById('edit-custom-price-package').value;
-    const newPrice = document.getElementById('edit-custom-price-new').value;
+  document.addEventListener('DOMContentLoaded', () => {
+    // 加载用户和卖家数据
+    loadUsers();
+    loadSellers();
     
-    console.log("保存定制价格:", userId, package, newPrice);
+    // 初始化各种事件处理
+    initTabSwitching();
+    initModals();
     
-    if (!userId || !package || newPrice === '') {
-      alert('请填写完整信息');
-      return;
-    }
-    
-    try {
-      const response = await fetch(`/admin/api/users/${userId}/custom-prices`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          package: package,
-          price: parseFloat(newPrice)
-        })
-      });
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        closeModal('editCustomPriceModal');
-        alert(result.message || '定制价格已更新');
-        
-        // 如果当前还在查看该用户的定制价格，更新显示
-        const currentUserId = document.getElementById('edit-custom-price-user-id').value;
-        if (currentUserId === userId) {
-          // 更新当前选中套餐的价格显示
-          const currentPackage = document.getElementById('edit-custom-price-package').value;
-          const customPrices = result.custom_prices || {};
-          
-          // 获取默认价格
-          const defaultPriceField = document.getElementById('edit-custom-price-default');
-          const defaultPrice = defaultPriceField.value;
-          
-          // 更新显示
-          updateCustomPriceDisplay(currentPackage, { [currentPackage]: defaultPrice }, customPrices);
-        }
-      } else {
-        alert('设置定制价格失败: ' + (result.error || '未知错误'));
-      }
-    } catch (e) {
-      console.error('设置定制价格失败', e);
-      alert('设置定制价格失败: ' + e.message);
-    }
-  });
-
-  // 设置虚拟滚动
-  function setupVirtualScroll() {
-    const tableContainer = document.querySelector('.table-container');
-    if (!tableContainer) return;
-    
-    virtualScrollConfig.container = tableContainer;
-    
-    // 绑定滚动事件
-    tableContainer.addEventListener('scroll', handleScroll);
-    
-    // 设置内容区高度
-    updateVirtualScrollHeight();
-  }
-  
-  // 处理滚动事件
-  function handleScroll() {
-    const { container } = virtualScrollConfig;
-    if (!container || !virtualScrollEnabled) return;
-    
-    // 标记正在滚动
-    virtualScrollConfig.isScrolling = true;
-    
-    // 清除之前的定时器
-    if (virtualScrollConfig.scrollTimeout) {
-      clearTimeout(virtualScrollConfig.scrollTimeout);
-    }
-    
-    // 如果滚动到底部附近，加载更多
-    const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    if (scrollBottom < 200 && !isLoadingOrders && hasMoreOrders) {
-      loadMoreOrders();
-    }
-    
-    // 计算可见项范围
-    const scrollTop = container.scrollTop;
-    const startIndex = Math.floor(scrollTop / virtualScrollConfig.itemHeight);
-    const visibleCount = Math.ceil(container.clientHeight / virtualScrollConfig.itemHeight);
-    const endIndex = startIndex + visibleCount + virtualScrollConfig.overscan;
-    
-    // 更新可见范围
-    virtualScrollConfig.visibleStartIndex = Math.max(0, startIndex - virtualScrollConfig.overscan);
-    virtualScrollConfig.visibleEndIndex = Math.min(allOrders.length, endIndex);
-    
-    // 只在滚动方向变化或大幅滚动时重新渲染
-    const scrollDelta = Math.abs(scrollTop - virtualScrollConfig.lastScrollTop);
-    const directionChanged = (scrollTop > virtualScrollConfig.lastScrollTop && 
-                            virtualScrollConfig.lastDirection === 'up') || 
-                           (scrollTop < virtualScrollConfig.lastScrollTop && 
-                            virtualScrollConfig.lastDirection === 'down');
-                            
-    if (scrollDelta > 50 || directionChanged) {
-      renderVisibleRows();
-      virtualScrollConfig.lastScrollTop = scrollTop;
-      virtualScrollConfig.lastDirection = scrollTop > virtualScrollConfig.lastScrollTop ? 'down' : 'up';
-    }
-    
-    // 滚动结束后的处理
-    virtualScrollConfig.scrollTimeout = setTimeout(() => {
-      virtualScrollConfig.isScrolling = false;
-      renderVisibleRows();
-    }, 100);
-  }
-  
-  // 更新虚拟滚动区域高度
-  function updateVirtualScrollHeight() {
-    const scrollContent = document.getElementById('orders-table-body');
-    if (!scrollContent || !allOrders.length) return;
-    
-    // 设置足够的高度以容纳所有项
-    const totalHeight = allOrders.length * virtualScrollConfig.itemHeight;
-    scrollContent.style.height = `${totalHeight}px`;
-  }
-  
-  // 只渲染可见行
-  function renderVisibleRows() {
-    if (!virtualScrollEnabled || allOrders.length === 0) return;
-    
-    const tbody = document.getElementById('orders-table-body');
-    if (!tbody) return;
-    
-    const { visibleStartIndex, visibleEndIndex, itemHeight } = virtualScrollConfig;
-    
-    // 获取当前可见的订单
-    const visibleOrders = allOrders.slice(visibleStartIndex, visibleEndIndex);
-    
-    // 清除现有的行
-    tbody.innerHTML = '';
-    
-    // 添加一个占位div来保持滚动位置
-    const placeholder = document.createElement('div');
-    placeholder.style.height = `${visibleStartIndex * itemHeight}px`;
-    placeholder.className = 'virtual-scroll-placeholder';
-    tbody.appendChild(placeholder);
-    
-    // 渲染可见的行
-    visibleOrders.forEach((order, index) => {
-      const row = createOrderRow(order);
-      tbody.appendChild(row);
-    });
-  }
-  
-  // 创建订单行
-  function createOrderRow(order) {
-    // 根据订单状态设置样式
-    let statusClass = '';
-    switch (order.status) {
-      case 'submitted': statusClass = 'status-submitted'; break;
-      case 'accepted': statusClass = 'status-accepted'; break;
-      case 'completed': statusClass = 'status-completed'; break;
-      case 'failed': statusClass = 'status-failed'; break;
-      default: statusClass = '';
-    }
-    
-    // 状态文本映射
-    const statusText = {
-      'submitted': '待处理',
-      'accepted': '已接单',
-      'completed': '已完成',
-      'failed': '充值失败',
-      'cancelled': '已取消',
-      'disputing': '正在质疑'
-    }[order.status] || order.status;
-    
-    const row = document.createElement('tr');
-    row.dataset.orderId = order.id;
-    
-    row.innerHTML = `
-      <td><input type="checkbox" class="order-checkbox" value="${order.id}"></td>
-      <td>${order.id}</td>
-      <td>${order.account.includes('uploads') ? `<a href="/${order.account}" target="_blank">查看二维码</a>` : order.account}</td>
-      <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-      <td>${escapeHtml(order.created_by || '')}</td>
-      <td>${escapeHtml(order.accepted_by_nickname || order.accepted_by || '-')}</td>
-      <td>
-        <div class="remark-container">
-          <span class="remark-text" data-order-id="${order.id}">${escapeHtml(order.remark || '')}</span>
-          <button class="edit-remark-btn small" onclick="editRemark(${order.id})"><i class="fas fa-pencil-alt"></i></button>
-        </div>
-      </td>
-      <td>${order.created_at}</td>
-      <td>${order.completed_at || '-'}</td>
-      <td>
-        <button class="btn btn-sm btn-primary" onclick="editOrder(${order.id})">编辑</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteOrder(${order.id})">删除</button>
-      </td>
-    `;
-    
-    return row;
-  }
-
-  // 设置过滤器
-  function setupFilters() {
-    // 状态过滤器
-    const statusFilter = document.getElementById('status-filter');
-    if (statusFilter) {
-      statusFilter.addEventListener('change', () => {
-        activeFilters.status = statusFilter.value || null;
-        loadOrders(1, true);
-      });
-    }
-    
-    // 搜索框
-    const searchInput = document.getElementById('order-search');
-    const searchButton = document.getElementById('order-search-btn');
-    if (searchInput && searchButton) {
-      searchButton.addEventListener('click', () => {
-        activeFilters.search = searchInput.value.trim() || null;
-        loadOrders(1, true);
-      });
-      
-      // 按回车键搜索
-      searchInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-          activeFilters.search = searchInput.value.trim() || null;
-          loadOrders(1, true);
-        }
-      });
-    }
-    
-    // 卖家过滤器
-    const sellerFilter = document.getElementById('seller-filter');
-    if (sellerFilter) {
-      sellerFilter.addEventListener('change', () => {
-        activeFilters.seller_id = sellerFilter.value || null;
-        loadOrders(1, true);
-      });
-    }
-  }
-  
-  // 开关虚拟滚动
-  function toggleVirtualScroll() {
-    virtualScrollEnabled = !virtualScrollEnabled;
-    const toggleBtn = document.getElementById('toggle-virtual-scroll-btn');
-    if (toggleBtn) {
-      toggleBtn.textContent = virtualScrollEnabled ? '禁用虚拟滚动' : '启用虚拟滚动';
-    }
-    
-    if (virtualScrollEnabled) {
-      updateVirtualScrollHeight();
-      renderVisibleRows();
-    } else {
-      renderOrders(allOrders);
-    }
-  }
-  
-  // 渲染完整订单列表（非虚拟滚动模式）
-  function renderOrders(orders) {
-    const tbody = document.getElementById('orders-table-body');
-    if (!tbody) return;
-    
-    if (orders.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4">暂无订单</td></tr>';
-      return;
-    }
-    
-    tbody.innerHTML = '';
-    tbody.style.height = 'auto'; // 重置虚拟滚动设置的高度
-    
-    orders.forEach(order => {
-      const row = createOrderRow(order);
-      tbody.appendChild(row);
-    });
-  }
-  
-  // 在页面加载完成后初始化虚拟滚动
-  document.addEventListener('DOMContentLoaded', function() {
-    // ... 原有代码 ...
-    
-    // 添加滚动监听
-    setupVirtualScroll();
-    
-    // 绑定过滤器事件
-    setupFilters();
+    // 显示默认标签页
+    showTab('users');
   });
 </script>
 </body>
