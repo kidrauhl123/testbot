@@ -1701,6 +1701,7 @@
   let viewMode = 'table'; // 默认视图模式：grid 或 table
   let page = 1; // 当前页码
   let orderPageSize = 10; // 每次加载的订单数量
+  let maxOrdersLimit = 1500; // 最大可显示的订单数量
   let fileInputClickCount = 0; // 记录文件选择器被触发的次数
   
   // 日志函数，用于调试
@@ -2160,8 +2161,8 @@
         }
       }
       
-      // 否则预加载新数据
-      const prefetchResponse = await fetch(`/api/quick-orders?limit=50&prefetch=1`, {
+      // 否则预加载新数据，第一页
+      const prefetchResponse = await fetch(`/api/quick-orders?page=1&limit=50&prefetch=1`, {
         headers: {'X-Requested-With': 'Prefetch'}
       });
       
@@ -2643,10 +2644,10 @@
         }
       }
       
-      // 请求轻量级订单数据
+      // 请求轻量级订单数据，指定页码为1（首页）
       const url = isAutoRefresh ? 
-        `/api/quick-orders?limit=50&t=${Date.now()}` : 
-        `/api/quick-orders?limit=50`;
+        `/api/quick-orders?page=1&limit=50&t=${Date.now()}` : 
+        `/api/quick-orders?page=1&limit=50`;
         
       const response = await fetch(url, {
         signal: controller.signal
@@ -2763,8 +2764,14 @@
     // 显示更多按钮
     const loadMoreContainer = document.getElementById('load-more-container');
     if (loadMoreContainer) {
-      // 只有当总订单数大于当前显示数时才显示"显示更多"按钮
-      loadMoreContainer.style.display = orders.length > displayedOrders ? 'block' : 'none';
+      // 只有当总订单数大于当前显示数且未达到最大限制时才显示"显示更多"按钮
+      const shouldShow = orders.length > displayedOrders && allOrders.length < maxOrdersLimit;
+      loadMoreContainer.style.display = shouldShow ? 'block' : 'none';
+      
+      // 如果加载了足够多的数据但没有达到最大限制，恢复按钮内容
+      if (shouldShow && loadMoreContainer.innerHTML.includes('loading-indicator')) {
+        loadMoreContainer.innerHTML = '<button onclick="loadMoreOrders()" class="btn btn-primary">显示更多</button>';
+      }
     }
   }
   
@@ -2919,29 +2926,103 @@
   // 加载更多订单
   function loadMoreOrders() {
     // 每次多显示orderPageSize个，不再有总数限制
-    displayedOrders += orderPageSize; 
+    displayedOrders += orderPageSize;
     
-    // 应用搜索和筛选
-    let filteredOrders = allOrders;
-    
-    // 应用搜索
-    if (searchKeyword) {
-      filteredOrders = filteredOrders.filter(order => 
-        order.id.toString().includes(searchKeyword) || 
-        order.account.toLowerCase().includes(searchKeyword.toLowerCase())
-      );
+    // 判断是否需要加载更多数据
+    if (displayedOrders > allOrders.length && allOrders.length < maxOrdersLimit) {
+      // 增加页码并加载更多数据
+      page++;
+      fetchMoreOrders(page);
+    } else {
+      // 已有数据足够，直接渲染
+      // 应用搜索和筛选
+      let filteredOrders = allOrders;
+      
+      // 应用搜索
+      if (searchKeyword) {
+        filteredOrders = filteredOrders.filter(order => 
+          order.id.toString().includes(searchKeyword) || 
+          order.account.toLowerCase().includes(searchKeyword.toLowerCase())
+        );
+      }
+      
+      // 应用筛选
+      filteredOrders = filterOrders(filteredOrders);
+      
+      // 渲染订单
+      renderOrders(filteredOrders);
+      
+      // 如果当前显示数量小于总数且未达到最大限制，保持"显示更多"按钮可见
+      const loadMoreContainer = document.getElementById('load-more-container');
+      if (loadMoreContainer) {
+        loadMoreContainer.style.display = (filteredOrders.length > displayedOrders && allOrders.length < maxOrdersLimit) ? 'block' : 'none';
+      }
     }
-    
-    // 应用筛选
-    filteredOrders = filterOrders(filteredOrders);
-    
-    // 渲染订单
-    renderOrders(filteredOrders);
-    
-    // 如果当前显示数量小于总数，保持"显示更多"按钮可见
+  }
+
+  // 新增函数：从API获取更多订单
+  async function fetchMoreOrders(pageNum) {
+    // 显示加载中状态
     const loadMoreContainer = document.getElementById('load-more-container');
     if (loadMoreContainer) {
-      loadMoreContainer.style.display = filteredOrders.length > displayedOrders ? 'block' : 'none';
+      loadMoreContainer.innerHTML = '<div class="loading-indicator">加载更多订单中...</div>';
+    }
+    
+    try {
+      const url = `/api/quick-orders?page=${pageNum}&limit=50&t=${Date.now()}`;
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        console.error('加载更多订单失败:', response.status);
+        throw new Error(`服务器响应错误: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success && result.orders && result.orders.length > 0) {
+        // 将新订单添加到现有订单中
+        allOrders = [...allOrders, ...result.orders];
+        
+        // 应用搜索关键词和筛选条件
+        let filteredOrders = allOrders;
+        
+        // 应用搜索
+        if (searchKeyword) {
+          filteredOrders = filteredOrders.filter(order => 
+            order.id.toString().includes(searchKeyword) || 
+            (order.account && order.account.toLowerCase().includes(searchKeyword.toLowerCase())) ||
+            (order.remark && order.remark.toLowerCase().includes(searchKeyword.toLowerCase()))
+          );
+        }
+        
+        // 应用筛选
+        filteredOrders = filterOrders(filteredOrders);
+        
+        // 渲染订单
+        renderOrders(filteredOrders);
+      } else {
+        // 如果没有更多订单，隐藏"显示更多"按钮
+        if (loadMoreContainer) {
+          loadMoreContainer.style.display = 'none';
+          showCustomAlert('已加载全部订单', 'info');
+        }
+      }
+      
+      // 如果已达到最大显示限制
+      if (allOrders.length >= maxOrdersLimit) {
+        if (loadMoreContainer) {
+          loadMoreContainer.style.display = 'none';
+          showCustomAlert('已达到最大显示限制（1500条）', 'warning');
+        }
+      }
+    } catch (error) {
+      console.error('加载更多订单失败:', error);
+      // 恢复"显示更多"按钮（如果未达到最大限制）
+      if (loadMoreContainer && allOrders.length < maxOrdersLimit) {
+        loadMoreContainer.innerHTML = '<button onclick="loadMoreOrders()" class="btn btn-primary">显示更多</button>';
+      } else if (loadMoreContainer) {
+        loadMoreContainer.style.display = 'none';
+      }
     }
   }
 
