@@ -23,7 +23,8 @@ from modules.database import (
     get_seller_completed_orders, get_seller_pending_orders, check_seller_completed_orders,
     get_seller_today_confirmed_orders_by_user, get_admin_sellers,
     get_user_today_confirmed_count, get_all_today_confirmed_count, create_order_with_deduction_atomic,
-    add_seller, check_all_sellers_full, delete_old_orders, get_today_valid_orders_count
+    add_seller, check_all_sellers_full, delete_old_orders, get_today_valid_orders_count,
+    get_today_valid_orders_count_by_tg_logic
 )
 import modules.constants as constants
 
@@ -1618,10 +1619,10 @@ def register_routes(app, notification_queue):
             # 获取用户今日有效订单数
             user_valid_count = get_today_valid_orders_count(user_id)
             
-            # 如果是管理员，还要获取全站今日有效订单数
+            # 如果是管理员，使用TG端逻辑获取全站今日有效订单数
             all_valid_count = 0
             if session.get('is_admin'):
-                all_valid_count = get_today_valid_orders_count()  # 不传user_id，获取全站数据
+                all_valid_count = get_today_valid_orders_count_by_tg_logic()  # 使用TG端逻辑
                 
             return jsonify({
                 'success': True,

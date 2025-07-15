@@ -1296,6 +1296,75 @@ def get_today_valid_orders_count(user_id=None):
         logger.error(f"获取今日有效订单数失败: {str(e)}", exc_info=True)
         return 0
 
+def get_today_valid_orders_count_by_tg_logic():
+    """获取今日有效订单数 - 完全复制TG端管理员统计逻辑
+    
+    统计所有卖家的今日有效订单数总和，使用和TG端/stats命令完全相同的逻辑
+    """
+    from datetime import datetime
+    import pytz
+    
+    today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
+    logger.info(f"使用TG端逻辑查询今日({today})有效订单...")
+    
+    try:
+        # 获取所有卖家
+        sellers = get_all_sellers()
+        if not sellers:
+            logger.info("没有找到任何卖家")
+            return 0
+        
+        total_orders = 0
+        
+        for seller in sellers:
+            telegram_id = seller[0]
+            
+            # 获取该卖家今日有效订单数 - 完全复制TG端的查询逻辑
+            if DATABASE_URL.startswith('postgres'):
+                seller_orders_result = execute_query("""
+                    SELECT COUNT(*) FROM orders 
+                    WHERE accepted_by = %s
+                    AND (
+                        -- 充值成功且非长时间未收到
+                        (status = 'completed' AND (confirm_status IS NULL OR confirm_status != 'not_received'))
+                        OR
+                        -- 充值失败但已确认收到
+                        (status = 'failed' AND confirm_status = 'confirmed')
+                        OR
+                        -- 已接单且买家已确认收到
+                        (status = 'accepted' AND confirm_status = 'confirmed')
+                    )
+                    AND to_char(created_at::timestamp, 'YYYY-MM-DD') = %s
+                """, (str(telegram_id), today), fetch=True)
+            else:
+                seller_orders_result = execute_query("""
+                    SELECT COUNT(*) FROM orders 
+                    WHERE accepted_by = ?
+                    AND (
+                        -- 充值成功且非长时间未收到
+                        (status = 'completed' AND (confirm_status IS NULL OR confirm_status != 'not_received'))
+                        OR
+                        -- 充值失败但已确认收到
+                        (status = 'failed' AND confirm_status = 'confirmed')
+                        OR
+                        -- 已接单且买家已确认收到
+                        (status = 'accepted' AND confirm_status = 'confirmed')
+                    )
+                    AND substr(created_at, 1, 10) = ?
+                """, (str(telegram_id), today), fetch=True)
+            
+            valid_orders = seller_orders_result[0][0] if seller_orders_result else 0
+            total_orders += valid_orders
+            
+            if valid_orders > 0:
+                logger.info(f"卖家 {telegram_id} 今日有效订单数: {valid_orders}")
+        
+        logger.info(f"使用TG端逻辑，今日有效订单总数: {total_orders}")
+        return total_orders
+    except Exception as e:
+        logger.error(f"使用TG端逻辑获取今日有效订单数失败: {str(e)}", exc_info=True)
+        return 0
+
 def get_all_today_confirmed_count():
     """获取所有用户今天已确认的订单总数"""
     from datetime import datetime
