@@ -1616,10 +1616,10 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 管理员：显示所有卖家的今日有效订单数
             sellers = get_all_sellers()
             if not sellers:
-                await update.message.reply_text("📊 *Today's Valid Orders (All Sellers)*\n\nNo sellers found.", parse_mode='Markdown')
+                await update.message.reply_text("📊 Today's Valid Orders (All Sellers)\n\nNo sellers found.", parse_mode='Markdown')
                 return
             
-            message_parts = ["📊 *Today's Valid Orders (All Sellers)*\n"]
+            message_parts = ["📊 Today's Valid Orders (All Sellers)\n"]
             total_orders = 0
             
             for seller in sellers:
@@ -1667,33 +1667,36 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 valid_orders = seller_orders_result[0][0] if seller_orders_result else 0
                 total_orders += valid_orders
                 
-                # 实时获取最新的用户名，强制只显示@username格式
-                try:
-                    # 通过Telegram API获取最新用户信息
-                    current_user_info = await get_user_info(int(telegram_id))
-                    current_username = current_user_info.get('username')
+                # 只显示有效订单数大于0的卖家
+                if valid_orders > 0:
+                    # 实时获取最新的用户名，强制只显示@username格式
+                    try:
+                        # 通过Telegram API获取最新用户信息
+                        current_user_info = await get_user_info(int(telegram_id))
+                        current_username = current_user_info.get('username')
+                        
+                        if current_username:
+                            username_display = f"@{current_username}"
+                            # 顺便更新数据库中的用户名
+                            if current_username != username:
+                                update_seller_info(str(telegram_id), current_username, current_user_info.get('first_name'))
+                        else:
+                            # 如果真的没有username，显示ID
+                            username_display = f"ID:{telegram_id}"
+                    except Exception as e:
+                        # 如果API调用失败，使用数据库中的用户名或显示ID
+                        if username:
+                            username_display = f"@{username}"
+                        else:
+                            username_display = f"ID:{telegram_id}"
                     
-                    if current_username:
-                        username_display = f"@{current_username}"
-                        # 顺便更新数据库中的用户名
-                        if current_username != username:
-                            update_seller_info(str(telegram_id), current_username, current_user_info.get('first_name'))
-                    else:
-                        # 如果真的没有username，显示ID
-                        username_display = f"ID:{telegram_id}"
-                except Exception as e:
-                    # 如果API调用失败，使用数据库中的用户名或显示ID
-                    if username:
-                        username_display = f"@{username}"
-                    else:
-                        username_display = f"ID:{telegram_id}"
-                
-                # 添加状态标识
-                status_emoji = "🟢" if is_active else "🔴"
-                
-                message_parts.append(f"{status_emoji} {username_display}: *{valid_orders}*")
+                    message_parts.append(f"{username_display}: {valid_orders}")
             
-            message_parts.append(f"\n*Total: {total_orders}* valid orders today")
+            # 如果没有任何卖家有有效订单，显示提示信息
+            if len(message_parts) == 1:  # 只有标题
+                message_parts.append("No sellers have valid orders today.")
+            else:
+                message_parts.append(f"\nTotal: {total_orders} valid orders today")
             message = "\n".join(message_parts)
             
         else:
