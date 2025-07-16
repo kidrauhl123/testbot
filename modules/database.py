@@ -2094,3 +2094,64 @@ def get_seller_participation_status(telegram_id):
     except Exception as e:
         logger.error(f"获取卖家参与状态失败: {e}")
         return None
+
+def get_user_last_remark(user_id):
+    """
+    获取用户的上一条订单备注
+    
+    参数:
+    - user_id: 用户ID
+    
+    返回:
+    - 上一条订单的备注内容，如果没有订单则返回None
+    """
+    try:
+        # 根据数据库类型选择不同查询语句
+        if DATABASE_URL.startswith('postgres'):
+            query = """
+                SELECT remark FROM orders 
+                WHERE user_id = %s 
+                ORDER BY created_at DESC 
+                LIMIT 1
+            """
+            params = (user_id,)
+        else:
+            query = """
+                SELECT remark FROM orders 
+                WHERE user_id = ? 
+                ORDER BY created_at DESC 
+                LIMIT 1
+            """
+            params = (user_id,)
+            
+        result = execute_query(query, params, fetch=True)
+        
+        if result and result[0] and result[0][0]:
+            return result[0][0]
+        return None
+    except Exception as e:
+        logger.error(f"获取用户上一条备注失败: {str(e)}", exc_info=True)
+        return None
+
+def is_pure_number(text):
+    """
+    检查文本是否为纯数字
+    
+    参数:
+    - text: 要检查的文本
+    
+    返回:
+    - 如果是纯数字返回True，否则返回False
+    """
+    if not text:
+        return False
+    
+    # 去除首尾空格
+    text = text.strip()
+    
+    # 检查是否为空
+    if not text:
+        return False
+    
+    # 检查是否为纯数字
+    return text.isdigit()

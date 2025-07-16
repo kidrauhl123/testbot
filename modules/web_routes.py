@@ -1660,6 +1660,64 @@ def register_routes(app, notification_queue):
         except Exception as e:
             logger.error(f"检查备注重复失败: {str(e)}", exc_info=True)
             return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/smart-remark', methods=['POST'])
+    @login_required
+    def smart_remark():
+        """智能备注处理：如果用户不填写备注，检查上一条备注并给出建议"""
+        try:
+            user_id = session.get('user_id')
+            remark = request.json.get('remark', '')
+            
+            # 如果用户已经填写了备注，直接返回
+            if remark and remark.strip() != '':
+                return jsonify({
+                    'success': True,
+                    'need_suggestion': False,
+                    'suggested_remark': None,
+                    'message': '用户已填写备注'
+                })
+            
+            # 获取用户的上一条订单备注
+            from modules.database import get_user_last_remark, is_pure_number
+            last_remark = get_user_last_remark(user_id)
+            
+            if not last_remark:
+                # 用户没有历史订单，不需要建议
+                return jsonify({
+                    'success': True,
+                    'need_suggestion': False,
+                    'suggested_remark': None,
+                    'message': '用户无历史订单'
+                })
+            
+            # 检查上一条备注是否为纯数字
+            if is_pure_number(last_remark):
+                # 上一条备注是纯数字，建议填写数字+1
+                try:
+                    next_number = int(last_remark) + 1
+                    suggested_remark = str(next_number)
+                    return jsonify({
+                        'success': True,
+                        'need_suggestion': True,
+                        'suggested_remark': suggested_remark,
+                        'message': f'检测到上一条备注为数字 {last_remark}，建议填写 {suggested_remark}'
+                    })
+                except ValueError:
+                    # 数字转换失败，当作非数字处理
+                    pass
+            
+            # 上一条备注不是纯数字，提示用户确认
+            return jsonify({
+                'success': True,
+                'need_suggestion': True,
+                'suggested_remark': None,
+                'message': f'上一条备注为：{last_remark}，确定不填写备注吗？'
+            })
+            
+        except Exception as e:
+            logger.error(f"智能备注处理失败: {str(e)}", exc_info=True)
+            return jsonify({'success': False, 'error': str(e)}), 500
     
     @app.route('/api/debug-stats')
     @login_required

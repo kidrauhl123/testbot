@@ -1661,6 +1661,19 @@
   </div>
 </div>
 
+<!-- 智能备注确认对话框 -->
+<div id="smartRemarkModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <span class="close-modal">&times;</span>
+    <h2>智能备注建议</h2>
+    <p id="smartRemarkMessage"></p>
+    <div class="modal-buttons">
+      <button id="confirmSmartRemarkYes" class="btn btn-primary">使用建议</button>
+      <button id="confirmSmartRemarkNo" class="btn btn-secondary">继续提交</button>
+    </div>
+  </div>
+</div>
+
 <!-- 加载指示器模板 -->
 <div class="loading-overlay" id="loadingOverlay" style="display:none;">
   <div class="loading-spinner"></div>
@@ -2481,6 +2494,67 @@
     try {
       const formData = new FormData(e.target);
       const remark = formData.get('remark');
+      
+      // 首先检查智能备注建议
+      if (!remark || remark.trim() === '') {
+        const smartResp = await fetch('/api/smart-remark', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ remark: remark || '' }),
+        });
+        
+        const smartResult = await smartResp.json();
+        
+        if (smartResult.success && smartResult.need_suggestion) {
+          // 显示智能备注确认对话框
+          btn.textContent = orig;
+          btn.disabled = false;
+          isSubmitting = false; // 重置提交状态
+          
+          // 显示确认对话框
+          const smartModal = document.getElementById('smartRemarkModal');
+          const smartMessage = document.getElementById('smartRemarkMessage');
+          smartMessage.textContent = smartResult.message;
+          smartModal.style.display = 'block';
+          
+          // 处理确认/取消事件
+          return new Promise((resolve) => {
+            document.getElementById('confirmSmartRemarkYes').onclick = async () => {
+              smartModal.style.display = 'none';
+              
+              // 如果有建议的备注，更新表单数据
+              if (smartResult.suggested_remark) {
+                const remarkInput = document.querySelector('input[name="remark"]');
+                if (remarkInput) {
+                  remarkInput.value = smartResult.suggested_remark;
+                  // 更新FormData
+                  formData.set('remark', smartResult.suggested_remark);
+                }
+              }
+              
+              // 继续提交订单
+              await submitOrderForm(formData);
+              resolve();
+            };
+            
+            document.getElementById('confirmSmartRemarkNo').onclick = async () => {
+              smartModal.style.display = 'none';
+              // 继续提交订单（不填写备注）
+              await submitOrderForm(formData);
+              resolve();
+            };
+            
+            smartModal.querySelector('.close-modal').onclick = async () => {
+              smartModal.style.display = 'none';
+              // 继续提交订单（不填写备注）
+              await submitOrderForm(formData);
+              resolve();
+            };
+          });
+        }
+      }
       
       // 检查备注是否重复
       if (remark && remark.trim() !== '') {
