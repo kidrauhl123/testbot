@@ -1664,7 +1664,7 @@ def register_routes(app, notification_queue):
     @app.route('/api/smart-remark', methods=['POST'])
     @login_required
     def smart_remark():
-        """智能备注处理：如果用户不填写备注，检查上一条备注并给出建议"""
+        """智能备注处理：如果用户不填写备注，检查上一条备注并自动应用数字建议"""
         try:
             user_id = session.get('user_id')
             remark = request.json.get('remark', '')
@@ -1674,8 +1674,7 @@ def register_routes(app, notification_queue):
                 return jsonify({
                     'success': True,
                     'need_suggestion': False,
-                    'suggested_remark': None,
-                    'message': '用户已填写备注'
+                    'suggested_remark': None
                 })
             
             # 获取用户的上一条订单备注
@@ -1687,32 +1686,29 @@ def register_routes(app, notification_queue):
                 return jsonify({
                     'success': True,
                     'need_suggestion': False,
-                    'suggested_remark': None,
-                    'message': '用户无历史订单'
+                    'suggested_remark': None
                 })
             
             # 检查上一条备注是否为纯数字
             if is_pure_number(last_remark):
-                # 上一条备注是纯数字，建议填写数字+1
+                # 上一条备注是纯数字，自动建议填写数字+1
                 try:
                     next_number = int(last_remark) + 1
                     suggested_remark = str(next_number)
                     return jsonify({
                         'success': True,
                         'need_suggestion': True,
-                        'suggested_remark': suggested_remark,
-                        'message': f'检测到上一条备注为数字 {last_remark}，建议填写 {suggested_remark}'
+                        'suggested_remark': suggested_remark
                     })
                 except ValueError:
                     # 数字转换失败，当作非数字处理
                     pass
             
-            # 上一条备注不是纯数字，提示用户确认
+            # 上一条备注不是纯数字，不提供建议
             return jsonify({
                 'success': True,
-                'need_suggestion': True,
-                'suggested_remark': None,
-                'message': f'上一条备注为：{last_remark}，确定不填写备注吗？'
+                'need_suggestion': False,
+                'suggested_remark': None
             })
             
         except Exception as e:
