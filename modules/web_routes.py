@@ -1704,11 +1704,13 @@ def register_routes(app, notification_queue):
                     # 数字转换失败，当作非数字处理
                     pass
             
-            # 上一条备注不是纯数字，不提供建议
+            # 上一条备注不是纯数字，需要确认
             return jsonify({
                 'success': True,
-                'need_suggestion': False,
-                'suggested_remark': None
+                'need_suggestion': True,
+                'suggested_remark': None,
+                'need_confirmation': True,
+                'message': f'上一条备注为：{last_remark}，确定不填写备注吗？'
             })
             
         except Exception as e:

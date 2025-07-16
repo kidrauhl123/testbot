@@ -2097,32 +2097,37 @@ def get_seller_participation_status(telegram_id):
 
 def get_user_last_remark(user_id):
     """
-    获取用户的上一条订单备注
+    获取用户今日的上一条订单备注
     
     参数:
     - user_id: 用户ID
     
     返回:
-    - 上一条订单的备注内容，如果没有订单则返回None
+    - 用户今日上一条订单的备注内容，如果没有订单则返回None
     """
     try:
+        # 获取今天的日期，格式为YYYY-MM-DD
+        today = datetime.now(CN_TIMEZONE).strftime("%Y-%m-%d")
+        
         # 根据数据库类型选择不同查询语句
         if DATABASE_URL.startswith('postgres'):
             query = """
                 SELECT remark FROM orders 
                 WHERE user_id = %s 
+                AND created_at LIKE %s
                 ORDER BY created_at DESC 
                 LIMIT 1
             """
-            params = (user_id,)
+            params = (user_id, f"{today}%")
         else:
             query = """
                 SELECT remark FROM orders 
                 WHERE user_id = ? 
+                AND created_at LIKE ?
                 ORDER BY created_at DESC 
                 LIMIT 1
             """
-            params = (user_id,)
+            params = (user_id, f"{today}%")
             
         result = execute_query(query, params, fetch=True)
         
@@ -2130,7 +2135,7 @@ def get_user_last_remark(user_id):
             return result[0][0]
         return None
     except Exception as e:
-        logger.error(f"获取用户上一条备注失败: {str(e)}", exc_info=True)
+        logger.error(f"获取用户今日上一条备注失败: {str(e)}", exc_info=True)
         return None
 
 def is_pure_number(text):

@@ -1661,7 +1661,18 @@
   </div>
 </div>
 
-
+<!-- 智能备注确认对话框 -->
+<div id="smartRemarkModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <span class="close-modal">&times;</span>
+    <h2>智能备注确认</h2>
+    <p id="smartRemarkMessage"></p>
+    <div class="modal-buttons">
+      <button id="confirmSmartRemarkYes" class="btn btn-primary">继续提交</button>
+      <button id="confirmSmartRemarkNo" class="btn btn-secondary">返回修改</button>
+    </div>
+  </div>
+</div>
 
 <!-- 加载指示器模板 -->
 <div class="loading-overlay" id="loadingOverlay" style="display:none;">
@@ -2484,7 +2495,7 @@
       const formData = new FormData(e.target);
       const remark = formData.get('remark');
       
-      // 自动应用智能备注建议
+      // 处理智能备注建议
       if (!remark || remark.trim() === '') {
         const smartResp = await fetch('/api/smart-remark', {
           method: 'POST',
@@ -2496,13 +2507,46 @@
         
         const smartResult = await smartResp.json();
         
-        if (smartResult.success && smartResult.need_suggestion && smartResult.suggested_remark) {
-          // 自动应用建议的备注
-          const remarkInput = document.querySelector('input[name="remark"]');
-          if (remarkInput) {
-            remarkInput.value = smartResult.suggested_remark;
-            // 更新FormData
-            formData.set('remark', smartResult.suggested_remark);
+        if (smartResult.success && smartResult.need_suggestion) {
+          if (smartResult.suggested_remark) {
+            // 自动应用数字建议
+            const remarkInput = document.querySelector('input[name="remark"]');
+            if (remarkInput) {
+              remarkInput.value = smartResult.suggested_remark;
+              // 更新FormData
+              formData.set('remark', smartResult.suggested_remark);
+            }
+          } else if (smartResult.need_confirmation) {
+            // 需要确认是否不填写备注
+            btn.textContent = orig;
+            btn.disabled = false;
+            isSubmitting = false; // 重置提交状态
+            
+            // 显示确认对话框
+            const smartModal = document.getElementById('smartRemarkModal');
+            const smartMessage = document.getElementById('smartRemarkMessage');
+            smartMessage.textContent = smartResult.message;
+            smartModal.style.display = 'block';
+            
+            // 处理确认/取消事件
+            return new Promise((resolve) => {
+              document.getElementById('confirmSmartRemarkYes').onclick = async () => {
+                smartModal.style.display = 'none';
+                // 继续提交订单（不填写备注）
+                await submitOrderForm(formData);
+                resolve();
+              };
+              
+              document.getElementById('confirmSmartRemarkNo').onclick = () => {
+                smartModal.style.display = 'none';
+                resolve();
+              };
+              
+              smartModal.querySelector('.close-modal').onclick = () => {
+                smartModal.style.display = 'none';
+                resolve();
+              };
+            });
           }
         }
       }
