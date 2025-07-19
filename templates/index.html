@@ -122,6 +122,85 @@
       background: rgba(242, 242, 247, 0.7);
       padding: 6px 12px;
       border-radius: 20px;
+      position: relative;
+      cursor: pointer;
+    }
+    
+    .stats-item:hover {
+      background: rgba(242, 242, 247, 0.9);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .stats-tooltip {
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.9);
+      color: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 12px;
+      white-space: nowrap;
+      z-index: 1000;
+      margin-top: 8px;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    
+    .stats-tooltip::before {
+      content: '';
+      position: absolute;
+      top: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-bottom: 6px solid rgba(0, 0, 0, 0.9);
+    }
+    
+    .stats-item:hover .stats-tooltip {
+      opacity: 1;
+      visibility: visible;
+    }
+    
+    .stats-tooltip-content {
+      max-width: 300px;
+    }
+    
+    .stats-tooltip-title {
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+    
+    .stats-tooltip-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .stats-tooltip-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 2px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    .stats-tooltip-item:last-child {
+      border-bottom: none;
+    }
+    
+    .stats-tooltip-submitter {
+      color: #ccc;
+    }
+    
+    .stats-tooltip-count {
+      color: #fff;
+      font-weight: 600;
     }
     .stats-item i {
       color: #667eea;
@@ -1388,8 +1467,19 @@
 <div class="navbar">
   <div class="navbar-brand">优图充值系统</div>
   <div class="navbar-stats">
-    <div class="stats-item">
+    <div class="stats-item" id="today-success-stats">
       <i class="fas fa-check-circle"></i> 今日有效订单数：<span id="today-success-count">0</span>
+      <div class="stats-tooltip" id="today-success-tooltip">
+        <div class="stats-tooltip-content">
+          <div class="stats-tooltip-title">按提交者分组</div>
+          <ul class="stats-tooltip-list" id="submitter-stats-list">
+            <li class="stats-tooltip-item">
+              <span class="stats-tooltip-submitter">加载中...</span>
+              <span class="stats-tooltip-count">-</span>
+            </li>
+          </ul>
+        </div>
+      </div>
     </div>
     <div class="stats-item">
       <i class="fas fa-user-check"></i> 当前有 <span id="active-sellers-count">0</span> 位活跃卖家
@@ -2441,6 +2531,53 @@
         }
     } catch (e) {
         console.error('获取今日确认订单数失败:', e);
+    }
+  }
+
+  // 加载按提交者分组的今日有效订单统计
+  async function loadTodayStatsBySubmitter() {
+    try {
+        // 只有管理员才能看到此功能
+        if (!isAdmin) {
+            return;
+        }
+
+        const response = await fetch('/api/today-stats-by-submitter');
+        const data = await response.json();
+
+        if (data.success) {
+            const submitterStatsList = document.getElementById('submitter-stats-list');
+            if (submitterStatsList) {
+                // 清空现有内容
+                submitterStatsList.innerHTML = '';
+                
+                if (data.stats && data.stats.length > 0) {
+                    // 添加统计数据
+                    data.stats.forEach(item => {
+                        const li = document.createElement('li');
+                        li.className = 'stats-tooltip-item';
+                        li.innerHTML = `
+                            <span class="stats-tooltip-submitter">${item.submitter}</span>
+                            <span class="stats-tooltip-count">${item.count}</span>
+                        `;
+                        submitterStatsList.appendChild(li);
+                    });
+                } else {
+                    // 没有数据时显示提示
+                    const li = document.createElement('li');
+                    li.className = 'stats-tooltip-item';
+                    li.innerHTML = `
+                        <span class="stats-tooltip-submitter">暂无数据</span>
+                        <span class="stats-tooltip-count">-</span>
+                    `;
+                    submitterStatsList.appendChild(li);
+                }
+            }
+        } else {
+            console.error('获取按提交者分组的统计数据失败:', data.error);
+        }
+    } catch (e) {
+        console.error('获取按提交者分组的统计数据失败:', e);
     }
   }
   
