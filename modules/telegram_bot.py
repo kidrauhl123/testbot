@@ -232,7 +232,8 @@ async def get_user_info(user_id):
         user_info_cache[user_id] = user_info
         return user_info
     except Exception as e:
-        logger.error(f"Failed to get user info for {user_id}: {e}")
+        logger.warning(f"无法获取用户 {user_id} 的信息: {e}")
+        # 返回默认信息而不是抛出异常
         default_info = {"id": user_id, "username": str(user_id), "first_name": str(user_id), "last_name": ""}
         user_info_cache[user_id] = default_info
         return default_info
@@ -1616,7 +1617,7 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 管理员：显示所有卖家的今日有效订单数
             sellers = get_all_sellers()
             if not sellers:
-                await update.message.reply_text("📊 Today's Valid Orders (All Sellers)\n\nNo sellers found.", parse_mode='Markdown')
+                await update.message.reply_text("📊 Today's Valid Orders (All Sellers)\n\nNo sellers found.")
                 return
             
             message_parts = ["📊 Today's Valid Orders (All Sellers)\n"]
@@ -1629,7 +1630,7 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 nickname = seller[3]
                 is_active = seller[4]
                 
-                                # 获取该卖家今日有效订单数
+                # 获取该卖家今日有效订单数
                 # 这里我们需要通过接单人来统计，而不是用户ID
                 if DATABASE_URL.startswith('postgres'):
                     seller_orders_result = execute_query("""
@@ -1646,7 +1647,7 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             (status = 'accepted' AND confirm_status = 'confirmed')
                         )
                         AND to_char(created_at::timestamp, 'YYYY-MM-DD') = %s
-                                          """, (str(telegram_id), datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")), fetch=True)
+                    """, (str(telegram_id), datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")), fetch=True)
                 else:
                     seller_orders_result = execute_query("""
                         SELECT COUNT(*) FROM orders 
@@ -1675,17 +1676,21 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         current_user_info = await get_user_info(int(telegram_id))
                         current_username = current_user_info.get('username')
                         
-                        if current_username:
+                        if current_username and current_username != str(telegram_id):
                             username_display = f"@{current_username}"
                             # 顺便更新数据库中的用户名
                             if current_username != username:
                                 update_seller_info(str(telegram_id), current_username, current_user_info.get('first_name'))
                         else:
-                            # 如果真的没有username，显示ID
-                            username_display = f"ID:{telegram_id}"
+                            # 如果没有有效的username，使用数据库中的用户名或显示ID
+                            if username and username != str(telegram_id):
+                                username_display = f"@{username}"
+                            else:
+                                username_display = f"ID:{telegram_id}"
                     except Exception as e:
                         # 如果API调用失败，使用数据库中的用户名或显示ID
-                        if username:
+                        logger.warning(f"无法获取用户 {telegram_id} 的最新信息: {e}")
+                        if username and username != str(telegram_id):
                             username_display = f"@{username}"
                         else:
                             username_display = f"ID:{telegram_id}"
@@ -1705,7 +1710,7 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             total_completed = sum(count for _, count in stats_by_user)
             
-            message_parts = [f"📊 *Your Today's Stats*\n\nYou have completed *{total_completed}* order{'s' if total_completed != 1 else ''} today."]
+            message_parts = [f"📊 Your Today's Stats\n\nYou have completed {total_completed} order{'s' if total_completed != 1 else ''} today."]
             
             if stats_by_user:
                 message_parts.append("\nBreakdown by user:")
@@ -1715,7 +1720,7 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             message = "\n".join(message_parts)
 
-        await update.message.reply_text(message, parse_mode='Markdown')
+        await update.message.reply_text(message)
 
     except Exception as e:
         logger.error(f"获取统计信息时出错 (用户: {user_id}): {e}", exc_info=True)

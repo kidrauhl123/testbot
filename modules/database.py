@@ -1497,7 +1497,8 @@ def get_seller_today_confirmed_orders_by_user(telegram_id):
         logger.info(f"卖家 {telegram_id} 今日充值成功订单数: {len(results) if results else 0}")
         return results if results else []
     except Exception as e:
-        logger.error(f"获取卖家今日确认订单数失败: {str(e)}", exc_info=True)
+        logger.error(f"获取卖家 {telegram_id} 今日确认订单数失败: {str(e)}", exc_info=True)
+        # 返回空列表而不是抛出异常，避免影响stats功能
         return []
 
 def get_seller_pending_orders(telegram_id):
