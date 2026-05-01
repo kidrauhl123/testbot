@@ -528,6 +528,12 @@
         </a>
       </div>
     </div>
+    
+    {% if balance is defined %}
+    <div class="balance-badge {% if balance < 0 %}negative{% endif %}">
+      余额: {{ balance }}元{% if credit_limit is defined and credit_limit > 0 %} (额度: {{ credit_limit }}元){% endif %}
+    </div>
+    {% endif %}
   </div>
 </div>
 
@@ -536,6 +542,7 @@
     <div class="sidebar">
       <ul class="sidebar-menu">
         <li><a href="#orders" class="active"><i class="fas fa-shopping-cart"></i> 订单管理</a></li>
+        <li><a href="#balance"><i class="fas fa-dollar-sign"></i> 余额明细</a></li>
       </ul>
     </div>
     <div class="content">
@@ -548,6 +555,46 @@
         </div>
         <div id="orders-container" class="orders-table-container">
           <div class="loading">加载中...</div>
+        </div>
+      </div>
+      <div class="tab-content" id="balance">
+        <div class="content-header">
+          <h2>余额明细</h2>
+          <div class="header-actions">
+            <button class="btn btn-primary">充值</button>
+          </div>
+        </div>
+        <div class="balance-summary">
+          <div class="balance-info">
+            <div class="balance-label">当前余额</div>
+            <div class="balance-value">{{ balance|default(0.00, true) }}元</div>
+          </div>
+          {% if credit_limit is defined and credit_limit > 0 %}
+          <div class="balance-info">
+            <div class="balance-label">透支额度</div>
+            <div class="balance-value">{{ credit_limit }}元</div>
+          </div>
+          {% endif %}
+        </div>
+        <div class="transaction-container">
+          <h3>交易记录</h3>
+          <table class="orders-table transaction-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>类型</th>
+                <th>金额</th>
+                <th>余额</th>
+                <th>时间</th>
+                <th>描述</th>
+              </tr>
+            </thead>
+            <tbody id="transaction-tbody">
+              <tr>
+                <td colspan="6" class="loading">加载中...</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -588,18 +635,17 @@
   async function loadOrdersAndStats() {
     try {
       console.log('开始加载订单数据');
-      const resp = await fetch('/orders/recent?limit=1500');
+      const resp = await fetch('/orders/recent?limit=1000');
       console.log('API响应状态:', resp.status);
       
       if (!resp.ok) {
         throw new Error(`HTTP错误! 状态: ${resp.status}`);
       }
       
-      const result = await resp.json();
-      const orders = result.orders || [];
-      console.log('获取到订单数据:', orders.length, '条');
+      const orders = await resp.json();
+      console.log('获取到订单数据:', orders && orders.length ? orders.length : 0, '条');
       
-      if (orders.length === 0) {
+      if (!orders || orders.length === 0) {
         document.getElementById('orders-container').innerHTML = '<div class="no-orders">暂无订单记录</div>';
         return;
       }
@@ -678,6 +724,9 @@
           <tr>
             <th>ID</th>
             <th>账号</th>
+            <th>密码</th>
+            <th>套餐</th>
+            <th>价格</th>
             <th>状态</th>
             <th>提交时间</th>
             <th>完成时间</th>
@@ -695,7 +744,10 @@
       tableHtml += `
         <tr>
           <td data-label="ID">${order.id}</td>
-          <td data-label="账号">${order.account}</td>
+          <td data-label="账号">${escapeHtml(order.account)}</td>
+          <td data-label="密码">${escapeHtml(order.password || '')}</td>
+          <td data-label="套餐">${order.package}个月</td>
+          <td data-label="价格">¥${price}</td>
           <td data-label="状态"><span class="status-badge ${statusClass}">${order.status_text}</span></td>
           <td data-label="提交时间">${order.created_at}</td>
           <td data-label="完成时间">${order.completed_at || '-'}</td>
@@ -727,6 +779,8 @@
     // 构建详细信息
     let detailMessage = `订单 #${orderId} 详情\n\n`;
     detailMessage += `账号: ${order.account}\n`;
+    detailMessage += `密码: ${order.password || '未提供'}\n`;
+    detailMessage += `套餐: ${order.package}个月\n`;
     detailMessage += `状态: ${order.status_text}\n`;
     detailMessage += `提交时间: ${order.created_at}\n`;
     
@@ -790,6 +844,11 @@
         e.preventDefault();
         const tabId = this.getAttribute('href').substring(1);
         showTab(tabId);
+        
+        // 当切换到余额明细标签页时加载数据
+        if (tabId === 'balance') {
+          loadBalanceDetails();
+        }
       });
     });
     
@@ -799,6 +858,64 @@
     // 加载订单数据
     loadOrdersAndStats();
   });
+  
+  // 加载余额明细数据
+  async function loadBalanceDetails() {
+    const transactionTbody = document.getElementById('transaction-tbody');
+    
+    try {
+      // 从API获取余额明细
+      const response = await fetch('/api/balance/records?limit=50');
+      
+      if (!response.ok) {
+        throw new Error(`获取余额明细失败: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || '获取余额明细失败');
+      }
+      
+      const records = data.records;
+      
+      if (!records || records.length === 0) {
+        transactionTbody.innerHTML = '<tr><td colspan="6" class="no-data">暂无余额变动记录</td></tr>';
+        return;
+      }
+      
+      let html = '';
+      records.forEach(record => {
+        // 类型显示转换
+        const typeMap = {
+          'recharge': '充值',
+          'consume': '消费',
+          'refund': '退款'
+        };
+        
+        // 根据类型设置样式
+        const isPositive = record.amount > 0;
+        const typeDisplay = typeMap[record.type] || record.type;
+        const amount = isPositive ? `+${record.amount}` : record.amount;
+        
+        html += `
+          <tr>
+            <td>${record.id}</td>
+            <td>${typeDisplay}</td>
+            <td class="${isPositive ? 'text-success' : 'text-danger'}">${amount}</td>
+            <td>${record.balance_after}</td>
+            <td>${record.created_at}</td>
+            <td>${record.reason}</td>
+          </tr>
+        `;
+      });
+      
+      transactionTbody.innerHTML = html;
+    } catch (error) {
+      console.error('加载余额明细失败:', error);
+      transactionTbody.innerHTML = '<tr><td colspan="6" class="error">加载失败，请刷新重试: ' + error.message + '</td></tr>';
+    }
+  }
 </script>
 </body>
 </html> 

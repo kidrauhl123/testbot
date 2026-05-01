@@ -1,30 +1,41 @@
-# Secrets and local environment
+# Environment / secrets
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*secret*
+*credential*
 
-# Runtime data
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Databases / runtime state
 *.db
 *.sqlite
 *.sqlite3
-*.db-journal
-bot.lock/
+orders.db
+instance/
 
-# Python artifacts
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+# Logs
+*.log
+logs/
 
-# Uploads and local payment assets
+# User-uploaded or private payment assets
 static/uploads/*
 !static/uploads/.gitkeep
-static/*qrcode*.png
-static/*qrcode*.jpg
+static/*qrcode*
 static/payment_qrcode.*
+static/alipay_qrcode.*
+static/wechat_qrcode.*
 
-# OS/editor noise
+# OS / editor
 .DS_Store
-.vscode/
 .idea/
+.vscode/

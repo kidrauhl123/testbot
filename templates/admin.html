@@ -179,13 +179,6 @@
       color: #667eea;
     }
     
-    /* 最大接单数输入框样式 */
-    .max-orders-input {
-      width: 80px;
-      display: inline-block;
-      text-align: center;
-    }
-    
     /* 模态框样式 */
     .modal-backdrop {
       display: none;
@@ -448,129 +441,6 @@
         font-size: 12px;
       }
     }
-
-    /* 基本样式 */
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      color: #333;
-      background-color: #f8f9fa;
-      margin: 0;
-      padding: 0;
-    }
-    
-    /* 表格容器 - 支持虚拟滚动 */
-    .table-container {
-      max-height: 70vh; /* 最大高度为视窗高度的70% */
-      overflow-y: auto;
-      position: relative;
-      border: 1px solid #e0e0e0;
-      border-radius: 5px;
-    }
-    
-    /* 虚拟滚动占位元素 */
-    .virtual-scroll-placeholder {
-      position: relative;
-      width: 100%;
-    }
-    
-    /* 分页控制 */
-    .pagination-container {
-      margin: 20px 0;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    
-    .pagination {
-      display: flex;
-      justify-content: center;
-      gap: 5px;
-      flex-wrap: wrap;
-    }
-    
-    .pagination-button {
-      padding: 6px 12px;
-      background: #fff;
-      border: 1px solid #dee2e6;
-      border-radius: 4px;
-      cursor: pointer;
-      min-width: 40px;
-      text-align: center;
-      transition: all 0.2s ease;
-    }
-    
-    .pagination-button:hover {
-      background-color: #f0f0f0;
-      border-color: #bbb;
-    }
-    
-    .pagination-button.active {
-      background-color: #007bff;
-      color: white;
-      border-color: #007bff;
-      font-weight: bold;
-    }
-    
-    /* 订单表格优化 */
-    #orders-table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-    }
-    
-    #orders-table th {
-      position: sticky;
-      top: 0;
-      background-color: #f8f9fa;
-      z-index: 10;
-      font-weight: 600;
-      padding: 12px 15px;
-      text-align: left;
-      border-bottom: 2px solid #dee2e6;
-    }
-    
-    #orders-table tbody tr {
-      border-bottom: 1px solid #e9ecef;
-    }
-    
-    #orders-table tbody tr:hover {
-      background-color: rgba(0,123,255,0.05);
-    }
-    
-    #orders-table td {
-      padding: 10px 15px;
-      vertical-align: middle;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    
-    /* 顺序很重要，这些样式需要放在后面以覆盖之前的定义 */
-    .text-center {
-      text-align: center;
-    }
-    
-    .py-4 {
-      padding-top: 1.5rem;
-      padding-bottom: 1.5rem;
-    }
-    
-    /* 加载中指示器样式 */
-    .loading-spinner {
-      width: 40px;
-      height: 40px;
-      margin: 20px auto;
-      border: 4px solid rgba(0, 123, 255, 0.1);
-      border-left-color: #007bff;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
   </style>
 </head>
 <body>
@@ -585,6 +455,14 @@
       </div>
       <div class="dropdown-menu">
         <div class="dropdown-menu-header">账户信息</div>
+        {% if balance is defined %}
+        <div class="dropdown-menu-item">
+          <span>账户余额：</span>
+          <span class="{% if balance < 0 %}text-danger{% else %}text-success{% endif %}">
+            {{ balance }}{% if credit_limit is defined and credit_limit > 0 %} (额度：{{ credit_limit }}){% endif %}
+          </span>
+        </div>
+        {% endif %}
         <div class="dropdown-divider"></div>
         <a href="/" class="dropdown-menu-item">
           <i class="fas fa-home"></i>返回主页
@@ -594,6 +472,12 @@
         </a>
       </div>
     </div>
+    
+    {% if balance is defined %}
+    <div class="balance-badge {% if balance < 0 %}negative{% endif %}">
+      余额: {{ balance }}元{% if credit_limit is defined and credit_limit > 0 %} (额度: {{ credit_limit }}元){% endif %}
+    </div>
+    {% endif %}
   </div>
 </div>
 
@@ -602,7 +486,11 @@
     <div class="sidebar">
       <ul class="sidebar-menu">
         <li><a href="#users" class="active" onclick="showTab('users'); return false;"><i class="fas fa-users"></i> 用户管理</a></li>
+        <li><a href="#orders" onclick="showTab('orders'); return false;"><i class="fas fa-file-invoice-dollar"></i> 订单管理</a></li>
         <li><a href="#sellers" onclick="showTab('sellers'); return false;"><i class="fas fa-user-tie"></i> 卖家管理</a></li>
+        <li><a href="#balance" onclick="showTab('balance'); return false;"><i class="fas fa-money-bill-wave"></i> 余额明细</a></li>
+        <li><a href="/admin/recharge-requests"><i class="fas fa-credit-card"></i> 充值管理</a></li>
+        <li><a href="/admin/activation-codes"><i class="fas fa-key"></i> 激活码管理</a></li>
       </ul>
     </div>
     
@@ -620,6 +508,8 @@
               <th>用户名</th>
                 <th>注册时间</th>
               <th>最后登录</th>
+                <th>余额</th>
+                <th>透支额度</th>
                 <th>今日消费</th>
                 <th>角色</th>
               <th>操作</th>
@@ -634,7 +524,39 @@
         </div>
       </div>
       
-
+      <!-- 订单管理 -->
+      <div id="orders" class="tab-content">
+        <div class="content-header">
+          <h2><i class="fas fa-file-invoice-dollar"></i> 订单管理</h2>
+          <div class="header-actions">
+            <input type="text" id="order-search" class="form-control" placeholder="搜索订单ID、账号、创建者..." style="width: 250px;">
+            <button id="batch-delete-btn" class="btn btn-danger">批量删除</button>
+          </div>
+        </div>
+        <div id="orders-table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="select-all-orders"></th>
+                <th>ID</th>
+                <th>账号</th>
+                <th>套餐</th>
+                <th>状态</th>
+                <th>创建者</th>
+                <th>接单人</th>
+                <th>创建时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="orders-table-body">
+              <tr>
+                <td colspan="9" class="loading">加载中...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination"></div>
+      </div>
       
       <!-- 卖家管理 -->
       <div id="sellers" class="tab-content">
@@ -644,30 +566,175 @@
             <button class="btn btn-primary" onclick="showAddSellerModal()">添加卖家</button>
           </div>
         </div>
-
         <div class="sellers-container">
           <table class="data-table">
-            <thead class="thead-dark">
+            <thead>
               <tr>
+                <th>Telegram ID</th>
+                <th>用户名</th>
                 <th>昵称</th>
-                <th>账户状态</th>
-                <th>分流状态</th>
-                <th>角色</th>
-                <th>分流等级</th>
-                <th>最大接单数</th>
+                <th>状态</th>
+                <th>身份</th>
                 <th>添加时间</th>
-                <th>添加者</th>
+                <th>添加人</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody id="sellers-table-body">
               <tr>
-                <td colspan="7" class="loading">加载中...</td>
+                <td colspan="8" class="loading">加载中...</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
+      
+      <!-- 余额明细管理 -->
+      <div id="balance" class="tab-content">
+        <div class="content-header">
+          <h2><i class="fas fa-money-bill-wave"></i> 余额明细</h2>
+          <div class="header-actions">
+            <select id="balance-user-filter" class="form-control" style="width: 200px;">
+              <option value="">所有用户</option>
+              <!-- 用户列表会通过JS动态加载 -->
+            </select>
+          </div>
+        </div>
+        <div class="balance-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>用户</th>
+                <th>类型</th>
+                <th>金额</th>
+                <th>变动后余额</th>
+                <th>原因</th>
+                <th>参考ID</th>
+                <th>时间</th>
+              </tr>
+            </thead>
+            <tbody id="balance-records-tbody">
+              <tr>
+                <td colspan="8" class="loading">加载中...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 修改余额模态框 -->
+<div class="modal-backdrop" id="editBalanceModal">
+    <div class="modal">
+      <div class="modal-header">
+      <h3>修改用户余额</h3>
+      <button class="modal-close" data-dismiss="modal">&times;</button>
+      </div>
+      <div class="modal-body">
+      <form id="editBalanceForm">
+        <input type="hidden" id="edit-balance-user-id">
+        <div class="form-group">
+          <label for="edit-balance-username">用户名</label>
+          <input type="text" id="edit-balance-username" class="form-control" disabled>
+        </div>
+        <div class="form-group">
+          <label for="edit-balance-current">当前余额</label>
+          <input type="text" id="edit-balance-current" class="form-control" disabled>
+        </div>
+        <div class="form-group">
+          <label for="edit-balance-new">新余额</label>
+          <input type="number" id="edit-balance-new" class="form-control" step="0.01" min="0" required>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
+      <button class="btn btn-primary" id="saveBalanceBtn">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 修改透支额度模态框 -->
+<div class="modal-backdrop" id="editCreditModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>修改用户透支额度</h3>
+      <button class="modal-close" data-dismiss="modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="editCreditForm">
+        <input type="hidden" id="edit-credit-user-id">
+        <div class="form-group">
+          <label for="edit-credit-username">用户名</label>
+          <input type="text" id="edit-credit-username" class="form-control" disabled>
+        </div>
+        <div class="form-group">
+          <label for="edit-credit-current">当前透支额度</label>
+          <input type="text" id="edit-credit-current" class="form-control" disabled>
+        </div>
+        <div class="form-group">
+          <label for="edit-credit-new">新透支额度</label>
+          <input type="number" id="edit-credit-new" class="form-control" step="0.01" min="0" required>
+        </div>
+      </form>
+      </div>
+      <div class="modal-footer">
+      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
+      <button class="btn btn-primary" id="saveCreditBtn">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 用户定制价格模态框 -->
+<div class="modal-backdrop" id="editCustomPriceModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>设置用户定制价格</h3>
+      <button class="modal-close" data-dismiss="modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="editCustomPriceForm">
+        <input type="hidden" id="edit-custom-price-user-id">
+        <div class="form-group">
+          <label for="edit-custom-price-username">用户名</label>
+          <input type="text" id="edit-custom-price-username" class="form-control" disabled>
+        </div>
+        
+        <div class="form-group">
+          <label>选择套餐</label>
+          <select id="edit-custom-price-package" class="form-control">
+            <option value="1">1个月</option>
+            <option value="2">2个月</option>
+            <option value="3">3个月</option>
+            <option value="6">6个月</option>
+            <option value="12">12个月</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="edit-custom-price-default">默认价格</label>
+          <input type="text" id="edit-custom-price-default" class="form-control" disabled>
+        </div>
+        
+        <div class="form-group">
+          <label for="edit-custom-price-current">当前定制价格</label>
+          <input type="text" id="edit-custom-price-current" class="form-control" disabled>
+          <small class="text-muted">无定制价格时显示"默认"</small>
+        </div>
+        
+        <div class="form-group">
+          <label for="edit-custom-price-new">新定制价格</label>
+          <input type="number" id="edit-custom-price-new" class="form-control" step="0.01" min="0" required>
+          <small class="text-muted">设置为0可删除定制价格，恢复默认价格</small>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
+      <button class="btn btn-primary" id="saveCustomPriceBtn">保存</button>
     </div>
   </div>
 </div>
@@ -688,6 +755,19 @@
           <input type="text" id="edit-order-account" class="form-control" required>
         </div>
         <div class="form-group">
+          <label for="edit-order-password">密码</label>
+          <input type="text" id="edit-order-password" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label for="edit-order-package">套餐</label>
+          <select id="edit-order-package" class="form-control">
+            <option value="1">1个月</option>
+            <option value="3">3个月</option>
+            <option value="6">6个月</option>
+            <option value="12">12个月</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label for="edit-order-status">状态</label>
           <select id="edit-order-status" class="form-control">
             <option value="submitted">待处理</option>
@@ -698,35 +778,15 @@
             <option value="disputing">正在质疑</option>
           </select>
         </div>
-      </form>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" data-dismiss="modal">取消</button>
-      <button class="btn btn-primary" onclick="saveOrderEdit()">保存</button>
-    </div>
-  </div>
-</div>
-
-<!-- 清理旧订单模态框 -->
-<div class="modal-backdrop" id="cleanup-orders-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <h3>清理旧订单</h3>
-      <button class="modal-close" data-dismiss="modal">&times;</button>
-    </div>
-    <div class="modal-body">
-      <div id="cleanup-orders-error" class="error-message" style="display:none;"></div>
-      <form id="cleanup-orders-form">
         <div class="form-group">
-          <label for="cleanup-days">保留最近几天的订单？</label>
-          <input type="number" id="cleanup-days" class="form-control" min="1" value="3" required>
-          <small class="text-muted">将删除指定天数之前的所有订单，此操作不可撤销！</small>
+          <label for="edit-order-remark">备注</label>
+          <textarea id="edit-order-remark" class="form-control" rows="3"></textarea>
         </div>
       </form>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" data-dismiss="modal">取消</button>
-      <button class="btn btn-danger" onclick="cleanupOldOrders()">执行清理</button>
+      <button class="btn btn-primary" onclick="saveOrderEdit()">保存</button>
     </div>
   </div>
 </div>
@@ -752,14 +812,9 @@
           <small class="text-muted">选填，Telegram用户名（不含@）</small>
         </div>
         <div class="form-group">
-          <label for="new-seller-firstname">TG昵称</label>
+          <label for="new-seller-firstname">昵称</label>
           <input type="text" id="new-seller-firstname" class="form-control">
           <small class="text-muted">选填，Telegram昵称</small>
-        </div>
-        <div class="form-group">
-          <label for="new-seller-nickname">显示昵称</label>
-          <input type="text" id="new-seller-nickname" class="form-control">
-          <small class="text-muted">选填，在网站下单选择接单人时显示的昵称</small>
         </div>
       </form>
     </div>
@@ -771,6 +826,204 @@
 </div>
 
 <script>
+  // 显示指定标签页
+  function showTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(tab => {
+      tab.classList.remove('active');
+    });
+    document.querySelectorAll('.sidebar-menu a').forEach(link => {
+      link.classList.remove('active');
+    });
+    document.getElementById(tabId).classList.add('active');
+    document.querySelector(`.sidebar-menu a[href="#${tabId}"]`).classList.add('active');
+    
+    // 加载对应标签页的数据
+    if (tabId === 'users' && !userDataLoaded) {
+      loadUsers();
+      userDataLoaded = true;
+    }
+    else if (tabId === 'orders' && !orderDataLoaded) {
+      loadOrders();
+      orderDataLoaded = true;
+    }
+    else if (tabId === 'sellers' && !sellerDataLoaded) {
+      loadSellers();
+      sellerDataLoaded = true;
+    }
+    else if (tabId === 'balance' && !balanceDataLoaded) {
+      loadBalanceRecords();
+      populateUserFilter();
+      balanceDataLoaded = true;
+    }
+  }
+  
+  // 全局变量
+  let userDataLoaded = false;
+  let orderDataLoaded = false;
+  let sellerDataLoaded = false;
+  let balanceDataLoaded = false;
+  let allUsers = []; // 存储所有用户数据
+
+  // 转义HTML
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  // 显示加载中
+  function renderLoading(elementId) {
+    document.getElementById(elementId).innerHTML = '<tr><td colspan="12" class="loading">加载中...</td></tr>';
+  }
+
+  // 用户管理
+  async function loadUsers() {
+    try {
+      console.log("开始加载用户数据...");
+    const tbody = document.getElementById('users-table-body');
+      if (!tbody) {
+        console.error("找不到users-table-body元素");
+        return;
+      }
+      
+      tbody.innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
+      
+      const resp = await fetch('/admin/api/users');
+      if (!resp.ok) {
+        console.error("加载用户数据失败:", resp.status, resp.statusText);
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
+        return;
+      }
+      
+      const users = await resp.json();
+      console.log("成功获取用户数据:", users);
+      
+    tbody.innerHTML = '';
+      
+      if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">暂无用户数据</td></tr>';
+        return;
+      }
+      
+    users.forEach(user => {
+        const tr = document.createElement('tr');
+        
+        // 格式化日期
+        const createdAt = user.created_at ? new Date(user.created_at).toLocaleString() : '未知';
+        const lastLogin = user.last_login ? new Date(user.last_login).toLocaleString() : '未登录';
+        
+        tr.innerHTML = `
+          <td>${user.id}</td>
+          <td>${user.username}</td>
+          <td>${createdAt}</td>
+          <td>${lastLogin}</td>
+          <td class="user-balance">${user.balance ? user.balance.toFixed(2) : '0.00'} 元</td>
+          <td class="user-credit">${user.credit_limit ? user.credit_limit.toFixed(2) : '0.00'} 元</td>
+          <td class="user-consumption">${user.today_consumption ? user.today_consumption.toFixed(2) : '0.00'} 元</td>
+          <td>${user.is_admin ? '<span class="badge badge-warning">管理员</span>' : '<span class="badge badge-secondary">普通用户</span>'}</td>
+          <td>
+            <button class="btn btn-sm btn-primary" onclick="editUserBalance(${user.id}, '${user.username}', ${user.balance || 0})">
+              修改余额
+            </button>
+            <button class="btn btn-sm btn-warning" onclick="editUserCredit(${user.id}, '${user.username}', ${user.credit_limit || 0})">
+              修改额度
+            </button>
+            <button class="btn btn-sm btn-info" onclick="editUserCustomPrice(${user.id}, '${user.username}')">
+              定制价格
+            </button>
+          </td>
+        `;
+        
+        tbody.appendChild(tr);
+      });
+      
+      console.log("用户数据渲染完成");
+      console.log("用户管理加载完成");
+    } catch (e) {
+      console.error('加载用户失败', e);
+      const tbody = document.getElementById('users-table-body');
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
+      }
+    }
+  }
+
+  // 修改用户余额函数
+  function editUserBalance(userId, username, balance) {
+    console.log("修改用户余额:", userId, username, balance);
+    
+    document.getElementById('edit-balance-user-id').value = userId;
+    document.getElementById('edit-balance-username').value = username;
+    document.getElementById('edit-balance-current').value = balance;
+    document.getElementById('edit-balance-new').value = balance;
+    
+    openModal('editBalanceModal');
+  }
+
+  // 修改用户透支额度函数
+  function editUserCredit(userId, username, credit) {
+    console.log("修改用户透支额度:", userId, username, credit);
+    
+    document.getElementById('edit-credit-user-id').value = userId;
+    document.getElementById('edit-credit-username').value = username;
+    document.getElementById('edit-credit-current').value = credit;
+    document.getElementById('edit-credit-new').value = credit;
+    
+    openModal('editCreditModal');
+  }
+
+  // 编辑用户定制价格函数
+  async function editUserCustomPrice(userId, username) {
+    console.log("修改用户定制价格:", userId, username);
+    
+    // 设置基本信息
+    document.getElementById('edit-custom-price-user-id').value = userId;
+    document.getElementById('edit-custom-price-username').value = username;
+    
+    try {
+      // 获取用户的定制价格
+      const response = await fetch(`/admin/api/users/${userId}/custom-prices`);
+      
+      if (!response.ok) {
+        throw new Error(`获取定制价格失败: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || '获取定制价格失败');
+      }
+      
+      // 获取默认价格和定制价格
+      const defaultPrices = data.default_prices;
+      const customPrices = data.custom_prices;
+      
+      // 获取套餐选择器
+      const packageSelect = document.getElementById('edit-custom-price-package');
+      
+      // 设置默认选中的套餐为1个月
+      packageSelect.value = '1';
+      
+      // 更新价格显示
+      updateCustomPriceDisplay(packageSelect.value, defaultPrices, customPrices);
+      
+      // 为套餐选择器添加事件监听器
+      packageSelect.onchange = function() {
+        updateCustomPriceDisplay(this.value, defaultPrices, customPrices);
+      };
+      
+      // 打开模态框
+      openModal('editCustomPriceModal');
+    } catch (error) {
+      console.error('获取用户定制价格失败:', error);
+      alert(`获取用户定制价格失败: ${error.message}`);
+    }
+  }
+  
   // 更新定制价格显示
   function updateCustomPriceDisplay(package, defaultPrices, customPrices) {
     const defaultPrice = defaultPrices[package] || '未知';
@@ -781,86 +1034,689 @@
     document.getElementById('edit-custom-price-new').value = customPrice === '默认' ? '' : customPrice;
   }
 
-  // 标签页切换
-  function showTab(tabId) {
-    // 隐藏所有标签页内容
-    document.querySelectorAll('.tab-content').forEach(tab => {
-      tab.classList.remove('active');
-    });
-    
-    // 取消所有导航项的活动状态
-    document.querySelectorAll('.sidebar-menu a').forEach(link => {
-      link.classList.remove('active');
-    });
-    
-    // 显示选中的标签页内容
-    const selectedTab = document.getElementById(tabId);
-    if (selectedTab) {
-      selectedTab.classList.add('active');
-    }
-    
-    // 高亮导航项
-    const activeLink = document.querySelector(`.sidebar-menu a[href="#${tabId}"]`);
-    if (activeLink) {
-      activeLink.classList.add('active');
-    }
-  }
-  
-  // 初始化标签页切换
-  function initTabSwitching() {
-    document.querySelector('.sidebar-menu a[href="#users"]').addEventListener('click', function() {
-      loadUsers();
-      showTab('users');
-      return false;
-    });
-    
-    document.querySelector('.sidebar-menu a[href="#sellers"]').addEventListener('click', function() {
-      loadSellers();
-      showTab('sellers');
-      return false;
-    });
-  }
-  
-  // 初始化模态框
-  function initModals() {
-    // 为所有关闭按钮添加事件
-    document.querySelectorAll('[data-dismiss="modal"]').forEach(button => {
-      button.addEventListener('click', function() {
-        const modal = this.closest('.modal-backdrop');
-        if (modal) {
-          closeModal(modal.id);
-        }
+  async function loadOrders() {
+    try {
+      console.log("开始加载订单数据...");
+      const container = document.getElementById('orders-table-container');
+      const tbody = document.getElementById('orders-table-body');
+      if (!tbody) {
+        console.error("找不到orders-table-body元素");
+        return;
+      }
+      
+      tbody.innerHTML = '<tr><td colspan="9" class="loading">加载中...</td></tr>';
+      
+      const response = await fetch('/admin/api/orders?limit=1000');
+      if (!response.ok) {
+        console.error("加载订单数据失败:", response.status, response.statusText);
+        tbody.innerHTML = '<tr><td colspan="9" class="loading">加载失败，请刷新重试</td></tr>';
+        return;
+      }
+      
+      const data = await response.json();
+      const orders = data.orders || [];
+      console.log("成功获取订单数据:", orders);
+      
+      tbody.innerHTML = '';
+      
+      if (orders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="loading">暂无订单数据</td></tr>';
+        return;
+      }
+      
+      const statusBadges = {
+        'submitted': 'badge-info',
+        'accepted': 'badge-warning',
+        'completed': 'badge-success',
+        'failed': 'badge-danger',
+        'cancelled': 'badge-secondary',
+        'disputing': 'badge-danger'
+      };
+      
+      orders.forEach(order => {
+        const statusClass = statusBadges[order.status] || 'badge-secondary';
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td><input type="checkbox" class="order-checkbox" value="${order.id}"></td>
+          <td>${order.id}</td>
+          <td>${escapeHtml(order.account)}</td>
+          <td>${order.package}个月</td>
+          <td><span class="badge ${statusClass}">${escapeHtml(order.status_text)}</span></td>
+          <td>${escapeHtml(order.creator || 'N/A')}</td>
+          <td>${order.seller ? escapeHtml(order.seller.name || order.seller.username || order.seller.telegram_id || 'N/A') : 'N/A'}</td>
+          <td>${order.created_at}</td>
+          <td><button class="btn btn-primary btn-sm" onclick="editOrder(${order.id})">编辑</button></td>
+        `;
+        tbody.appendChild(row);
       });
-    });
+      
+      console.log("订单数据加载完成");
+    } catch (e) {
+      console.error('加载订单失败', e);
+      const tbody = document.getElementById('orders-table-body');
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="9" class="loading">加载失败，请刷新重试</td></tr>';
+      }
+    }
+  }
+
+  // 已被替换为openModal和closeModal函数
+
+  function showAddSellerModal() {
+    console.log("点击了添加卖家按钮");
+    // Clear previous input
+    const idInput = document.getElementById('new-seller-id');
+    const usernameInput = document.getElementById('new-seller-username');
+    const firstnameInput = document.getElementById('new-seller-firstname');
+    const errorDiv = document.getElementById('add-seller-error');
+    
+    if (!idInput || !usernameInput || !firstnameInput || !errorDiv) {
+      console.error("找不到模态框内的输入元素");
+      alert("模态框元素加载失败，请检查控制台");
+      return;
+    }
+    
+    idInput.value = '';
+    usernameInput.value = '';
+    firstnameInput.value = '';
+    errorDiv.style.display = 'none';
+    
+    // 这里直接添加卖家，不使用模态框
+    // openModal('add-seller-modal');
+    openModal('add-seller-modal');
+  }
+
+  async function loadSellers() {
+    try {
+      console.log("开始加载卖家数据...");
+      const tbody = document.getElementById('sellers-table-body');
+      if (!tbody) {
+        console.error("找不到sellers-table-body元素");
+        return;
+      }
+      
+      tbody.innerHTML = '<tr><td colspan="8" class="loading">加载中...</td></tr>';
+      
+      const response = await fetch('/admin/api/sellers');
+      if (!response.ok) {
+        console.error("加载卖家数据失败:", response.status, response.statusText);
+        tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
+        return;
+      }
+      
+      const sellers = await response.json();
+      console.log("成功获取卖家数据:", sellers);
+      
+      tbody.innerHTML = '';
+      
+      if (sellers.length === 0) {
+        const colCount = tbody.parentElement.querySelector('thead tr').childElementCount || 8;
+        tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding: 40px;">暂无卖家</td></tr>`;
+        return;
+      }
+      
+      sellers.forEach(seller => {
+        const statusBadge = seller.is_active 
+          ? '<span class="badge badge-success">活跃</span>' 
+          : '<span class="badge badge-secondary">停用</span>';
+        const toggleButtonText = seller.is_active ? '停用' : '启用';
+        const toggleButtonClass = seller.is_active ? 'btn-warning' : 'btn-success';
+        
+        const adminBadge = seller.is_admin
+          ? '<span class="badge badge-primary">管理员</span>'
+          : '<span class="badge badge-info">普通卖家</span>';
+        const adminButtonText = seller.is_admin ? '降级为普通卖家' : '升级为管理员';
+        const adminButtonClass = seller.is_admin ? 'btn-warning' : 'btn-info';
+        
+        const row = `
+          <tr>
+            <td>${seller.telegram_id}</td>
+            <td>${escapeHtml(seller.username || '')}</td>
+            <td>${escapeHtml(seller.first_name || '')}</td>
+            <td>${statusBadge}</td>
+            <td>${adminBadge}</td>
+            <td>${seller.added_at}</td>
+            <td>${escapeHtml(seller.added_by || '')}</td>
+            <td class="actions">
+              <button class="btn ${toggleButtonClass} btn-sm" onclick="toggleSeller(${seller.telegram_id})">${toggleButtonText}</button>
+              <button class="btn ${adminButtonClass} btn-sm" onclick="toggleSellerAdmin(${seller.telegram_id})">${adminButtonText}</button>
+              <button class="btn btn-danger btn-sm" onclick="removeSeller(${seller.telegram_id})">删除</button>
+            </td>
+          </tr>
+        `;
+        tbody.innerHTML += row;
+      });
+      
+      console.log("卖家数据加载完成");
+    } catch (e) {
+      console.error('加载卖家失败', e);
+      const tbody = document.getElementById('sellers-table-body');
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
+      }
+    }
+  }
+
+  async function addSeller() {
+    const errorDiv = document.getElementById('add-seller-error');
+    const telegramId = document.getElementById('new-seller-id').value;
+    if (!telegramId) {
+      errorDiv.textContent = 'Telegram ID 不能为空。';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    const data = {
+      telegram_id: parseInt(telegramId),
+      username: document.getElementById('new-seller-username').value,
+      first_name: document.getElementById('new-seller-firstname').value,
+    };
+
+    try {
+      const response = await fetch('/admin/api/sellers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      if (response.ok) {
+        // 清空输入框
+        document.getElementById('new-seller-id').value = '';
+        document.getElementById('new-seller-username').value = '';
+        document.getElementById('new-seller-firstname').value = '';
+        errorDiv.style.display = 'none';
+        
+        // 显示成功消息
+        alert('卖家添加成功！');
+        
+        // 重新加载卖家列表
+        loadSellers();
+      } else {
+        const result = await response.json();
+        errorDiv.textContent = result.error || '添加失败，请重试。';
+        errorDiv.style.display = 'block';
+      }
+    } catch (error) {
+      console.error('添加卖家出错:', error);
+      errorDiv.textContent = '网络错误，请重试。';
+      errorDiv.style.display = 'block';
+    }
+  }
+
+  async function removeSeller(telegramId) {
+    if (!confirm(`确认要删除卖家 ${telegramId} 吗？此操作不可逆。`)) return;
+
+    await fetch(`/admin/api/sellers/${telegramId}`, { method: 'DELETE' });
+    loadSellers();
+  }
+
+  async function toggleSeller(telegramId) {
+    await fetch(`/admin/api/sellers/${telegramId}/toggle`, { method: 'POST' });
+    loadSellers();
+  }
+
+  async function toggleSellerAdmin(telegramId) {
+    if (!confirm('确定要切换此卖家的管理员身份吗？')) {
+      return;
+    }
+    
+    try {
+      const response = await fetch('/admin/api/sellers/toggle_admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ telegram_id: telegramId })
+      });
+      
+      if (!response.ok) {
+        throw new Error('操作失败');
+      }
+      
+      await loadSellers();
+      showToast('操作成功', 'success');
+    } catch (e) {
+      console.error('切换卖家管理员状态失败:', e);
+      showToast('操作失败: ' + e.message, 'error');
+    }
+  }
+
+  // 编辑订单
+  async function editOrder(orderId) {
+    try {
+      // 加载订单详情
+      const response = await fetch(`/admin/api/orders/${orderId}`);
+      
+      if (!response.ok) {
+        alert('加载订单详情失败');
+        return;
+      }
+      
+      const order = await response.json();
+      
+      // 填充表单
+      document.getElementById('edit-order-id').value = order.id;
+      document.getElementById('edit-order-account').value = order.account;
+      document.getElementById('edit-order-password').value = order.password;
+      document.getElementById('edit-order-package').value = order.package;
+      document.getElementById('edit-order-status').value = order.status;
+      document.getElementById('edit-order-remark').value = order.remark || '';
+      
+      // 显示模态框
+      openModal('edit-order-modal');
+    } catch (error) {
+      console.error('获取订单详情失败:', error);
+      alert('获取订单详情失败');
+    }
   }
   
-  // 打开模态框
-  function openModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (!modal) return;
+  // 保存订单编辑
+  async function saveOrderEdit() {
+    const orderId = document.getElementById('edit-order-id').value;
+    const errorDiv = document.getElementById('edit-order-error');
     
+    try {
+      const data = {
+        account: document.getElementById('edit-order-account').value,
+        password: document.getElementById('edit-order-password').value,
+        package: document.getElementById('edit-order-package').value,
+        status: document.getElementById('edit-order-status').value,
+        remark: document.getElementById('edit-order-remark').value
+      };
+      
+      if (!data.account || !data.password) {
+        errorDiv.textContent = '账号和密码不能为空';
+        errorDiv.style.display = 'block';
+        return;
+      }
+      
+      const response = await fetch(`/admin/api/orders/${orderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      
+      if (response.ok) {
+        closeModal('edit-order-modal');
+        loadOrders(); // 重新加载订单列表
+        alert('订单更新成功');
+      } else {
+        const result = await response.json();
+        errorDiv.textContent = result.error || '更新失败，请重试';
+        errorDiv.style.display = 'block';
+      }
+    } catch (error) {
+      console.error('保存订单编辑失败:', error);
+      errorDiv.textContent = '网络错误，请重试';
+      errorDiv.style.display = 'block';
+    }
+  }
+
+  // 模态框操作函数
+  function openModal(modalId) {
+    console.log("显示模态框:", modalId);
+    const modal = document.getElementById(modalId);
+    if (!modal) {
+      console.error("找不到模态框元素:", modalId);
+      alert(`找不到ID为${modalId}的模态框元素，请检查HTML`);
+      return;
+    }
+    
+    // 强制显示模态框
     modal.style.display = 'flex';
     setTimeout(() => {
       modal.classList.add('show');
+      console.log("模态框已添加show类，当前样式:", modal.style.display, modal.className);
     }, 10);
   }
   
-  // 关闭模态框
   function closeModal(modalId) {
+    console.log("隐藏模态框:", modalId);
     const modal = document.getElementById(modalId);
-    if (!modal) return;
-    
+    if (!modal) {
+      console.error("找不到模态框元素:", modalId);
+      return;
+    }
     modal.classList.remove('show');
+    
+    // 延迟隐藏，以便动画效果
     setTimeout(() => {
       modal.style.display = 'none';
     }, 300);
   }
   
+  // 为所有关闭按钮添加事件
+  document.querySelectorAll('[data-dismiss="modal"]').forEach(button => {
+    button.addEventListener('click', function() {
+      const modal = this.closest('.modal-backdrop');
+      if (modal) {
+        console.log("关闭模态框:", modal.id);
+        modal.classList.remove('show');
+        
+        // 延迟隐藏，以便动画效果
+        setTimeout(() => {
+          modal.style.display = 'none';
+        }, 300);
+      } else {
+        console.error("未找到父级模态框元素");
+      }
+    });
+  });
+
+  // 保存余额修改
+  document.getElementById('saveBalanceBtn').addEventListener('click', async function() {
+    const userId = document.getElementById('edit-balance-user-id').value;
+    const newBalance = document.getElementById('edit-balance-new').value;
+    
+    console.log("保存余额:", userId, newBalance);
+    
+    if (!userId || !newBalance) {
+      alert('请填写完整信息');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/admin/api/users/${userId}/balance`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          balance: parseFloat(newBalance)
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        closeModal('editBalanceModal');
+        alert('余额已更新');
+        loadUsers();
+      } else {
+        alert('更新余额失败: ' + (result.error || '未知错误'));
+      }
+    } catch (e) {
+      console.error('更新余额失败', e);
+      alert('更新余额失败: ' + e.message);
+    }
+  });
+
+  // 保存透支额度修改
+  document.getElementById('saveCreditBtn').addEventListener('click', async function() {
+    const userId = document.getElementById('edit-credit-user-id').value;
+    const newCredit = document.getElementById('edit-credit-new').value;
+    
+    console.log("保存透支额度:", userId, newCredit);
+    
+    if (!userId || newCredit === '') {
+      alert('请填写完整信息');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/admin/api/users/${userId}/credit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          credit_limit: parseFloat(newCredit)
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        closeModal('editCreditModal');
+        alert('透支额度已更新');
+        loadUsers();
+      } else {
+        alert('更新透支额度失败: ' + (result.error || '未知错误'));
+      }
+    } catch (e) {
+      console.error('更新透支额度失败', e);
+      alert('更新透支额度失败: ' + e.message);
+    }
+  });
+
+  // 为"保存定制价格"按钮添加点击事件
+  document.getElementById('saveCustomPriceBtn').addEventListener('click', async function() {
+    const userId = document.getElementById('edit-custom-price-user-id').value;
+    const package = document.getElementById('edit-custom-price-package').value;
+    const newPrice = document.getElementById('edit-custom-price-new').value;
+    
+    console.log("保存定制价格:", userId, package, newPrice);
+    
+    if (!userId || !package || newPrice === '') {
+      alert('请填写完整信息');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/admin/api/users/${userId}/custom-prices`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          package: package,
+          price: parseFloat(newPrice)
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        closeModal('editCustomPriceModal');
+        alert(result.message || '定制价格已更新');
+        
+        // 如果当前还在查看该用户的定制价格，更新显示
+        const currentUserId = document.getElementById('edit-custom-price-user-id').value;
+        if (currentUserId === userId) {
+          // 更新当前选中套餐的价格显示
+          const currentPackage = document.getElementById('edit-custom-price-package').value;
+          const customPrices = result.custom_prices || {};
+          
+          // 获取默认价格
+          const defaultPriceField = document.getElementById('edit-custom-price-default');
+          const defaultPrice = defaultPriceField.value;
+          
+          // 更新显示
+          updateCustomPriceDisplay(currentPackage, { [currentPackage]: defaultPrice }, customPrices);
+        }
+      } else {
+        alert('设置定制价格失败: ' + (result.error || '未知错误'));
+      }
+    } catch (e) {
+      console.error('设置定制价格失败', e);
+      alert('设置定制价格失败: ' + e.message);
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // 检查页面上的所有模态框元素
+    console.log("检查模态框元素:");
+    console.log("editBalanceModal:", document.getElementById('editBalanceModal'));
+    console.log("editCreditModal:", document.getElementById('editCreditModal'));
+    console.log("edit-order-modal:", document.getElementById('edit-order-modal'));
+    
+    // 检查标签页元素
+    console.log("检查标签页元素:");
+    console.log("users标签页:", document.getElementById('users'));
+    console.log("orders标签页:", document.getElementById('orders'));
+    console.log("sellers标签页:", document.getElementById('sellers'));
+    
+    // 检查订单编辑表单元素
+    console.log("检查订单编辑表单元素:");
+    console.log("edit-order-id:", document.getElementById('edit-order-id'));
+    console.log("edit-order-account:", document.getElementById('edit-order-account'));
+    console.log("edit-order-password:", document.getElementById('edit-order-password'));
+    console.log("edit-order-package:", document.getElementById('edit-order-package'));
+    console.log("edit-order-status:", document.getElementById('edit-order-status'));
+    console.log("edit-order-remark:", document.getElementById('edit-order-remark'));
+    
+    // 检查余额编辑表单元素
+    console.log("检查余额编辑表单元素:");
+    console.log("edit-balance-user-id:", document.getElementById('edit-balance-user-id'));
+    console.log("edit-balance-username:", document.getElementById('edit-balance-username'));
+    console.log("edit-balance-current:", document.getElementById('edit-balance-current'));
+    console.log("edit-balance-new:", document.getElementById('edit-balance-new'));
+    console.log("saveBalanceBtn:", document.getElementById('saveBalanceBtn'));
+    
+    try {
+    showTab('users');
+      console.log("显示用户标签页成功");
+    } catch (e) {
+      console.error("显示用户标签页失败:", e);
+    }
+    
+    try {
+    loadUsers();
+      console.log("加载用户数据成功");
+    } catch (e) {
+      console.error("加载用户数据失败:", e);
+    }
+    
+    try {
+    loadOrders();
+      console.log("加载订单数据成功");
+    } catch (e) {
+      console.error("加载订单数据失败:", e);
+    }
+    
+    try {
+    loadSellers();
+      console.log("加载卖家数据成功");
+    } catch (e) {
+      console.error("加载卖家数据失败:", e);
+    }
+
+    document.querySelector('.sidebar-menu a[href="#users"]').addEventListener('click', function() {
+      loadUsers();
+      showTab('users');
+    });
+    document.querySelector('.sidebar-menu a[href="#orders"]').addEventListener('click', function() {
+      loadOrders();
+      showTab('orders');
+    });
+    document.querySelector('.sidebar-menu a[href="#sellers"]').addEventListener('click', function() {
+      loadSellers();
+      showTab('sellers');
+    });
+    document.querySelector('.sidebar-menu a[href="#balance"]').addEventListener('click', function() {
+      loadBalanceRecords();
+      populateUserFilter();
+      showTab('balance');
+    });
+    
+    // 手动测试绑定事件是否有效
+    window.testEditBalance = function() {
+      console.log("测试修改余额");
+      editUserBalance(1, 'test', 100);
+    };
+    
+    window.testEditOrder = function() {
+      console.log("测试编辑订单");
+      editOrder(1);
+    };
+    
+    // 添加手动打开模态框的函数
+    window.testOpenModal = function(modalId) {
+      console.log("手动打开模态框:", modalId);
+      const modal = document.getElementById(modalId);
+      if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.add('show');
+        console.log("模态框已打开");
+      } else {
+        console.error("找不到模态框:", modalId);
+      }
+    };
+    
+    // 添加手动关闭模态框的函数
+    window.testCloseModal = function(modalId) {
+      console.log("手动关闭模态框:", modalId);
+      const modal = document.getElementById(modalId);
+      if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+        console.log("模态框已关闭");
+      } else {
+        console.error("找不到模态框:", modalId);
+      }
+    };
+    
+    console.log("页面初始化完成，绑定了测试函数 testEditBalance()、testEditOrder()、testOpenModal() 和 testCloseModal()");
+
+    // --- 订单管理 ---
+    const selectAllCheckbox = document.getElementById('select-all-orders');
+    const batchDeleteBtn = document.getElementById('batch-delete-btn');
+    const ordersTableContainer = document.getElementById('orders-table-container');
+
+    if (selectAllCheckbox) {
+      selectAllCheckbox.addEventListener('change', (e) => {
+        const checkboxes = document.querySelectorAll('.order-checkbox');
+        checkboxes.forEach(checkbox => {
+          checkbox.checked = e.target.checked;
+        });
+      });
+    }
+
+    if (batchDeleteBtn) {
+      batchDeleteBtn.addEventListener('click', async () => {
+        const selectedCheckboxes = document.querySelectorAll('.order-checkbox:checked');
+        const orderIds = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+        if (orderIds.length === 0) {
+          alert('请至少选择一个订单');
+          return;
+        }
+
+        if (confirm(`确定要永久删除这 ${orderIds.length} 个订单吗？此操作不可撤销！`)) {
+          try {
+            const resp = await fetch('/admin/api/orders/batch-delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ order_ids: orderIds })
+            });
+            const result = await resp.json();
+            if (resp.ok && result.success) {
+              alert(`成功删除了 ${result.deleted_count} 个订单`);
+              loadOrders(); // 重新加载订单
+            } else {
+              alert(result.error || '删除失败');
+            }
+          } catch (e) {
+            alert('请求失败，请检查网络');
+            console.error(e);
+          }
+        }
+      });
+    }
+
+    if (ordersTableContainer) {
+      ordersTableContainer.addEventListener('change', (e) => {
+        if (e.target.classList.contains('order-checkbox')) {
+          const allCheckboxes = document.querySelectorAll('.order-checkbox');
+          const allChecked = Array.from(allCheckboxes).every(cb => cb.checked);
+          selectAllCheckbox.checked = allChecked;
+        }
+      });
+    }
+
+    // --- 用户管理 ---
+    const userSearchInput = document.getElementById('user-search');
+    if (userSearchInput) {
+      // ... existing code ...
+    }
+  });
+
   // 显示消息提示
   function showToast(message, type = 'info') {
-    // 创建toast容器
+    // 检查是否已存在toast容器
     let toastContainer = document.getElementById('toast-container');
     if (!toastContainer) {
+      // 创建toast容器
       toastContainer = document.createElement('div');
       toastContainer.id = 'toast-container';
       toastContainer.style.position = 'fixed';
@@ -900,7 +1756,10 @@
         toast.style.color = 'white';
     }
     
+    // 设置消息内容
     toast.textContent = message;
+    
+    // 添加到容器
     toastContainer.appendChild(toast);
     
     // 3秒后移除
@@ -909,343 +1768,6 @@
     }, 3000);
   }
 
-  // 异步加载卖家数据
-  async function loadSellers() {
-    try {
-      const tbody = document.getElementById('sellers-table-body');
-      if (!tbody) return;
-      
-      tbody.innerHTML = '<tr><td colspan="8" class="loading">加载中...</td></tr>';
-      
-      const response = await fetch('/admin/api/sellers');
-      if (!response.ok) {
-        tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
-        return;
-      }
-      
-      const sellers = await response.json();
-      
-      tbody.innerHTML = '';
-      
-      if (sellers.length === 0) {
-        const colCount = tbody.parentElement.querySelector('thead tr').childElementCount || 8;
-        tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding: 40px;">暂无卖家</td></tr>`;
-        return;
-      }
-      
-      sellers.forEach(seller => {
-        const accountStatusBadge = seller.is_active 
-          ? '<span class="badge badge-success">正常</span>' 
-          : '<span class="badge badge-secondary">停用</span>';
-        const toggleButtonText = seller.is_active ? '停用账户' : '启用账户';
-        const toggleButtonClass = seller.is_active ? 'btn-warning' : 'btn-success';
-        
-        const distributionStatusBadge = seller.participate_in_distribution 
-          ? '<span class="badge badge-info">参与分流</span>' 
-          : '<span class="badge badge-warning">暂停分流</span>';
-        const toggleDistributionButtonText = seller.participate_in_distribution ? '暂停分流' : '恢复分流';
-        const toggleDistributionButtonClass = seller.participate_in_distribution ? 'btn-warning' : 'btn-success';
-        
-        const adminBadge = seller.is_admin
-          ? '<span class="badge badge-primary">管理员</span>'
-          : '<span class="badge badge-info">普通卖家</span>';
-        const adminButtonText = seller.is_admin ? '降级为普通卖家' : '升级为管理员';
-        const adminButtonClass = seller.is_admin ? 'btn-warning' : 'btn-info';
-        
-        const row = `
-          <tr data-id="${seller.telegram_id}" data-nickname="${escapeHtml(seller.nickname || 'N/A')}">
-            <td>${escapeHtml(seller.nickname || '')}</td>
-            <td>${accountStatusBadge}</td>
-            <td>${distributionStatusBadge}</td>
-            <td>${adminBadge}</td>
-            <td>
-              <input type="number" class="form-control form-control-sm level-input" 
-                value="${seller.distribution_level || 1}" 
-                min="1" 
-                max="10" 
-                data-id="${seller.telegram_id}" 
-                onchange="updateSellerLevel(${seller.telegram_id}, this.value)">
-            </td>
-            <td>
-              <input type="number" class="form-control form-control-sm max-orders-input" 
-                value="${seller.max_concurrent_orders || 5}" 
-                min="1" 
-                max="20" 
-                data-id="${seller.telegram_id}" 
-                onchange="updateSellerMaxOrders(${seller.telegram_id}, this.value)">
-            </td>
-            <td>${seller.added_at}</td>
-            <td>${escapeHtml(seller.added_by || '')}</td>
-            <td class="actions">
-              <button class="btn btn-primary btn-sm" onclick="editSeller(${seller.telegram_id}, '${escapeHtml(seller.nickname || '')}')">编辑</button>
-              <button class="btn ${toggleDistributionButtonClass} btn-sm" onclick="toggleSellerDistribution(${seller.telegram_id})">${toggleDistributionButtonText}</button>
-              <button class="btn ${toggleButtonClass} btn-sm" onclick="toggleSeller(${seller.telegram_id})">${toggleButtonText}</button>
-              <button class="btn ${adminButtonClass} btn-sm" onclick="toggleSellerAdmin(${seller.telegram_id})">${adminButtonText}</button>
-              <button class="btn btn-danger btn-sm" onclick="removeSeller(${seller.telegram_id})">删除</button>
-            </td>
-          </tr>
-        `;
-        tbody.innerHTML += row;
-      });
-      
-      sellerDataLoaded = true;
-    } catch (e) {
-      console.error('加载卖家失败', e);
-      const tbody = document.getElementById('sellers-table-body');
-      if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="8" class="loading">加载失败，请刷新重试</td></tr>';
-      }
-    }
-  }
-  
-  // 异步加载用户数据
-  async function loadUsers() {
-    try {
-      const tbody = document.getElementById('users-table-body');
-      if (!tbody) return;
-      
-      tbody.innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
-      
-      const response = await fetch('/admin/api/users');
-      if (!response.ok) {
-        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
-        return;
-      }
-      
-      const result = await response.json();
-      const users = result.users || [];
-      
-      tbody.innerHTML = '';
-      
-      if (users.length === 0) {
-        const colCount = tbody.parentElement.querySelector('thead tr').childElementCount || 7;
-        tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding: 40px;">暂无用户</td></tr>`;
-        return;
-      }
-      
-      users.forEach(user => {
-        const roleBadge = user.is_admin 
-          ? '<span class="badge badge-primary">管理员</span>' 
-          : '<span class="badge badge-info">普通用户</span>';
-        
-        const row = `
-          <tr data-id="${user.id}">
-            <td>${user.id}</td>
-            <td>${escapeHtml(user.username)}</td>
-            <td>${user.created_at || '-'}</td>
-            <td>${user.last_login || '-'}</td>
-            <td>${user.today_consumption || '0'}</td>
-            <td>${roleBadge}</td>
-            <td class="actions">
-              <button class="btn btn-primary btn-sm" onclick="editUser(${user.id})">编辑</button>
-              <button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id})">删除</button>
-            </td>
-          </tr>
-        `;
-        tbody.innerHTML += row;
-      });
-    } catch (e) {
-      console.error('加载用户失败', e);
-      const tbody = document.getElementById('users-table-body');
-      if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
-      }
-    }
-  }
-  
-  // HTML转义函数
-  function escapeHtml(unsafe) {
-    if (unsafe === undefined || unsafe === null) return '';
-    return String(unsafe)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-  
-  // 编辑用户
-  async function editUser(userId) {
-    alert('编辑用户功能尚未实现');
-    // 这里可以添加编辑用户的代码
-  }
-  
-  // 删除用户
-  async function deleteUser(userId) {
-    if (!confirm(`确定要删除ID为 ${userId} 的用户吗？此操作不可恢复！`)) {
-      return;
-    }
-    
-    try {
-      const response = await fetch(`/admin/api/users/${userId}`, {
-        method: 'DELETE'
-      });
-      
-      if (response.ok) {
-        showToast('用户已成功删除', 'success');
-        loadUsers(); // 重新加载用户列表
-      } else {
-        const result = await response.json();
-        showToast(result.error || '删除用户失败', 'error');
-      }
-    } catch (e) {
-      console.error('删除用户失败', e);
-      showToast('网络错误，删除失败', 'error');
-    }
-  }
-  
-  // 卖家相关操作函数
-  async function editSeller(telegramId, currentNickname) {
-    const newNickname = prompt('请输入新的显示昵称', currentNickname || '');
-    if (newNickname === null) return;
-    
-    try {
-      const response = await fetch(`/admin/api/sellers/${telegramId}`, {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({nickname: newNickname})
-      });
-      
-      if (!response.ok) throw new Error('更新失败');
-      
-      showToast('卖家昵称已更新', 'success');
-      await loadSellers();
-    } catch (e) {
-      console.error('更新卖家昵称失败', e);
-      showToast('更新失败: ' + e.message, 'error');
-    }
-  }
-  
-  async function toggleSeller(telegramId) {
-    await fetch(`/admin/api/sellers/${telegramId}/toggle`, {method: 'POST'});
-      loadSellers();
-  }
-
-  async function toggleSellerDistribution(telegramId) {
-    try {
-      const response = await fetch(`/admin/api/sellers/${telegramId}/toggle_distribution`, {method: 'POST'});
-      if (response.ok) {
-        loadSellers();
-        showToast('分流状态已更新', 'success');
-      } else {
-        showToast('操作失败', 'error');
-      }
-    } catch (e) {
-      showToast('操作失败: ' + e.message, 'error');
-    }
-  }
-  
-  async function toggleSellerAdmin(telegramId) {
-    if (!confirm('确定要切换此卖家的管理员身份吗？')) return;
-    
-    try {
-      const response = await fetch('/admin/api/sellers/toggle_admin', {
-              method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({telegram_id: telegramId})
-      });
-      
-      if (!response.ok) throw new Error('操作失败');
-      
-      await loadSellers();
-      showToast('操作成功', 'success');
-    } catch (e) {
-      showToast('操作失败: ' + e.message, 'error');
-    }
-  }
-  
-  async function removeSeller(telegramId) {
-    const sellerRow = document.querySelector(`tr[data-id='${telegramId}']`);
-    const nickname = sellerRow ? sellerRow.dataset.nickname : `ID ${telegramId}`;
-    
-    if (!confirm(`确认要删除卖家 ${nickname} 吗？此操作不可逆。`)) return;
-    
-    await fetch(`/admin/api/sellers/${telegramId}`, {method: 'DELETE'});
-    loadSellers();
-  }
-  
-  async function updateSellerLevel(telegramId, newLevel) {
-    try {
-      const response = await fetch(`/admin/api/sellers/${telegramId}`, {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({distribution_level: parseInt(newLevel)})
-      });
-      
-      if (!response.ok) throw new Error('更新分流等级失败');
-      
-      showToast('分流等级已更新', 'success');
-    } catch (e) {
-      showToast('更新分流等级失败: ' + e.message, 'error');
-    }
-  }
-
-  async function updateSellerMaxOrders(telegramId, newMaxOrders) {
-    try {
-      const response = await fetch(`/admin/api/sellers/${telegramId}`, {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({max_concurrent_orders: parseInt(newMaxOrders)})
-      });
-      
-      if (!response.ok) throw new Error('更新最大接单数失败');
-      
-      showToast('最大接单数已更新', 'success');
-    } catch (e) {
-      showToast('更新最大接单数失败: ' + e.message, 'error');
-    }
-  }
-
-  async function showAddSellerModal() {
-    openModal('add-seller-modal');
-  }
-  
-  async function addSeller() {
-    const errorDiv = document.getElementById('add-seller-error');
-    const telegramId = document.getElementById('new-seller-id').value;
-    
-    if (!telegramId) {
-      errorDiv.textContent = 'Telegram ID 不能为空。';
-      errorDiv.style.display = 'block';
-      return;
-    }
-    
-    const data = {
-      telegram_id: parseInt(telegramId),
-      username: document.getElementById('new-seller-username').value,
-      first_name: document.getElementById('new-seller-firstname').value,
-      nickname: document.getElementById('new-seller-nickname').value
-    };
-    
-    try {
-      const response = await fetch('/admin/api/sellers', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(data)
-      });
-      
-      if (response.ok) {
-        // 清空输入
-        document.getElementById('new-seller-id').value = '';
-        document.getElementById('new-seller-username').value = '';
-        document.getElementById('new-seller-firstname').value = '';
-        document.getElementById('new-seller-nickname').value = '';
-        errorDiv.style.display = 'none';
-        
-        showToast('卖家添加成功！', 'success');
-        closeModal('add-seller-modal');
-        loadSellers();
-      } else {
-      const result = await response.json();
-        errorDiv.textContent = result.error || '添加失败，请重试。';
-        errorDiv.style.display = 'block';
-      }
-    } catch (error) {
-      errorDiv.textContent = '网络错误，请重试。';
-      errorDiv.style.display = 'block';
-    }
-  }
-  
   // 添加CSS动画
   const style = document.createElement('style');
   style.textContent = `
@@ -1260,18 +1782,104 @@
   `;
   document.head.appendChild(style);
 
-  document.addEventListener('DOMContentLoaded', () => {
-    // 加载用户和卖家数据
-    loadUsers();
-    loadSellers();
+  // 加载余额明细记录
+  async function loadBalanceRecords(userId = null) {
+    const tbody = document.getElementById('balance-records-tbody');
+    tbody.innerHTML = '<tr><td colspan="8" class="loading">加载中...</td></tr>';
     
-    // 初始化各种事件处理
-    initTabSwitching();
-    initModals();
+    try {
+      // 构建请求URL，如果有指定用户ID则添加过滤条件
+      let url = '/api/balance/records?limit=100';
+      if (userId) {
+        url += `&user_id=${userId}`;
+      }
+      
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`获取余额明细失败: ${response.status}`);
+      
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || '获取余额明细失败');
+      
+      const records = data.records;
+      if (!records || records.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="no-data">暂无余额变动记录</td></tr>';
+        return;
+      }
+      
+      // 渲染数据
+      let html = '';
+      records.forEach(record => {
+        // 类型显示转换
+        const typeMap = {
+          'recharge': '充值',
+          'consume': '消费',
+          'refund': '退款'
+        };
+        
+        const typeDisplay = typeMap[record.type] || record.type;
+        const amountClass = record.amount > 0 ? 'text-success' : 'text-danger';
+        const amountDisplay = record.amount > 0 ? `+${record.amount}` : record.amount;
+        
+        html += `
+          <tr>
+            <td>${record.id}</td>
+            <td>${record.username}</td>
+            <td>${typeDisplay}</td>
+            <td class="${amountClass}">${amountDisplay}</td>
+            <td>${record.balance_after}</td>
+            <td>${record.reason}</td>
+            <td>${record.reference_id || '-'}</td>
+            <td>${record.created_at}</td>
+          </tr>
+        `;
+      });
+      
+      tbody.innerHTML = html;
+    } catch (error) {
+      console.error('加载余额明细失败:', error);
+      tbody.innerHTML = `<tr><td colspan="8" class="error">加载失败: ${error.message}</td></tr>`;
+    }
+  }
+  
+  // 填充用户筛选下拉框
+  function populateUserFilter() {
+    const userFilter = document.getElementById('balance-user-filter');
     
-    // 显示默认标签页
-    showTab('users');
-  });
+    // 如果尚未加载用户数据，则先加载
+    if (allUsers.length === 0) {
+      fetch('/admin/api/users')
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            allUsers = data.users;
+            populateUserFilterOptions(userFilter);
+          }
+        })
+        .catch(error => console.error('加载用户数据失败:', error));
+    } else {
+      populateUserFilterOptions(userFilter);
+    }
+    
+    // 添加事件监听器
+    userFilter.addEventListener('change', function() {
+      const userId = this.value;
+      loadBalanceRecords(userId || null);
+    });
+  }
+  
+  // 填充用户筛选下拉框选项
+  function populateUserFilterOptions(selectElement) {
+    // 保留第一个"所有用户"选项
+    selectElement.innerHTML = '<option value="">所有用户</option>';
+    
+    // 添加所有用户选项
+    allUsers.forEach(user => {
+      const option = document.createElement('option');
+      option.value = user.id;
+      option.textContent = `${user.username} (ID: ${user.id})`;
+      selectElement.appendChild(option);
+    });
+  }
 </script>
 </body>
 </html> 

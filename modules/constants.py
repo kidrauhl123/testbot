@@ -7,15 +7,22 @@ import time
 # 设置日志
 logger = logging.getLogger(__name__)
 
-# 敏感配置必须从环境变量读取，不能提交到代码仓库。
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
-if not BOT_TOKEN:
-    logger.warning("未设置 BOT_TOKEN 环境变量，Telegram 机器人将无法启动。")
+def require_env(name):
+    """读取必需环境变量，避免把 token/密码等敏感信息写死在代码里。"""
+    value = os.environ.get(name)
+    if not value:
+        raise RuntimeError(f"缺少必需环境变量: {name}")
+    return value
 
-ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
-if not ADMIN_USERNAME or not ADMIN_PASSWORD:
-    logger.warning("未设置 ADMIN_USERNAME/ADMIN_PASSWORD，启动时不会自动创建管理员账号。")
+# 敏感配置必须通过环境变量提供，不能在代码中写死默认值。
+BOT_TOKEN = require_env("BOT_TOKEN")
+ADMIN_USERNAME = require_env("ADMIN_USERNAME")
+ADMIN_PASSWORD = require_env("ADMIN_PASSWORD")
+SUPER_ADMIN_TELEGRAM_ID = int(require_env("SUPER_ADMIN_TELEGRAM_ID"))
+
+# 页面展示用联系方式/收款提示。未配置时使用不含个人信息的安全文案。
+ALIPAY_PAYMENT_TEXT = os.environ.get("ALIPAY_PAYMENT_TEXT", "请联系站主获取支付宝收款信息")
+WECHAT_PAYMENT_TEXT = os.environ.get("WECHAT_PAYMENT_TEXT", "请联系站主获取微信收款信息")
 
 # 支持通过环境变量设置卖家ID
 SELLER_CHAT_IDS = []
@@ -48,11 +55,42 @@ def sync_env_sellers_to_db():
             if seller_id not in db_seller_ids:
                 logger.info(f"将环境变量中的卖家ID {seller_id} 同步到数据库")
                 execute_query(
-                    "INSERT INTO sellers (telegram_id, username, first_name, nickname, is_active, added_at, added_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (seller_id, f"env_seller_{seller_id}", f"环境变量卖家 {seller_id}", f"卖家 {seller_id}", 1, timestamp, "环境变量")
+                    "INSERT INTO sellers (telegram_id, username, first_name, is_active, added_at, added_by) VALUES (?, ?, ?, ?, ?, ?)",
+                    (seller_id, f"env_seller_{seller_id}", f"环境变量卖家 {seller_id}", 1, timestamp, "环境变量")
                 )
     except Exception as e:
         logger.error(f"同步环境变量卖家到数据库失败: {e}")
+
+# ===== 价格系统 =====
+# 网页端价格（人民币）
+WEB_PRICES = {'1': 14, '2': 16, '3': 16, '6': 50, '12': 84}
+# Telegram端卖家薪资（美元）
+TG_PRICES = {'1': 1.65, '2': 1.65, '3': 4.8, '6': 8.5, '12': 16.5}
+
+# 获取用户套餐价格
+def get_user_package_price(user_id, package):
+    """
+    获取特定用户的套餐价格
+    
+    参数:
+    - user_id: 用户ID
+    - package: 套餐（如'1'，'2'等）
+    
+    返回:
+    - 用户的套餐价格，如果没有定制价格则返回默认价格
+    """
+    # 如果没有用户ID，返回默认价格
+    if not user_id:
+        return WEB_PRICES.get(package, 0)
+        
+    # 避免循环导入
+    from modules.database import get_user_custom_prices
+    
+    # 获取用户定制价格
+    custom_prices = get_user_custom_prices(user_id)
+    
+    # 如果该套餐有定制价格，返回定制价格，否则返回默认价格
+    return custom_prices.get(package, WEB_PRICES.get(package, 0))
 
 # ===== 状态常量 =====
 STATUS = {
@@ -67,19 +105,9 @@ STATUS_TEXT_ZH = {
     'submitted': '已提交', 'accepted': '已接单', 'completed': '充值成功',
     'failed': '充值失败', 'cancelled': '已撤销', 'disputing': '正在质疑'
 }
-
-# 确认状态常量
-CONFIRM_STATUS = {
-    'PENDING': 'pending',
-    'CONFIRMED': 'confirmed',
-    'NOT_RECEIVED': 'not_received'
-}
-
-CONFIRM_STATUS_TEXT_ZH = {
-    'pending': '待确认',
-    'confirmed': '确认收到',
-    'not_received': '长时间未收到'
-}
+PLAN_OPTIONS = [('1', '1个月'), ('2', '2个月'), ('3', '3个月'), ('6', '6个月'), ('12', '12个月')]
+PLAN_LABELS_ZH = {v: l for v, l in PLAN_OPTIONS}
+PLAN_LABELS_EN = {'1': '1 Month', '2': '2 Months', '3': '3 Months', '6': '6 Months', '12': '12 Months'}
 
 # 失败原因的中英文映射
 REASON_TEXT_ZH = {
@@ -100,4 +128,4 @@ notified_orders_lock = threading.Lock()  # 在主应用中初始化
 DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///orders.db')
 
 # 用户信息缓存
-user_info_cache = {}
+user_info_cache = {} 

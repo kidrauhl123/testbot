@@ -5,11 +5,9 @@ import hashlib
 import logging
 import psycopg2
 from functools import wraps
-from datetime import datetime, timedelta
+from datetime import datetime
 from urllib.parse import urlparse
-from werkzeug.security import check_password_hash, generate_password_hash
 import pytz
-import random
 
 from modules.constants import DATABASE_URL, STATUS, ADMIN_USERNAME, ADMIN_PASSWORD
 
@@ -73,19 +71,22 @@ def add_balance_record(user_id, amount, type_name, reason, reference_id=None, ba
 
 # ===== 数据库 =====
 def init_db():
-    """初始化数据库"""
-    try:
-        if DATABASE_URL.startswith('postgres'):
-            init_postgres_db()
-        else:
-            init_sqlite_db()
-        
-        # 创建充值相关表
-        create_recharge_tables()
-        
-        logger.info("数据库初始化完成")
-    except Exception as e:
-        logger.error(f"数据库初始化失败: {str(e)}", exc_info=True)
+    """根据环境配置初始化数据库"""
+    logger.info(f"初始化数据库，使用连接: {DATABASE_URL[:10]}...")
+    if DATABASE_URL.startswith('postgres'):
+        init_postgres_db()
+    else:
+        init_sqlite_db()
+    
+    # 创建充值记录表和余额记录表
+    logger.info("正在创建充值记录表和余额记录表...")
+    create_recharge_tables()
+    logger.info("充值记录表和余额记录表创建完成")
+    
+    # 创建激活码表
+    logger.info("正在创建激活码表...")
+    create_activation_code_table()
+    logger.info("激活码表创建完成")
 
 def init_sqlite_db():
     """初始化SQLite数据库"""
@@ -98,148 +99,93 @@ def init_sqlite_db():
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
     
-    # 创建订单表
-    c.execute('''
-    CREATE TABLE IF NOT EXISTS orders (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        account TEXT,
-        password TEXT,
-        package TEXT,
-        remark TEXT,
-        status TEXT DEFAULT 'submitted',
-        created_at TEXT,
-        updated_at TEXT,
-        user_id INTEGER,
-        username TEXT,
-        accepted_by TEXT,
-        accepted_at TEXT,
-        completed_at TEXT,
-        notified INTEGER DEFAULT 0,
-        accepted_by_username TEXT,
-        accepted_by_first_name TEXT,
-        accepted_by_nickname TEXT,
-        failed_at TEXT,
-        fail_reason TEXT,
-        buyer_confirmed INTEGER DEFAULT 0,
-        confirm_status TEXT DEFAULT 'pending'
-    )
-    ''')
+    # 订单表
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account TEXT NOT NULL,
+            password TEXT NOT NULL,
+            package TEXT NOT NULL,
+            remark TEXT,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            accepted_at TEXT,
+            completed_at TEXT,
+            accepted_by TEXT,
+            accepted_by_username TEXT,
+            accepted_by_first_name TEXT,
+            notified INTEGER DEFAULT 0,
+            web_user_id TEXT,
+            user_id INTEGER,
+            refunded INTEGER DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    """)
     
-    # 检查orders表是否需要添加accepted_by_nickname列
-    try:
-        c.execute("SELECT accepted_by_nickname FROM orders LIMIT 1")
-    except sqlite3.OperationalError:
-        logger.info("为orders表添加accepted_by_nickname列")
-        c.execute("ALTER TABLE orders ADD COLUMN accepted_by_nickname TEXT")
-        conn.commit()
+    # 用户表
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            is_admin INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            last_login TEXT,
+            balance REAL DEFAULT 0,
+            credit_limit REAL DEFAULT 0
+        )
+    """)
     
-    # 检查orders表是否需要添加buyer_confirmed列
-    try:
-        c.execute("SELECT buyer_confirmed FROM orders LIMIT 1")
-    except sqlite3.OperationalError:
-        logger.info("为orders表添加buyer_confirmed列")
-        c.execute("ALTER TABLE orders ADD COLUMN buyer_confirmed INTEGER DEFAULT 0")
-        conn.commit()
-        
-    # 检查orders表是否需要添加confirm_status列
-    try:
-        c.execute("SELECT confirm_status FROM orders LIMIT 1")
-    except sqlite3.OperationalError:
-        logger.info("为orders表添加confirm_status列")
-        c.execute("ALTER TABLE orders ADD COLUMN confirm_status TEXT DEFAULT 'pending'")
-        conn.commit()
+    # 卖家表
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS sellers (
+            telegram_id INTEGER PRIMARY KEY,
+            username TEXT,
+            first_name TEXT,
+            is_active INTEGER DEFAULT 1,
+            added_at TEXT NOT NULL,
+            added_by TEXT,
+            is_admin BOOLEAN DEFAULT FALSE
+        )
+    """)
     
-    # 创建用户表
-    c.execute('''
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE,
-        password TEXT,
-        email TEXT,
-        is_admin INTEGER DEFAULT 0,
-        created_at TEXT,
-        balance REAL DEFAULT 0,
-        credit_limit REAL DEFAULT 0
-    )
-    ''')
+    # 用户定制价格表
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS user_custom_prices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            package TEXT NOT NULL,
+            price REAL NOT NULL,
+            created_at TEXT NOT NULL,
+            created_by INTEGER NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            FOREIGN KEY (created_by) REFERENCES users (id),
+            UNIQUE(user_id, package)
+        )
+    """)
     
-    # 创建卖家表
-    c.execute('''
-    CREATE TABLE IF NOT EXISTS sellers (
-        telegram_id TEXT PRIMARY KEY,
-        username TEXT,
-        first_name TEXT,
-        nickname TEXT,
-        is_active INTEGER DEFAULT 1,
-        added_at TEXT,
-        added_by TEXT,
-        is_admin INTEGER DEFAULT 0,
-        last_active_at TEXT,
-        desired_orders INTEGER DEFAULT 0,
-        activity_check_at TEXT,
-        distribution_level INTEGER DEFAULT 1,
-        max_concurrent_orders INTEGER DEFAULT 5
-    )
-    ''')
+    # 检查orders表中是否需要添加新列
+    c.execute("PRAGMA table_info(orders)")
+    orders_columns = [column[1] for column in c.fetchall()]
     
-    # 检查sellers表是否需要添加新字段
-    try:
-        c.execute("SELECT last_active_at FROM sellers LIMIT 1")
-    except sqlite3.OperationalError:
-        c.execute("ALTER TABLE sellers ADD COLUMN last_active_at TEXT")
-        conn.commit()
+    if 'user_id' not in orders_columns:
+        logger.info("为orders表添加user_id列")
+        c.execute("ALTER TABLE orders ADD COLUMN user_id INTEGER")
     
-    try:
-        c.execute("SELECT desired_orders FROM sellers LIMIT 1")
-    except sqlite3.OperationalError:
-        c.execute("ALTER TABLE sellers ADD COLUMN desired_orders INTEGER DEFAULT 0")
-        conn.commit()
+    # 检查是否需要添加refunded列（是否已退款）
+    if 'refunded' not in orders_columns:
+        logger.info("为orders表添加refunded列")
+        c.execute("ALTER TABLE orders ADD COLUMN refunded INTEGER DEFAULT 0")
     
-    try:
-        c.execute("SELECT activity_check_at FROM sellers LIMIT 1")
-    except sqlite3.OperationalError:
-        c.execute("ALTER TABLE sellers ADD COLUMN activity_check_at TEXT")
-        conn.commit()
+    # 检查是否需要添加accepted_by_username列（Telegram用户名）
+    if 'accepted_by_username' not in orders_columns:
+        logger.info("为orders表添加accepted_by_username列")
+        c.execute("ALTER TABLE orders ADD COLUMN accepted_by_username TEXT")
     
-    # 检查sellers表是否需要添加nickname列
-    try:
-        c.execute("SELECT nickname FROM sellers LIMIT 1")
-    except sqlite3.OperationalError:
-        logger.info("为sellers表添加nickname列")
-        c.execute("ALTER TABLE sellers ADD COLUMN nickname TEXT")
-        conn.commit()
-    
-    # 检查sellers表是否需要添加is_admin列
-    try:
-        c.execute("SELECT is_admin FROM sellers LIMIT 1")
-    except sqlite3.OperationalError:
-        logger.info("为sellers表添加is_admin列")
-        c.execute("ALTER TABLE sellers ADD COLUMN is_admin INTEGER DEFAULT 0")
-        conn.commit()
-    
-    # 检查sellers表是否需要添加distribution_level列
-    try:
-        c.execute("SELECT distribution_level FROM sellers LIMIT 1")
-    except sqlite3.OperationalError:
-        logger.info("为sellers表添加distribution_level列")
-        c.execute("ALTER TABLE sellers ADD COLUMN distribution_level INTEGER DEFAULT 1")
-        conn.commit()
-    
-    # 检查sellers表是否需要添加max_concurrent_orders列
-    try:
-        c.execute("SELECT max_concurrent_orders FROM sellers LIMIT 1")
-    except sqlite3.OperationalError:
-        logger.info("为sellers表添加max_concurrent_orders列")
-        c.execute("ALTER TABLE sellers ADD COLUMN max_concurrent_orders INTEGER DEFAULT 5")
-        conn.commit()
-    
-    # 检查sellers表是否需要添加participate_in_distribution列
-    try:
-        c.execute("SELECT participate_in_distribution FROM sellers LIMIT 1")
-    except sqlite3.OperationalError:
-        logger.info("为sellers表添加participate_in_distribution列")
-        c.execute("ALTER TABLE sellers ADD COLUMN participate_in_distribution INTEGER DEFAULT 1")
-        conn.commit()
+    # 检查是否需要添加accepted_by_first_name列（Telegram昵称）
+    if 'accepted_by_first_name' not in orders_columns:
+        logger.info("为orders表添加accepted_by_first_name列")
+        c.execute("ALTER TABLE orders ADD COLUMN accepted_by_first_name TEXT")
     
     # 检查users表中是否需要添加新列
     c.execute("PRAGMA table_info(users)")
@@ -266,36 +212,17 @@ def init_sqlite_db():
         # Table might not exist yet, will be created by create_recharge_tables()
         pass
     
-    # 创建超级管理员账号（如果配置了环境变量且不存在）
-    if ADMIN_USERNAME and ADMIN_PASSWORD:
-        admin_hash = hash_password(ADMIN_PASSWORD)
-        c.execute("SELECT id FROM users WHERE username = ?", (ADMIN_USERNAME,))
-        if not c.fetchone():
-            logger.info(f"创建管理员账号: {ADMIN_USERNAME}")
-            c.execute("""
-                INSERT INTO users (username, password_hash, is_admin, created_at)
-                VALUES (?, ?, 1, ?)
-            """, (ADMIN_USERNAME, admin_hash, get_china_time()))
-    else:
-        logger.warning("未配置管理员环境变量，跳过自动创建管理员账号。")
+    # 创建超级管理员账号（如果不存在）
+    admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
+    c.execute("SELECT id FROM users WHERE username = ?", (ADMIN_USERNAME,))
+    if not c.fetchone():
+        logger.info(f"创建默认管理员账号: {ADMIN_USERNAME}")
+        c.execute("""
+            INSERT INTO users (username, password_hash, is_admin, created_at) 
+            VALUES (?, ?, 1, ?)
+        """, (ADMIN_USERNAME, admin_hash, get_china_time()))
     
-    # 创建索引以提高查询性能
-    logger.info("检查并创建索引以提高查询性能")
-    try:
-        # 为订单表的created_at字段添加索引，优化按时间查询和删除操作
-        c.execute("CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)")
-        
-        # 为订单表的status字段添加索引，优化按状态查询操作
-        c.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
-        
-        # 为用户ID添加索引，优化按用户查询订单操作
-        c.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)")
-        
-        conn.commit()
-        logger.info("数据库索引创建或更新完成")
-    except Exception as e:
-        logger.error(f"创建索引时出错: {str(e)}", exc_info=True)
-    
+    conn.commit()
     conn.close()
     logger.info("SQLite数据库初始化完成")
 
@@ -308,9 +235,6 @@ def init_postgres_db():
     host = url.hostname
     port = url.port
     
-    logger.info(f"使用PostgreSQL数据库: {host}:{port}/{dbname}")
-    logger.info(f"连接PostgreSQL数据库: {host}:{port}/{dbname}")
-    
     conn = psycopg2.connect(
         dbname=dbname,
         user=user,
@@ -318,199 +242,130 @@ def init_postgres_db():
         host=host,
         port=port
     )
-    
-    # 使用自动提交模式，避免事务问题
     conn.autocommit = True
-    cur = conn.cursor()
+    c = conn.cursor()
     
-    # 创建订单表
-    cur.execute('''
-    CREATE TABLE IF NOT EXISTS orders (
-        id SERIAL PRIMARY KEY,
-        account TEXT,
-        password TEXT,
-        package TEXT,
-        remark TEXT,
-        status TEXT DEFAULT 'submitted',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP,
-        user_id INTEGER,
-        username TEXT,
-        accepted_by TEXT,
-        accepted_at TIMESTAMP,
-        completed_at TIMESTAMP,
-        notified INTEGER DEFAULT 0,
-        accepted_by_username TEXT,
-        accepted_by_first_name TEXT,
-        accepted_by_nickname TEXT,
-        failed_at TIMESTAMP,
-        fail_reason TEXT,
-        buyer_confirmed BOOLEAN DEFAULT FALSE,
-        confirm_status TEXT DEFAULT 'pending'
-    )
-    ''')
+    # 订单表
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS orders (
+            id SERIAL PRIMARY KEY,
+            account TEXT NOT NULL,
+            password TEXT NOT NULL,
+            package TEXT NOT NULL,
+            remark TEXT,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            accepted_at TEXT,
+            completed_at TEXT,
+            accepted_by TEXT,
+            accepted_by_username TEXT,
+            accepted_by_first_name TEXT,
+            notified INTEGER DEFAULT 0,
+            web_user_id TEXT,
+            user_id INTEGER,
+            refunded INTEGER DEFAULT 0
+        )
+    """)
     
-    # 检查orders表是否需要添加accepted_by_nickname列
+    # 用户表
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            is_admin INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            last_login TEXT,
+            balance REAL DEFAULT 0,
+            credit_limit REAL DEFAULT 0
+        )
+    """)
+    
+    # 卖家表
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS sellers (
+            telegram_id BIGINT PRIMARY KEY,
+            username TEXT,
+            first_name TEXT,
+            is_active BOOLEAN DEFAULT TRUE,
+            added_at TEXT NOT NULL,
+            added_by TEXT,
+            is_admin BOOLEAN DEFAULT FALSE
+        )
+    """)
+    
+    # 用户定制价格表
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS user_custom_prices (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            package TEXT NOT NULL,
+            price REAL NOT NULL,
+            created_at TEXT NOT NULL,
+            created_by INTEGER NOT NULL,
+            UNIQUE(user_id, package)
+        )
+    """)
+    
+    # 检查是否需要添加新列
     try:
-        cur.execute("SELECT accepted_by_nickname FROM orders LIMIT 1")
+        c.execute("SELECT user_id FROM orders LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
-        logger.info("为orders表添加accepted_by_nickname列")
-        cur.execute("ALTER TABLE orders ADD COLUMN accepted_by_nickname TEXT")
-        conn.commit()
+        c.execute("ALTER TABLE orders ADD COLUMN user_id INTEGER")
     
-    # 检查orders表是否需要添加buyer_confirmed列
+    # 检查是否需要添加refunded列（是否已退款）
     try:
-        cur.execute("SELECT buyer_confirmed FROM orders LIMIT 1")
+        c.execute("SELECT refunded FROM orders LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
-        logger.info("为orders表添加buyer_confirmed列")
-        cur.execute("ALTER TABLE orders ADD COLUMN buyer_confirmed BOOLEAN DEFAULT FALSE")
-        conn.commit()
-        
-    # 检查orders表是否需要添加confirm_status列
+        logger.info("为orders表添加refunded列")
+        c.execute("ALTER TABLE orders ADD COLUMN refunded INTEGER DEFAULT 0")
+    
+    # 检查是否需要添加balance列（用户余额）
     try:
-        cur.execute("SELECT confirm_status FROM orders LIMIT 1")
+        c.execute("SELECT balance FROM users LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
-        logger.info("为orders表添加confirm_status列")
-        cur.execute("ALTER TABLE orders ADD COLUMN confirm_status TEXT DEFAULT 'pending'")
-        conn.commit()
+        logger.info("为users表添加balance列")
+        c.execute("ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0")
     
-    # 创建用户表
-    cur.execute('''
-    CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        username TEXT UNIQUE,
-        password TEXT,
-        email TEXT,
-        is_admin INTEGER DEFAULT 0,
-        created_at TEXT,
-        balance REAL DEFAULT 0,
-        credit_limit REAL DEFAULT 0
-    )
-    ''')
-    
-    # 创建卖家表
-    cur.execute('''
-    CREATE TABLE IF NOT EXISTS sellers (
-        telegram_id TEXT PRIMARY KEY,
-        username TEXT,
-        first_name TEXT,
-        nickname TEXT,
-        is_active BOOLEAN DEFAULT TRUE,
-        added_at TEXT,
-        added_by TEXT,
-        is_admin BOOLEAN DEFAULT FALSE,
-        last_active_at TEXT,
-        desired_orders INTEGER DEFAULT 0,
-        activity_check_at TEXT,
-        distribution_level INTEGER DEFAULT 1,
-        max_concurrent_orders INTEGER DEFAULT 5
-    )
-    ''')
-    
-    # 检查sellers表是否需要添加新字段
+    # 检查是否需要添加credit_limit列（透支额度）
     try:
-        cur.execute("SELECT last_active_at FROM sellers LIMIT 1")
+        c.execute("SELECT credit_limit FROM users LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
-        logger.info("为sellers表添加last_active_at列")
-        cur.execute("ALTER TABLE sellers ADD COLUMN last_active_at TEXT")
-        conn.commit()
+        logger.info("为users表添加credit_limit列")
+        c.execute("ALTER TABLE users ADD COLUMN credit_limit REAL DEFAULT 0")
     
+    # 检查是否需要添加accepted_by_username列（Telegram用户名）
     try:
-        cur.execute("SELECT desired_orders FROM sellers LIMIT 1")
+        c.execute("SELECT accepted_by_username FROM orders LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
-        logger.info("为sellers表添加desired_orders列")
-        cur.execute("ALTER TABLE sellers ADD COLUMN desired_orders INTEGER DEFAULT 0")
-        conn.commit()
+        logger.info("为orders表添加accepted_by_username列")
+        c.execute("ALTER TABLE orders ADD COLUMN accepted_by_username TEXT")
     
+    # 检查是否需要添加accepted_by_first_name列（Telegram昵称）
     try:
-        cur.execute("SELECT activity_check_at FROM sellers LIMIT 1")
+        c.execute("SELECT accepted_by_first_name FROM orders LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
-        logger.info("为sellers表添加activity_check_at列")
-        cur.execute("ALTER TABLE sellers ADD COLUMN activity_check_at TEXT")
-        conn.commit()
+        logger.info("为orders表添加accepted_by_first_name列")
+        c.execute("ALTER TABLE orders ADD COLUMN accepted_by_first_name TEXT")
     
-    # 检查sellers表是否需要添加distribution_level列
+    # 检查是否需要添加details列（充值详情，如口令）
     try:
-        cur.execute("SELECT distribution_level FROM sellers LIMIT 1")
+        c.execute("SELECT details FROM recharge_requests LIMIT 1")
     except psycopg2.errors.UndefinedColumn:
-        logger.info("为sellers表添加distribution_level列")
-        cur.execute("ALTER TABLE sellers ADD COLUMN distribution_level INTEGER DEFAULT 1")
-        conn.commit()
+        logger.info("为recharge_requests表添加details列")
+        c.execute("ALTER TABLE recharge_requests ADD COLUMN details TEXT")
+    except psycopg2.errors.UndefinedTable:
+        # Table might not exist yet
+        pass
     
-    # 检查sellers表是否需要添加max_concurrent_orders列
-    try:
-        cur.execute("SELECT max_concurrent_orders FROM sellers LIMIT 1")
-    except psycopg2.errors.UndefinedColumn:
-        logger.info("为sellers表添加max_concurrent_orders列")
-        cur.execute("ALTER TABLE sellers ADD COLUMN max_concurrent_orders INTEGER DEFAULT 5")
-        conn.commit()
-    
-    # 检查sellers表是否需要添加participate_in_distribution列
-    try:
-        cur.execute("SELECT participate_in_distribution FROM sellers LIMIT 1")
-    except psycopg2.errors.UndefinedColumn:
-        logger.info("为sellers表添加participate_in_distribution列")
-        cur.execute("ALTER TABLE sellers ADD COLUMN participate_in_distribution BOOLEAN DEFAULT TRUE")
-        conn.commit()
-    
-    # 检查sellers表是否需要添加nickname列
-    try:
-        cur.execute("SELECT nickname FROM sellers LIMIT 1")
-    except psycopg2.errors.UndefinedColumn:
-        logger.info("为sellers表添加nickname列")
-        cur.execute("ALTER TABLE sellers ADD COLUMN nickname TEXT")
-        conn.commit()
-    
-    # 检查sellers表是否需要添加is_admin列
-    try:
-        cur.execute("SELECT is_admin FROM sellers LIMIT 1")
-    except psycopg2.errors.UndefinedColumn:
-        logger.info("为sellers表添加is_admin列")
-        cur.execute("ALTER TABLE sellers ADD COLUMN is_admin BOOLEAN DEFAULT FALSE")
-        conn.commit()
-    
-    # 创建用户自定义价格表
-    cur.execute('''
-    CREATE TABLE IF NOT EXISTS user_custom_prices (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL,
-        package TEXT NOT NULL,
-        price REAL NOT NULL,
-        created_at TEXT NOT NULL,
-        created_by INTEGER,
-        FOREIGN KEY (user_id) REFERENCES users (id),
-        FOREIGN KEY (created_by) REFERENCES users (id),
-        UNIQUE(user_id, package)
-    )
-    ''')
-    
-    # 创建超级管理员账号（如果配置了环境变量且不存在）
-    if ADMIN_USERNAME and ADMIN_PASSWORD:
-        admin_hash = hash_password(ADMIN_PASSWORD)
-        cur.execute("SELECT id FROM users WHERE username = %s", (ADMIN_USERNAME,))
-        if not cur.fetchone():
-            cur.execute("""
-                INSERT INTO users (username, password_hash, is_admin, created_at)
-                VALUES (%s, %s, 1, %s)
-            """, (ADMIN_USERNAME, admin_hash, get_china_time()))
-    else:
-        logger.warning("未配置管理员环境变量，跳过自动创建管理员账号。")
-    
-    # 创建索引以提高查询性能
-    logger.info("检查并创建索引以提高查询性能")
-    try:
-        # 为订单表的created_at字段添加索引，优化按时间查询和删除操作
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)")
-        
-        # 为订单表的status字段添加索引，优化按状态查询操作
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
-        
-        # 为用户ID添加索引，优化按用户查询订单操作
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)")
-        
-        logger.info("数据库索引创建或更新完成")
-    except Exception as e:
-        logger.error(f"创建索引时出错: {str(e)}", exc_info=True)
+    # 创建超级管理员账号（如果不存在）
+    admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
+    c.execute("SELECT id FROM users WHERE username = %s", (ADMIN_USERNAME,))
+    if not c.fetchone():
+        c.execute("""
+            INSERT INTO users (username, password_hash, is_admin, created_at) 
+            VALUES (%s, %s, 1, %s)
+        """, (ADMIN_USERNAME, admin_hash, get_china_time()))
     
     conn.close()
 
@@ -526,45 +381,17 @@ def execute_query(query, params=(), fetch=False, return_cursor=False):
 def execute_sqlite_query(query, params=(), fetch=False, return_cursor=False):
     """执行SQLite查询并返回结果"""
     try:
-        # 使用绝对路径访问数据库
         current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         db_path = os.path.join(current_dir, "orders.db")
-        logger.debug(f"执行查询，使用数据库: {db_path}")
-        
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        
-        # 检查是否为INSERT语句，确保notified字段被正确设置
-        if "INSERT INTO orders" in query and "notified" not in query:
-            logger.warning("检测到INSERT订单但未包含notified字段，自动添加notified=0")
-            # 修改查询添加notified字段
-            if ")" in query and "VALUES" in query:
-                parts = query.split(")")
-                values_part = parts[1].strip()
-                if values_part.startswith("VALUES"):
-                    # 在字段列表末尾添加notified
-                    parts[0] = parts[0] + ", notified"
-                    # 在值列表末尾添加0
-                    values_start = values_part.find("(")
-                    if values_start >= 0:
-                        values_part = values_part[:values_start+1] + "?, " + values_part[values_start+1:]
-                        parts[1] = values_part
-                        query = ")".join(parts)
-                        params = params + (0,)
-        
         cursor.execute(query, params)
-        
+
         if return_cursor:
             conn.commit()
             return cursor
 
-        result = None
-        if fetch:
-            result = cursor.fetchall()
-            logger.debug(f"查询返回 {len(result)} 条结果")
-        else:
-            logger.debug(f"查询影响 {cursor.rowcount} 行")
-        
+        result = cursor.fetchall() if fetch else None
         conn.commit()
         conn.close()
         return result
@@ -608,21 +435,13 @@ def execute_postgres_query(query, params=(), fetch=False, return_cursor=False):
 
 # ===== 密码加密 =====
 def hash_password(password):
-    return generate_password_hash(password)
-
-def verify_password(stored_hash, password):
-    """兼容旧 SHA256 密码，同时支持新的 Werkzeug 慢哈希。"""
-    if not stored_hash:
-        return False
-    if len(stored_hash) == 64 and all(c in "0123456789abcdef" for c in stored_hash.lower()):
-        return hashlib.sha256(password.encode()).hexdigest() == stored_hash
-    return check_password_hash(stored_hash, password)
+    return hashlib.sha256(password.encode()).hexdigest()
 
 # 获取未通知订单
 def get_unnotified_orders():
     """获取未通知的订单"""
     orders = execute_query("""
-        SELECT id, account, password, package, created_at, web_user_id, remark 
+        SELECT id, account, password, package, created_at, web_user_id 
         FROM orders 
         WHERE notified = 0 AND status = ?
     """, (STATUS['SUBMITTED'],), fetch=True)
@@ -633,141 +452,260 @@ def get_unnotified_orders():
     
     return orders
 
+# 接单原子操作
+def accept_order_atomic(oid, user_id):
+    # 使用事务确保操作的原子性
+    if DATABASE_URL.startswith('postgres'):
+        # PostgreSQL版本
+        url = urlparse(DATABASE_URL)
+        dbname = url.path[1:]
+        user = url.username
+        password = url.password
+        host = url.hostname
+        port = url.port
+        
+        conn = psycopg2.connect(
+            dbname=dbname,
+            user=user,
+            password=password,
+            host=host,
+            port=port
+        )
+        cursor = conn.cursor()
+        
+        try:
+            # 开始事务
+            cursor.execute("BEGIN")
+            
+            # 检查订单状态
+            cursor.execute("SELECT status FROM orders WHERE id = %s FOR UPDATE", (oid,))
+            order = cursor.fetchone()
+            if not order:
+                conn.rollback()
+                conn.close()
+                return False, "Order not found"
+                
+            if order[0] == 'cancelled':
+                conn.rollback()
+                conn.close()
+                return False, "Order has been cancelled"
+                
+            if order[0] != 'submitted':
+                conn.rollback()
+                conn.close()
+                return False, "Order already taken"
+            
+            # 检查该用户是否有正在质疑的订单
+            cursor.execute("""
+                SELECT COUNT(*) FROM orders 
+                WHERE accepted_by = %s AND status = 'disputing'
+            """, (str(user_id),))
+            disputing_count = cursor.fetchone()[0]
+            
+            if disputing_count > 0:
+                conn.rollback()
+                conn.close()
+                return False, "You have a disputed order. Please resolve it before accepting new orders."
+            
+            # 检查该用户当前接单数量（状态为accepted的订单）
+            cursor.execute("""
+                SELECT COUNT(*) FROM orders 
+                WHERE accepted_by = %s AND status = 'accepted'
+            """, (str(user_id),))
+            active_count = cursor.fetchone()[0]
+            
+            if active_count >= 3:
+                conn.rollback()
+                conn.close()
+                return False, "You already have 3 active orders. Please complete your current orders first before accepting new ones."
+            
+            # 获取用户信息
+            try:
+                # 从缓存中获取用户名和昵称
+                from modules.constants import user_info_cache
+                username = None
+                first_name = None
+                last_name = None
+                full_name = None
+                
+                if user_id in user_info_cache:
+                    username = user_info_cache[user_id].get('username')
+                    first_name = user_info_cache[user_id].get('first_name')
+                    last_name = user_info_cache[user_id].get('last_name', '')
+                    
+                    # 组合完整昵称
+                    if first_name:
+                        if last_name:
+                            full_name = f"{first_name} {last_name}".strip()
+                        else:
+                            full_name = first_name
+                
+                # 更新订单
+                timestamp = get_china_time()
+                cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = %s, accepted_by = %s, accepted_by_username = %s, accepted_by_first_name = %s WHERE id = %s",
+                            (timestamp, str(user_id), username, full_name, oid))
+            except Exception as e:
+                logger.error(f"获取用户信息失败: {str(e)}")
+                # 如果获取用户信息失败，仍然更新订单，但不设置用户名和昵称
+                timestamp = get_china_time()
+                cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = %s, accepted_by = %s WHERE id = %s",
+                            (timestamp, str(user_id), oid))
+            
+            # 提交事务
+            conn.commit()
+            conn.close()
+            return True, "Success"
+            
+        except Exception as e:
+            conn.rollback()
+            conn.close()
+            logger.error(f"Error in accept_order_atomic: {str(e)}")
+            return False, "Database error"
+    else:
+        # SQLite版本
+        # 使用绝对路径访问数据库
+        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        db_path = os.path.join(current_dir, "orders.db")
+        logger.debug(f"接单操作，使用数据库: {db_path}")
+        
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        try:
+            # 开始独占事务
+            cursor.execute("BEGIN EXCLUSIVE")
+            
+            # 检查订单状态
+            cursor.execute("SELECT status FROM orders WHERE id = ?", (oid,))
+            order = cursor.fetchone()
+            if not order:
+                conn.rollback()
+                conn.close()
+                return False, "Order not found"
+                
+            if order[0] == 'cancelled':
+                conn.rollback()
+                conn.close()
+                return False, "Order has been cancelled"
+                
+            if order[0] != 'submitted':
+                conn.rollback()
+                conn.close()
+                return False, "Order already taken"
+            
+            # 检查该用户是否有正在质疑的订单
+            cursor.execute("""
+                SELECT COUNT(*) FROM orders 
+                WHERE accepted_by = ? AND status = 'disputing'
+            """, (str(user_id),))
+            disputing_count = cursor.fetchone()[0]
+            
+            if disputing_count > 0:
+                conn.rollback()
+                conn.close()
+                return False, "You have a disputed order. Please resolve it before accepting new orders."
+            
+            # 检查该用户当前接单数量（状态为accepted的订单）
+            cursor.execute("""
+                SELECT COUNT(*) FROM orders 
+                WHERE accepted_by = ? AND status = 'accepted'
+            """, (str(user_id),))
+            active_count = cursor.fetchone()[0]
+            
+            if active_count >= 3:
+                conn.rollback()
+                conn.close()
+                return False, "You already have 3 active orders. Please complete your current orders first before accepting new ones."
+            
+            # 获取用户信息
+            try:
+                # 从缓存中获取用户名和昵称
+                from modules.constants import user_info_cache
+                username = None
+                first_name = None
+                last_name = None
+                full_name = None
+                
+                if user_id in user_info_cache:
+                    username = user_info_cache[user_id].get('username')
+                    first_name = user_info_cache[user_id].get('first_name')
+                    last_name = user_info_cache[user_id].get('last_name', '')
+                    
+                    # 组合完整昵称
+                    if first_name:
+                        if last_name:
+                            full_name = f"{first_name} {last_name}".strip()
+                        else:
+                            full_name = first_name
+                
+                # 更新订单
+                timestamp = get_china_time()
+                cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = ?, accepted_by = ?, accepted_by_username = ?, accepted_by_first_name = ? WHERE id = ?",
+                            (timestamp, str(user_id), username, full_name, oid))
+            except Exception as e:
+                logger.error(f"获取用户信息失败: {str(e)}")
+                # 如果获取用户信息失败，仍然更新订单，但不设置用户名和昵称
+                timestamp = get_china_time()
+                cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = ?, accepted_by = ? WHERE id = ?",
+                            (timestamp, str(user_id), oid))
+            
+            # 提交事务
+            conn.commit()
+            conn.close()
+            return True, "Success"
+            
+        except Exception as e:
+            conn.rollback()
+            conn.close()
+            logger.error(f"Error in accept_order_atomic: {str(e)}")
+            return False, "Database error"
+
 # 获取订单详情
 def get_order_details(oid):
-    return execute_query("SELECT id, account, password, package, status, remark FROM orders WHERE id = ?", (oid,), fetch=True)
+    placeholder = '%s' if DATABASE_URL.startswith('postgres') else '?'
+    return execute_query(f"SELECT id, account, password, package, status, remark FROM orders WHERE id = {placeholder}", (oid,), fetch=True)
 
 # ===== 卖家管理 =====
 def get_all_sellers():
-    """获取所有卖家列表"""
-    try:
-        if DATABASE_URL.startswith('postgres'):
-            return execute_query("""
-                SELECT telegram_id, username, first_name, nickname, is_active, 
-                       added_at, added_by, 
-                       COALESCE(is_admin, FALSE) as is_admin,
-                       COALESCE(distribution_level, 1) as distribution_level,
-                       COALESCE(max_concurrent_orders, 5) as max_concurrent_orders,
-                       COALESCE(participate_in_distribution, TRUE) as participate_in_distribution
-                FROM sellers
-                ORDER BY added_at DESC
-            """, fetch=True)
-        else:
-            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
-            conn.row_factory = sqlite3.Row
-            c = conn.cursor()
-            c.execute("""
-                SELECT telegram_id, username, first_name, nickname, is_active, 
-                      added_at, added_by, is_admin, distribution_level, max_concurrent_orders,
-                      COALESCE(participate_in_distribution, 1) as participate_in_distribution
-                FROM sellers
-                ORDER BY added_at DESC
-            """)
-            results = c.fetchall()
-            conn.close()
-            return results
-    except Exception as e:
-        logger.error(f"获取卖家列表失败: {str(e)}", exc_info=True)
-        return []
+    """获取所有卖家信息"""
+    if DATABASE_URL.startswith('postgres'):
+        # PostgreSQL需要显式处理BOOLEAN类型
+        return execute_query("""
+            SELECT telegram_id, username, first_name, is_active, 
+                   added_at, added_by, 
+                   COALESCE(is_admin, FALSE) as is_admin 
+            FROM sellers 
+            ORDER BY added_at DESC
+        """, fetch=True)
+    else:
+        # SQLite版本
+        return execute_query("""
+            SELECT telegram_id, username, first_name, is_active, 
+                   added_at, added_by, 
+                   COALESCE(is_admin, 0) as is_admin 
+            FROM sellers 
+            ORDER BY added_at DESC
+        """, fetch=True)
 
 def get_active_seller_ids():
-    """获取所有活跃的卖家ID"""
+    """获取所有活跃的卖家Telegram ID"""
     if DATABASE_URL.startswith('postgres'):
         sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = TRUE", fetch=True)
     else:
         sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = 1", fetch=True)
-    
-    return [seller[0] for seller in sellers] if sellers else []
+    return [seller[0] for seller in sellers]
 
-def get_seller_info(telegram_id):
-    """
-    获取指定卖家的信息
-    
-    参数:
-    - telegram_id: 卖家的Telegram ID
-    
-    返回:
-    - 包含卖家信息的字典，如果卖家不存在则返回None
-    """
-    try:
-        if DATABASE_URL.startswith('postgres'):
-            result = execute_query("""
-                SELECT telegram_id, nickname, username, first_name, is_active
-                FROM sellers
-                WHERE telegram_id = %s
-            """, (telegram_id,), fetch=True)
-        else:
-            result = execute_query("""
-                SELECT telegram_id, nickname, username, first_name, is_active
-                FROM sellers
-                WHERE telegram_id = ?
-            """, (telegram_id,), fetch=True)
-        
-        if not result:
-            logger.warning(f"卖家 {telegram_id} 不存在")
-            return None
-            
-        seller = result[0]
-        telegram_id, nickname, username, first_name, is_active = seller
-        
-        # 如果没有设置昵称，则使用first_name或username作为默认昵称
-        display_name = nickname or first_name or f"Seller {telegram_id}"
-        
-        return {
-            "telegram_id": telegram_id,
-            "nickname": nickname,
-            "username": username,
-            "first_name": first_name, 
-            "display_name": display_name,
-            "is_active": bool(is_active)
-        }
-    except Exception as e:
-        logger.error(f"获取卖家 {telegram_id} 信息失败: {str(e)}", exc_info=True)
-        return None
-
-def get_active_sellers():
-    """获取所有活跃的卖家的ID和昵称"""
-    if DATABASE_URL.startswith('postgres'):
-        sellers = execute_query("""
-            SELECT telegram_id, nickname, username, first_name, 
-                   last_active_at
-            FROM sellers 
-            WHERE is_active = TRUE
-        """, fetch=True)
-    else:
-        sellers = execute_query("""
-            SELECT telegram_id, nickname, username, first_name, 
-                   last_active_at
-            FROM sellers 
-            WHERE is_active = 1
-        """, fetch=True)
-    
-    result = []
-    for seller in sellers:
-        telegram_id, nickname, username, first_name, last_active_at = seller
-        # 如果没有设置昵称，则使用first_name或username作为默认昵称
-        display_name = nickname or first_name or f"卖家 {telegram_id}"
-        result.append({
-            "id": telegram_id,
-            "name": display_name,
-            "last_active_at": last_active_at or ""
-        })
-    return result
-
-def add_seller(telegram_id, username, first_name, nickname, added_by):
+def add_seller(telegram_id, username, first_name, added_by):
     """添加新卖家"""
     timestamp = get_china_time()
     execute_query(
-        "INSERT INTO sellers (telegram_id, username, first_name, nickname, added_at, added_by) VALUES (?, ?, ?, ?, ?, ?)",
-        (telegram_id, username, first_name, nickname, timestamp, added_by)
+        "INSERT INTO sellers (telegram_id, username, first_name, added_at, added_by) VALUES (?, ?, ?, ?, ?)",
+        (telegram_id, username, first_name, timestamp, added_by)
     )
 
 def toggle_seller_status(telegram_id):
     """切换卖家活跃状态"""
-    if DATABASE_URL.startswith('postgres'):
-        execute_query("UPDATE sellers SET is_active = NOT is_active WHERE telegram_id = %s", (telegram_id,))
-    else:
-        execute_query("UPDATE sellers SET is_active = NOT is_active WHERE telegram_id = ?", (telegram_id,))
+    execute_query("UPDATE sellers SET is_active = NOT is_active WHERE telegram_id = ?", (telegram_id,))
 
 def remove_seller(telegram_id):
     """移除卖家"""
@@ -826,9 +764,544 @@ def is_admin_seller(telegram_id):
         )
     return bool(result and result[0][0])
 
+# ===== 余额系统相关函数 =====
+def get_user_balance(user_id):
+    """获取用户余额"""
+    if DATABASE_URL.startswith('postgres'):
+        result = execute_query("SELECT balance FROM users WHERE id=%s", (user_id,), fetch=True)
+    else:
+        result = execute_query("SELECT balance FROM users WHERE id=?", (user_id,), fetch=True)
+    
+    if result:
+        return result[0][0]
+    return 0
+
+def get_user_credit_limit(user_id):
+    """获取用户透支额度"""
+    if DATABASE_URL.startswith('postgres'):
+        result = execute_query("SELECT credit_limit FROM users WHERE id=%s", (user_id,), fetch=True)
+    else:
+        result = execute_query("SELECT credit_limit FROM users WHERE id=?", (user_id,), fetch=True)
+    
+    if result:
+        return result[0][0]
+    return 0
+
+def set_user_credit_limit(user_id, credit_limit):
+    """设置用户透支额度（仅限管理员使用）"""
+    # 确保透支额度不为负
+    if credit_limit < 0:
+        credit_limit = 0
+    
+    if DATABASE_URL.startswith('postgres'):
+        execute_query("UPDATE users SET credit_limit=%s WHERE id=%s", (credit_limit, user_id))
+    else:
+        execute_query("UPDATE users SET credit_limit=? WHERE id=?", (credit_limit, user_id))
+    
+    return True, credit_limit
+
+def get_balance_records(user_id=None, limit=50, offset=0):
+    """
+    获取余额变动记录
+    
+    参数:
+    - user_id: 用户ID，如果不提供则获取所有用户的记录（仅限管理员）
+    - limit: 最大记录数
+    - offset: 偏移量
+    
+    返回:
+    - 记录列表
+    """
+    try:
+        if user_id:
+            if DATABASE_URL.startswith('postgres'):
+                records = execute_query("""
+                    SELECT br.id, br.user_id, u.username, br.amount, br.type, br.reason, br.reference_id, br.balance_after, br.created_at
+                    FROM balance_records br
+                    JOIN users u ON br.user_id = u.id
+                    WHERE br.user_id = %s
+                    ORDER BY br.id DESC
+                    LIMIT %s OFFSET %s
+                """, (user_id, limit, offset), fetch=True)
+            else:
+                records = execute_query("""
+                    SELECT br.id, br.user_id, u.username, br.amount, br.type, br.reason, br.reference_id, br.balance_after, br.created_at
+                    FROM balance_records br
+                    JOIN users u ON br.user_id = u.id
+                    WHERE br.user_id = ?
+                    ORDER BY br.id DESC
+                    LIMIT ? OFFSET ?
+                """, (user_id, limit, offset), fetch=True)
+        else:
+            # 管理员查看所有记录
+            if DATABASE_URL.startswith('postgres'):
+                records = execute_query("""
+                    SELECT br.id, br.user_id, u.username, br.amount, br.type, br.reason, br.reference_id, br.balance_after, br.created_at
+                    FROM balance_records br
+                    JOIN users u ON br.user_id = u.id
+                    ORDER BY br.id DESC
+                    LIMIT %s OFFSET %s
+                """, (limit, offset), fetch=True)
+            else:
+                records = execute_query("""
+                    SELECT br.id, br.user_id, u.username, br.amount, br.type, br.reason, br.reference_id, br.balance_after, br.created_at
+                    FROM balance_records br
+                    JOIN users u ON br.user_id = u.id
+                    ORDER BY br.id DESC
+                    LIMIT ? OFFSET ?
+                """, (limit, offset), fetch=True)
+        
+        # 格式化记录
+        formatted_records = []
+        for record in records:
+            formatted_records.append({
+                'id': record[0],
+                'user_id': record[1],
+                'username': record[2],
+                'amount': record[3],
+                'type': record[4],
+                'reason': record[5],
+                'reference_id': record[6],
+                'balance_after': record[7],
+                'created_at': record[8]
+            })
+        
+        return formatted_records
+    except Exception as e:
+        logger.error(f"获取余额变动记录失败: {str(e)}", exc_info=True)
+        return []
+
+def update_user_balance(user_id, amount):
+    """更新用户余额（增加或减少）"""
+    # 获取当前余额
+    current_balance = get_user_balance(user_id)
+    new_balance = current_balance + amount
+    
+    # 获取透支额度
+    credit_limit = get_user_credit_limit(user_id)
+    
+    # 确保余额+透支额度不会变成负数
+    if new_balance < -credit_limit:
+        return False, "余额和透支额度不足"
+    
+    # 使用事务处理
+    conn = None
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL连接
+            url = urlparse(DATABASE_URL)
+            conn = psycopg2.connect(
+                dbname=url.path[1:],
+                user=url.username,
+                password=url.password,
+                host=url.hostname,
+                port=url.port
+            )
+            
+            with conn:
+                cursor = conn.cursor()
+                
+                # 更新余额
+                cursor.execute("""
+                    UPDATE users 
+                    SET balance = %s 
+                    WHERE id = %s
+                    RETURNING balance
+                """, (new_balance, user_id))
+                
+                # 确认更新成功
+                result = cursor.fetchone()
+                if not result:
+                    logger.error(f"更新用户余额失败: 用户ID={user_id}不存在")
+                    return False, "用户不存在"
+                
+                updated_balance = result[0]
+                
+                # 记录余额变动
+                type_name = 'recharge' if amount > 0 else 'consume'
+                reason = '手动调整余额' if amount > 0 else '消费'
+                now = get_china_time()
+                
+                cursor.execute("""
+                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (user_id, amount, type_name, reason, None, updated_balance, now))
+            
+            return True, updated_balance
+        else:
+            # SQLite连接
+            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(current_dir, "orders.db")
+            conn = sqlite3.connect(db_path, timeout=10)
+            
+            with conn:
+                c = conn.cursor()
+                
+                # 更新余额
+                c.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
+                
+                # 记录余额变动
+                type_name = 'recharge' if amount > 0 else 'consume'
+                reason = '手动调整余额' if amount > 0 else '消费'
+                now = get_china_time()
+                
+                c.execute("""
+                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (user_id, amount, type_name, reason, None, new_balance, now))
+            
+            return True, new_balance
+    
+    except Exception as e:
+        logger.error(f"更新用户余额失败: {str(e)}", exc_info=True)
+        return False, f"更新用户余额失败: {str(e)}"
+    
+    finally:
+        if conn:
+            conn.close()
+
+def set_user_balance(user_id, balance):
+    """设置用户余额（仅限管理员使用）"""
+    # 获取当前余额
+    current_balance = get_user_balance(user_id)
+    
+    # 计算变动金额
+    change_amount = balance - current_balance
+    
+    # 确保余额不为负
+    if balance < 0:
+        balance = 0
+        change_amount = -current_balance
+    
+    # 如果没有变化，直接返回
+    if change_amount == 0:
+        return True, balance
+    
+    # 使用事务处理
+    conn = None
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL连接
+            url = urlparse(DATABASE_URL)
+            conn = psycopg2.connect(
+                dbname=url.path[1:],
+                user=url.username,
+                password=url.password,
+                host=url.hostname,
+                port=url.port
+            )
+            
+            with conn:
+                cursor = conn.cursor()
+                
+                # 更新余额
+                cursor.execute("""
+                    UPDATE users 
+                    SET balance = %s 
+                    WHERE id = %s
+                    RETURNING balance
+                """, (balance, user_id))
+                
+                # 确认更新成功
+                result = cursor.fetchone()
+                if not result:
+                    logger.error(f"设置用户余额失败: 用户ID={user_id}不存在")
+                    return False, "用户不存在"
+                
+                updated_balance = result[0]
+                
+                # 记录余额变动
+                if change_amount != 0:
+                    type_name = 'recharge' if change_amount > 0 else 'consume'
+                    now = get_china_time()
+                    
+                    cursor.execute("""
+                        INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """, (user_id, change_amount, type_name, '管理员调整余额', None, updated_balance, now))
+            
+            return True, updated_balance
+        else:
+            # SQLite连接
+            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(current_dir, "orders.db")
+            conn = sqlite3.connect(db_path, timeout=10)
+            
+            with conn:
+                c = conn.cursor()
+                
+                # 更新余额
+                c.execute("UPDATE users SET balance = ? WHERE id = ?", (balance, user_id))
+                
+                # 记录余额变动
+                if change_amount != 0:
+                    type_name = 'recharge' if change_amount > 0 else 'consume'
+                    now = get_china_time()
+                    
+                    c.execute("""
+                        INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (user_id, change_amount, type_name, '管理员调整余额', None, balance, now))
+            
+            return True, balance
+    
+    except Exception as e:
+        logger.error(f"设置用户余额失败: {str(e)}", exc_info=True)
+        return False, f"设置用户余额失败: {str(e)}"
+    
+    finally:
+        if conn:
+            conn.close()
+
+def check_balance_for_package(user_id, package):
+    """检查用户余额是否足够购买指定套餐"""
+    from modules.constants import WEB_PRICES
+    
+    # 获取套餐价格
+    price = WEB_PRICES.get(package, 0)
+    
+    # 获取用户余额
+    balance = get_user_balance(user_id)
+    
+    # 获取用户透支额度
+    credit_limit = get_user_credit_limit(user_id)
+    
+    # 判断余额+透支额度是否足够
+    if balance + credit_limit >= price:
+        return True, balance, price, credit_limit
+    else:
+        return False, balance, price, credit_limit
+
+def refund_order(order_id):
+    """退款订单金额到用户余额 (兼容SQLite/PostgreSQL)"""
+    # 先读取订单信息（使用 execute_query，自动选择数据库）
+    order = execute_query(
+        "SELECT id, user_id, package, status, refunded FROM orders WHERE id = ?" if not DATABASE_URL.startswith('postgres') else
+        "SELECT id, user_id, package, status, refunded FROM orders WHERE id = %s",
+        (order_id,), fetch=True)
+
+    if not order:
+        logger.warning(f"退款失败: 找不到订单ID={order_id}")
+        return False, "找不到订单"
+
+    order_id, user_id, package, status, refunded_flag = order[0]
+
+    # 只有已撤销或充值失败的订单才能退款
+    if status not in ['cancelled', 'failed']:
+        logger.warning(f"退款失败: 订单状态不是已撤销或充值失败 (ID={order_id}, 状态={status})")
+        return False, f"订单状态不允许退款: {status}"
+
+    if refunded_flag:
+        logger.warning(f"退款失败: 订单已退款 (ID={order_id})")
+        return False, "订单已退款"
+
+    from modules.constants import WEB_PRICES
+    price = WEB_PRICES.get(package, 0)
+    if price <= 0:
+        logger.warning(f"退款失败: 套餐价格无效 (ID={order_id}, 套餐={package}, 价格={price})")
+        return False, "套餐价格无效"
+
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            # ---------- PostgreSQL 版本 ----------
+            url = urlparse(DATABASE_URL)
+            conn = psycopg2.connect(
+                dbname=url.path[1:],
+                user=url.username,
+                password=url.password,
+                host=url.hostname,
+                port=url.port
+            )
+            cursor = conn.cursor()
+            try:
+                cursor.execute("BEGIN")
+                # 获取当前余额（FOR UPDATE 锁行）
+                cursor.execute("SELECT balance FROM users WHERE id = %s FOR UPDATE", (user_id,))
+                current_balance = cursor.fetchone()[0]
+                new_balance = current_balance + price
+                # 更新余额
+                cursor.execute("UPDATE users SET balance = %s WHERE id = %s", (new_balance, user_id))
+                # 标记订单已退款
+                cursor.execute("UPDATE orders SET refunded = 1 WHERE id = %s", (order_id,))
+                # 插入余额记录
+                now = get_china_time()
+                cursor.execute(
+                    """
+                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (user_id, price, 'refund', f'订单退款: #{order_id}', order_id, new_balance, now)
+                )
+                conn.commit()
+                logger.info(f"订单退款成功(PostgreSQL): ID={order_id}, 用户ID={user_id}, 金额={price}, 新余额={new_balance}")
+                return True, new_balance
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"退款到用户余额失败(PostgreSQL): {str(e)}", exc_info=True)
+                return False, str(e)
+            finally:
+                conn.close()
+        else:
+            # ---------- SQLite 版本 ---------- (原逻辑保持)
+            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(current_dir, "orders.db")
+            conn = sqlite3.connect(db_path, timeout=10)
+            try:
+                with conn:
+                    c = conn.cursor()
+                    c.execute("SELECT balance FROM users WHERE id = ?", (user_id,))
+                    current_balance = c.fetchone()[0]
+                    new_balance = current_balance + price
+                    c.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
+                    c.execute("UPDATE orders SET refunded = 1 WHERE id = ?", (order_id,))
+                    now = get_china_time()
+                    c.execute(
+                        """
+                        INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (user_id, price, 'refund', f'订单退款: #{order_id}', order_id, new_balance, now)
+                    )
+                logger.info(f"订单退款成功(SQLite): ID={order_id}, 用户ID={user_id}, 金额={price}, 新余额={new_balance}")
+                return True, new_balance
+            except Exception as e:
+                logger.error(f"退款到用户余额失败(SQLite): {str(e)}", exc_info=True)
+                return False, str(e)
+            finally:
+                conn.close()
+    except Exception as e:
+        logger.error(f"退款到用户余额失败: {str(e)}", exc_info=True)
+        return False, str(e)
+
+def create_order_with_deduction_atomic(account, password, package, remark, username, user_id):
+    """
+    使用事务原子性地创建订单并扣除用户余额，兼容 SQLite 与 PostgreSQL
+    
+    返回:
+    - (success, message, new_balance, credit_limit)
+    """
+    from modules.constants import WEB_PRICES, get_user_package_price
+
+    try:
+        if DATABASE_URL.startswith('postgres'):
+            # ---------- PostgreSQL 版本 ----------
+            url = urlparse(DATABASE_URL)
+            conn = psycopg2.connect(
+                dbname=url.path[1:],
+                user=url.username,
+                password=url.password,
+                host=url.hostname,
+                port=url.port
+            )
+            cursor = conn.cursor()
+
+            try:
+                cursor.execute("BEGIN")
+
+                # 查询余额和额度
+                cursor.execute("SELECT balance, credit_limit FROM users WHERE id = %s FOR UPDATE", (user_id,))
+                row = cursor.fetchone()
+                if not row:
+                    conn.rollback()
+                    return False, "用户不存在", None, None
+
+                current_balance, credit_limit = row
+                available_funds = current_balance + credit_limit
+
+                price = get_user_package_price(user_id, package)
+                if price > available_funds:
+                    conn.rollback()
+                    return False, f"余额不足，需要 {price} 元，可用 {available_funds} 元", current_balance, credit_limit
+
+                # 扣款并更新余额
+                new_balance = current_balance - price
+                cursor.execute("UPDATE users SET balance = %s WHERE id = %s", (new_balance, user_id))
+
+                # 记录余额变动
+                now = get_china_time()
+                cursor.execute(
+                    """
+                    INSERT INTO balance_records (user_id, amount, type, reason, balance_after, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (user_id, -price, 'consume', f'购买{package}个月套餐', new_balance, now)
+                )
+
+                # 创建订单记录
+                cursor.execute(
+                    """
+                    INSERT INTO orders (account, password, package, status, created_at, remark, user_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (account, password, package, 'submitted', now, remark, user_id)
+                )
+
+                conn.commit()
+                return True, "订单创建成功", new_balance, credit_limit
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"创建订单失败(PostgreSQL): {str(e)}", exc_info=True)
+                return False, f"创建订单失败: {str(e)}", None, None
+            finally:
+                conn.close()
+        else:
+            # ---------- SQLite 版本 ----------
+            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(current_dir, "orders.db")
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            try:
+                cursor.execute("BEGIN TRANSACTION")
+                cursor.execute("SELECT balance, credit_limit FROM users WHERE id = ?", (user_id,))
+                user_data = cursor.fetchone()
+                if not user_data:
+                    conn.rollback()
+                    return False, "用户不存在", None, None
+
+                current_balance = user_data['balance']
+                credit_limit = user_data['credit_limit']
+                available_funds = current_balance + credit_limit
+
+                price = get_user_package_price(user_id, package)
+                if price > available_funds:
+                    conn.rollback()
+                    return False, f"余额不足，需要 {price} 元，可用 {available_funds} 元", current_balance, credit_limit
+
+                new_balance = current_balance - price
+                cursor.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
+                now = get_china_time()
+                cursor.execute(
+                    """
+                    INSERT INTO balance_records (user_id, amount, type, reason, balance_after, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (user_id, -price, 'consume', f'购买{package}个月套餐', new_balance, now)
+                )
+
+                cursor.execute(
+                    """
+                    INSERT INTO orders (account, password, package, status, created_at, remark, user_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (account, password, package, 'submitted', now, remark, user_id)
+                )
+
+                conn.commit()
+                return True, "订单创建成功", new_balance, credit_limit
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"创建订单失败(SQLite): {str(e)}", exc_info=True)
+                return False, f"创建订单失败: {str(e)}", None, None
+            finally:
+                conn.close()
+    except Exception as e:
+        logger.error(f"创建订单时数据库连接失败: {str(e)}", exc_info=True)
+        return False, f"数据库连接失败: {str(e)}", None, None
+
 # ===== 充值相关函数 =====
 def create_recharge_tables():
-    """创建充值相关表"""
+    """创建充值记录表和余额明细表"""
     try:
         if DATABASE_URL.startswith('postgres'):
             # 检查表是否存在
@@ -1141,608 +1614,263 @@ def reject_recharge_request(request_id, admin_id):
         logger.error(f"拒绝充值请求失败: {str(e)}", exc_info=True)
         return False, f"拒绝充值请求失败: {str(e)}"
 
-def update_seller_nickname(telegram_id, nickname):
-    """更新卖家昵称"""
-    execute_query(
-        "UPDATE sellers SET nickname = ? WHERE telegram_id = ?",
-        (nickname, telegram_id)
-    )
-    logger.info(f"已更新卖家 {telegram_id} 的昵称为 {nickname}")
-
-def update_seller_last_active(telegram_id):
-    """更新卖家最后活跃时间"""
-    timestamp = get_china_time()
-    execute_query(
-        "UPDATE sellers SET last_active_at = ? WHERE telegram_id = ?",
-        (timestamp, telegram_id)
-    )
-
-def update_seller_info(telegram_id, username=None, first_name=None):
-    """更新卖家的Telegram信息（用户名和昵称）"""
+# ===== 激活码系统 =====
+def create_activation_code_table():
+    """创建激活码表"""
     try:
-        fields_to_update = []
-        params = []
-        
-        # 根据数据库类型选择占位符
-        placeholder = "%s" if DATABASE_URL.startswith('postgres') else "?"
-        
-        if username is not None:
-            fields_to_update.append(f"username = {placeholder}")
-            params.append(username)
-            
-        if first_name is not None:
-            fields_to_update.append(f"first_name = {placeholder}")
-            params.append(first_name)
-            
-        if not fields_to_update:
-            return  # 没有需要更新的字段
-            
-        # 添加telegram_id到参数末尾
-        params.append(telegram_id)
-        
-        # 构建SQL语句
-        sql = f"UPDATE sellers SET {', '.join(fields_to_update)} WHERE telegram_id = {placeholder}"
-        
-        execute_query(sql, params)
-        logger.info(f"已更新卖家 {telegram_id} 的信息: username={username}, first_name={first_name}")
-    except Exception as e:
-        logger.error(f"更新卖家 {telegram_id} 信息失败: {str(e)}", exc_info=True)
-
-def get_seller_completed_orders(telegram_id):
-    """获取卖家已完成的订单数（以买家已确认为准）"""
-    if DATABASE_URL.startswith('postgres'):
-        result = execute_query(
-            "SELECT COUNT(*) FROM orders WHERE accepted_by = ? AND buyer_confirmed = TRUE",
-            (telegram_id,),
-            fetch=True
-        )
-    else:
-        result = execute_query(
-            "SELECT COUNT(*) FROM orders WHERE accepted_by = ? AND buyer_confirmed = 1",
-            (telegram_id,),
-            fetch=True
-        )
-    
-    if result and len(result) > 0:
-        return result[0][0]
-    return 0
-
-def get_user_today_confirmed_count(user_id):
-    """获取指定用户今天已确认的订单数"""
-    from datetime import datetime
-    import pytz
-    today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
-    
-    try:
-        # 根据数据库类型选择不同查询语句
         if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL使用to_char函数转换日期格式
-            query = """
-                SELECT COUNT(*) FROM orders 
-                WHERE user_id = %s 
-                AND status = 'completed' 
-                AND to_char(updated_at::timestamp, 'YYYY-MM-DD') = %s
-            """
-            params = (user_id, today)
-        else:
-            # SQLite继续使用LIKE
-            query = "SELECT COUNT(*) FROM orders WHERE user_id = ? AND status = 'completed' AND updated_at LIKE ?"
-            params = (user_id, f"{today}%")
-            
-        result = execute_query(query, params, fetch=True)
-        count = result[0][0] if result and result[0] else 0
-        logger.info(f"用户 {user_id} 今日充值成功订单数: {count}")
-        return count
-    except Exception as e:
-        logger.error(f"获取用户今日确认订单数失败: {str(e)}", exc_info=True)
-        return 0
-
-def get_today_valid_orders_count(user_id=None):
-    """获取今日有效订单数
-    
-    有效订单数计算规则：
-    - 充值成功的订单 (status = 'completed')
-    - + 充值失败但已确认收到的订单 (status = 'failed' AND confirm_status = 'confirmed')  
-    - + 已接单且买家已确认收到的订单 (status = 'accepted' AND confirm_status = 'confirmed')
-    - - 充值成功但被标记长时间未收到的订单 (status = 'completed' AND confirm_status = 'not_received')
-    
-    Args:
-        user_id: 如果指定，只计算该用户的订单；否则计算所有订单
-    """
-    from datetime import datetime
-    import pytz
-    
-    today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
-    logger.info(f"查询今日({today})有效订单...")
-    
-    try:
-        # 根据数据库类型构建查询
-        if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL版本
-            base_query = """
-                SELECT COUNT(*) FROM orders 
-                WHERE (
-                    -- 充值成功且非长时间未收到
-                    (status = 'completed' AND (confirm_status IS NULL OR confirm_status != 'not_received'))
-                    OR
-                    -- 充值失败但已确认收到
-                    (status = 'failed' AND confirm_status = 'confirmed')
-                    OR
-                    -- 已接单且买家已确认收到
-                    (status = 'accepted' AND confirm_status = 'confirmed')
+            # PostgreSQL
+            table_exists = execute_query("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'activation_codes'
                 )
-                AND to_char(created_at::timestamp, 'YYYY-MM-DD') = %s
-            """
-            if user_id:
-                query = base_query + " AND user_id = %s"
-                params = (today, user_id)
-            else:
-                query = base_query
-                params = (today,)
-        else:
-            # SQLite版本
-            base_query = """
-                SELECT COUNT(*) FROM orders 
-                WHERE (
-                    -- 充值成功且非长时间未收到
-                    (status = 'completed' AND (confirm_status IS NULL OR confirm_status != 'not_received'))
-                    OR
-                    -- 充值失败但已确认收到
-                    (status = 'failed' AND confirm_status = 'confirmed')
-                    OR
-                    -- 已接单且买家已确认收到
-                    (status = 'accepted' AND confirm_status = 'confirmed')
-                )
-                AND substr(created_at, 1, 10) = ?
-            """
-            if user_id:
-                query = base_query + " AND user_id = ?"
-                params = (today, user_id)
-            else:
-                query = base_query
-                params = (today,)
-                
-        result = execute_query(query, params, fetch=True)
-        count = result[0][0] if result and result[0] else 0
-        
-        logger.info(f"今日有效订单数: {count} (用户ID: {user_id if user_id else '全站'})")
-        return count
-    except Exception as e:
-        logger.error(f"获取今日有效订单数失败: {str(e)}", exc_info=True)
-        return 0
-
-def get_today_valid_orders_count_by_tg_logic():
-    """获取今日有效订单数 - 完全复制TG端管理员统计逻辑
-    
-    统计所有卖家的今日有效订单数总和，使用和TG端/stats命令完全相同的逻辑
-    """
-    from datetime import datetime
-    import pytz
-    
-    today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
-    logger.info(f"使用TG端逻辑查询今日({today})有效订单...")
-    
-    try:
-        # 获取所有卖家
-        sellers = get_all_sellers()
-        if not sellers:
-            logger.info("没有找到任何卖家")
-            return 0
-        
-        total_orders = 0
-        
-        for seller in sellers:
-            telegram_id = seller[0]
+            """, fetch=True)
             
-            # 获取该卖家今日有效订单数 - 完全复制TG端的查询逻辑
-            if DATABASE_URL.startswith('postgres'):
-                seller_orders_result = execute_query("""
-                    SELECT COUNT(*) FROM orders 
-                    WHERE accepted_by = %s
-                    AND (
-                        -- 充值成功且非长时间未收到
-                        (status = 'completed' AND (confirm_status IS NULL OR confirm_status != 'not_received'))
-                        OR
-                        -- 充值失败但已确认收到
-                        (status = 'failed' AND confirm_status = 'confirmed')
-                        OR
-                        -- 已接单且买家已确认收到
-                        (status = 'accepted' AND confirm_status = 'confirmed')
+            if not table_exists or not table_exists[0][0]:
+                execute_query("""
+                    CREATE TABLE activation_codes (
+                        id SERIAL PRIMARY KEY,
+                        code TEXT UNIQUE NOT NULL,
+                        package TEXT NOT NULL,
+                        is_used INTEGER DEFAULT 0,
+                        created_at TEXT NOT NULL,
+                        used_at TEXT,
+                        used_by INTEGER,
+                        created_by INTEGER,
+                        FOREIGN KEY (used_by) REFERENCES users (id),
+                        FOREIGN KEY (created_by) REFERENCES users (id)
                     )
-                    AND to_char(created_at::timestamp, 'YYYY-MM-DD') = %s
-                """, (str(telegram_id), today), fetch=True)
-            else:
-                seller_orders_result = execute_query("""
-                    SELECT COUNT(*) FROM orders 
-                    WHERE accepted_by = ?
-                    AND (
-                        -- 充值成功且非长时间未收到
-                        (status = 'completed' AND (confirm_status IS NULL OR confirm_status != 'not_received'))
-                        OR
-                        -- 充值失败但已确认收到
-                        (status = 'failed' AND confirm_status = 'confirmed')
-                        OR
-                        -- 已接单且买家已确认收到
-                        (status = 'accepted' AND confirm_status = 'confirmed')
+                """)
+                logger.info("已创建激活码表(PostgreSQL)")
+        else:
+            # SQLite
+            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(current_dir, "orders.db")
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # 检查激活码表是否存在
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='activation_codes'")
+            if not cursor.fetchone():
+                cursor.execute("""
+                    CREATE TABLE activation_codes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        code TEXT UNIQUE NOT NULL,
+                        package TEXT NOT NULL,
+                        is_used INTEGER DEFAULT 0,
+                        created_at TEXT NOT NULL,
+                        used_at TEXT,
+                        used_by INTEGER,
+                        created_by INTEGER,
+                        FOREIGN KEY (used_by) REFERENCES users (id),
+                        FOREIGN KEY (created_by) REFERENCES users (id)
                     )
-                    AND substr(created_at, 1, 10) = ?
-                """, (str(telegram_id), today), fetch=True)
+                """)
+                conn.commit()
+                logger.info("已创建激活码表(SQLite)")
             
-            valid_orders = seller_orders_result[0][0] if seller_orders_result else 0
-            total_orders += valid_orders
-            
-            if valid_orders > 0:
-                logger.info(f"卖家 {telegram_id} 今日有效订单数: {valid_orders}")
+            conn.close()
         
-        logger.info(f"使用TG端逻辑，今日有效订单总数: {total_orders}")
-        return total_orders
-    except Exception as e:
-        logger.error(f"使用TG端逻辑获取今日有效订单数失败: {str(e)}", exc_info=True)
-        return 0
-
-def get_all_today_confirmed_count():
-    """获取所有用户今天已确认的订单总数"""
-    from datetime import datetime
-    import pytz
-    
-    today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
-    logger.info(f"查询今日({today})充值成功订单...")
-    
-    try:
-        # 首先，查询所有状态为completed的订单，不考虑日期
-        all_completed_query = "SELECT id, status, updated_at FROM orders WHERE status = 'completed'"
-        all_completed = execute_query(all_completed_query, (), fetch=True)
-        logger.info(f"所有充值成功订单数: {len(all_completed) if all_completed else 0}")
-        if all_completed:
-            for order in all_completed:
-                logger.info(f"订单ID: {order[0]}, 状态: {order[1]}, 更新时间: {order[2]}")
-        
-        # 根据数据库类型选择不同查询语句
-        if DATABASE_URL.startswith('postgres'):
-            # 尝试多种方法
-            methods = [
-                {
-                    "name": "to_char方法",
-                    "query": """
-                        SELECT COUNT(*) FROM orders 
-                        WHERE status = 'completed' 
-                        AND to_char(updated_at::timestamp, 'YYYY-MM-DD') = %s
-                    """,
-                    "params": (today,)
-                },
-                {
-                    "name": "substring方法",
-                    "query": """
-                        SELECT COUNT(*) FROM orders 
-                        WHERE status = 'completed' 
-                        AND substring(updated_at, 1, 10) = %s
-                    """,
-                    "params": (today,)
-                },
-                {
-                    "name": "LIKE方法",
-                    "query": """
-                        SELECT COUNT(*) FROM orders 
-                        WHERE status = 'completed' 
-                        AND updated_at LIKE %s
-                    """,
-                    "params": (f"{today}%",)
-                }
-            ]
-            
-            # 尝试所有方法
-            for method in methods:
-                try:
-                    result = execute_query(method["query"], method["params"], fetch=True)
-                    count = result[0][0] if result and result[0] else 0
-                    logger.info(f"使用{method['name']}查询结果: {count}")
-                    
-                    # 如果找到了结果，就返回
-                    if count > 0:
-                        logger.info(f"今日全站充值成功订单数: {count}, 查询方法: {method['name']}")
-                        return count
-                except Exception as e:
-                    logger.error(f"使用{method['name']}查询失败: {str(e)}")
-            
-            # 如果所有方法都没有找到结果，返回0
-            logger.warning("所有查询方法都返回0，可能是日期格式问题")
-            return 0
-        else:
-            # SQLite使用LIKE方法
-            query = "SELECT COUNT(*) FROM orders WHERE status = 'completed' AND updated_at LIKE ?"
-            params = (f"{today}%",)
-            
-            result = execute_query(query, params, fetch=True)
-            count = result[0][0] if result and result[0] else 0
-            
-            # 如果没有找到结果，尝试其他方法
-            if count == 0:
-                try:
-                    # 尝试使用substr
-                    substr_query = "SELECT COUNT(*) FROM orders WHERE status = 'completed' AND substr(updated_at, 1, 10) = ?"
-                    substr_result = execute_query(substr_query, (today,), fetch=True)
-                    substr_count = substr_result[0][0] if substr_result and substr_result[0] else 0
-                    
-                    if substr_count > 0:
-                        logger.info(f"今日全站充值成功订单数(使用substr): {substr_count}")
-                        return substr_count
-                except Exception as e:
-                    logger.error(f"使用substr查询失败: {str(e)}")
-            
-            logger.info(f"今日全站充值成功订单数: {count}, 查询参数: {today}")
-            return count
-    except Exception as e:
-        logger.error(f"获取全站今日确认订单数失败: {str(e)}", exc_info=True)
-        return 0
-
-def get_seller_today_confirmed_orders_by_user(telegram_id):
-    """获取卖家今天已确认的订单数，并按用户分组"""
-    from datetime import datetime
-    import pytz
-    today = datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d")
-    
-    try:
-        if DATABASE_URL.startswith('postgres'):
-            results = execute_query(
-                """
-                SELECT web_user_id, COUNT(*) 
-                FROM orders 
-                WHERE accepted_by = %s 
-                AND status = 'completed' 
-                AND to_char(updated_at::timestamp, 'YYYY-MM-DD') = %s
-                GROUP BY web_user_id
-                """,
-                (str(telegram_id), today),
-                fetch=True
-            )
-        else:
-            results = execute_query(
-                """
-                SELECT web_user_id, COUNT(*) 
-                FROM orders 
-                WHERE accepted_by = ? 
-                AND status = 'completed' 
-                AND updated_at LIKE ?
-                GROUP BY web_user_id
-                """,
-                (str(telegram_id), f"{today}%"),
-                fetch=True
-            )
-        
-        logger.info(f"卖家 {telegram_id} 今日充值成功订单数: {len(results) if results else 0}")
-        return results if results else []
-    except Exception as e:
-        logger.error(f"获取卖家 {telegram_id} 今日确认订单数失败: {str(e)}", exc_info=True)
-        # 返回空列表而不是抛出异常，避免影响stats功能
-        return []
-
-def get_seller_pending_orders(telegram_id):
-    """获取卖家当前未完成的订单数（已接单但未确认）"""
-    if DATABASE_URL.startswith('postgres'):
-        result = execute_query(
-            """
-            SELECT COUNT(*) FROM orders 
-            WHERE accepted_by = ? 
-            AND status != '已取消' 
-            AND (buyer_confirmed IS NULL OR buyer_confirmed = FALSE)
-            """,
-            (telegram_id,),
-            fetch=True
-        )
-    else:
-        result = execute_query(
-            """
-            SELECT COUNT(*) FROM orders 
-            WHERE accepted_by = ? 
-            AND status != '已取消' 
-            AND (buyer_confirmed IS NULL OR buyer_confirmed = 0)
-            """,
-            (telegram_id,),
-            fetch=True
-        )
-    
-    if result and len(result) > 0:
-        return result[0][0]
-    return 0
-
-def check_seller_completed_orders(telegram_id):
-    """检查卖家完成的订单数量"""
-    orders = get_seller_completed_orders(telegram_id)
-    return len(orders) if orders else 0
-
-def get_seller_current_orders_count(telegram_id):
-    """
-    获取卖家最近1小时内未完成的订单数量
-    
-    参数:
-    - telegram_id: 卖家的Telegram ID
-    
-    返回:
-    - 最近1小时内未完成订单数量
-    """
-    try:
-        # 获取1小时前的时间戳
-        one_hour_ago = datetime.now() - timedelta(hours=1)
-        one_hour_ago_str = one_hour_ago.strftime("%Y-%m-%d %H:%M:%S")
-        
-        # 查询最近1小时内非完成/失败/取消的订单
-        if DATABASE_URL.startswith('postgres'):
-            result = execute_query("""
-                SELECT COUNT(*) FROM orders 
-                WHERE accepted_by = %s 
-                AND status NOT IN (%s, %s, %s)
-                AND accepted_at >= %s
-            """, (str(telegram_id), STATUS['COMPLETED'], STATUS['FAILED'], STATUS['CANCELLED'], one_hour_ago_str), fetch=True)
-        else:
-            result = execute_query("""
-                SELECT COUNT(*) FROM orders 
-                WHERE accepted_by = ? 
-                AND status NOT IN (?, ?, ?)
-                AND accepted_at >= ?
-            """, (str(telegram_id), STATUS['COMPLETED'], STATUS['FAILED'], STATUS['CANCELLED'], one_hour_ago_str), fetch=True)
-            
-        count = result[0][0] if result else 0
-        logger.info(f"卖家 {telegram_id} 最近1小时内有效订单数: {count}")
-        return count
-    except Exception as e:
-        logger.error(f"获取卖家当前订单数量失败: {e}", exc_info=True)
-        return 0
-
-def check_all_sellers_full():
-    """
-    检查是否所有活跃且参与分流的卖家都已达到最大接单量
-    
-    返回:
-    - True: 所有卖家都已满
-    - False: 至少有一个卖家未满
-    """
-    try:
-        # 获取所有活跃且参与分流的卖家
-        active_sellers = get_participating_sellers()
-        
-        if not active_sellers:
-            logger.warning("没有活跃且参与分流的卖家，订单提交受限")
-            return True  # 没有活跃且参与分流的卖家时返回True（不允许接单）
-        
-        for seller in active_sellers:
-            seller_id = seller["id"]
-            
-            # 获取卖家最大接单量
-            if DATABASE_URL.startswith('postgres'):
-                max_orders_result = execute_query("""
-                    SELECT max_concurrent_orders FROM sellers 
-                    WHERE telegram_id = %s
-                """, (seller_id,), fetch=True)
-            else:
-                max_orders_result = execute_query("""
-                    SELECT max_concurrent_orders FROM sellers 
-                    WHERE telegram_id = ?
-                """, (seller_id,), fetch=True)
-                
-            max_orders = max_orders_result[0][0] if max_orders_result else 5  # 默认值为5
-            
-            # 获取当前接单量
-            current_orders = get_seller_current_orders_count(seller_id)
-            
-            logger.info(f"卖家 {seller_id} 当前订单: {current_orders}, 最大接单: {max_orders}")
-            
-            # 如果有卖家未达到最大接单量，返回False
-            if current_orders < max_orders:
-                return False
-        
-        # 所有卖家都已达到最大接单量
-        logger.warning("所有卖家都已达到最大接单量，订单提交受限")
         return True
     except Exception as e:
-        logger.error(f"检查卖家接单状态时出错: {e}", exc_info=True)
-        return False  # 发生错误时默认允许提交订单
+        logger.error(f"创建激活码表失败: {str(e)}", exc_info=True)
+        return False
 
-def select_active_seller():
-    """
-    从所有活跃且参与分流的卖家中选择一个卖家接单
+def generate_activation_code(length=16):
+    """生成唯一的激活码"""
+    import random
+    import string
     
-    选择逻辑：
-    1. 获取所有活跃且参与分流的卖家
-    2. 筛选出当前接单数小于最大接单量的卖家
-    3. 基于分流等级进行加权随机选择，等级越高被选中的概率越大
+    while True:
+        # 生成随机激活码
+        code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
+        
+        # 检查是否已存在
+        existing = execute_query(
+            "SELECT id FROM activation_codes WHERE code = %s" if DATABASE_URL.startswith('postgres') else "SELECT id FROM activation_codes WHERE code = ?", 
+            (code,), fetch=True)
+        if not existing:
+            return code
+
+def create_activation_code(package, created_by=None, count=1):
+    """创建激活码"""
+    codes = []
+    now = get_china_time()
     
-    返回:
-    - 卖家ID，如果没有可用卖家则返回None
-    """
+    for _ in range(count):
+        code = generate_activation_code()
+        
+        if DATABASE_URL.startswith('postgres'):
+            result = execute_query("""
+                INSERT INTO activation_codes (code, package, created_at, created_by, is_used)
+                VALUES (%s, %s, %s, %s, 0)
+                RETURNING id
+            """, (code, package, now, created_by), fetch=True)
+            code_id = result[0][0]
+        else:
+            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO activation_codes (code, package, created_at, created_by, is_used)
+                VALUES (?, ?, ?, ?, 0)
+            """, (code, package, now, created_by))
+            code_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+        
+        codes.append({"id": code_id, "code": code})
+    
+    return codes
+
+def get_activation_code(code):
+    """获取激活码信息"""
     try:
-        active_sellers = get_participating_sellers()
+        if DATABASE_URL.startswith('postgres'):
+            result = execute_query("""
+                SELECT id, code, package, is_used, created_at, used_at, used_by
+                FROM activation_codes
+                WHERE code = %s
+            """, (code,), fetch=True)
+        else:
+            result = execute_query("""
+                SELECT id, code, package, is_used, created_at, used_at, used_by
+                FROM activation_codes
+                WHERE code = ?
+            """, (code,), fetch=True)
         
-        if not active_sellers:
-            logger.warning("没有活跃且参与分流的卖家可用于选择")
-            return None
-            
-        available_sellers = []
-        total_weight = 0
-        
-        # 检查每个活跃卖家的当前接单数
-        for seller in active_sellers:
-            seller_id = seller["id"]
-            
-            # 获取卖家最大接单量和分流等级
-            if DATABASE_URL.startswith('postgres'):
-                seller_info = execute_query("""
-                    SELECT max_concurrent_orders, distribution_level FROM sellers 
-                    WHERE telegram_id = %s
-                """, (seller_id,), fetch=True)
-            else:
-                seller_info = execute_query("""
-                    SELECT max_concurrent_orders, distribution_level FROM sellers 
-                    WHERE telegram_id = ?
-                """, (seller_id,), fetch=True)
-                
-            max_orders = seller_info[0][0] if seller_info else 5
-            distribution_level = seller_info[0][1] if seller_info and len(seller_info[0]) > 1 else 1
-            
-            # 获取当前接单量
-            current_orders = get_seller_current_orders_count(seller_id)
-            
-            # 如果卖家当前接单数小于最大接单量，则添加到可用卖家列表
-            if current_orders < max_orders:
-                # 权重就是分流等级，确保分流等级至少为1
-                weight = max(1, distribution_level)
-                total_weight += weight
-                
-                available_sellers.append({
-                    "id": seller_id,
-                    "current_orders": current_orders,
-                    "max_orders": max_orders,
-                    "distribution_level": distribution_level,
-                    "weight": weight
-                })
-        
-        if not available_sellers:
-            logger.warning("没有可用的卖家（所有卖家都已达到最大接单量）")
-            return None
-        
-        # 如果只有一个可用卖家，直接返回
-        if len(available_sellers) == 1:
-            selected_seller = available_sellers[0]
-            logger.info(f"只有一个可用卖家: {selected_seller['id']}, 当前接单: {selected_seller['current_orders']}/{selected_seller['max_orders']}, 分流等级: {selected_seller['distribution_level']}")
-            return selected_seller["id"]
-        
-        # 使用加权随机选择，等级越高被选中的概率越大
-        # 计算每个卖家的选择概率范围
-        cumulative_weight = 0
-        for seller in available_sellers:
-            seller["cumulative_weight_start"] = cumulative_weight
-            cumulative_weight += seller["weight"]
-            seller["cumulative_weight_end"] = cumulative_weight
-        
-        # 随机选择一个值
-        random_value = random.uniform(0, total_weight)
-        
-        # 找到对应的卖家
-        selected_seller = None
-        for seller in available_sellers:
-            if seller["cumulative_weight_start"] <= random_value < seller["cumulative_weight_end"]:
-                selected_seller = seller
-                break
-        
-        # 如果没有选中（理论上不应该发生），选择第一个可用卖家
-        if not selected_seller:
-            selected_seller = available_sellers[0]
-        
-        logger.info(f"选择卖家: {selected_seller['id']}, 当前接单: {selected_seller['current_orders']}/{selected_seller['max_orders']}, 分流等级: {selected_seller['distribution_level']}")
-        return selected_seller["id"]
-    
+        if result and len(result) > 0:
+            return {
+                "id": result[0][0],
+                "code": result[0][1],
+                "package": result[0][2],
+                "is_used": result[0][3],
+                "created_at": result[0][4],
+                "used_at": result[0][5],
+                "used_by": result[0][6]
+            }
+        return None
     except Exception as e:
-        logger.error(f"选择活跃卖家失败: {str(e)}", exc_info=True)
+        logger.error(f"获取激活码信息失败: {str(e)}", exc_info=True)
         return None
 
-def check_seller_activity(telegram_id):
-    """向卖家发送活跃度检查请求"""
-    # 记录检查请求时间
-    timestamp = get_china_time()
-    execute_query(
-        "UPDATE sellers SET activity_check_at = ? WHERE telegram_id = ?",
-        (timestamp, telegram_id)
-    )
-    return True
+def mark_activation_code_used(code_id, user_id):
+    """标记激活码为已使用"""
+    now = get_china_time()
+    try:
+        # 如果user_id为0或无效值，设置为NULL以避免外键约束错误
+        if user_id <= 0:
+            user_id = None
+            
+        if DATABASE_URL.startswith('postgres'):
+            # PostgreSQL使用事务
+            conn = psycopg2.connect(DATABASE_URL)
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE activation_codes
+                SET is_used = 1, used_at = %s, used_by = %s
+                WHERE id = %s AND is_used = 0
+            """, (now, user_id, code_id))
+            
+            # 检查是否真的更新了记录
+            cursor.execute("""
+                SELECT count(*) FROM activation_codes 
+                WHERE id = %s AND is_used = 1
+            """, (code_id,))
+            result = cursor.fetchone()
+            rows_updated = cursor.rowcount
+            
+            conn.commit()
+            conn.close()
+            
+            return rows_updated > 0
+        else:
+            # SQLite使用事务
+            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
+            cursor = conn.cursor()
+            
+            # 开始事务
+            conn.execute("BEGIN TRANSACTION")
+            
+            # 只更新未使用的激活码
+            cursor.execute("""
+                UPDATE activation_codes
+                SET is_used = 1, used_at = ?, used_by = ?
+                WHERE id = ? AND is_used = 0
+            """, (now, user_id, code_id))
+            
+            # 检查是否真的更新了记录
+            rows_updated = cursor.rowcount
+            
+            if rows_updated > 0:
+                # 提交事务
+                conn.commit()
+                conn.close()
+                return True
+            else:
+                # 回滚事务
+                conn.rollback()
+                conn.close()
+                return False
+    except Exception as e:
+        logger.error(f"标记激活码已使用失败: {str(e)}", exc_info=True)
+        return False
+
+def get_admin_activation_codes(limit=100, offset=0, conditions=None, params=None):
+    """获取所有激活码（管理员用）"""
+    try:
+        # 构建WHERE子句
+        where_clause = ""
+        query_params = []
+        
+        if conditions and params:
+            where_clause = " WHERE " + " AND ".join(conditions)
+            query_params.extend(params)
+        
+        # 添加分页参数
+        query_params.extend([limit, offset])
+        
+        if DATABASE_URL.startswith('postgres'):
+            placeholders = ["%s"] * len(query_params)
+            result = execute_query(f"""
+                SELECT a.id, a.code, a.package, a.is_used, a.created_at, a.used_at, 
+                       c.username as creator, u.username as user
+                FROM activation_codes a
+                LEFT JOIN users c ON a.created_by = c.id
+                LEFT JOIN users u ON a.used_by = u.id
+                {where_clause}
+                ORDER BY a.created_at DESC
+                LIMIT %s OFFSET %s
+            """, query_params, fetch=True)
+        else:
+            result = execute_query(f"""
+                SELECT a.id, a.code, a.package, a.is_used, a.created_at, a.used_at, 
+                       c.username as creator, u.username as user
+                FROM activation_codes a
+                LEFT JOIN users c ON a.created_by = c.id
+                LEFT JOIN users u ON a.used_by = u.id
+                {where_clause}
+                ORDER BY a.created_at DESC
+                LIMIT ? OFFSET ?
+            """, query_params, fetch=True)
+        
+        codes = []
+        for r in result:
+            codes.append({
+                "id": r[0],
+                "code": r[1],
+                "package": r[2],
+                "is_used": r[3],
+                "created_at": r[4],
+                "used_at": r[5],
+                "creator": r[6],
+                "user": r[7]
+            })
+        return codes
+    except Exception as e:
+        logger.error(f"获取激活码列表失败: {str(e)}", exc_info=True)
+        return []
 
 # 用户定制价格函数
 def get_user_custom_prices(user_id):
@@ -1867,312 +1995,4 @@ def delete_user_custom_price(user_id, package):
         return True
     except Exception as e:
         logger.error(f"删除用户定制价格失败: {str(e)}", exc_info=True)
-        return False
-
-def get_admin_sellers():
-    """获取所有管理员卖家的Telegram ID"""
-    if DATABASE_URL.startswith('postgres'):
-        admins = execute_query(
-            "SELECT telegram_id FROM sellers WHERE is_admin = TRUE",
-            fetch=True
-        )
-    else:
-        admins = execute_query(
-            "SELECT telegram_id FROM sellers WHERE is_admin = 1",
-            fetch=True
-        )
-    return [admin[0] for admin in admins] if admins else []
-
-def check_db_connection():
-    """检查并确认数据库连接正常"""
-    try:
-        # 使用execute_query函数测试数据库连接
-        execute_query("SELECT 1", fetch=True)
-        logger.info("数据库连接成功。")
-        return True
-    except Exception as e:
-        logger.error(f"数据库连接失败: {e}", exc_info=True)
-        # 根据需要，这里可以决定是否退出程序
-        # exit(1)
-        return False
-
-# ===== 余额系统相关函数 =====
-def get_user_balance(user_id):
-    """获取用户余额"""
-    return 0
-
-def get_user_credit_limit(user_id):
-    """获取用户透支额度"""
-    return 0
-
-def refund_order(order_id):
-    """退款功能已移除，此函数仅为兼容性保留"""
-    # 标记订单为已退款
-    try:
-        execute_query("UPDATE orders SET refunded = 1 WHERE id = ?", (order_id,))
-        return True, 0
-    except Exception as e:
-        logger.error(f"标记订单已退款失败: {str(e)}", exc_info=True)
-        return False, str(e)
-
-def create_order_with_deduction_atomic(account, password, package, remark, username, user_id):
-    """创建订单（已移除余额扣除功能）"""
-    try:
-        # 创建订单记录
-        now = get_china_time()
-        
-        # 根据数据库类型选择不同的SQL
-        if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL版本 - 不使用username字段
-            execute_query(
-                """
-                INSERT INTO orders (account, password, package, status, created_at, remark, user_id, web_user_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                """,
-                (account, password, package, 'submitted', now, remark, user_id, username)
-            )
-        else:
-            # SQLite版本
-            execute_query(
-                """
-                INSERT INTO orders (account, password, package, status, created_at, remark, user_id, username)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (account, password, package, 'submitted', now, remark, user_id, username)
-            )
-            
-        return True, "订单创建成功", 0, 0
-    except Exception as e:
-        logger.error(f"创建订单失败: {str(e)}", exc_info=True)
-        return False, f"创建订单失败: {str(e)}", None, None
-
-def check_duplicate_remark(user_id, remark):
-    """
-    检查当前用户今日订单中是否存在重复的备注
-    
-    参数:
-    - user_id: 用户ID
-    - remark: 要检查的备注
-    
-    返回:
-    - 如果存在重复，返回True，否则返回False
-    """
-    if not remark or remark.strip() == '':
-        # 空备注不检查重复
-        return False
-        
-    try:
-        # 获取今天的日期，格式为YYYY-MM-DD
-        today = datetime.now(CN_TIMEZONE).strftime("%Y-%m-%d")
-        
-        # 根据数据库类型选择不同查询语句
-        if DATABASE_URL.startswith('postgres'):
-            query = """
-                SELECT COUNT(*) FROM orders 
-                WHERE user_id = %s 
-                AND remark = %s 
-                AND created_at LIKE %s
-            """
-            params = (user_id, remark, f"{today}%")
-        else:
-            query = """
-                SELECT COUNT(*) FROM orders 
-                WHERE user_id = ? 
-                AND remark = ? 
-                AND created_at LIKE ?
-            """
-            params = (user_id, remark, f"{today}%")
-            
-        result = execute_query(query, params, fetch=True)
-        count = result[0][0] if result and result[0] else 0
-        
-        return count > 0
-    except Exception as e:
-        logger.error(f"检查备注重复失败: {str(e)}", exc_info=True)
-        return False
-
-def delete_old_orders(days=3):
-    """
-    删除指定天数前的订单数据
-    
-    参数:
-    - days: 天数，默认为3天
-    
-    返回:
-    - 已删除的订单数量
-    """
-    try:
-        # 计算截止日期（当前时间减去指定天数）
-        cutoff_date = datetime.now() - timedelta(days=days)
-        cutoff_date_str = cutoff_date.strftime("%Y-%m-%d %H:%M:%S")
-        
-        logger.info(f"开始删除 {days} 天前的订单数据（截止日期：{cutoff_date_str}）")
-        
-        # 执行删除操作
-        if DATABASE_URL.startswith('postgres'):
-            result = execute_query(
-                "DELETE FROM orders WHERE created_at < %s RETURNING id",
-                (cutoff_date_str,),
-                fetch=True
-            )
-            deleted_count = len(result) if result else 0
-        else:
-            # SQLite
-            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM orders WHERE created_at < ?", (cutoff_date_str,))
-            deleted_count = cursor.rowcount
-            conn.commit()
-            conn.close()
-        
-        logger.info(f"已删除 {deleted_count} 条过期订单数据")
-        return deleted_count
-    except Exception as e:
-        logger.error(f"删除旧订单数据失败: {str(e)}", exc_info=True)
-        return 0
-
-def toggle_seller_distribution_participation(telegram_id):
-    """切换卖家参与分流状态"""
-    try:
-        if DATABASE_URL.startswith('postgres'):
-            execute_query("UPDATE sellers SET participate_in_distribution = NOT participate_in_distribution WHERE telegram_id = %s", (telegram_id,))
-        else:
-            execute_query("UPDATE sellers SET participate_in_distribution = NOT participate_in_distribution WHERE telegram_id = ?", (telegram_id,))
-        return True
-    except Exception as e:
-        logger.error(f"切换卖家参与分流状态失败: {e}")
-        return False
-
-def set_seller_distribution_participation(telegram_id, participate):
-    """设置卖家参与分流状态"""
-    try:
-        if DATABASE_URL.startswith('postgres'):
-            execute_query("UPDATE sellers SET participate_in_distribution = %s WHERE telegram_id = %s", (participate, telegram_id))
-        else:
-            execute_query("UPDATE sellers SET participate_in_distribution = ? WHERE telegram_id = ?", (1 if participate else 0, telegram_id))
-        return True
-    except Exception as e:
-        logger.error(f"设置卖家参与分流状态失败: {e}")
-        return False
-
-def get_participating_sellers():
-    """获取所有活跃且参与分流的卖家的ID和昵称"""
-    if DATABASE_URL.startswith('postgres'):
-        sellers = execute_query("""
-            SELECT telegram_id, nickname, username, first_name, 
-                   last_active_at
-            FROM sellers 
-            WHERE is_active = TRUE AND participate_in_distribution = TRUE
-        """, fetch=True)
-    else:
-        sellers = execute_query("""
-            SELECT telegram_id, nickname, username, first_name, 
-                   last_active_at
-            FROM sellers 
-            WHERE is_active = 1 AND participate_in_distribution = 1
-        """, fetch=True)
-    
-    result = []
-    for seller in sellers:
-        telegram_id, nickname, username, first_name, last_active_at = seller
-        # 如果没有设置昵称，则使用first_name或username作为默认昵称
-        display_name = nickname or first_name or f"卖家 {telegram_id}"
-        result.append({
-            "id": telegram_id,
-            "name": display_name,
-            "last_active_at": last_active_at or ""
-        })
-    return result
-
-def get_seller_participation_status(telegram_id):
-    """获取卖家的参与分流状态"""
-    try:
-        if DATABASE_URL.startswith('postgres'):
-            result = execute_query(
-                "SELECT participate_in_distribution, is_active FROM sellers WHERE telegram_id = %s", 
-                (str(telegram_id),), 
-                fetch=True
-            )
-        else:
-            result = execute_query(
-                "SELECT participate_in_distribution, is_active FROM sellers WHERE telegram_id = ?", 
-                (str(telegram_id),), 
-                fetch=True
-            )
-        
-        if result:
-            participate, active = result[0]
-            return {
-                "participate_in_distribution": bool(participate),
-                "is_active": bool(active)
-            }
-        return None
-    except Exception as e:
-        logger.error(f"获取卖家参与状态失败: {e}")
-        return None
-
-def get_user_last_remark(user_id):
-    """
-    获取用户今日的上一条订单备注
-    
-    参数:
-    - user_id: 用户ID
-    
-    返回:
-    - 用户今日上一条订单的备注内容，如果没有订单则返回None
-    """
-    try:
-        # 获取今天的日期，格式为YYYY-MM-DD
-        today = datetime.now(CN_TIMEZONE).strftime("%Y-%m-%d")
-        
-        # 根据数据库类型选择不同查询语句
-        if DATABASE_URL.startswith('postgres'):
-            query = """
-                SELECT remark FROM orders 
-                WHERE user_id = %s 
-                AND created_at LIKE %s
-                ORDER BY created_at DESC 
-                LIMIT 1
-            """
-            params = (user_id, f"{today}%")
-        else:
-            query = """
-                SELECT remark FROM orders 
-                WHERE user_id = ? 
-                AND created_at LIKE ?
-                ORDER BY created_at DESC 
-                LIMIT 1
-            """
-            params = (user_id, f"{today}%")
-            
-        result = execute_query(query, params, fetch=True)
-        
-        if result and result[0] and result[0][0]:
-            return result[0][0]
-        return None
-    except Exception as e:
-        logger.error(f"获取用户今日上一条备注失败: {str(e)}", exc_info=True)
-        return None
-
-def is_pure_number(text):
-    """
-    检查文本是否为纯数字
-    
-    参数:
-    - text: 要检查的文本
-    
-    返回:
-    - 如果是纯数字返回True，否则返回False
-    """
-    if not text:
-        return False
-    
-    # 去除首尾空格
-    text = text.strip()
-    
-    # 检查是否为空
-    if not text:
-        return False
-    
-    # 检查是否为纯数字
-    return text.isdigit()
+        return False 
