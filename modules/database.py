@@ -1041,130 +1041,68 @@ def reject_recharge_request(request_id, admin_id):
 
 # ===== 激活码系统 =====
 def create_activation_code_table():
-    """创建激活码表"""
+    """创建激活码表。"""
     try:
-        if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL
-            table_exists = execute_query("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
-                    AND table_name = 'activation_codes'
-                )
-            """, fetch=True)
-            
-            if not table_exists or not table_exists[0][0]:
-                execute_query("""
-                    CREATE TABLE activation_codes (
-                        id SERIAL PRIMARY KEY,
-                        code TEXT UNIQUE NOT NULL,
-                        package TEXT NOT NULL,
-                        is_used INTEGER DEFAULT 0,
-                        created_at TEXT NOT NULL,
-                        used_at TEXT,
-                        used_by INTEGER,
-                        created_by INTEGER,
-                        FOREIGN KEY (used_by) REFERENCES users (id),
-                        FOREIGN KEY (created_by) REFERENCES users (id)
-                    )
-                """)
-                logger.info("已创建激活码表(PostgreSQL)")
-        else:
-            # SQLite
-            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            db_path = os.path.join(current_dir, "orders.db")
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            
-            # 检查激活码表是否存在
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='activation_codes'")
-            if not cursor.fetchone():
-                cursor.execute("""
-                    CREATE TABLE activation_codes (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        code TEXT UNIQUE NOT NULL,
-                        package TEXT NOT NULL,
-                        is_used INTEGER DEFAULT 0,
-                        created_at TEXT NOT NULL,
-                        used_at TEXT,
-                        used_by INTEGER,
-                        created_by INTEGER,
-                        FOREIGN KEY (used_by) REFERENCES users (id),
-                        FOREIGN KEY (created_by) REFERENCES users (id)
-                    )
-                """)
-                conn.commit()
-                logger.info("已创建激活码表(SQLite)")
-            
-            conn.close()
-        
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS activation_codes (
+                id SERIAL PRIMARY KEY,
+                code TEXT UNIQUE NOT NULL,
+                package TEXT NOT NULL,
+                is_used INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                used_at TEXT,
+                used_by INTEGER,
+                created_by INTEGER,
+                FOREIGN KEY (used_by) REFERENCES users (id),
+                FOREIGN KEY (created_by) REFERENCES users (id)
+            )
+        """)
+        logger.info("已确保激活码表存在(PostgreSQL)")
         return True
     except Exception as e:
         logger.error(f"创建激活码表失败: {str(e)}", exc_info=True)
         return False
 
 def generate_activation_code(length=16):
-    """生成唯一的激活码"""
+    """生成唯一的激活码。"""
     import random
     import string
-    
+
     while True:
-        # 生成随机激活码
         code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
-        
-        # 检查是否已存在
         existing = execute_query(
-            "SELECT id FROM activation_codes WHERE code = %s" if DATABASE_URL.startswith('postgres') else "SELECT id FROM activation_codes WHERE code = ?", 
-            (code,), fetch=True)
+            "SELECT id FROM activation_codes WHERE code = %s",
+            (code,),
+            fetch=True,
+        )
         if not existing:
             return code
 
 def create_activation_code(package, created_by=None, count=1):
-    """创建激活码"""
+    """创建激活码。"""
     codes = []
     now = get_china_time()
-    
+
     for _ in range(count):
         code = generate_activation_code()
-        
-        if DATABASE_URL.startswith('postgres'):
-            result = execute_query("""
-                INSERT INTO activation_codes (code, package, created_at, created_by, is_used)
-                VALUES (%s, %s, %s, %s, 0)
-                RETURNING id
-            """, (code, package, now, created_by), fetch=True)
-            code_id = result[0][0]
-        else:
-            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO activation_codes (code, package, created_at, created_by, is_used)
-                VALUES (?, ?, ?, ?, 0)
-            """, (code, package, now, created_by))
-            code_id = cursor.lastrowid
-            conn.commit()
-            conn.close()
-        
-        codes.append({"id": code_id, "code": code})
-    
+        result = execute_query("""
+            INSERT INTO activation_codes (code, package, created_at, created_by, is_used)
+            VALUES (%s, %s, %s, %s, 0)
+            RETURNING id
+        """, (code, package, now, created_by), fetch=True)
+        codes.append({"id": result[0][0], "code": code})
+
     return codes
 
 def get_activation_code(code):
-    """获取激活码信息"""
+    """获取激活码信息。"""
     try:
-        if DATABASE_URL.startswith('postgres'):
-            result = execute_query("""
-                SELECT id, code, package, is_used, created_at, used_at, used_by
-                FROM activation_codes
-                WHERE code = %s
-            """, (code,), fetch=True)
-        else:
-            result = execute_query("""
-                SELECT id, code, package, is_used, created_at, used_at, used_by
-                FROM activation_codes
-                WHERE code = ?
-            """, (code,), fetch=True)
-        
+        result = execute_query("""
+            SELECT id, code, package, is_used, created_at, used_at, used_by
+            FROM activation_codes
+            WHERE code = %s
+        """, (code,), fetch=True)
+
         if result and len(result) > 0:
             return {
                 "id": result[0][0],
@@ -1181,105 +1119,59 @@ def get_activation_code(code):
         return None
 
 def mark_activation_code_used(code_id, user_id):
-    """标记激活码为已使用"""
+    """标记激活码为已使用。"""
     now = get_china_time()
+    conn = None
     try:
-        # 如果user_id为0或无效值，设置为NULL以避免外键约束错误
         if user_id <= 0:
             user_id = None
-            
-        if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL使用事务
-            conn = psycopg2.connect(DATABASE_URL)
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE activation_codes
-                SET is_used = 1, used_at = %s, used_by = %s
-                WHERE id = %s AND is_used = 0
-            """, (now, user_id, code_id))
-            
-            # 检查是否真的更新了记录
-            cursor.execute("""
-                SELECT count(*) FROM activation_codes 
-                WHERE id = %s AND is_used = 1
-            """, (code_id,))
-            result = cursor.fetchone()
-            rows_updated = cursor.rowcount
-            
+
+        conn = get_postgres_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE activation_codes
+            SET is_used = 1, used_at = %s, used_by = %s
+            WHERE id = %s AND is_used = 0
+        """, (now, user_id, code_id))
+        rows_updated = cursor.rowcount
+
+        if rows_updated > 0:
             conn.commit()
-            conn.close()
-            
-            return rows_updated > 0
-        else:
-            # SQLite使用事务
-            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
-            cursor = conn.cursor()
-            
-            # 开始事务
-            conn.execute("BEGIN TRANSACTION")
-            
-            # 只更新未使用的激活码
-            cursor.execute("""
-                UPDATE activation_codes
-                SET is_used = 1, used_at = ?, used_by = ?
-                WHERE id = ? AND is_used = 0
-            """, (now, user_id, code_id))
-            
-            # 检查是否真的更新了记录
-            rows_updated = cursor.rowcount
-            
-            if rows_updated > 0:
-                # 提交事务
-                conn.commit()
-                conn.close()
-                return True
-            else:
-                # 回滚事务
-                conn.rollback()
-                conn.close()
-                return False
+            return True
+
+        conn.rollback()
+        return False
     except Exception as e:
+        if conn:
+            conn.rollback()
         logger.error(f"标记激活码已使用失败: {str(e)}", exc_info=True)
         return False
+    finally:
+        if conn:
+            conn.close()
 
 def get_admin_activation_codes(limit=100, offset=0, conditions=None, params=None):
-    """获取所有激活码（管理员用）"""
+    """获取所有激活码（管理员用）。"""
     try:
-        # 构建WHERE子句
         where_clause = ""
         query_params = []
-        
+
         if conditions and params:
             where_clause = " WHERE " + " AND ".join(conditions)
             query_params.extend(params)
-        
-        # 添加分页参数
+
         query_params.extend([limit, offset])
-        
-        if DATABASE_URL.startswith('postgres'):
-            placeholders = ["%s"] * len(query_params)
-            result = execute_query(f"""
-                SELECT a.id, a.code, a.package, a.is_used, a.created_at, a.used_at, 
-                       c.username as creator, u.username as user
-                FROM activation_codes a
-                LEFT JOIN users c ON a.created_by = c.id
-                LEFT JOIN users u ON a.used_by = u.id
-                {where_clause}
-                ORDER BY a.created_at DESC
-                LIMIT %s OFFSET %s
-            """, query_params, fetch=True)
-        else:
-            result = execute_query(f"""
-                SELECT a.id, a.code, a.package, a.is_used, a.created_at, a.used_at, 
-                       c.username as creator, u.username as user
-                FROM activation_codes a
-                LEFT JOIN users c ON a.created_by = c.id
-                LEFT JOIN users u ON a.used_by = u.id
-                {where_clause}
-                ORDER BY a.created_at DESC
-                LIMIT ? OFFSET ?
-            """, query_params, fetch=True)
-        
+        result = execute_query(f"""
+            SELECT a.id, a.code, a.package, a.is_used, a.created_at, a.used_at,
+                   c.username as creator, u.username as user
+            FROM activation_codes a
+            LEFT JOIN users c ON a.created_by = c.id
+            LEFT JOIN users u ON a.used_by = u.id
+            {where_clause}
+            ORDER BY a.created_at DESC
+            LIMIT %s OFFSET %s
+        """, query_params, fetch=True)
+
         codes = []
         for r in result:
             codes.append({

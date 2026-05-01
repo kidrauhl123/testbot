@@ -134,6 +134,28 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
                 self.assertNotIn("lastrowid", source)
                 self.assertNotIn("BEGIN TRANSACTION", source)
 
+    def test_activation_code_helpers_have_no_sqlite_branches(self):
+        import inspect
+
+        for func in (
+            database.create_activation_code_table,
+            database.generate_activation_code,
+            database.create_activation_code,
+            database.get_activation_code,
+            database.mark_activation_code_used,
+            database.get_admin_activation_codes,
+        ):
+            with self.subTest(func=func.__name__):
+                source = inspect.getsource(func)
+                self.assertNotIn("DATABASE_URL.startswith", source)
+                self.assertNotIn("sqlite3", source)
+                self.assertNotIn("orders.db", source)
+                self.assertNotIn("SQLite", source)
+                self.assertNotIn("sqlite_master", source)
+                self.assertNotIn("AUTOINCREMENT", source)
+                self.assertNotIn("BEGIN TRANSACTION", source)
+                self.assertNotIn("LIMIT ? OFFSET ?", source)
+
     def test_execute_query_converts_sqlite_placeholders_for_postgres(self):
         executed = {}
 
