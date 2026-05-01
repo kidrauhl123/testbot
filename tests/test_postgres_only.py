@@ -1,3 +1,4 @@
+import inspect
 import os
 import sys
 import unittest
@@ -319,6 +320,29 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIs(getattr(database, name), getattr(sellers, name))
 
+    def test_database_reexports_schema_helpers(self):
+        from modules import db_schema
+
+        helper_names = (
+            "init_db",
+            "init_postgres_db",
+            "create_performance_indexes",
+        )
+        for name in helper_names:
+            with self.subTest(name=name):
+                self.assertIs(getattr(database, name), getattr(db_schema, name))
+
+    def test_schema_helpers_have_no_sqlite_branches(self):
+        from modules import db_schema
+
+        for name in ("init_db", "init_postgres_db", "create_performance_indexes"):
+            source = inspect.getsource(getattr(db_schema, name))
+            with self.subTest(name=name):
+                self.assertNotIn("sqlite3", source)
+                self.assertNotIn("orders.db", source)
+                self.assertNotIn("SQLite", source)
+                self.assertNotIn("DATABASE_URL.startswith", source)
+
     def test_execute_query_requires_postgres_placeholders(self):
         import inspect
         from modules import db_core
@@ -373,6 +397,7 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
             "modules/constants.py",
             "modules/database.py",
             "modules/db_core.py",
+            "modules/db_schema.py",
             "modules/order_balance.py",
             "modules/recharge.py",
             "modules/activation_codes.py",
