@@ -30,6 +30,10 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
                 with mock.patch.object(database, "DATABASE_URL", url):
                     database.ensure_postgres_configured()
 
+    def test_sqlite_entrypoints_are_not_exposed(self):
+        self.assertFalse(hasattr(database, "init_sqlite_db"))
+        self.assertFalse(hasattr(database, "execute_sqlite_query"))
+
     def test_execute_query_converts_sqlite_placeholders_for_postgres(self):
         executed = {}
 
