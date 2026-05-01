@@ -101,6 +101,17 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
         self.assertNotIn("SQLite", source)
         self.assertNotIn("WHERE id = ?", source)
 
+    def test_create_order_with_deduction_has_no_sqlite_branches(self):
+        import inspect
+
+        source = inspect.getsource(database.create_order_with_deduction_atomic)
+        self.assertNotIn("DATABASE_URL.startswith", source)
+        self.assertNotIn("sqlite3", source)
+        self.assertNotIn("orders.db", source)
+        self.assertNotIn("SQLite", source)
+        self.assertNotIn("BEGIN TRANSACTION", source)
+        self.assertNotIn("VALUES (?, ?, ?, ?, ?, ?, ?)", source)
+
     def test_execute_query_converts_sqlite_placeholders_for_postgres(self):
         executed = {}
 

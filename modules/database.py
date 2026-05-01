@@ -825,129 +825,71 @@ def refund_order(order_id):
 
 def create_order_with_deduction_atomic(account, password, package, remark, username, user_id):
     """
-    使用事务原子性地创建订单并扣除用户余额，兼容 SQLite 与 PostgreSQL
+    使用事务原子性地创建订单并扣除用户余额。
     
     返回:
     - (success, message, new_balance, credit_limit)
     """
-    from modules.constants import WEB_PRICES, get_user_package_price
+    from modules.constants import get_user_package_price
 
+    conn = None
     try:
-        if DATABASE_URL.startswith('postgres'):
-            # ---------- PostgreSQL 版本 ----------
-            url = urlparse(DATABASE_URL)
-            conn = psycopg2.connect(
-                dbname=url.path[1:],
-                user=url.username,
-                password=url.password,
-                host=url.hostname,
-                port=url.port
+        conn = get_postgres_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("BEGIN")
+
+            # 查询余额和额度
+            cursor.execute("SELECT balance, credit_limit FROM users WHERE id = %s FOR UPDATE", (user_id,))
+            row = cursor.fetchone()
+            if not row:
+                conn.rollback()
+                return False, "用户不存在", None, None
+
+            current_balance, credit_limit = row
+            available_funds = current_balance + credit_limit
+
+            price = get_user_package_price(user_id, package)
+            if price > available_funds:
+                conn.rollback()
+                return False, f"余额不足，需要 {price} 元，可用 {available_funds} 元", current_balance, credit_limit
+
+            # 扣款并更新余额
+            new_balance = current_balance - price
+            cursor.execute("UPDATE users SET balance = %s WHERE id = %s", (new_balance, user_id))
+
+            # 记录余额变动
+            now = get_china_time()
+            cursor.execute(
+                """
+                INSERT INTO balance_records (user_id, amount, type, reason, balance_after, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (user_id, -price, 'consume', f'购买{package}个月套餐', new_balance, now)
             )
-            cursor = conn.cursor()
 
-            try:
-                cursor.execute("BEGIN")
+            # 创建订单记录
+            cursor.execute(
+                """
+                INSERT INTO orders (account, password, package, status, created_at, remark, user_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (account, password, package, 'submitted', now, remark, user_id)
+            )
 
-                # 查询余额和额度
-                cursor.execute("SELECT balance, credit_limit FROM users WHERE id = %s FOR UPDATE", (user_id,))
-                row = cursor.fetchone()
-                if not row:
-                    conn.rollback()
-                    return False, "用户不存在", None, None
-
-                current_balance, credit_limit = row
-                available_funds = current_balance + credit_limit
-
-                price = get_user_package_price(user_id, package)
-                if price > available_funds:
-                    conn.rollback()
-                    return False, f"余额不足，需要 {price} 元，可用 {available_funds} 元", current_balance, credit_limit
-
-                # 扣款并更新余额
-                new_balance = current_balance - price
-                cursor.execute("UPDATE users SET balance = %s WHERE id = %s", (new_balance, user_id))
-
-                # 记录余额变动
-                now = get_china_time()
-                cursor.execute(
-                    """
-                    INSERT INTO balance_records (user_id, amount, type, reason, balance_after, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    """,
-                    (user_id, -price, 'consume', f'购买{package}个月套餐', new_balance, now)
-                )
-
-                # 创建订单记录
-                cursor.execute(
-                    """
-                    INSERT INTO orders (account, password, package, status, created_at, remark, user_id)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (account, password, package, 'submitted', now, remark, user_id)
-                )
-
-                conn.commit()
-                return True, "订单创建成功", new_balance, credit_limit
-            except Exception as e:
-                conn.rollback()
-                logger.error(f"创建订单失败(PostgreSQL): {str(e)}", exc_info=True)
-                return False, f"创建订单失败: {str(e)}", None, None
-            finally:
-                conn.close()
-        else:
-            # ---------- SQLite 版本 ----------
-            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            db_path = os.path.join(current_dir, "orders.db")
-            conn = sqlite3.connect(db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            try:
-                cursor.execute("BEGIN TRANSACTION")
-                cursor.execute("SELECT balance, credit_limit FROM users WHERE id = ?", (user_id,))
-                user_data = cursor.fetchone()
-                if not user_data:
-                    conn.rollback()
-                    return False, "用户不存在", None, None
-
-                current_balance = user_data['balance']
-                credit_limit = user_data['credit_limit']
-                available_funds = current_balance + credit_limit
-
-                price = get_user_package_price(user_id, package)
-                if price > available_funds:
-                    conn.rollback()
-                    return False, f"余额不足，需要 {price} 元，可用 {available_funds} 元", current_balance, credit_limit
-
-                new_balance = current_balance - price
-                cursor.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
-                now = get_china_time()
-                cursor.execute(
-                    """
-                    INSERT INTO balance_records (user_id, amount, type, reason, balance_after, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (user_id, -price, 'consume', f'购买{package}个月套餐', new_balance, now)
-                )
-
-                cursor.execute(
-                    """
-                    INSERT INTO orders (account, password, package, status, created_at, remark, user_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (account, password, package, 'submitted', now, remark, user_id)
-                )
-
-                conn.commit()
-                return True, "订单创建成功", new_balance, credit_limit
-            except Exception as e:
-                conn.rollback()
-                logger.error(f"创建订单失败(SQLite): {str(e)}", exc_info=True)
-                return False, f"创建订单失败: {str(e)}", None, None
-            finally:
-                conn.close()
+            conn.commit()
+            return True, "订单创建成功", new_balance, credit_limit
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"创建订单失败: {str(e)}", exc_info=True)
+            return False, f"创建订单失败: {str(e)}", None, None
+        finally:
+            conn.close()
     except Exception as e:
         logger.error(f"创建订单时数据库连接失败: {str(e)}", exc_info=True)
         return False, f"数据库连接失败: {str(e)}", None, None
+
 
 # ===== 充值相关函数 =====
 def create_recharge_tables():
