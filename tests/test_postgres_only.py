@@ -91,6 +91,16 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
                 self.assertNotIn("orders.db", source)
                 self.assertNotIn("LIMIT ? OFFSET ?", source)
 
+    def test_refund_order_has_no_sqlite_branches(self):
+        import inspect
+
+        source = inspect.getsource(database.refund_order)
+        self.assertNotIn("DATABASE_URL.startswith", source)
+        self.assertNotIn("sqlite3", source)
+        self.assertNotIn("orders.db", source)
+        self.assertNotIn("SQLite", source)
+        self.assertNotIn("WHERE id = ?", source)
+
     def test_execute_query_converts_sqlite_placeholders_for_postgres(self):
         executed = {}
 
