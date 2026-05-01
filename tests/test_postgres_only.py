@@ -237,6 +237,29 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
         self.assertIs(database.execute_postgres_query, db_core.execute_postgres_query)
         self.assertIs(database.execute_query, db_core.execute_query)
 
+    def test_database_reexports_order_balance_helpers(self):
+        from modules import order_balance
+
+        helper_names = (
+            "get_china_time",
+            "add_balance_record",
+            "get_unnotified_orders",
+            "accept_order_atomic",
+            "get_order_details",
+            "get_user_balance",
+            "get_user_credit_limit",
+            "set_user_credit_limit",
+            "get_balance_records",
+            "update_user_balance",
+            "set_user_balance",
+            "check_balance_for_package",
+            "refund_order",
+            "create_order_with_deduction_atomic",
+        )
+        for name in helper_names:
+            with self.subTest(name=name):
+                self.assertIs(getattr(database, name), getattr(order_balance, name))
+
     def test_execute_query_requires_postgres_placeholders(self):
         import inspect
         from modules import db_core
@@ -291,6 +314,7 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
             "modules/constants.py",
             "modules/database.py",
             "modules/db_core.py",
+            "modules/order_balance.py",
             "modules/web_routes.py",
             "modules/telegram_bot.py",
         ):
