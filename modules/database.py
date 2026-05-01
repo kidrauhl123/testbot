@@ -4,10 +4,15 @@ import logging
 import psycopg2
 from functools import wraps
 from datetime import datetime
-from urllib.parse import urlparse
 import pytz
 
-from modules.constants import DATABASE_URL, STATUS, ADMIN_USERNAME, ADMIN_PASSWORD
+from modules.constants import STATUS, ADMIN_USERNAME, ADMIN_PASSWORD
+from modules.db_core import (
+    ensure_postgres_configured,
+    execute_postgres_query,
+    execute_query,
+    get_postgres_connection,
+)
 
 # 设置日志
 logger = logging.getLogger(__name__)
@@ -56,14 +61,6 @@ def add_balance_record(user_id, amount, type_name, reason, reference_id=None, ba
         return None
 
 # ===== 数据库 =====
-def ensure_postgres_configured():
-    """确保应用只连接 PostgreSQL，避免误回退到历史 SQLite 数据库。"""
-    if not DATABASE_URL.startswith(('postgres://', 'postgresql://')):
-        raise RuntimeError(
-            "DATABASE_URL 必须配置为 PostgreSQL 连接串；本项目已停用 SQLite。"
-        )
-
-
 def init_db():
     """初始化 PostgreSQL 数据库。"""
     ensure_postgres_configured()
@@ -87,13 +84,6 @@ def init_db():
 
 def init_postgres_db():
     """初始化PostgreSQL数据库"""
-    url = urlparse(DATABASE_URL)
-    dbname = url.path[1:]
-    user = url.username
-    password = url.password
-    host = url.hostname
-    port = url.port
-    
     conn = get_postgres_connection()
     conn.autocommit = True
     c = conn.cursor()
@@ -221,42 +211,6 @@ def init_postgres_db():
         """, (ADMIN_USERNAME, admin_hash, get_china_time()))
     
     conn.close()
-
-# 数据库执行函数
-def execute_query(query, params=(), fetch=False, return_cursor=False):
-    """执行 PostgreSQL 查询并返回结果。"""
-    ensure_postgres_configured()
-    logger.debug(f"执行查询: {query[:50]}... 参数: {params}")
-    return execute_postgres_query(query, params, fetch, return_cursor)
-
-
-def get_postgres_connection():
-    """创建 PostgreSQL 连接。后续可以在这里替换成连接池。"""
-    ensure_postgres_configured()
-    return psycopg2.connect(DATABASE_URL)
-
-
-def execute_postgres_query(query, params=(), fetch=False, return_cursor=False):
-    """执行PostgreSQL查询并返回结果"""
-    conn = get_postgres_connection()
-    cursor = conn.cursor()
-    
-    if params:
-        cursor.execute(query, params)
-    else:
-        cursor.execute(query)
-    
-    if return_cursor:
-        conn.commit()
-        return cursor
-
-    result = None
-    if fetch:
-        result = cursor.fetchall()
-    
-    conn.commit()
-    conn.close()
-    return result
 
 def create_performance_indexes():
     """创建常用查询索引；只做 IF NOT EXISTS，重复启动安全。"""

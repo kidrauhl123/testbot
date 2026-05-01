@@ -9,6 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from modules import database
+from modules import db_core
 
 
 class WebRoutesPostgresOnlyTests(unittest.TestCase):
@@ -54,11 +55,11 @@ class TelegramBotPostgresOnlyTests(unittest.TestCase):
 
 class PostgresOnlyDatabaseTests(unittest.TestCase):
     def test_rejects_missing_or_sqlite_database_url(self):
-        with mock.patch.object(database, "DATABASE_URL", ""):
+        with mock.patch.object(db_core, "DATABASE_URL", ""):
             with self.assertRaises(RuntimeError):
                 database.ensure_postgres_configured()
 
-        with mock.patch.object(database, "DATABASE_URL", "sqlite:///orders.db"):
+        with mock.patch.object(db_core, "DATABASE_URL", "sqlite:///orders.db"):
             with self.assertRaises(RuntimeError):
                 database.ensure_postgres_configured()
 
@@ -68,7 +69,7 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
             "postgresql://user:pass@localhost:5432/testbot",
         ):
             with self.subTest(url=url):
-                with mock.patch.object(database, "DATABASE_URL", url):
+                with mock.patch.object(db_core, "DATABASE_URL", url):
                     database.ensure_postgres_configured()
 
     def test_sqlite_entrypoints_are_not_exposed(self):
@@ -228,10 +229,19 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
                 self.assertNotIn("VALUES (?, ?, ?, ?, ?)", source)
                 self.assertNotIn("SET price = ?", source)
 
+    def test_database_reexports_core_database_helpers(self):
+        from modules import db_core
+
+        self.assertIs(database.ensure_postgres_configured, db_core.ensure_postgres_configured)
+        self.assertIs(database.get_postgres_connection, db_core.get_postgres_connection)
+        self.assertIs(database.execute_postgres_query, db_core.execute_postgres_query)
+        self.assertIs(database.execute_query, db_core.execute_query)
+
     def test_execute_query_requires_postgres_placeholders(self):
         import inspect
+        from modules import db_core
 
-        source = inspect.getsource(database.execute_postgres_query)
+        source = inspect.getsource(db_core.execute_postgres_query)
         self.assertNotIn("replace('?', '%s')", source)
         self.assertNotIn('replace("?", "%s")', source)
 
@@ -255,8 +265,8 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
             def close(self):
                 executed["closed"] = True
 
-        with mock.patch.object(database, "DATABASE_URL", "postgresql://user:***@localhost/testbot"), \
-             mock.patch.object(database, "get_postgres_connection", return_value=FakeConnection()):
+        with mock.patch.object(db_core, "DATABASE_URL", "postgresql://user:***@localhost/testbot"), \
+             mock.patch.object(db_core, "get_postgres_connection", return_value=FakeConnection()):
             result = database.execute_query("SELECT * FROM users WHERE id = %s", (123,), fetch=True)
 
         self.assertEqual(result, [(1,)])
@@ -280,6 +290,7 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
         for relative_path in (
             "modules/constants.py",
             "modules/database.py",
+            "modules/db_core.py",
             "modules/web_routes.py",
             "modules/telegram_bot.py",
         ):
