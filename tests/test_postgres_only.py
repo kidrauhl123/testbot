@@ -290,6 +290,18 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIs(getattr(database, name), getattr(activation_codes, name))
 
+    def test_database_reexports_custom_price_helpers(self):
+        from modules import custom_prices
+
+        helper_names = (
+            "get_user_custom_prices",
+            "set_user_custom_price",
+            "delete_user_custom_price",
+        )
+        for name in helper_names:
+            with self.subTest(name=name):
+                self.assertIs(getattr(database, name), getattr(custom_prices, name))
+
     def test_execute_query_requires_postgres_placeholders(self):
         import inspect
         from modules import db_core
@@ -347,6 +359,7 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
             "modules/order_balance.py",
             "modules/recharge.py",
             "modules/activation_codes.py",
+            "modules/custom_prices.py",
             "modules/web_routes.py",
             "modules/telegram_bot.py",
         ):
