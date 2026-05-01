@@ -1471,9 +1471,11 @@ async def bot_main(notification_queue):
         if railway_url:
             webhook_url = f"{railway_url}/telegram-webhook"
             logger.info(f"设置 Telegram webhook: {webhook_url}")
+            webhook_secret = os.environ.get('TELEGRAM_WEBHOOK_SECRET') or None
             await bot_application.bot.set_webhook(
                 url=webhook_url,
-                allowed_updates=Update.ALL_TYPES
+                allowed_updates=Update.ALL_TYPES,
+                secret_token=webhook_secret
             )
         else:
             logger.warning("无法获取公开URL，未设置webhook。机器人可能无法接收更新。")
