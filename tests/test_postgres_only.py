@@ -48,6 +48,34 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
         self.assertNotIn("DATABASE_URL.startswith", source)
         self.assertNotIn(" else '?'", source)
 
+    def test_seller_helpers_have_no_sqlite_branches(self):
+        import inspect
+
+        for func in (
+            database.get_all_sellers,
+            database.get_active_seller_ids,
+            database.toggle_seller_admin,
+            database.is_admin_seller,
+        ):
+            with self.subTest(func=func.__name__):
+                source = inspect.getsource(func)
+                self.assertNotIn("DATABASE_URL.startswith", source)
+                self.assertNotIn("COALESCE(is_admin, 0)", source)
+                self.assertNotIn("is_active = 1", source)
+
+    def test_credit_helpers_have_no_sqlite_branches(self):
+        import inspect
+
+        for func in (
+            database.get_user_balance,
+            database.get_user_credit_limit,
+            database.set_user_credit_limit,
+        ):
+            with self.subTest(func=func.__name__):
+                source = inspect.getsource(func)
+                self.assertNotIn("DATABASE_URL.startswith", source)
+                self.assertNotIn("WHERE id=?", source)
+
     def test_execute_query_converts_sqlite_placeholders_for_postgres(self):
         executed = {}
 

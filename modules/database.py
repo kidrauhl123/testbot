@@ -520,31 +520,17 @@ def get_order_details(oid):
 # ===== 卖家管理 =====
 def get_all_sellers():
     """获取所有卖家信息"""
-    if DATABASE_URL.startswith('postgres'):
-        # PostgreSQL需要显式处理BOOLEAN类型
-        return execute_query("""
-            SELECT telegram_id, username, first_name, is_active, 
-                   added_at, added_by, 
-                   COALESCE(is_admin, FALSE) as is_admin 
-            FROM sellers 
-            ORDER BY added_at DESC
-        """, fetch=True)
-    else:
-        # SQLite版本
-        return execute_query("""
-            SELECT telegram_id, username, first_name, is_active, 
-                   added_at, added_by, 
-                   COALESCE(is_admin, 0) as is_admin 
-            FROM sellers 
-            ORDER BY added_at DESC
-        """, fetch=True)
+    return execute_query("""
+        SELECT telegram_id, username, first_name, is_active,
+               added_at, added_by,
+               COALESCE(is_admin, FALSE) as is_admin
+        FROM sellers
+        ORDER BY added_at DESC
+    """, fetch=True)
 
 def get_active_seller_ids():
     """获取所有活跃的卖家Telegram ID"""
-    if DATABASE_URL.startswith('postgres'):
-        sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = TRUE", fetch=True)
-    else:
-        sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = 1", fetch=True)
+    sellers = execute_query("SELECT telegram_id FROM sellers WHERE is_active = TRUE", fetch=True)
     return [seller[0] for seller in sellers]
 
 def add_seller(telegram_id, username, first_name, added_by):
@@ -567,34 +553,21 @@ def toggle_seller_admin(telegram_id):
     """切换卖家的管理员状态"""
     try:
         # 先获取当前状态
-        if DATABASE_URL.startswith('postgres'):
-            current = execute_query(
-                "SELECT COALESCE(is_admin, FALSE) FROM sellers WHERE telegram_id = ?", 
-                (telegram_id,), 
-                fetch=True
-            )
-        else:
-            current = execute_query(
-                "SELECT COALESCE(is_admin, 0) FROM sellers WHERE telegram_id = ?", 
-                (telegram_id,), 
-                fetch=True
-            )
+        current = execute_query(
+            "SELECT COALESCE(is_admin, FALSE) FROM sellers WHERE telegram_id = ?", 
+            (telegram_id,), 
+            fetch=True
+        )
             
         if not current:
             return False
             
         new_status = not bool(current[0][0])
         
-        if DATABASE_URL.startswith('postgres'):
-            execute_query(
-                "UPDATE sellers SET is_admin = ? WHERE telegram_id = ?",
-                (new_status, telegram_id)
-            )
-        else:
-            execute_query(
-                "UPDATE sellers SET is_admin = ? WHERE telegram_id = ?",
-                (1 if new_status else 0, telegram_id)
-            )
+        execute_query(
+            "UPDATE sellers SET is_admin = ? WHERE telegram_id = ?",
+            (new_status, telegram_id)
+        )
         return True
     except Exception as e:
         logger.error(f"切换卖家管理员状态失败: {e}")
@@ -602,27 +575,17 @@ def toggle_seller_admin(telegram_id):
 
 def is_admin_seller(telegram_id):
     """检查卖家是否是管理员"""
-    if DATABASE_URL.startswith('postgres'):
-        result = execute_query(
-            "SELECT COALESCE(is_admin, FALSE) FROM sellers WHERE telegram_id = ? AND is_active = TRUE",
-            (telegram_id,),
-            fetch=True
-        )
-    else:
-        result = execute_query(
-            "SELECT COALESCE(is_admin, 0) FROM sellers WHERE telegram_id = ? AND is_active = 1",
-            (telegram_id,),
-            fetch=True
-        )
+    result = execute_query(
+        "SELECT COALESCE(is_admin, FALSE) FROM sellers WHERE telegram_id = ? AND is_active = TRUE",
+        (telegram_id,),
+        fetch=True
+    )
     return bool(result and result[0][0])
 
 # ===== 余额系统相关函数 =====
 def get_user_balance(user_id):
     """获取用户余额"""
-    if DATABASE_URL.startswith('postgres'):
-        result = execute_query("SELECT balance FROM users WHERE id=%s", (user_id,), fetch=True)
-    else:
-        result = execute_query("SELECT balance FROM users WHERE id=?", (user_id,), fetch=True)
+    result = execute_query("SELECT balance FROM users WHERE id=%s", (user_id,), fetch=True)
     
     if result:
         return result[0][0]
@@ -630,10 +593,7 @@ def get_user_balance(user_id):
 
 def get_user_credit_limit(user_id):
     """获取用户透支额度"""
-    if DATABASE_URL.startswith('postgres'):
-        result = execute_query("SELECT credit_limit FROM users WHERE id=%s", (user_id,), fetch=True)
-    else:
-        result = execute_query("SELECT credit_limit FROM users WHERE id=?", (user_id,), fetch=True)
+    result = execute_query("SELECT credit_limit FROM users WHERE id=%s", (user_id,), fetch=True)
     
     if result:
         return result[0][0]
@@ -645,10 +605,7 @@ def set_user_credit_limit(user_id, credit_limit):
     if credit_limit < 0:
         credit_limit = 0
     
-    if DATABASE_URL.startswith('postgres'):
-        execute_query("UPDATE users SET credit_limit=%s WHERE id=%s", (credit_limit, user_id))
-    else:
-        execute_query("UPDATE users SET credit_limit=? WHERE id=?", (credit_limit, user_id))
+    execute_query("UPDATE users SET credit_limit=%s WHERE id=%s", (credit_limit, user_id))
     
     return True, credit_limit
 
