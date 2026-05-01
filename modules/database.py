@@ -47,24 +47,12 @@ def add_balance_record(user_id, amount, type_name, reason, reference_id=None, ba
         now = get_china_time()
         
         # 添加记录
-        if DATABASE_URL.startswith('postgres'):
-            result = execute_query("""
-                INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-            """, (user_id, amount, type_name, reason, reference_id, balance_after, now), fetch=True)
-            return result[0][0]
-        else:
-            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (user_id, amount, type_name, reason, reference_id, balance_after, now))
-            record_id = cursor.lastrowid
-            conn.commit()
-            conn.close()
-            return record_id
+        result = execute_query("""
+            INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (user_id, amount, type_name, reason, reference_id, balance_after, now), fetch=True)
+        return result[0][0]
     except Exception as e:
         logger.error(f"添加余额变动记录失败: {str(e)}", exc_info=True)
         return None
@@ -523,8 +511,11 @@ def accept_order_atomic(oid, user_id):
 
 # 获取订单详情
 def get_order_details(oid):
-    placeholder = '%s' if DATABASE_URL.startswith('postgres') else '?'
-    return execute_query(f"SELECT id, account, password, package, status, remark FROM orders WHERE id = {placeholder}", (oid,), fetch=True)
+    return execute_query(
+        "SELECT id, account, password, package, status, remark FROM orders WHERE id = %s",
+        (oid,),
+        fetch=True,
+    )
 
 # ===== 卖家管理 =====
 def get_all_sellers():

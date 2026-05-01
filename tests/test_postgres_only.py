@@ -34,6 +34,20 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
         self.assertFalse(hasattr(database, "init_sqlite_db"))
         self.assertFalse(hasattr(database, "execute_sqlite_query"))
 
+    def test_add_balance_record_has_no_sqlite_fallback(self):
+        import inspect
+
+        source = inspect.getsource(database.add_balance_record)
+        self.assertNotIn("sqlite3", source)
+        self.assertNotIn("orders.db", source)
+
+    def test_get_order_details_has_no_sqlite_placeholder_branch(self):
+        import inspect
+
+        source = inspect.getsource(database.get_order_details)
+        self.assertNotIn("DATABASE_URL.startswith", source)
+        self.assertNotIn(" else '?'", source)
+
     def test_execute_query_converts_sqlite_placeholders_for_postgres(self):
         executed = {}
 
