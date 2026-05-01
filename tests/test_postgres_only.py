@@ -302,6 +302,23 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIs(getattr(database, name), getattr(custom_prices, name))
 
+    def test_database_reexports_seller_helpers(self):
+        from modules import sellers
+
+        helper_names = (
+            "hash_password",
+            "get_all_sellers",
+            "get_active_seller_ids",
+            "add_seller",
+            "toggle_seller_status",
+            "remove_seller",
+            "toggle_seller_admin",
+            "is_admin_seller",
+        )
+        for name in helper_names:
+            with self.subTest(name=name):
+                self.assertIs(getattr(database, name), getattr(sellers, name))
+
     def test_execute_query_requires_postgres_placeholders(self):
         import inspect
         from modules import db_core
@@ -360,6 +377,7 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
             "modules/recharge.py",
             "modules/activation_codes.py",
             "modules/custom_prices.py",
+            "modules/sellers.py",
             "modules/web_routes.py",
             "modules/telegram_bot.py",
         ):
