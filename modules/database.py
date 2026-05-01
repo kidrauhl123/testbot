@@ -895,107 +895,37 @@ def create_order_with_deduction_atomic(account, password, package, remark, usern
 def create_recharge_tables():
     """创建充值记录表和余额明细表"""
     try:
-        if DATABASE_URL.startswith('postgres'):
-            # 检查表是否存在
-            table_exists = execute_query("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
-                    AND table_name = 'recharge_requests'
-                )
-            """, fetch=True)
-            
-            if not table_exists or not table_exists[0][0]:
-                execute_query("""
-                    CREATE TABLE recharge_requests (
-                        id SERIAL PRIMARY KEY,
-                        user_id INTEGER NOT NULL,
-                        amount REAL NOT NULL,
-                        status TEXT NOT NULL,
-                        payment_method TEXT NOT NULL,
-                        proof_image TEXT,
-                        details TEXT,
-                        created_at TEXT NOT NULL,
-                        processed_at TEXT,
-                        processed_by TEXT,
-                        FOREIGN KEY (user_id) REFERENCES users (id)
-                    )
-                """)
-                logger.info("已创建充值记录表(PostgreSQL)")
-                
-            # 检查余额明细表是否存在
-            balance_table_exists = execute_query("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
-                    AND table_name = 'balance_records'
-                )
-            """, fetch=True)
-            
-            if not balance_table_exists or not balance_table_exists[0][0]:
-                execute_query("""
-                    CREATE TABLE balance_records (
-                        id SERIAL PRIMARY KEY,
-                        user_id INTEGER NOT NULL,
-                        amount REAL NOT NULL,
-                        type TEXT NOT NULL,
-                        reason TEXT NOT NULL,
-                        reference_id INTEGER,
-                        balance_after REAL NOT NULL,
-                        created_at TEXT NOT NULL,
-                        FOREIGN KEY (user_id) REFERENCES users (id)
-                    )
-                """)
-                logger.info("已创建余额明细表(PostgreSQL)")
-        else:
-            # SQLite连接
-            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            db_path = os.path.join(current_dir, "orders.db")
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            
-            # 检查充值表是否存在
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='recharge_requests'")
-            if not cursor.fetchone():
-                cursor.execute("""
-                    CREATE TABLE recharge_requests (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER NOT NULL,
-                        amount REAL NOT NULL,
-                        status TEXT NOT NULL,
-                        payment_method TEXT NOT NULL,
-                        proof_image TEXT,
-                        details TEXT,
-                        created_at TEXT NOT NULL,
-                        processed_at TEXT,
-                        processed_by TEXT,
-                        FOREIGN KEY (user_id) REFERENCES users (id)
-                    )
-                """)
-                conn.commit()
-                logger.info("已创建充值记录表(SQLite)")
-                
-            # 检查余额明细表是否存在
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='balance_records'")
-            if not cursor.fetchone():
-                cursor.execute("""
-                    CREATE TABLE balance_records (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER NOT NULL,
-                        amount REAL NOT NULL,
-                        type TEXT NOT NULL,
-                        reason TEXT NOT NULL,
-                        reference_id INTEGER,
-                        balance_after REAL NOT NULL,
-                        created_at TEXT NOT NULL,
-                        FOREIGN KEY (user_id) REFERENCES users (id)
-                    )
-                """)
-                conn.commit()
-                logger.info("已创建余额明细表(SQLite)")
-            
-            conn.close()
-        
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS recharge_requests (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                status TEXT NOT NULL,
+                payment_method TEXT NOT NULL,
+                proof_image TEXT,
+                details TEXT,
+                created_at TEXT NOT NULL,
+                processed_at TEXT,
+                processed_by TEXT,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        """)
+        logger.info("已确认充值记录表")
+
+        execute_query("""
+            CREATE TABLE IF NOT EXISTS balance_records (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                type TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                reference_id INTEGER,
+                balance_after REAL NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        """)
+        logger.info("已确认余额明细表")
         return True
     except Exception as e:
         logger.error(f"创建充值记录表或余额明细表失败: {str(e)}", exc_info=True)
@@ -1004,30 +934,13 @@ def create_recharge_tables():
 def create_recharge_request(user_id, amount, payment_method, proof_image, details=None):
     """创建充值请求"""
     try:
-        # 获取当前时间
         now = get_china_time()
-        
-        # 插入充值请求记录
-        if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL需要使用RETURNING子句获取新ID
-            result = execute_query("""
-                INSERT INTO recharge_requests (user_id, amount, status, payment_method, proof_image, details, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-            """, (user_id, amount, 'pending', payment_method, proof_image, details, now), fetch=True)
-            request_id = result[0][0]
-        else:
-            # SQLite可以直接获取lastrowid
-            conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO recharge_requests (user_id, amount, status, payment_method, proof_image, details, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (user_id, amount, 'pending', payment_method, proof_image, details, now))
-            request_id = cursor.lastrowid
-            conn.commit()
-            conn.close()
-            
+        result = execute_query("""
+            INSERT INTO recharge_requests (user_id, amount, status, payment_method, proof_image, details, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (user_id, amount, 'pending', payment_method, proof_image, details, now), fetch=True)
+        request_id = result[0][0]
         return request_id, True, "充值请求已提交"
     except Exception as e:
         logger.error(f"创建充值请求失败: {str(e)}", exc_info=True)
@@ -1036,21 +949,12 @@ def create_recharge_request(user_id, amount, payment_method, proof_image, detail
 def get_user_recharge_requests(user_id):
     """获取用户的充值请求记录"""
     try:
-        if DATABASE_URL.startswith('postgres'):
-            requests = execute_query("""
-                SELECT id, amount, status, payment_method, proof_image, created_at, processed_at, details
-                FROM recharge_requests
-                WHERE user_id = %s
-                ORDER BY created_at DESC
-            """, (user_id,), fetch=True)
-        else:
-            requests = execute_query("""
-                SELECT id, amount, status, payment_method, proof_image, created_at, processed_at, details
-                FROM recharge_requests
-                WHERE user_id = ?
-                ORDER BY created_at DESC
-            """, (user_id,), fetch=True)
-        
+        requests = execute_query("""
+            SELECT id, amount, status, payment_method, proof_image, created_at, processed_at, details
+            FROM recharge_requests
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+        """, (user_id,), fetch=True)
         return requests
     except Exception as e:
         logger.error(f"获取用户充值请求失败: {str(e)}", exc_info=True)
@@ -1059,23 +963,13 @@ def get_user_recharge_requests(user_id):
 def get_pending_recharge_requests():
     """获取所有待处理的充值请求"""
     try:
-        if DATABASE_URL.startswith('postgres'):
-            requests = execute_query("""
-                SELECT r.id, r.user_id, r.amount, r.payment_method, r.proof_image, r.created_at, u.username, r.details
-                FROM recharge_requests r
-                JOIN users u ON r.user_id = u.id
-                WHERE r.status = %s
-                ORDER BY r.created_at ASC
-            """, ('pending',), fetch=True)
-        else:
-            requests = execute_query("""
-                SELECT r.id, r.user_id, r.amount, r.payment_method, r.proof_image, r.created_at, u.username, r.details
-                FROM recharge_requests r
-                JOIN users u ON r.user_id = u.id
-                WHERE r.status = ?
-                ORDER BY r.created_at ASC
-            """, ('pending',), fetch=True)
-        
+        requests = execute_query("""
+            SELECT r.id, r.user_id, r.amount, r.payment_method, r.proof_image, r.created_at, u.username, r.details
+            FROM recharge_requests r
+            JOIN users u ON r.user_id = u.id
+            WHERE r.status = %s
+            ORDER BY r.created_at ASC
+        """, ('pending',), fetch=True)
         return requests
     except Exception as e:
         logger.error(f"获取待处理充值请求失败: {str(e)}", exc_info=True)
@@ -1084,99 +978,49 @@ def get_pending_recharge_requests():
 def approve_recharge_request(request_id, admin_id):
     """批准充值请求并增加用户余额"""
     try:
-        # 获取充值请求详情
-        if DATABASE_URL.startswith('postgres'):
-            request = execute_query("""
+        conn = get_postgres_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("BEGIN")
+            cursor.execute("""
                 SELECT user_id, amount
                 FROM recharge_requests
                 WHERE id = %s AND status = %s
-            """, (request_id, 'pending'), fetch=True)
-        else:
-            request = execute_query("""
-                SELECT user_id, amount
-                FROM recharge_requests
-                WHERE id = ? AND status = ?
-            """, (request_id, 'pending'), fetch=True)
-        
-        if not request:
-            return False, "充值请求不存在或已处理"
-            
-        user_id, amount = request[0]
-        
-        # 开始事务
-        conn = None
-        if DATABASE_URL.startswith('postgres'):
-            conn = psycopg2.connect(DATABASE_URL)
-            conn.autocommit = False
-        else:
-            # 使用绝对路径访问数据库
-            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            db_path = os.path.join(current_dir, "orders.db")
-            conn = sqlite3.connect(db_path)
-        
-        try:
-            cursor = conn.cursor()
+                FOR UPDATE
+            """, (request_id, 'pending'))
+            request = cursor.fetchone()
+            if not request:
+                conn.rollback()
+                return False, "充值请求不存在或已处理"
+
+            user_id, amount = request
             now = get_china_time()
-            
-            # 更新充值请求状态
-            if DATABASE_URL.startswith('postgres'):
-                cursor.execute("""
-                    UPDATE recharge_requests
-                    SET status = %s, processed_at = %s, processed_by = %s
-                    WHERE id = %s
-                """, ('approved', now, admin_id, request_id))
-                
-                # 增加用户余额
-                cursor.execute("""
-                    UPDATE users
-                    SET balance = balance + %s
-                    WHERE id = %s
-                    RETURNING balance
-                """, (amount, user_id))
-                new_balance = cursor.fetchone()[0]
-                
-                # 记录余额变动
-                cursor.execute("""
-                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, (user_id, amount, 'recharge', f'充值: 请求#{request_id}', request_id, new_balance, now))
-            else:
-                cursor.execute("""
-                    UPDATE recharge_requests
-                    SET status = ?, processed_at = ?, processed_by = ?
-                    WHERE id = ?
-                """, ('approved', now, admin_id, request_id))
-                
-                # 增加用户余额
-                cursor.execute("""
-                    UPDATE users
-                    SET balance = balance + ?
-                    WHERE id = ?
-                """, (amount, user_id))
-                
-                # 获取新余额
-                cursor.execute("SELECT balance FROM users WHERE id = ?", (user_id,))
-                new_balance = cursor.fetchone()[0]
-                
-                # 记录余额变动
-                cursor.execute("""
-                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (user_id, amount, 'recharge', f'充值: 请求#{request_id}', request_id, new_balance, now))
-            
-            # 提交事务
+            cursor.execute("""
+                UPDATE recharge_requests
+                SET status = %s, processed_at = %s, processed_by = %s
+                WHERE id = %s AND status = %s
+            """, ('approved', now, admin_id, request_id, 'pending'))
+
+            cursor.execute("""
+                UPDATE users
+                SET balance = balance + %s
+                WHERE id = %s
+                RETURNING balance
+            """, (amount, user_id))
+            new_balance = cursor.fetchone()[0]
+
+            cursor.execute("""
+                INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (user_id, amount, 'recharge', f'充值: 请求#{request_id}', request_id, new_balance, now))
             conn.commit()
-            
             return True, f"已成功批准充值 {amount} 元"
         except Exception as e:
-            # 回滚事务
-            if conn:
-                conn.rollback()
+            conn.rollback()
             logger.error(f"批准充值请求失败: {str(e)}", exc_info=True)
             return False, f"批准充值请求失败: {str(e)}"
         finally:
-            if conn:
-                conn.close()
+            conn.close()
     except Exception as e:
         logger.error(f"批准充值请求失败: {str(e)}", exc_info=True)
         return False, f"批准充值请求失败: {str(e)}"
@@ -1184,23 +1028,12 @@ def approve_recharge_request(request_id, admin_id):
 def reject_recharge_request(request_id, admin_id):
     """拒绝充值请求"""
     try:
-        # 获取当前时间
         now = get_china_time()
-        
-        # 更新充值请求状态
-        if DATABASE_URL.startswith('postgres'):
-            execute_query("""
-                UPDATE recharge_requests
-                SET status = %s, processed_at = %s, processed_by = %s
-                WHERE id = %s AND status = %s
-            """, ('rejected', now, admin_id, request_id, 'pending'))
-        else:
-            execute_query("""
-                UPDATE recharge_requests
-                SET status = ?, processed_at = ?, processed_by = ?
-                WHERE id = ? AND status = ?
-            """, ('rejected', now, admin_id, request_id, 'pending'))
-        
+        execute_query("""
+            UPDATE recharge_requests
+            SET status = %s, processed_at = %s, processed_by = %s
+            WHERE id = %s AND status = %s
+        """, ('rejected', now, admin_id, request_id, 'pending'))
         return True, "已拒绝充值请求"
     except Exception as e:
         logger.error(f"拒绝充值请求失败: {str(e)}", exc_info=True)

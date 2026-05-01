@@ -112,6 +112,28 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
         self.assertNotIn("BEGIN TRANSACTION", source)
         self.assertNotIn("VALUES (?, ?, ?, ?, ?, ?, ?)", source)
 
+    def test_recharge_helpers_have_no_sqlite_branches(self):
+        import inspect
+
+        for func in (
+            database.create_recharge_tables,
+            database.create_recharge_request,
+            database.get_user_recharge_requests,
+            database.get_pending_recharge_requests,
+            database.approve_recharge_request,
+            database.reject_recharge_request,
+        ):
+            with self.subTest(func=func.__name__):
+                source = inspect.getsource(func)
+                self.assertNotIn("DATABASE_URL.startswith", source)
+                self.assertNotIn("sqlite3", source)
+                self.assertNotIn("orders.db", source)
+                self.assertNotIn("SQLite", source)
+                self.assertNotIn("sqlite_master", source)
+                self.assertNotIn("AUTOINCREMENT", source)
+                self.assertNotIn("lastrowid", source)
+                self.assertNotIn("BEGIN TRANSACTION", source)
+
     def test_execute_query_converts_sqlite_placeholders_for_postgres(self):
         executed = {}
 
