@@ -623,42 +623,23 @@ def get_balance_records(user_id=None, limit=50, offset=0):
     """
     try:
         if user_id:
-            if DATABASE_URL.startswith('postgres'):
-                records = execute_query("""
-                    SELECT br.id, br.user_id, u.username, br.amount, br.type, br.reason, br.reference_id, br.balance_after, br.created_at
-                    FROM balance_records br
-                    JOIN users u ON br.user_id = u.id
-                    WHERE br.user_id = %s
-                    ORDER BY br.id DESC
-                    LIMIT %s OFFSET %s
-                """, (user_id, limit, offset), fetch=True)
-            else:
-                records = execute_query("""
-                    SELECT br.id, br.user_id, u.username, br.amount, br.type, br.reason, br.reference_id, br.balance_after, br.created_at
-                    FROM balance_records br
-                    JOIN users u ON br.user_id = u.id
-                    WHERE br.user_id = ?
-                    ORDER BY br.id DESC
-                    LIMIT ? OFFSET ?
-                """, (user_id, limit, offset), fetch=True)
+            records = execute_query("""
+                SELECT br.id, br.user_id, u.username, br.amount, br.type, br.reason, br.reference_id, br.balance_after, br.created_at
+                FROM balance_records br
+                JOIN users u ON br.user_id = u.id
+                WHERE br.user_id = %s
+                ORDER BY br.id DESC
+                LIMIT %s OFFSET %s
+            """, (user_id, limit, offset), fetch=True)
         else:
             # 管理员查看所有记录
-            if DATABASE_URL.startswith('postgres'):
-                records = execute_query("""
-                    SELECT br.id, br.user_id, u.username, br.amount, br.type, br.reason, br.reference_id, br.balance_after, br.created_at
-                    FROM balance_records br
-                    JOIN users u ON br.user_id = u.id
-                    ORDER BY br.id DESC
-                    LIMIT %s OFFSET %s
-                """, (limit, offset), fetch=True)
-            else:
-                records = execute_query("""
-                    SELECT br.id, br.user_id, u.username, br.amount, br.type, br.reason, br.reference_id, br.balance_after, br.created_at
-                    FROM balance_records br
-                    JOIN users u ON br.user_id = u.id
-                    ORDER BY br.id DESC
-                    LIMIT ? OFFSET ?
-                """, (limit, offset), fetch=True)
+            records = execute_query("""
+                SELECT br.id, br.user_id, u.username, br.amount, br.type, br.reason, br.reference_id, br.balance_after, br.created_at
+                FROM balance_records br
+                JOIN users u ON br.user_id = u.id
+                ORDER BY br.id DESC
+                LIMIT %s OFFSET %s
+            """, (limit, offset), fetch=True)
         
         # 格式化记录
         formatted_records = []
@@ -682,182 +663,80 @@ def get_balance_records(user_id=None, limit=50, offset=0):
 
 def update_user_balance(user_id, amount):
     """更新用户余额（增加或减少）"""
-    # 获取当前余额
     current_balance = get_user_balance(user_id)
     new_balance = current_balance + amount
-    
-    # 获取透支额度
     credit_limit = get_user_credit_limit(user_id)
-    
-    # 确保余额+透支额度不会变成负数
     if new_balance < -credit_limit:
         return False, "余额和透支额度不足"
     
-    # 使用事务处理
     conn = None
     try:
-        if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL连接
-            url = urlparse(DATABASE_URL)
-            conn = psycopg2.connect(
-                dbname=url.path[1:],
-                user=url.username,
-                password=url.password,
-                host=url.hostname,
-                port=url.port
-            )
-            
-            with conn:
-                cursor = conn.cursor()
-                
-                # 更新余额
-                cursor.execute("""
-                    UPDATE users 
-                    SET balance = %s 
-                    WHERE id = %s
-                    RETURNING balance
-                """, (new_balance, user_id))
-                
-                # 确认更新成功
-                result = cursor.fetchone()
-                if not result:
-                    logger.error(f"更新用户余额失败: 用户ID={user_id}不存在")
-                    return False, "用户不存在"
-                
-                updated_balance = result[0]
-                
-                # 记录余额变动
-                type_name = 'recharge' if amount > 0 else 'consume'
-                reason = '手动调整余额' if amount > 0 else '消费'
-                now = get_china_time()
-                
-                cursor.execute("""
-                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, (user_id, amount, type_name, reason, None, updated_balance, now))
-            
-            return True, updated_balance
-        else:
-            # SQLite连接
-            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            db_path = os.path.join(current_dir, "orders.db")
-            conn = sqlite3.connect(db_path, timeout=10)
-            
-            with conn:
-                c = conn.cursor()
-                
-                # 更新余额
-                c.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
-                
-                # 记录余额变动
-                type_name = 'recharge' if amount > 0 else 'consume'
-                reason = '手动调整余额' if amount > 0 else '消费'
-                now = get_china_time()
-                
-                c.execute("""
-                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (user_id, amount, type_name, reason, None, new_balance, now))
-            
-            return True, new_balance
-    
+        conn = get_postgres_connection()
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE users 
+                SET balance = %s 
+                WHERE id = %s
+                RETURNING balance
+            """, (new_balance, user_id))
+            result = cursor.fetchone()
+            if not result:
+                logger.error(f"更新用户余额失败: 用户ID={user_id}不存在")
+                return False, "用户不存在"
+            updated_balance = result[0]
+            type_name = 'recharge' if amount > 0 else 'consume'
+            reason = '手动调整余额' if amount > 0 else '消费'
+            now = get_china_time()
+            cursor.execute("""
+                INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (user_id, amount, type_name, reason, None, updated_balance, now))
+        return True, updated_balance
     except Exception as e:
         logger.error(f"更新用户余额失败: {str(e)}", exc_info=True)
         return False, f"更新用户余额失败: {str(e)}"
-    
     finally:
         if conn:
             conn.close()
 
 def set_user_balance(user_id, balance):
     """设置用户余额（仅限管理员使用）"""
-    # 获取当前余额
     current_balance = get_user_balance(user_id)
-    
-    # 计算变动金额
     change_amount = balance - current_balance
-    
-    # 确保余额不为负
     if balance < 0:
         balance = 0
         change_amount = -current_balance
-    
-    # 如果没有变化，直接返回
     if change_amount == 0:
         return True, balance
     
-    # 使用事务处理
     conn = None
     try:
-        if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL连接
-            url = urlparse(DATABASE_URL)
-            conn = psycopg2.connect(
-                dbname=url.path[1:],
-                user=url.username,
-                password=url.password,
-                host=url.hostname,
-                port=url.port
-            )
-            
-            with conn:
-                cursor = conn.cursor()
-                
-                # 更新余额
+        conn = get_postgres_connection()
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE users 
+                SET balance = %s 
+                WHERE id = %s
+                RETURNING balance
+            """, (balance, user_id))
+            result = cursor.fetchone()
+            if not result:
+                logger.error(f"设置用户余额失败: 用户ID={user_id}不存在")
+                return False, "用户不存在"
+            updated_balance = result[0]
+            if change_amount != 0:
+                type_name = 'recharge' if change_amount > 0 else 'consume'
+                now = get_china_time()
                 cursor.execute("""
-                    UPDATE users 
-                    SET balance = %s 
-                    WHERE id = %s
-                    RETURNING balance
-                """, (balance, user_id))
-                
-                # 确认更新成功
-                result = cursor.fetchone()
-                if not result:
-                    logger.error(f"设置用户余额失败: 用户ID={user_id}不存在")
-                    return False, "用户不存在"
-                
-                updated_balance = result[0]
-                
-                # 记录余额变动
-                if change_amount != 0:
-                    type_name = 'recharge' if change_amount > 0 else 'consume'
-                    now = get_china_time()
-                    
-                    cursor.execute("""
-                        INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """, (user_id, change_amount, type_name, '管理员调整余额', None, updated_balance, now))
-            
-            return True, updated_balance
-        else:
-            # SQLite连接
-            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            db_path = os.path.join(current_dir, "orders.db")
-            conn = sqlite3.connect(db_path, timeout=10)
-            
-            with conn:
-                c = conn.cursor()
-                
-                # 更新余额
-                c.execute("UPDATE users SET balance = ? WHERE id = ?", (balance, user_id))
-                
-                # 记录余额变动
-                if change_amount != 0:
-                    type_name = 'recharge' if change_amount > 0 else 'consume'
-                    now = get_china_time()
-                    
-                    c.execute("""
-                        INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (user_id, change_amount, type_name, '管理员调整余额', None, balance, now))
-            
-            return True, balance
-    
+                    INSERT INTO balance_records (user_id, amount, type, reason, reference_id, balance_after, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (user_id, change_amount, type_name, '管理员调整余额', None, updated_balance, now))
+        return True, updated_balance
     except Exception as e:
         logger.error(f"设置用户余额失败: {str(e)}", exc_info=True)
         return False, f"设置用户余额失败: {str(e)}"
-    
     finally:
         if conn:
             conn.close()
