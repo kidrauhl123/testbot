@@ -260,6 +260,21 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIs(getattr(database, name), getattr(order_balance, name))
 
+    def test_database_reexports_recharge_helpers(self):
+        from modules import recharge
+
+        helper_names = (
+            "create_recharge_tables",
+            "create_recharge_request",
+            "get_user_recharge_requests",
+            "get_pending_recharge_requests",
+            "approve_recharge_request",
+            "reject_recharge_request",
+        )
+        for name in helper_names:
+            with self.subTest(name=name):
+                self.assertIs(getattr(database, name), getattr(recharge, name))
+
     def test_execute_query_requires_postgres_placeholders(self):
         import inspect
         from modules import db_core
@@ -315,6 +330,7 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
             "modules/database.py",
             "modules/db_core.py",
             "modules/order_balance.py",
+            "modules/recharge.py",
             "modules/web_routes.py",
             "modules/telegram_bot.py",
         ):
