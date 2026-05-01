@@ -32,6 +32,26 @@ class WebRoutesPostgresOnlyTests(unittest.TestCase):
                 self.assertNotIn(marker, source)
 
 
+class TelegramBotPostgresOnlyTests(unittest.TestCase):
+    def test_telegram_bot_has_no_sqlite_branches(self):
+        source = (PROJECT_ROOT / "modules" / "telegram_bot.py").read_text()
+        forbidden_markers = (
+            "import sqlite3",
+            "sqlite3.connect",
+            "orders.db",
+            "DATABASE_URL.startswith('postgres')",
+            "DATABASE_URL.startswith(\"postgres\")",
+            "placeholder = '%s' if DATABASE_URL.startswith('postgres') else '?'",
+            "SELECT * FROM orders WHERE id = ?",
+            "UPDATE orders SET notified = 1 WHERE id = ?",
+            "UPDATE orders SET status = ?, handler_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        )
+        for marker in forbidden_markers:
+            with self.subTest(marker=marker):
+                self.assertNotIn(marker, source)
+
+
 class PostgresOnlyDatabaseTests(unittest.TestCase):
     def test_rejects_missing_or_sqlite_database_url(self):
         with mock.patch.object(database, "DATABASE_URL", ""):

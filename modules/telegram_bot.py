@@ -5,9 +5,6 @@ import time
 import os
 from functools import wraps
 import functools
-import sqlite3
-import psycopg2
-from urllib.parse import urlparse
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -21,50 +18,22 @@ from telegram.ext import (
 
 from modules.constants import (
     BOT_TOKEN, STATUS, PLAN_LABELS_EN,
-    STATUS_TEXT_ZH, TG_PRICES, WEB_PRICES, SELLER_CHAT_IDS, DATABASE_URL
+    STATUS_TEXT_ZH, TG_PRICES, WEB_PRICES, SELLER_CHAT_IDS
 )
 from modules.database import (
     get_order_details, accept_order_atomic, execute_query,
     get_unnotified_orders, get_active_seller_ids, approve_recharge_request, reject_recharge_request,
-    get_china_time
+    get_china_time, get_postgres_connection
 )
 
 logger = logging.getLogger(__name__)
 
 # 获取数据库连接
 def get_db_connection():
-    """获取数据库连接，根据环境变量决定使用SQLite或PostgreSQL"""
+    """获取 PostgreSQL 数据库连接。"""
     
     try:
-        if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL连接
-            url = urlparse(DATABASE_URL)
-            dbname = url.path[1:]
-            user = url.username
-            password = url.password
-            host = url.hostname
-            port = url.port
-            
-            logger.info(f"连接PostgreSQL数据库: {host}:{port}/{dbname}")
-            
-            conn = psycopg2.connect(
-                dbname=dbname,
-                user=user,
-                password=password,
-                host=host,
-                port=port
-            )
-            return conn
-        else:
-            # SQLite连接
-            # 使用绝对路径访问数据库
-            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            db_path = os.path.join(current_dir, "orders.db")
-            logger.info(f"连接SQLite数据库: {db_path}")
-            
-            conn = sqlite3.connect(db_path)
-            conn.row_factory = sqlite3.Row  # 使查询结果可以通过列名访问
-            return conn
+        return get_postgres_connection()
     except Exception as e:
         logger.error(f"获取数据库连接时出错: {str(e)}", exc_info=True)
         return None
@@ -431,18 +400,11 @@ async def on_accept(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
             
         # 获取订单详情
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        if DATABASE_URL.startswith('postgres'):
-            cursor.execute("SELECT * FROM orders WHERE id = %s", (oid,))
-        else:
-            cursor.execute("SELECT * FROM orders WHERE id = ?", (oid,))
-            
-        order_row = cursor.fetchone()
-        columns = [column[0] for column in cursor.description]
-        order = {columns[i]: order_row[i] for i in range(len(columns))}
-        conn.close()
+        order = get_order_by_id(oid)
+        if not order:
+            logger.error(f"订单 {oid} 接单成功后无法读取详情")
+            await query.answer("Order accepted, but failed to load details", show_alert=True)
+            return
         
         # 确认回调
         await query.answer("You have successfully accepted the order!", show_alert=True)
@@ -1104,7 +1066,7 @@ async def check_and_push_orders():
                 if success_count > 0:
                     # 只有成功推送给至少一个卖家时才标记为已通知
                     try:
-                        execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
+                        execute_query("UPDATE orders SET notified = 1 WHERE id = %s", (oid,))
                         logger.info(f"订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家")
                     except Exception as update_error:
                         logger.error(f"更新订单 #{oid} 通知状态时出错: {str(update_error)}", exc_info=True)
@@ -1140,18 +1102,18 @@ async def send_notification_from_queue(data):
 
 # ===== 推送通知函数 =====
 def set_order_notified_atomic(oid):
-    """原子性地将订单notified字段设为1，只有notified=0时才更新，防止重复推送"""
+    """原子性地将订单 notified 字段设为 1，只有 notified=0 时才更新，防止重复推送。"""
     conn = get_db_connection()
     if not conn:
         return False
     try:
         cursor = conn.cursor()
-        placeholder = '%s' if DATABASE_URL.startswith('postgres') else '?'
-        cursor.execute(f"UPDATE orders SET notified=1 WHERE id={placeholder} AND notified=0", (oid,))
+        cursor.execute("UPDATE orders SET notified=1 WHERE id=%s AND notified=0", (oid,))
         affected = cursor.rowcount
         conn.commit()
         return affected > 0
     except Exception as e:
+        conn.rollback()
         logger.error(f"原子标记订单 #{oid} 通知状态时出错: {e}", exc_info=True)
         return False
     finally:
@@ -1207,7 +1169,7 @@ async def send_new_order_notification(data):
         if success_count > 0:
             # 标记订单为已通知
             try:
-                execute_query("UPDATE orders SET notified = 1 WHERE id = ?", (oid,))
+                execute_query("UPDATE orders SET notified = 1 WHERE id = %s", (oid,))
                 logger.info(f"订单 #{oid} 已成功推送给 {success_count}/{len(seller_ids)} 个卖家")
             except Exception as update_error:
                 logger.error(f"更新订单 #{oid} 通知状态时出错: {str(update_error)}", exc_info=True)
@@ -1567,12 +1529,11 @@ def get_order_by_id(order_id):
             logger.error(f"获取订单 {order_id} 信息时无法获取数据库连接")
             return None
         cursor = conn.cursor()
-        placeholder = '%s' if DATABASE_URL.startswith('postgres') else '?'
-        cursor.execute(f"SELECT * FROM orders WHERE id = {placeholder}", (order_id,))
+        cursor.execute("SELECT * FROM orders WHERE id = %s", (order_id,))
         order = cursor.fetchone()
+        columns = [desc[0] for desc in cursor.description] if cursor.description else []
         conn.close()
         if order:
-            columns = [desc[0] for desc in cursor.description]
             return dict(zip(columns, order))
         return None
     except Exception as e:
@@ -1582,8 +1543,7 @@ def get_order_by_id(order_id):
 def check_order_exists(order_id):
     """检查数据库中是否存在指定ID的订单"""
     try:
-        placeholder = '%s' if DATABASE_URL.startswith('postgres') else '?'
-        result = execute_query(f"SELECT COUNT(*) FROM orders WHERE id = {placeholder}", (order_id,), fetch=True)
+        result = execute_query("SELECT COUNT(*) FROM orders WHERE id = %s", (order_id,), fetch=True)
         count = result[0][0] if result else 0
         if count == 0:
             logger.warning(f"订单 {order_id} 在数据库中不存在")
@@ -1602,31 +1562,16 @@ def update_order_status(order_id, status, handler_id=None):
             
         cursor = conn.cursor()
         
-        # 根据数据库类型执行不同的查询
-        if DATABASE_URL.startswith('postgres'):
-            # PostgreSQL使用%s作为占位符，并且时间戳函数不同
-            if handler_id:
-                cursor.execute(
-                    "UPDATE orders SET status = %s, handler_id = %s, updated_at = NOW() WHERE id = %s",
-                    (status, handler_id, order_id)
-                )
-            else:
-                cursor.execute(
-                    "UPDATE orders SET status = %s, updated_at = NOW() WHERE id = %s",
-                    (status, order_id)
-                )
+        if handler_id:
+            cursor.execute(
+                "UPDATE orders SET status = %s, handler_id = %s, updated_at = NOW() WHERE id = %s",
+                (status, handler_id, order_id)
+            )
         else:
-            # SQLite
-            if handler_id:
-                cursor.execute(
-                    "UPDATE orders SET status = ?, handler_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    (status, handler_id, order_id)
-                )
-            else:
-                cursor.execute(
-                    "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    (status, order_id)
-                )
+            cursor.execute(
+                "UPDATE orders SET status = %s, updated_at = NOW() WHERE id = %s",
+                (status, order_id)
+            )
         
         conn.commit()
         conn.close()
@@ -1634,6 +1579,11 @@ def update_order_status(order_id, status, handler_id=None):
         logger.info(f"已更新订单 {order_id} 状态为 {status}")
         return True
     except Exception as e:
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
         logger.error(f"更新订单 {order_id} 状态时出错: {str(e)}", exc_info=True)
         return False 
 
