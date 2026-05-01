@@ -48,7 +48,7 @@ def register_routes(app, notification_queue):
                 
             # 验证用户
             hashed_password = hash_password(password)
-            user = execute_query("SELECT id, username, is_admin FROM users WHERE username=? AND password_hash=?",
+            user = execute_query("SELECT id, username, is_admin FROM users WHERE username=%s AND password_hash=%s",
                             (username, hashed_password), fetch=True)
             
             if user:
@@ -58,7 +58,7 @@ def register_routes(app, notification_queue):
                 session['is_admin'] = is_admin
                 
                 # 更新最后登录时间
-                execute_query("UPDATE users SET last_login=? WHERE id=%s",
+                execute_query("UPDATE users SET last_login=%s WHERE id=%s",
                             (get_china_time(), user_id))
                 
                 logger.info(f"用户 {username} 登录成功")
@@ -102,7 +102,7 @@ def register_routes(app, notification_queue):
                 return render_template('register.html', error='两次密码输入不一致')
             
             # 检查用户名是否已存在
-            existing_user = execute_query("SELECT id FROM users WHERE username=?", (username,), fetch=True)
+            existing_user = execute_query("SELECT id FROM users WHERE username=%s", (username,), fetch=True)
             if existing_user:
                 return render_template('register.html', error='用户名已存在')
             
@@ -110,7 +110,7 @@ def register_routes(app, notification_queue):
             hashed_password = hash_password(password)
             execute_query("""
                 INSERT INTO users (username, password_hash, is_admin, created_at) 
-                VALUES (?, ?, 0, ?)
+                VALUES (%s, %s, 0, %s)
             """, (username, hashed_password, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
             
             return redirect(url_for('login'))
@@ -254,28 +254,28 @@ def register_routes(app, notification_queue):
         submitted_counts = execute_query("""
             SELECT package, COUNT(*) as count
             FROM orders
-            WHERE web_user_id = ? AND status = ?
+            WHERE web_user_id = %s AND status = %s
             GROUP BY package
         """, (user_id, STATUS['SUBMITTED']), fetch=True)
         
         completed_counts = execute_query("""
             SELECT package, COUNT(*) as count
             FROM orders
-            WHERE web_user_id = ? AND status = ?
+            WHERE web_user_id = %s AND status = %s
             GROUP BY package
         """, (user_id, STATUS['COMPLETED']), fetch=True)
         
         failed_counts = execute_query("""
             SELECT package, COUNT(*) as count
             FROM orders
-            WHERE web_user_id = ? AND status = ?
+            WHERE web_user_id = %s AND status = %s
             GROUP BY package
         """, (user_id, STATUS['FAILED']), fetch=True)
         
         cancelled_counts = execute_query("""
             SELECT package, COUNT(*) as count
             FROM orders
-            WHERE web_user_id = ? AND status = ?
+            WHERE web_user_id = %s AND status = %s
             GROUP BY package
         """, (user_id, STATUS['CANCELLED']), fetch=True)
         
@@ -411,7 +411,7 @@ def register_routes(app, notification_queue):
             return jsonify({"error": "只能取消待处理的订单"}), 400
             
         # 更新订单状态为已取消
-        execute_query("UPDATE orders SET status=? WHERE id=%s", 
+        execute_query("UPDATE orders SET status=%s WHERE id=%s", 
                       (STATUS['CANCELLED'], oid))
         
         logger.info(f"订单已取消: ID={oid}")
@@ -454,7 +454,7 @@ def register_routes(app, notification_queue):
             return jsonify({"error": "只能质疑已完成的订单"}), 400
             
         # 更新订单状态为正在质疑
-        execute_query("UPDATE orders SET status=? WHERE id=%s", 
+        execute_query("UPDATE orders SET status=%s WHERE id=%s", 
                       (STATUS['DISPUTING'], oid))
         
         logger.info(f"订单已被质疑: ID={oid}, 用户ID={user_id}")
@@ -631,7 +631,7 @@ def register_routes(app, notification_queue):
             # 查询该用户今日已完成订单的消费总额
             today_orders = execute_query("""
                 SELECT package FROM orders 
-                WHERE web_user_id = ? AND created_at LIKE ? AND status = 'completed'
+                WHERE web_user_id = %s AND created_at LIKE %s AND status = 'completed'
             """, (username, today), fetch=True)
             
             # 计算总消费额
@@ -815,11 +815,11 @@ def register_routes(app, notification_queue):
         params = []
         
         if status:
-            conditions.append("status = ?")
+            conditions.append("status = %s")
             params.append(status)
         
         if search:
-            conditions.append("(account LIKE ? OR web_user_id LIKE ? OR id LIKE ?)")
+            conditions.append("(account LIKE %s OR web_user_id LIKE %s OR id LIKE %s)")
             search_param = f"%{search}%"
             params.extend([search_param, search_param, search_param])
         
@@ -1574,7 +1574,7 @@ def register_routes(app, notification_queue):
         
         if is_used is not None:
             is_used = int(is_used)
-            conditions.append("is_used = ?")
+            conditions.append("is_used = %s")
             params.append(is_used)
             
         if package:

@@ -252,7 +252,7 @@ async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 首先检查当前用户的活跃订单数
     active_orders_count = execute_query("""
         SELECT COUNT(*) FROM orders 
-        WHERE accepted_by = ? AND status = ?
+        WHERE accepted_by = %s AND status = %s
     """, (str(user_id), STATUS['ACCEPTED']), fetch=True)[0][0]
     
     # 发送当前状态
@@ -271,12 +271,12 @@ async def on_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 查询待处理订单
     new_orders = execute_query("""
         SELECT id, account, password, package, created_at FROM orders 
-        WHERE status = ? ORDER BY id DESC LIMIT 5
+        WHERE status = %s ORDER BY id DESC LIMIT 5
     """, (STATUS['SUBMITTED'],), fetch=True)
     
     my_orders = execute_query("""
         SELECT id, account, password, package, status FROM orders 
-        WHERE accepted_by = ? AND status IN (?, ?) ORDER BY id DESC LIMIT 5
+        WHERE accepted_by = %s AND status IN (%s, %s) ORDER BY id DESC LIMIT 5
     """, (str(user_id), STATUS['ACCEPTED'], STATUS['FAILED']), fetch=True)
     
     # 发送订单信息
@@ -474,7 +474,7 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             logger.info(f"管理员 {user_id} 标记订单 #{oid} 为已完成")
             
             timestamp = get_china_time()
-            execute_query("UPDATE orders SET status=?, completed_at=? WHERE id=? AND accepted_by=?",
+            execute_query("UPDATE orders SET status=%s, completed_at=%s WHERE id=%s AND accepted_by=%s",
                         (STATUS['COMPLETED'], timestamp, oid, str(user_id)))
                         
             try:
@@ -554,7 +554,7 @@ async def on_feedback_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 reason_text = f"Unknown reason: {reason_type}"
             
             # 更新数据库
-            execute_query("UPDATE orders SET status=?, completed_at=?, remark=? WHERE id=? AND accepted_by=?",
+            execute_query("UPDATE orders SET status=%s, completed_at=%s, remark=%s WHERE id=%s AND accepted_by=%s",
                         (STATUS['FAILED'], timestamp, reason_text, oid, str(user_id)))
             
             # 执行退款操作
@@ -617,7 +617,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         oid = feedback_waiting[user_id]
         feedback = update.message.text
         
-        execute_query("UPDATE orders SET remark=? WHERE id=?", (feedback, oid))
+        execute_query("UPDATE orders SET remark=%s WHERE id=%s", (feedback, oid))
         del feedback_waiting[user_id]
         
         await update.message.reply_text("Feedback recorded. Thank you.")
@@ -761,7 +761,7 @@ async def show_personal_stats(query, user_id, date_str, period_text):
     # 查询指定日期完成的订单
     completed_orders = execute_query("""
         SELECT package FROM orders 
-        WHERE accepted_by = ? AND status = ? AND completed_at LIKE ?
+        WHERE accepted_by = %s AND status = %s AND completed_at LIKE %s
     """, (str(user_id), STATUS['COMPLETED'], f"{date_str}%"), fetch=True)
     
     # 统计各套餐数量
@@ -808,8 +808,8 @@ async def show_period_stats(query, user_id, start_date, end_date, period_text):
     # 获取该时间段内用户完成的所有订单
     orders = execute_query("""
         SELECT package, completed_at FROM orders 
-        WHERE accepted_by = ? AND status = ? 
-        AND completed_at >= ? AND completed_at <= ?
+        WHERE accepted_by = %s AND status = %s 
+        AND completed_at >= %s AND completed_at <= %s
     """, (
         str(user_id), STATUS['COMPLETED'], 
         f"{start_str} 00:00:00", f"{end_str} 23:59:59"
@@ -909,13 +909,13 @@ async def show_all_stats(query, date_str, period_text):
     if len(date_str) == 10:  # 单日格式 YYYY-MM-DD
         completed_orders = execute_query("""
             SELECT accepted_by, package FROM orders 
-            WHERE status = ? AND completed_at LIKE ?
+            WHERE status = %s AND completed_at LIKE %s
         """, (STATUS['COMPLETED'], f"{date_str}%"), fetch=True)
     else:  # 时间段
         start_str = date_str
         completed_orders = execute_query("""
             SELECT accepted_by, package FROM orders 
-            WHERE status = ? AND completed_at >= ?
+            WHERE status = %s AND completed_at >= %s
         """, (STATUS['COMPLETED'], f"{start_str} 00:00:00"), fetch=True)
     
     # 按用户统计

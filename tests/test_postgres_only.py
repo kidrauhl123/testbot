@@ -228,7 +228,13 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
                 self.assertNotIn("VALUES (?, ?, ?, ?, ?)", source)
                 self.assertNotIn("SET price = ?", source)
 
-    def test_execute_query_converts_sqlite_placeholders_for_postgres(self):
+    def test_execute_query_requires_postgres_placeholders(self):
+        import inspect
+
+        source = inspect.getsource(database.execute_postgres_query)
+        self.assertNotIn("replace('?', '%s')", source)
+        self.assertNotIn('replace("?", "%s")', source)
+
         executed = {}
 
         class FakeCursor:
@@ -249,15 +255,38 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
             def close(self):
                 executed["closed"] = True
 
-        with mock.patch.object(database, "DATABASE_URL", "postgresql://user:pass@localhost/testbot"), \
+        with mock.patch.object(database, "DATABASE_URL", "postgresql://user:***@localhost/testbot"), \
              mock.patch.object(database, "get_postgres_connection", return_value=FakeConnection()):
-            result = database.execute_query("SELECT * FROM users WHERE id = ?", (123,), fetch=True)
+            result = database.execute_query("SELECT * FROM users WHERE id = %s", (123,), fetch=True)
 
         self.assertEqual(result, [(1,)])
         self.assertEqual(executed["query"], "SELECT * FROM users WHERE id = %s")
         self.assertEqual(executed["params"], (123,))
         self.assertTrue(executed["committed"])
         self.assertTrue(executed["closed"])
+
+    def test_application_sql_uses_postgres_placeholders(self):
+        forbidden_snippets = (
+            " = ?",
+            "=?",
+            "IN (?,",
+            "VALUES (?,",
+            "SET status=?",
+            "SET remark=?",
+            "completed_at=?",
+            "LIMIT ?",
+            "OFFSET ?",
+        )
+        for relative_path in (
+            "modules/constants.py",
+            "modules/database.py",
+            "modules/web_routes.py",
+            "modules/telegram_bot.py",
+        ):
+            source = (PROJECT_ROOT / relative_path).read_text()
+            with self.subTest(file=relative_path):
+                for snippet in forbidden_snippets:
+                    self.assertNotIn(snippet, source)
 
 
 if __name__ == "__main__":

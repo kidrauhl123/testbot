@@ -241,8 +241,6 @@ def execute_postgres_query(query, params=(), fetch=False, return_cursor=False):
     conn = get_postgres_connection()
     cursor = conn.cursor()
     
-    # PostgreSQL使用%s作为参数占位符，而不是SQLite的?
-    query = query.replace('?', '%s')
     if params:
         cursor.execute(query, params)
     else:
@@ -290,7 +288,7 @@ def get_unnotified_orders():
     orders = execute_query("""
         SELECT id, account, password, package, created_at, web_user_id 
         FROM orders 
-        WHERE notified = 0 AND status = ?
+        WHERE notified = 0 AND status = %s
     """, (STATUS['SUBMITTED'],), fetch=True)
     
     # 记录获取到的未通知订单
@@ -399,24 +397,24 @@ def add_seller(telegram_id, username, first_name, added_by):
     """添加新卖家"""
     timestamp = get_china_time()
     execute_query(
-        "INSERT INTO sellers (telegram_id, username, first_name, added_at, added_by) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO sellers (telegram_id, username, first_name, added_at, added_by) VALUES (%s, %s, %s, %s, %s)",
         (telegram_id, username, first_name, timestamp, added_by)
     )
 
 def toggle_seller_status(telegram_id):
     """切换卖家活跃状态"""
-    execute_query("UPDATE sellers SET is_active = NOT is_active WHERE telegram_id = ?", (telegram_id,))
+    execute_query("UPDATE sellers SET is_active = NOT is_active WHERE telegram_id = %s", (telegram_id,))
 
 def remove_seller(telegram_id):
     """移除卖家"""
-    return execute_query("DELETE FROM sellers WHERE telegram_id=?", (telegram_id,))
+    return execute_query("DELETE FROM sellers WHERE telegram_id=%s", (telegram_id,))
 
 def toggle_seller_admin(telegram_id):
     """切换卖家的管理员状态"""
     try:
         # 先获取当前状态
         current = execute_query(
-            "SELECT COALESCE(is_admin, FALSE) FROM sellers WHERE telegram_id = ?", 
+            "SELECT COALESCE(is_admin, FALSE) FROM sellers WHERE telegram_id = %s", 
             (telegram_id,), 
             fetch=True
         )
@@ -427,7 +425,7 @@ def toggle_seller_admin(telegram_id):
         new_status = not bool(current[0][0])
         
         execute_query(
-            "UPDATE sellers SET is_admin = ? WHERE telegram_id = ?",
+            "UPDATE sellers SET is_admin = %s WHERE telegram_id = %s",
             (new_status, telegram_id)
         )
         return True
@@ -438,7 +436,7 @@ def toggle_seller_admin(telegram_id):
 def is_admin_seller(telegram_id):
     """检查卖家是否是管理员"""
     result = execute_query(
-        "SELECT COALESCE(is_admin, FALSE) FROM sellers WHERE telegram_id = ? AND is_active = TRUE",
+        "SELECT COALESCE(is_admin, FALSE) FROM sellers WHERE telegram_id = %s AND is_active = TRUE",
         (telegram_id,),
         fetch=True
     )

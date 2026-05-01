@@ -49,7 +49,7 @@ def sync_env_sellers_to_db():
             if seller_id not in db_seller_ids:
                 logger.info(f"将环境变量中的卖家ID {seller_id} 同步到数据库")
                 execute_query(
-                    "INSERT INTO sellers (telegram_id, username, first_name, is_active, added_at, added_by) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO sellers (telegram_id, username, first_name, is_active, added_at, added_by) VALUES (%s, %s, %s, %s, %s, %s)",
                     (seller_id, f"env_seller_{seller_id}", f"环境变量卖家 {seller_id}", 1, timestamp, "环境变量")
                 )
     except Exception as e:
