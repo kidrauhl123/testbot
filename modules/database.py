@@ -1,6 +1,4 @@
-import os
 import time
-import sqlite3
 import hashlib
 import logging
 import psycopg2
@@ -303,211 +301,75 @@ def get_unnotified_orders():
 
 # 接单原子操作
 def accept_order_atomic(oid, user_id):
-    # 使用事务确保操作的原子性
-    if DATABASE_URL.startswith('postgres'):
-        # PostgreSQL版本
-        url = urlparse(DATABASE_URL)
-        dbname = url.path[1:]
-        user = url.username
-        password = url.password
-        host = url.hostname
-        port = url.port
-        
-        conn = psycopg2.connect(
-            dbname=dbname,
-            user=user,
-            password=password,
-            host=host,
-            port=port
+    """原子接单；Postgres-only。"""
+    conn = get_postgres_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("SELECT status FROM orders WHERE id = %s FOR UPDATE", (oid,))
+        order = cursor.fetchone()
+        if not order:
+            conn.rollback()
+            return False, "Order not found"
+
+        if order[0] == 'cancelled':
+            conn.rollback()
+            return False, "Order has been cancelled"
+
+        if order[0] != 'submitted':
+            conn.rollback()
+            return False, "Order already taken"
+
+        cursor.execute("""
+            SELECT COUNT(*) FROM orders
+            WHERE accepted_by = %s AND status = 'disputing'
+        """, (str(user_id),))
+        disputing_count = cursor.fetchone()[0]
+        if disputing_count > 0:
+            conn.rollback()
+            return False, "You have a disputed order. Please resolve it before accepting new orders."
+
+        cursor.execute("""
+            SELECT COUNT(*) FROM orders
+            WHERE accepted_by = %s AND status = 'accepted'
+        """, (str(user_id),))
+        active_count = cursor.fetchone()[0]
+        if active_count >= 3:
+            conn.rollback()
+            return False, "You already have 3 active orders. Please complete your current orders first before accepting new ones."
+
+        from modules.constants import user_info_cache
+        cached_user = user_info_cache.get(user_id, {})
+        username = cached_user.get('username')
+        first_name = cached_user.get('first_name')
+        last_name = cached_user.get('last_name', '')
+        full_name = None
+        if first_name:
+            full_name = f"{first_name} {last_name}".strip() if last_name else first_name
+
+        timestamp = get_china_time()
+        cursor.execute(
+            """
+            UPDATE orders
+            SET status = 'accepted',
+                accepted_at = %s,
+                accepted_by = %s,
+                accepted_by_username = %s,
+                accepted_by_first_name = %s
+            WHERE id = %s
+            """,
+            (timestamp, str(user_id), username, full_name, oid),
         )
-        cursor = conn.cursor()
-        
-        try:
-            # 开始事务
-            cursor.execute("BEGIN")
-            
-            # 检查订单状态
-            cursor.execute("SELECT status FROM orders WHERE id = %s FOR UPDATE", (oid,))
-            order = cursor.fetchone()
-            if not order:
-                conn.rollback()
-                conn.close()
-                return False, "Order not found"
-                
-            if order[0] == 'cancelled':
-                conn.rollback()
-                conn.close()
-                return False, "Order has been cancelled"
-                
-            if order[0] != 'submitted':
-                conn.rollback()
-                conn.close()
-                return False, "Order already taken"
-            
-            # 检查该用户是否有正在质疑的订单
-            cursor.execute("""
-                SELECT COUNT(*) FROM orders 
-                WHERE accepted_by = %s AND status = 'disputing'
-            """, (str(user_id),))
-            disputing_count = cursor.fetchone()[0]
-            
-            if disputing_count > 0:
-                conn.rollback()
-                conn.close()
-                return False, "You have a disputed order. Please resolve it before accepting new orders."
-            
-            # 检查该用户当前接单数量（状态为accepted的订单）
-            cursor.execute("""
-                SELECT COUNT(*) FROM orders 
-                WHERE accepted_by = %s AND status = 'accepted'
-            """, (str(user_id),))
-            active_count = cursor.fetchone()[0]
-            
-            if active_count >= 3:
-                conn.rollback()
-                conn.close()
-                return False, "You already have 3 active orders. Please complete your current orders first before accepting new ones."
-            
-            # 获取用户信息
-            try:
-                # 从缓存中获取用户名和昵称
-                from modules.constants import user_info_cache
-                username = None
-                first_name = None
-                last_name = None
-                full_name = None
-                
-                if user_id in user_info_cache:
-                    username = user_info_cache[user_id].get('username')
-                    first_name = user_info_cache[user_id].get('first_name')
-                    last_name = user_info_cache[user_id].get('last_name', '')
-                    
-                    # 组合完整昵称
-                    if first_name:
-                        if last_name:
-                            full_name = f"{first_name} {last_name}".strip()
-                        else:
-                            full_name = first_name
-                
-                # 更新订单
-                timestamp = get_china_time()
-                cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = %s, accepted_by = %s, accepted_by_username = %s, accepted_by_first_name = %s WHERE id = %s",
-                            (timestamp, str(user_id), username, full_name, oid))
-            except Exception as e:
-                logger.error(f"获取用户信息失败: {str(e)}")
-                # 如果获取用户信息失败，仍然更新订单，但不设置用户名和昵称
-                timestamp = get_china_time()
-                cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = %s, accepted_by = %s WHERE id = %s",
-                            (timestamp, str(user_id), oid))
-            
-            # 提交事务
-            conn.commit()
-            conn.close()
-            return True, "Success"
-            
-        except Exception as e:
-            conn.rollback()
-            conn.close()
-            logger.error(f"Error in accept_order_atomic: {str(e)}")
-            return False, "Database error"
-    else:
-        # SQLite版本
-        # 使用绝对路径访问数据库
-        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        db_path = os.path.join(current_dir, "orders.db")
-        logger.debug(f"接单操作，使用数据库: {db_path}")
-        
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        
-        try:
-            # 开始独占事务
-            cursor.execute("BEGIN EXCLUSIVE")
-            
-            # 检查订单状态
-            cursor.execute("SELECT status FROM orders WHERE id = ?", (oid,))
-            order = cursor.fetchone()
-            if not order:
-                conn.rollback()
-                conn.close()
-                return False, "Order not found"
-                
-            if order[0] == 'cancelled':
-                conn.rollback()
-                conn.close()
-                return False, "Order has been cancelled"
-                
-            if order[0] != 'submitted':
-                conn.rollback()
-                conn.close()
-                return False, "Order already taken"
-            
-            # 检查该用户是否有正在质疑的订单
-            cursor.execute("""
-                SELECT COUNT(*) FROM orders 
-                WHERE accepted_by = ? AND status = 'disputing'
-            """, (str(user_id),))
-            disputing_count = cursor.fetchone()[0]
-            
-            if disputing_count > 0:
-                conn.rollback()
-                conn.close()
-                return False, "You have a disputed order. Please resolve it before accepting new orders."
-            
-            # 检查该用户当前接单数量（状态为accepted的订单）
-            cursor.execute("""
-                SELECT COUNT(*) FROM orders 
-                WHERE accepted_by = ? AND status = 'accepted'
-            """, (str(user_id),))
-            active_count = cursor.fetchone()[0]
-            
-            if active_count >= 3:
-                conn.rollback()
-                conn.close()
-                return False, "You already have 3 active orders. Please complete your current orders first before accepting new ones."
-            
-            # 获取用户信息
-            try:
-                # 从缓存中获取用户名和昵称
-                from modules.constants import user_info_cache
-                username = None
-                first_name = None
-                last_name = None
-                full_name = None
-                
-                if user_id in user_info_cache:
-                    username = user_info_cache[user_id].get('username')
-                    first_name = user_info_cache[user_id].get('first_name')
-                    last_name = user_info_cache[user_id].get('last_name', '')
-                    
-                    # 组合完整昵称
-                    if first_name:
-                        if last_name:
-                            full_name = f"{first_name} {last_name}".strip()
-                        else:
-                            full_name = first_name
-                
-                # 更新订单
-                timestamp = get_china_time()
-                cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = ?, accepted_by = ?, accepted_by_username = ?, accepted_by_first_name = ? WHERE id = ?",
-                            (timestamp, str(user_id), username, full_name, oid))
-            except Exception as e:
-                logger.error(f"获取用户信息失败: {str(e)}")
-                # 如果获取用户信息失败，仍然更新订单，但不设置用户名和昵称
-                timestamp = get_china_time()
-                cursor.execute("UPDATE orders SET status = 'accepted', accepted_at = ?, accepted_by = ? WHERE id = ?",
-                            (timestamp, str(user_id), oid))
-            
-            # 提交事务
-            conn.commit()
-            conn.close()
-            return True, "Success"
-            
-        except Exception as e:
-            conn.rollback()
-            conn.close()
-            logger.error(f"Error in accept_order_atomic: {str(e)}")
-            return False, "Database error"
+
+        conn.commit()
+        return True, "Success"
+
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error in accept_order_atomic: {str(e)}")
+        return False, "Database error"
+    finally:
+        conn.close()
 
 # 获取订单详情
 def get_order_details(oid):
@@ -1191,125 +1053,58 @@ def get_admin_activation_codes(limit=100, offset=0, conditions=None, params=None
 
 # 用户定制价格函数
 def get_user_custom_prices(user_id):
-    """
-    获取用户的定制价格
-    
-    参数:
-    - user_id: 用户ID
-    
-    返回:
-    - 用户定制价格的字典，键为套餐（如'1'），值为价格
-    """
+    """获取用户的定制价格，返回 {package: price}。"""
     try:
-        if DATABASE_URL.startswith('postgres'):
-            results = execute_query("""
-                SELECT package, price FROM user_custom_prices
-                WHERE user_id = %s
-            """, (user_id,), fetch=True)
-        else:
-            results = execute_query("""
-                SELECT package, price FROM user_custom_prices
-                WHERE user_id = ?
-            """, (user_id,), fetch=True)
-        
+        results = execute_query("""
+            SELECT package, price FROM user_custom_prices
+            WHERE user_id = %s
+        """, (user_id,), fetch=True)
+
         if not results:
             return {}
-            
-        custom_prices = {}
-        for package, price in results:
-            custom_prices[package] = price
-            
-        return custom_prices
+
+        return {package: price for package, price in results}
     except Exception as e:
         logger.error(f"获取用户定制价格失败: {str(e)}", exc_info=True)
         return {}
 
+
 def set_user_custom_price(user_id, package, price, admin_id):
-    """
-    设置用户的定制价格
-    
-    参数:
-    - user_id: 用户ID
-    - package: 套餐（如'1'，'2'等）
-    - price: 价格
-    - admin_id: 设置价格的管理员ID
-    
-    返回:
-    - 成功返回True，失败返回False
-    """
+    """设置或更新用户的定制价格。"""
     try:
         now = get_china_time()
-        
-        # 检查是否已存在该用户的该套餐定制价格
-        if DATABASE_URL.startswith('postgres'):
-            existing = execute_query("""
-                SELECT id FROM user_custom_prices
+        existing = execute_query("""
+            SELECT id FROM user_custom_prices
+            WHERE user_id = %s AND package = %s
+        """, (user_id, package), fetch=True)
+
+        if existing:
+            execute_query("""
+                UPDATE user_custom_prices
+                SET price = %s, created_at = %s, created_by = %s
                 WHERE user_id = %s AND package = %s
-            """, (user_id, package), fetch=True)
-            
-            if existing:
-                # 更新已有价格
-                execute_query("""
-                    UPDATE user_custom_prices
-                    SET price = %s, created_at = %s, created_by = %s
-                    WHERE user_id = %s AND package = %s
-                """, (price, now, admin_id, user_id, package))
-            else:
-                # 添加新价格
-                execute_query("""
-                    INSERT INTO user_custom_prices
-                    (user_id, package, price, created_at, created_by)
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (user_id, package, price, now, admin_id))
+            """, (price, now, admin_id, user_id, package))
         else:
-            existing = execute_query("""
-                SELECT id FROM user_custom_prices
-                WHERE user_id = ? AND package = ?
-            """, (user_id, package), fetch=True)
-            
-            if existing:
-                # 更新已有价格
-                execute_query("""
-                    UPDATE user_custom_prices
-                    SET price = ?, created_at = ?, created_by = ?
-                    WHERE user_id = ? AND package = ?
-                """, (price, now, admin_id, user_id, package))
-            else:
-                # 添加新价格
-                execute_query("""
-                    INSERT INTO user_custom_prices
-                    (user_id, package, price, created_at, created_by)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (user_id, package, price, now, admin_id))
-            
+            execute_query("""
+                INSERT INTO user_custom_prices
+                (user_id, package, price, created_at, created_by)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (user_id, package, price, now, admin_id))
+
         return True
     except Exception as e:
         logger.error(f"设置用户定制价格失败: {str(e)}", exc_info=True)
         return False
 
+
 def delete_user_custom_price(user_id, package):
-    """
-    删除用户的定制价格
-    
-    参数:
-    - user_id: 用户ID
-    - package: 套餐（如'1'，'2'等）
-    
-    返回:
-    - 成功返回True，失败返回False
-    """
+    """删除用户的定制价格。"""
     try:
-        if DATABASE_URL.startswith('postgres'):
-            execute_query("""
-                DELETE FROM user_custom_prices
-                WHERE user_id = %s AND package = %s
-            """, (user_id, package))
-        else:
-            execute_query("""
-                DELETE FROM user_custom_prices
-                WHERE user_id = ? AND package = ?
-            """, (user_id, package))
+        execute_query("""
+            DELETE FROM user_custom_prices
+            WHERE user_id = %s AND package = %s
+        """, (user_id, package))
         return True
     except Exception as e:
         logger.error(f"删除用户定制价格失败: {str(e)}", exc_info=True)
-        return False 
+        return False

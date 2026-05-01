@@ -156,6 +156,37 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
                 self.assertNotIn("BEGIN TRANSACTION", source)
                 self.assertNotIn("LIMIT ? OFFSET ?", source)
 
+    def test_order_acceptance_helpers_have_no_sqlite_branches(self):
+        import inspect
+
+        for func in (
+            database.get_unnotified_orders,
+            database.accept_order_atomic,
+        ):
+            with self.subTest(func=func.__name__):
+                source = inspect.getsource(func)
+                self.assertNotIn("DATABASE_URL.startswith", source)
+                self.assertNotIn("sqlite3", source)
+                self.assertNotIn("orders.db", source)
+                self.assertNotIn("SQLite", source)
+                self.assertNotIn("BEGIN EXCLUSIVE", source)
+                self.assertNotIn("WHERE id = ?", source)
+
+    def test_custom_price_helpers_have_no_sqlite_branches(self):
+        import inspect
+
+        for func in (
+            database.get_user_custom_prices,
+            database.set_user_custom_price,
+            database.delete_user_custom_price,
+        ):
+            with self.subTest(func=func.__name__):
+                source = inspect.getsource(func)
+                self.assertNotIn("DATABASE_URL.startswith", source)
+                self.assertNotIn("WHERE user_id = ?", source)
+                self.assertNotIn("VALUES (?, ?, ?, ?, ?)", source)
+                self.assertNotIn("SET price = ?", source)
+
     def test_execute_query_converts_sqlite_placeholders_for_postgres(self):
         executed = {}
 
