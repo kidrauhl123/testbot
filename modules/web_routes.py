@@ -2,14 +2,13 @@ import os
 import time
 import logging
 import asyncio
-import sqlite3
 from functools import wraps
 from datetime import datetime, timedelta
 import pytz
 
 from flask import Flask, request, render_template, jsonify, session, redirect, url_for, flash
 
-from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH, DATABASE_URL
+from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH
 from modules.database import (
     execute_query, hash_password, get_all_sellers, add_seller, remove_seller, toggle_seller_status,
     get_user_balance, get_user_credit_limit, set_user_balance, set_user_credit_limit, refund_order,
@@ -17,7 +16,7 @@ from modules.database import (
     get_pending_recharge_requests, approve_recharge_request, reject_recharge_request, toggle_seller_admin,
     get_balance_records, get_activation_code, mark_activation_code_used, create_activation_code,
     get_admin_activation_codes, get_user_custom_prices, set_user_custom_price, delete_user_custom_price,
-    get_china_time
+    get_china_time, get_postgres_connection
 )
 import modules.constants as constants
 
@@ -59,7 +58,7 @@ def register_routes(app, notification_queue):
                 session['is_admin'] = is_admin
                 
                 # 更新最后登录时间
-                execute_query("UPDATE users SET last_login=? WHERE id=?",
+                execute_query("UPDATE users SET last_login=? WHERE id=%s",
                             (get_china_time(), user_id))
                 
                 logger.info(f"用户 {username} 登录成功")
@@ -336,7 +335,7 @@ def register_routes(app, notification_queue):
         
         # 非管理员只能看到自己的订单
         if not session.get('is_admin'):
-            user_filter = "WHERE user_id = ?"
+            user_filter = "WHERE user_id = %s"
             params.append(session.get('user_id'))
         
         # 查询订单
@@ -345,7 +344,7 @@ def register_routes(app, notification_queue):
                    remark, web_user_id, user_id, accepted_by, accepted_by_username, accepted_by_first_name
             FROM orders 
             {user_filter}
-            ORDER BY id DESC LIMIT ? OFFSET ?
+            ORDER BY id DESC LIMIT %s OFFSET %s
         """, params + [limit, offset], fetch=True)
         
         logger.info(f"查询到 {len(orders)} 条订单记录")
@@ -395,7 +394,7 @@ def register_routes(app, notification_queue):
         order = execute_query("""
             SELECT id, user_id, status, package, refunded 
             FROM orders 
-            WHERE id=?
+            WHERE id=%s
         """, (oid,), fetch=True)
         
         if not order:
@@ -412,7 +411,7 @@ def register_routes(app, notification_queue):
             return jsonify({"error": "只能取消待处理的订单"}), 400
             
         # 更新订单状态为已取消
-        execute_query("UPDATE orders SET status=? WHERE id=?", 
+        execute_query("UPDATE orders SET status=? WHERE id=%s", 
                       (STATUS['CANCELLED'], oid))
         
         logger.info(f"订单已取消: ID={oid}")
@@ -438,7 +437,7 @@ def register_routes(app, notification_queue):
         order = execute_query("""
             SELECT id, user_id, status, package, accepted_by, account, password
             FROM orders 
-            WHERE id=?
+            WHERE id=%s
         """, (oid,), fetch=True)
         
         if not order:
@@ -455,7 +454,7 @@ def register_routes(app, notification_queue):
             return jsonify({"error": "只能质疑已完成的订单"}), 400
             
         # 更新订单状态为正在质疑
-        execute_query("UPDATE orders SET status=? WHERE id=?", 
+        execute_query("UPDATE orders SET status=? WHERE id=%s", 
                       (STATUS['DISPUTING'], oid))
         
         logger.info(f"订单已被质疑: ID={oid}, 用户ID={user_id}")
@@ -486,7 +485,7 @@ def register_routes(app, notification_queue):
         order = execute_query("""
             SELECT id, user_id, status, package, accepted_by, accepted_at, account, password
             FROM orders 
-            WHERE id=?
+            WHERE id=%s
         """, (oid,), fetch=True)
         
         if not order:
@@ -717,7 +716,7 @@ def register_routes(app, notification_queue):
         """获取用户定制价格（仅限管理员）"""
         try:
             # 获取用户信息
-            user = execute_query("SELECT username FROM users WHERE id=?", (user_id,), fetch=True)
+            user = execute_query("SELECT username FROM users WHERE id=%s", (user_id,), fetch=True)
             if not user:
                 return jsonify({"error": "用户不存在"}), 404
                 
@@ -770,7 +769,7 @@ def register_routes(app, notification_queue):
             return jsonify({"error": f"无效的套餐: {package}"}), 400
             
         # 检查用户是否存在
-        user = execute_query("SELECT username FROM users WHERE id=?", (user_id,), fetch=True)
+        user = execute_query("SELECT username FROM users WHERE id=%s", (user_id,), fetch=True)
         if not user:
             return jsonify({"error": "用户不存在"}), 404
             
@@ -833,7 +832,7 @@ def register_routes(app, notification_queue):
             FROM orders
             {where_clause}
             ORDER BY id DESC
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
         """, params + [limit, offset], fetch=True)
         
         # 查询订单总数
@@ -948,7 +947,7 @@ def register_routes(app, notification_queue):
                    accepted_at, completed_at, accepted_by, web_user_id, user_id,
                    accepted_by_username, accepted_by_first_name
             FROM orders 
-            WHERE id = ?
+            WHERE id = %s
         """, (order_id,), fetch=True)
         
         if not order:
@@ -979,7 +978,7 @@ def register_routes(app, notification_queue):
         data = request.json
         
         # 获取当前订单信息
-        order = execute_query("SELECT status, user_id, package, refunded FROM orders WHERE id=?", (order_id,), fetch=True)
+        order = execute_query("SELECT status, user_id, package, refunded FROM orders WHERE id=%s", (order_id,), fetch=True)
         if not order:
             return jsonify({"error": "订单不存在"}), 404
         
@@ -991,8 +990,8 @@ def register_routes(app, notification_queue):
         # 更新订单信息
         execute_query("""
             UPDATE orders 
-            SET account=?, password=?, package=?, status=?, remark=? 
-            WHERE id=?
+            SET account=%s, password=%s, package=%s, status=%s, remark=%s 
+            WHERE id=%s
         """, (
             data.get('account'), 
             data.get('password'), 
@@ -1024,31 +1023,20 @@ def register_routes(app, notification_queue):
             # 获取订单总数
             total_count = execute_query("SELECT COUNT(*) FROM orders", fetch=True)[0][0]
             if len(order_ids) == total_count:
-                # 全部删除，直接truncate并重置自增ID
-                if DATABASE_URL.startswith('postgres'):
-                    import psycopg2
-                    from urllib.parse import urlparse
-                    url = urlparse(DATABASE_URL)
-                    conn = psycopg2.connect(
-                        dbname=url.path[1:],
-                        user=url.username,
-                        password=url.password,
-                        host=url.hostname,
-                        port=url.port
-                    )
-                    cur = conn.cursor()
+                # 全部删除，直接 truncate 并重置自增 ID
+                conn = get_postgres_connection()
+                cur = conn.cursor()
+                try:
                     cur.execute("TRUNCATE TABLE orders RESTART IDENTITY;")
                     conn.commit()
+                finally:
                     cur.close()
                     conn.close()
-                else:
-                    # SQLite等其他数据库的处理
-                    execute_query("DELETE FROM orders")
                 deleted_count = total_count
             else:
                 # 普通批量删除
                 order_ids_int = [int(oid) for oid in order_ids]
-                placeholders = ','.join(['?'] * len(order_ids_int))
+                placeholders = ','.join(['%s'] * len(order_ids_int))
                 result = execute_query(
                     f"DELETE FROM orders WHERE id IN ({placeholders})",
                     order_ids_int,
@@ -1295,7 +1283,7 @@ def register_routes(app, notification_queue):
                 if code_info:
                     # 查找使用此激活码创建的订单
                     order_query = execute_query(
-                        "SELECT id, account, package, status, created_at, completed_at, remark FROM orders WHERE remark LIKE ? ORDER BY id DESC LIMIT 1", 
+                        "SELECT id, account, package, status, created_at, completed_at, remark FROM orders WHERE remark LIKE %s ORDER BY id DESC LIMIT 1", 
                         (f"%通过激活码兑换: {code}%",), 
                         fetch=True
                     )
@@ -1319,7 +1307,7 @@ def register_routes(app, notification_queue):
                 
                 # 查询订单详情
                 order_query = execute_query(
-                    "SELECT id, account, package, status, created_at, completed_at, remark FROM orders WHERE id = ?", 
+                    "SELECT id, account, package, status, created_at, completed_at, remark FROM orders WHERE id = %s", 
                     (last_order_id,), 
                     fetch=True
                 )
@@ -1385,7 +1373,7 @@ def register_routes(app, notification_queue):
             if code_info['is_used']:
                 # 查找使用此激活码创建的订单
                 order_query = execute_query(
-                    "SELECT id, status FROM orders WHERE remark LIKE ? ORDER BY id DESC LIMIT 1", 
+                    "SELECT id, status FROM orders WHERE remark LIKE %s ORDER BY id DESC LIMIT 1", 
                     (f"%通过激活码兑换: {code}%",), 
                     fetch=True
                 )
@@ -1443,7 +1431,7 @@ def register_routes(app, notification_queue):
             if code_info['is_used']:
                 # 查找使用此激活码创建的订单
                 order_query = execute_query(
-                    "SELECT id, status FROM orders WHERE remark LIKE ? ORDER BY id DESC LIMIT 1", 
+                    "SELECT id, status FROM orders WHERE remark LIKE %s ORDER BY id DESC LIMIT 1", 
                     (f"%通过激活码兑换: {code}%",), 
                     fetch=True
                 )
@@ -1470,122 +1458,65 @@ def register_routes(app, notification_queue):
             order_id = None
             
             # 使用数据库事务确保原子性操作
+            conn = None
+            cursor = None
             try:
-                if DATABASE_URL.startswith('postgres'):
-                    # PostgreSQL事务
-                    import psycopg2
-                    from urllib.parse import urlparse
-                    url = urlparse(DATABASE_URL)
-                    conn = psycopg2.connect(
-                        dbname=url.path[1:],
-                        user=url.username,
-                        password=url.password,
-                        host=url.hostname,
-                        port=url.port
-                    )
-                    cursor = conn.cursor()
-                    
-                    # 开始事务
-                    conn.autocommit = False
-                    
-                    # 1. 先检查激活码是否仍然可用
-                    cursor.execute(
-                        "SELECT id, is_used FROM activation_codes WHERE code = %s FOR UPDATE",
-                        (code,)
-                    )
-                    code_check = cursor.fetchone()
-                    if not code_check or code_check[1] == 1:
-                        conn.rollback()
-                        return jsonify({"success": False, "error": "此激活码已被使用或不存在"}), 400
-                    
-                    # 2. 创建订单
-                    cursor.execute("""
-                        INSERT INTO orders (account, password, package, remark, status, created_at, user_id)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        RETURNING id
-                    """, (
-                        account,
-                        password,
-                        code_info['package'],
-                        f"通过激活码兑换: {code}",
-                        STATUS['SUBMITTED'],
-                        now,
-                        user_id
-                    ))
-                    order_id = cursor.fetchone()[0]
-                    
-                    # 3. 标记激活码为已使用
-                    cursor.execute("""
-                        UPDATE activation_codes
-                        SET is_used = 1, used_at = %s, used_by = %s
-                        WHERE id = %s
-                    """, (now, user_id if user_id > 0 else None, code_info['id']))
-                    
-                    # 提交事务
-                    conn.commit()
-                    
-                else:
-                    # SQLite事务
-                    conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "orders.db"))
-                    cursor = conn.cursor()
-                    
-                    # 开始事务
-                    conn.execute("BEGIN TRANSACTION")
-                    
-                    # 1. 先检查激活码是否仍然可用
-                    cursor.execute(
-                        "SELECT id, is_used FROM activation_codes WHERE code = ?",
-                        (code,)
-                    )
-                    code_check = cursor.fetchone()
-                    if not code_check or code_check[1] == 1:
-                        conn.rollback()
-                        conn.close()
-                        return jsonify({"success": False, "error": "此激活码已被使用或不存在"}), 400
-                    
-                    # 2. 创建订单
-                    cursor.execute("""
-                        INSERT INTO orders (account, password, package, remark, status, created_at, user_id)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        account,
-                        password,
-                        code_info['package'],
-                        f"通过激活码兑换: {code}",
-                        STATUS['SUBMITTED'],
-                        now,
-                        user_id
-                    ))
-                    order_id = cursor.lastrowid
-                    
-                    # 3. 标记激活码为已使用
-                    cursor.execute("""
-                        UPDATE activation_codes
-                        SET is_used = 1, used_at = ?, used_by = ?
-                        WHERE id = ?
-                    """, (now, user_id if user_id > 0 else None, code_info['id']))
-                    
-                    # 提交事务
-                    conn.commit()
-                    conn.close()
-                
+                conn = get_postgres_connection()
+                cursor = conn.cursor()
+                conn.autocommit = False
+
+                # 1. 先检查激活码是否仍然可用
+                cursor.execute(
+                    "SELECT id, is_used FROM activation_codes WHERE code = %s FOR UPDATE",
+                    (code,)
+                )
+                code_check = cursor.fetchone()
+                if not code_check or code_check[1] == 1:
+                    conn.rollback()
+                    return jsonify({"success": False, "error": "此激活码已被使用或不存在"}), 400
+
+                # 2. 创建订单
+                cursor.execute("""
+                    INSERT INTO orders (account, password, package, remark, status, created_at, user_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (
+                    account,
+                    password,
+                    code_info['package'],
+                    f"通过激活码兑换: {code}",
+                    STATUS['SUBMITTED'],
+                    now,
+                    user_id
+                ))
+                order_id = cursor.fetchone()[0]
+
+                # 3. 标记激活码为已使用
+                cursor.execute("""
+                    UPDATE activation_codes
+                    SET is_used = 1, used_at = %s, used_by = %s
+                    WHERE id = %s
+                """, (now, user_id if user_id > 0 else None, code_info['id']))
+
+                conn.commit()
+
                 # 记录成功日志
                 logger.info(f"用户 {username} 成功兑换激活码 {code}, 套餐: {code_info['package']}, 订单ID: {order_id}")
-                
+
                 # 将激活码和订单ID保存到session，以便刷新页面后仍能显示
                 session['last_redeemed_code'] = code
                 session['last_order_id'] = order_id
-                
+
             except Exception as e:
-                # 回滚事务
-                if 'conn' in locals():
-                    if DATABASE_URL.startswith('postgres'):
-                        conn.rollback()
-                    else:
-                        conn.rollback()
-                        conn.close()
+                if conn:
+                    conn.rollback()
                 logger.error(f"激活码兑换事务失败: {str(e)}", exc_info=True)
                 return jsonify({"success": False, "error": f"处理激活码兑换失败: {str(e)}"}), 500
+            finally:
+                if cursor:
+                    cursor.close()
+                if conn:
+                    conn.close()
             
             # 获取完整的订单信息
             order = {
@@ -1647,7 +1578,7 @@ def register_routes(app, notification_queue):
             params.append(is_used)
             
         if package:
-            conditions.append("package = ?")
+            conditions.append("package = %s")
             params.append(package)
             
         # 将条件传递给数据库函数
@@ -1690,15 +1621,12 @@ def register_routes(app, notification_queue):
                 return jsonify({"success": False, "message": "未选择任何激活码"}), 400
                 
             # 构建占位符
-            if DATABASE_URL.startswith('postgres'):
-                placeholders = ','.join(['%s'] * len(code_ids))
-                query = f"DELETE FROM activation_codes WHERE id IN ({placeholders}) AND is_used = 0"
-            else:
-                placeholders = ','.join(['?'] * len(code_ids))
-                query = f"DELETE FROM activation_codes WHERE id IN ({placeholders}) AND is_used = 0"
-            
+            code_ids_int = [int(code_id) for code_id in code_ids]
+            placeholders = ','.join(['%s'] * len(code_ids_int))
+            query = f"DELETE FROM activation_codes WHERE id IN ({placeholders}) AND is_used = 0"
+
             # 执行删除
-            result = execute_query(query, code_ids, return_cursor=True)
+            result = execute_query(query, code_ids_int, return_cursor=True)
             deleted_count = result.rowcount if result else 0
             
             logger.info(f"管理员删除了 {deleted_count} 个激活码")
@@ -1727,11 +1655,11 @@ def register_routes(app, notification_queue):
             
             if is_used is not None:
                 is_used = int(is_used)
-                conditions.append("is_used = ?")
+                conditions.append("is_used = %s")
                 params.append(is_used)
                 
             if package:
-                conditions.append("package = ?")
+                conditions.append("package = %s")
                 params.append(package)
                 
             where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""

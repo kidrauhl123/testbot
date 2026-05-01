@@ -11,6 +11,27 @@ if str(PROJECT_ROOT) not in sys.path:
 from modules import database
 
 
+class WebRoutesPostgresOnlyTests(unittest.TestCase):
+    def test_web_routes_have_no_sqlite_branches(self):
+        source = (PROJECT_ROOT / "modules" / "web_routes.py").read_text()
+        forbidden_markers = (
+            "import sqlite3",
+            "sqlite3.connect",
+            "orders.db",
+            "DATABASE_URL.startswith('postgres')",
+            "DATABASE_URL.startswith(\"postgres\")",
+            "BEGIN TRANSACTION",
+            "cursor.lastrowid",
+            "LIMIT ? OFFSET ?",
+            "WHERE id = ?",
+            "WHERE id=?",
+            "SET account=?, password=?, package=?, status=?, remark=?",
+        )
+        for marker in forbidden_markers:
+            with self.subTest(marker=marker):
+                self.assertNotIn(marker, source)
+
+
 class PostgresOnlyDatabaseTests(unittest.TestCase):
     def test_rejects_missing_or_sqlite_database_url(self):
         with mock.patch.object(database, "DATABASE_URL", ""):
