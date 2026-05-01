@@ -8,7 +8,8 @@ import atexit
 import signal
 import json
 import traceback
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash, send_file
+import secrets
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash, send_from_directory, abort
 import sqlite3
 import shutil
 import schedule  # 添加schedule库用于定时任务
@@ -87,7 +88,10 @@ atexit.register(cleanup_resources)
 
 # ===== Flask 应用 =====
 app = Flask(__name__)
-app.secret_key = os.environ.get('FLASK_SECRET', 'secret_' + str(time.time()))
+app.secret_key = os.environ.get('FLASK_SECRET')
+if not app.secret_key:
+    logger.warning("未设置 FLASK_SECRET，正在使用临时密钥。生产环境必须设置固定强密钥。")
+    app.secret_key = secrets.token_hex(32)
 app.config['DEBUG'] = False
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
@@ -113,8 +117,8 @@ def serve_file(filepath):
             # 从完整路径中提取相对路径
             parts = filepath.split('static/uploads/')
             if len(parts) > 1:
-                filename = parts[1]
-                return app.send_static_file(f'uploads/{filename}')
+                filename = parts[1].lstrip('/\\')
+                return send_from_directory(uploads_dir, filename)
         except Exception as e:
             logger.error(f"访问文件 {filepath} 时出错: {str(e)}")
     
@@ -126,72 +130,30 @@ def serve_file(filepath):
 def view_image(filepath):
     """提供一个专门的图片查看页面"""
     try:
-        # 构建完整的文件路径
-        full_path = filepath
-        if not os.path.exists(full_path):
-            # 尝试添加static前缀
-            if not full_path.startswith('static/'):
-                full_path = os.path.join('static', filepath)
-        
-        if os.path.exists(full_path) and os.path.isfile(full_path):
-            # 读取文件内容
-            with open(full_path, 'rb') as f:
-                file_content = f.read()
-            
-            # 确定MIME类型
-            import mimetypes
-            mime_type = mimetypes.guess_type(full_path)[0] or 'application/octet-stream'
-            
-            # 如果是图片，返回HTML页面显示图片
-            if mime_type.startswith('image/'):
-                # 获取文件的相对URL
-                file_url = '/' + filepath if not filepath.startswith('/') else filepath
-                
-                # 返回HTML页面
-                html = f"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>YouTube QR Code</title>
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <style>
-                        body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; text-align: center; }}
-                        .image-container {{ max-width: 100%; margin: 0 auto; }}
-                        img {{ max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 5px; }}
-                        h1 {{ color: #333; }}
-                        .info {{ margin: 20px 0; color: #666; }}
-                    </style>
-                </head>
-                <body>
-                    <h1>YouTube QR Code</h1>
-                    <div class="image-container">
-                        <img src="{file_url}" alt="YouTube QR Code">
-                    </div>
-                    <div class="info">
-                        <p>请扫描上方二维码</p>
-                    </div>
-                </body>
-                </html>
-                """
-                return html
-            else:
-                # 如果不是图片，直接返回文件
-                return send_file(full_path, mimetype=mime_type)
-        else:
-            return "File not found", 404
+        filename = filepath.split('static/uploads/', 1)[1] if 'static/uploads/' in filepath else filepath
+        filename = filename.lstrip('/\\')
+        if filename.startswith('..') or os.path.isabs(filename):
+            abort(404)
+        return send_from_directory(uploads_dir, filename)
     except Exception as e:
         logger.error(f"查看图片 {filepath} 时出错: {str(e)}", exc_info=True)
-        return f"Error viewing image: {str(e)}", 500
+        abort(404)
 
 # 添加Telegram webhook路由
 @app.route('/telegram-webhook', methods=['POST'])
 def telegram_webhook():
     """处理来自Telegram的webhook请求"""
     try:
+        webhook_secret = os.environ.get('TELEGRAM_WEBHOOK_SECRET')
+        if webhook_secret:
+            request_secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
+            if request_secret != webhook_secret:
+                return jsonify({"status": "error", "message": "unauthorized"}), 401
+
         # 获取更新数据
         update_data = request.get_json()
-        logger.info(f"收到Telegram webhook更新: {update_data}")
-        print(f"DEBUG: 收到Telegram webhook更新: {update_data}")
+        update_id = update_data.get('update_id') if isinstance(update_data, dict) else None
+        logger.info(f"收到Telegram webhook更新: update_id={update_id}")
         
         # 在单独的线程中处理更新，避免阻塞Flask响应
         threading.Thread(

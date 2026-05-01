@@ -1,0 +1,30 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Runtime data
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+bot.lock/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Uploads and local payment assets
+static/uploads/*
+!static/uploads/.gitkeep
+static/*qrcode*.png
+static/*qrcode*.jpg
+static/payment_qrcode.*
+
+# OS/editor noise
+.DS_Store
+.vscode/
+.idea/

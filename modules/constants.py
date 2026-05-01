@@ -7,18 +7,15 @@ import time
 # 设置日志
 logger = logging.getLogger(__name__)
 
-# ✅ 写死变量（优先）
-if not os.environ.get('BOT_TOKEN'):
-    os.environ['BOT_TOKEN'] = '7952478409:AAHdi7_JOjpHu_WAM8mtBewe0m2GWLLmvEk'
+# 敏感配置必须从环境变量读取，不能提交到代码仓库。
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+if not BOT_TOKEN:
+    logger.warning("未设置 BOT_TOKEN 环境变量，Telegram 机器人将无法启动。")
 
-BOT_TOKEN = os.environ["BOT_TOKEN"]
-
-# ✅ 管理员默认凭证（优先从环境变量读取）
-ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', '755439')
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '755439')
-
-if ADMIN_USERNAME == '755439' or ADMIN_PASSWORD == '755439':
-    logger.warning("正在使用默认的管理员凭证。为了安全，请设置 ADMIN_USERNAME 和 ADMIN_PASSWORD 环境变量。")
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+if not ADMIN_USERNAME or not ADMIN_PASSWORD:
+    logger.warning("未设置 ADMIN_USERNAME/ADMIN_PASSWORD，启动时不会自动创建管理员账号。")
 
 # 支持通过环境变量设置卖家ID
 SELLER_CHAT_IDS = []
@@ -103,4 +100,4 @@ notified_orders_lock = threading.Lock()  # 在主应用中初始化
 DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///orders.db')
 
 # 用户信息缓存
-user_info_cache = {} 
+user_info_cache = {}

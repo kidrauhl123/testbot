@@ -7,6 +7,7 @@ import psycopg2
 from functools import wraps
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
+from werkzeug.security import check_password_hash, generate_password_hash
 import pytz
 import random
 
@@ -265,15 +266,18 @@ def init_sqlite_db():
         # Table might not exist yet, will be created by create_recharge_tables()
         pass
     
-    # 创建超级管理员账号（如果不存在）
-    admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
-    c.execute("SELECT id FROM users WHERE username = ?", (ADMIN_USERNAME,))
-    if not c.fetchone():
-        logger.info(f"创建默认管理员账号: {ADMIN_USERNAME}")
-        c.execute("""
-            INSERT INTO users (username, password_hash, is_admin, created_at) 
-            VALUES (?, ?, 1, ?)
-        """, (ADMIN_USERNAME, admin_hash, get_china_time()))
+    # 创建超级管理员账号（如果配置了环境变量且不存在）
+    if ADMIN_USERNAME and ADMIN_PASSWORD:
+        admin_hash = hash_password(ADMIN_PASSWORD)
+        c.execute("SELECT id FROM users WHERE username = ?", (ADMIN_USERNAME,))
+        if not c.fetchone():
+            logger.info(f"创建管理员账号: {ADMIN_USERNAME}")
+            c.execute("""
+                INSERT INTO users (username, password_hash, is_admin, created_at)
+                VALUES (?, ?, 1, ?)
+            """, (ADMIN_USERNAME, admin_hash, get_china_time()))
+    else:
+        logger.warning("未配置管理员环境变量，跳过自动创建管理员账号。")
     
     # 创建索引以提高查询性能
     logger.info("检查并创建索引以提高查询性能")
@@ -480,14 +484,17 @@ def init_postgres_db():
     )
     ''')
     
-    # 创建超级管理员账号（如果不存在）
-    admin_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
-    cur.execute("SELECT id FROM users WHERE username = %s", (ADMIN_USERNAME,))
-    if not cur.fetchone():
-        cur.execute("""
-            INSERT INTO users (username, password_hash, is_admin, created_at) 
-            VALUES (%s, %s, 1, %s)
-        """, (ADMIN_USERNAME, admin_hash, get_china_time()))
+    # 创建超级管理员账号（如果配置了环境变量且不存在）
+    if ADMIN_USERNAME and ADMIN_PASSWORD:
+        admin_hash = hash_password(ADMIN_PASSWORD)
+        cur.execute("SELECT id FROM users WHERE username = %s", (ADMIN_USERNAME,))
+        if not cur.fetchone():
+            cur.execute("""
+                INSERT INTO users (username, password_hash, is_admin, created_at)
+                VALUES (%s, %s, 1, %s)
+            """, (ADMIN_USERNAME, admin_hash, get_china_time()))
+    else:
+        logger.warning("未配置管理员环境变量，跳过自动创建管理员账号。")
     
     # 创建索引以提高查询性能
     logger.info("检查并创建索引以提高查询性能")
@@ -601,7 +608,15 @@ def execute_postgres_query(query, params=(), fetch=False, return_cursor=False):
 
 # ===== 密码加密 =====
 def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+    return generate_password_hash(password)
+
+def verify_password(stored_hash, password):
+    """兼容旧 SHA256 密码，同时支持新的 Werkzeug 慢哈希。"""
+    if not stored_hash:
+        return False
+    if len(stored_hash) == 64 and all(c in "0123456789abcdef" for c in stored_hash.lower()):
+        return hashlib.sha256(password.encode()).hexdigest() == stored_hash
+    return check_password_hash(stored_hash, password)
 
 # 获取未通知订单
 def get_unnotified_orders():

@@ -12,11 +12,11 @@ import string
 import psycopg2
 from urllib.parse import urlparse
 
-from flask import Flask, request, render_template, jsonify, session, redirect, url_for, flash, send_file, send_from_directory
+from flask import Flask, request, render_template, jsonify, session, redirect, url_for, flash, send_from_directory
 
 from modules.constants import STATUS, STATUS_TEXT_ZH, REASON_TEXT_ZH, DATABASE_URL, CONFIRM_STATUS, CONFIRM_STATUS_TEXT_ZH
 from modules.database import (
-    execute_query, hash_password, get_unnotified_orders,
+    execute_query, hash_password, verify_password, get_unnotified_orders,
     get_order_details, get_all_sellers, get_active_sellers, toggle_seller_status, 
     remove_seller, toggle_seller_admin,
     update_seller_nickname, select_active_seller, check_seller_activity,
@@ -62,12 +62,11 @@ def register_routes(app, notification_queue):
                 return render_template('login.html', error='请填写用户名和密码')
                 
             # 验证用户
-            hashed_password = hash_password(password)
-            user = execute_query("SELECT id, username, is_admin FROM users WHERE username=? AND password_hash=?",
-                            (username, hashed_password), fetch=True)
+            user = execute_query("SELECT id, username, is_admin, password_hash FROM users WHERE username=?",
+                            (username,), fetch=True)
             
-            if user:
-                user_id, username, is_admin = user[0]
+            if user and verify_password(user[0][3], password):
+                user_id, username, is_admin = user[0][0], user[0][1], user[0][2]
                 session['user_id'] = user_id
                 session['username'] = username
                 session['is_admin'] = is_admin
