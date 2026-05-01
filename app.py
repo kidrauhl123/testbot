@@ -6,13 +6,10 @@ import queue
 import sys
 import atexit
 import signal
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
+load_dotenv()
 
 # 根据环境变量确定是否为生产环境
 is_production = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('PRODUCTION')
@@ -76,7 +73,10 @@ atexit.register(cleanup_resources)
 
 # ===== Flask 应用 =====
 app = Flask(__name__)
-app.secret_key = os.environ.get('FLASK_SECRET', 'secret_' + str(time.time()))
+app.secret_key = os.environ.get('FLASK_SECRET')
+if not app.secret_key:
+    logger.warning("未设置 FLASK_SECRET，正在使用临时密钥。生产环境必须设置固定强密钥。")
+    app.secret_key = 'secret_' + str(time.time())
 app.config['DEBUG'] = False
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
@@ -98,9 +98,16 @@ register_routes(app, notification_queue)
 def telegram_webhook():
     """处理来自Telegram的webhook请求"""
     try:
+        webhook_secret = os.environ.get('TELEGRAM_WEBHOOK_SECRET')
+        if webhook_secret:
+            request_secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
+            if request_secret != webhook_secret:
+                return jsonify({"status": "error", "message": "unauthorized"}), 401
+
         # 获取更新数据
         update_data = request.get_json()
-        logger.info(f"收到Telegram webhook更新: {update_data}")
+        update_id = update_data.get('update_id') if isinstance(update_data, dict) else None
+        logger.info(f"收到Telegram webhook更新: update_id={update_id}")
         
         # 在单独的线程中处理更新，避免阻塞Flask响应
         threading.Thread(
@@ -148,10 +155,13 @@ if __name__ == "__main__":
     logger.info("环境变量卖家同步完成")
     
     # 启动 Bot 线程，并将队列传递给它
-    logger.info("正在启动Telegram机器人...")
-    bot_thread = threading.Thread(target=run_bot, args=(notification_queue,), daemon=True)
-    bot_thread.start()
-    logger.info("Telegram机器人线程已启动")
+    if os.environ.get('BOT_TOKEN'):
+        logger.info("正在启动Telegram机器人...")
+        bot_thread = threading.Thread(target=run_bot, args=(notification_queue,), daemon=True)
+        bot_thread.start()
+        logger.info("Telegram机器人线程已启动")
+    else:
+        logger.warning("未设置 BOT_TOKEN，跳过 Telegram 机器人启动；Web 服务仍会正常运行。")
     
     # 启动 Flask
     port = int(os.environ.get("PORT", 5000))

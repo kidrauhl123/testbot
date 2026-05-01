@@ -21,8 +21,7 @@ from telegram.ext import (
 
 from modules.constants import (
     BOT_TOKEN, STATUS, PLAN_LABELS_EN,
-    STATUS_TEXT_ZH, TG_PRICES, WEB_PRICES, SELLER_CHAT_IDS, DATABASE_URL,
-    SUPER_ADMIN_TELEGRAM_ID
+    STATUS_TEXT_ZH, TG_PRICES, WEB_PRICES, SELLER_CHAT_IDS, DATABASE_URL
 )
 from modules.database import (
     get_order_details, accept_order_atomic, execute_query,
@@ -681,8 +680,8 @@ async def on_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     ]
     
-    # 只有超级管理员（ID: SUPER_ADMIN_TELEGRAM_ID）可以查看所有人的统计
-    if user_id == SUPER_ADMIN_TELEGRAM_ID:
+    # 只有超级管理员（ID: 1878943383）可以查看所有人的统计
+    if user_id == 1878943383:
         keyboard.append([
             InlineKeyboardButton("👥 All Sellers", callback_data="stats_all_sellers_menu")
         ])
@@ -715,7 +714,7 @@ async def on_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("📊 This Month", callback_data="stats_month_personal")
             ]
         ]
-        if user_id == SUPER_ADMIN_TELEGRAM_ID:
+        if user_id == 1878943383:
             keyboard.append([
                 InlineKeyboardButton("👥 All Sellers", callback_data="stats_all_sellers_menu")
             ])
@@ -940,7 +939,7 @@ async def show_all_stats(query, date_str, period_text):
     """显示所有人的统计信息"""
     # 检查是否是超级管理员
     user_id = query.from_user.id
-    if user_id != SUPER_ADMIN_TELEGRAM_ID:
+    if user_id != 1878943383:
         await query.answer("You don't have permission to view all sellers' statistics", show_alert=True)
         return
         
@@ -1223,7 +1222,7 @@ async def send_status_change_notification(data):
     
     try:
         # 超级管理员的Telegram ID
-        admin_id = SUPER_ADMIN_TELEGRAM_ID
+        admin_id = 1878943383
         
         # 获取订单状态变更详情
         oid = data.get('order_id')
@@ -1266,7 +1265,7 @@ async def send_recharge_request_notification(data):
     
     try:
         # 超级管理员的Telegram ID
-        admin_id = SUPER_ADMIN_TELEGRAM_ID
+        admin_id = 1878943383
         
         # 获取充值请求详情
         request_id = data.get('request_id')
@@ -1666,7 +1665,7 @@ async def on_approve_recharge(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = update.effective_user.id
     
     # 只允许超级管理员处理充值请求
-    if user_id != SUPER_ADMIN_TELEGRAM_ID:
+    if user_id != 1878943383:
         await query.answer("您没有权限执行此操作", show_alert=True)
         return
     
@@ -1697,7 +1696,7 @@ async def on_reject_recharge(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_id = update.effective_user.id
     
     # 只允许超级管理员处理充值请求
-    if user_id != SUPER_ADMIN_TELEGRAM_ID:
+    if user_id != 1878943383:
         await query.answer("您没有权限执行此操作", show_alert=True)
         return
     

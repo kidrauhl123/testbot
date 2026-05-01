@@ -7,22 +7,16 @@ import time
 # 设置日志
 logger = logging.getLogger(__name__)
 
-def require_env(name):
-    """读取必需环境变量，避免把 token/密码等敏感信息写死在代码里。"""
-    value = os.environ.get(name)
-    if not value:
-        raise RuntimeError(f"缺少必需环境变量: {name}")
-    return value
+# Sensitive configuration must come from environment variables or .env.
+# Do not hardcode bot tokens, admin passwords, database URLs, or webhook secrets.
+BOT_TOKEN = os.environ.get('BOT_TOKEN', '').strip()
+if not BOT_TOKEN:
+    logger.warning("未设置 BOT_TOKEN 环境变量，Telegram 机器人将不会启动。")
 
-# 敏感配置必须通过环境变量提供，不能在代码中写死默认值。
-BOT_TOKEN = require_env("BOT_TOKEN")
-ADMIN_USERNAME = require_env("ADMIN_USERNAME")
-ADMIN_PASSWORD = require_env("ADMIN_PASSWORD")
-SUPER_ADMIN_TELEGRAM_ID = int(require_env("SUPER_ADMIN_TELEGRAM_ID"))
-
-# 页面展示用联系方式/收款提示。未配置时使用不含个人信息的安全文案。
-ALIPAY_PAYMENT_TEXT = os.environ.get("ALIPAY_PAYMENT_TEXT", "请联系站主获取支付宝收款信息")
-WECHAT_PAYMENT_TEXT = os.environ.get("WECHAT_PAYMENT_TEXT", "请联系站主获取微信收款信息")
+ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', '').strip()
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '')
+if not ADMIN_USERNAME or not ADMIN_PASSWORD:
+    logger.warning("未设置 ADMIN_USERNAME/ADMIN_PASSWORD，启动时不会自动创建管理员账号。")
 
 # 支持通过环境变量设置卖家ID
 SELLER_CHAT_IDS = []

@@ -1,41 +1,14 @@
-# Environment / secrets
 .env
-.env.*
-!.env.example
-*.pem
-*.key
-*.p12
-*.pfx
-*secret*
-*credential*
-
-# Python
+*.db
+*.db-journal
+bot.lock/
+venv/
 __pycache__/
 *.py[cod]
-*$py.class
-.venv/
-venv/
-
-# Databases / runtime state
-*.db
-*.sqlite
-*.sqlite3
-orders.db
-instance/
-
-# Logs
-*.log
-logs/
-
-# User-uploaded or private payment assets
-static/uploads/*
-!static/uploads/.gitkeep
-static/*qrcode*
-static/payment_qrcode.*
-static/alipay_qrcode.*
-static/wechat_qrcode.*
-
-# OS / editor
+.pytest_cache/
 .DS_Store
-.idea/
-.vscode/
+static/uploads/
+# Payment QR images are deployment/runtime assets, not source code.
+static/alipay_qrcode.png
+static/wechat_qrcode.png
+static/payment_qrcode.jpg

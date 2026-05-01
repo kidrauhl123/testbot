@@ -9,10 +9,7 @@ import pytz
 
 from flask import Flask, request, render_template, jsonify, session, redirect, url_for, flash
 
-from modules.constants import (
-    STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH, DATABASE_URL,
-    SUPER_ADMIN_TELEGRAM_ID, ALIPAY_PAYMENT_TEXT, WECHAT_PAYMENT_TEXT
-)
+from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, REASON_TEXT_ZH, DATABASE_URL
 from modules.database import (
     execute_query, hash_password, get_all_sellers, add_seller, remove_seller, toggle_seller_status,
     get_user_balance, get_user_credit_limit, set_user_balance, set_user_credit_limit, refund_order,
@@ -932,7 +929,7 @@ def register_routes(app, notification_queue):
             return jsonify({"error": "Missing telegram_id"}), 400
             
         # 不允许修改超级管理员的身份
-        if str(telegram_id) == str(SUPER_ADMIN_TELEGRAM_ID):
+        if str(telegram_id) == "1878943383":
             return jsonify({"error": "Cannot modify superadmin status"}), 403
             
         if toggle_seller_admin(telegram_id):
@@ -1083,9 +1080,7 @@ def register_routes(app, notification_queue):
                               username=session.get('username'),
                               is_admin=session.get('is_admin'),
                               balance=balance,
-                              recharge_history=recharge_history,
-                              alipay_payment_text=ALIPAY_PAYMENT_TEXT,
-                              wechat_payment_text=WECHAT_PAYMENT_TEXT)
+                              recharge_history=recharge_history)
     
     @app.route('/recharge', methods=['POST'])
     @login_required
