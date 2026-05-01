@@ -275,6 +275,21 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIs(getattr(database, name), getattr(recharge, name))
 
+    def test_database_reexports_activation_code_helpers(self):
+        from modules import activation_codes
+
+        helper_names = (
+            "create_activation_code_table",
+            "generate_activation_code",
+            "create_activation_code",
+            "get_activation_code",
+            "mark_activation_code_used",
+            "get_admin_activation_codes",
+        )
+        for name in helper_names:
+            with self.subTest(name=name):
+                self.assertIs(getattr(database, name), getattr(activation_codes, name))
+
     def test_execute_query_requires_postgres_placeholders(self):
         import inspect
         from modules import db_core
@@ -331,6 +346,7 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
             "modules/db_core.py",
             "modules/order_balance.py",
             "modules/recharge.py",
+            "modules/activation_codes.py",
             "modules/web_routes.py",
             "modules/telegram_bot.py",
         ):
