@@ -36,9 +36,9 @@ notification_queue = queue.Queue()
 # 锁目录路径
 lock_dir = 'bot.lock'
 
-# 清理锁目录和数据库 journal 文件的函数
+# 清理锁目录的函数
 def cleanup_resources():
-    """清理应用锁目录和数据库 journal 文件。"""
+    """清理应用锁目录。"""
     # 清理应用锁目录
     if os.path.exists(lock_dir):
         try:
@@ -50,15 +50,6 @@ def cleanup_resources():
                 logger.info(f"已清理锁文件: {lock_dir}")
         except Exception as e:
             logger.error(f"清理锁目录时出错: {str(e)}", exc_info=True)
-
-    # 清理数据库 journal 文件
-    try:
-        journal_path = "orders.db-journal"
-        if os.path.exists(journal_path):
-            os.remove(journal_path)
-            logger.info(f"已清理残留的 journal 文件: {journal_path}")
-    except Exception as e:
-        logger.error(f"清理 journal 文件时出错: {str(e)}", exc_info=True)
 
 # 信号处理函数
 def signal_handler(sig, frame):

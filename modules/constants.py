@@ -118,8 +118,11 @@ feedback_waiting = {}
 notified_orders = set()
 notified_orders_lock = threading.Lock()  # 在主应用中初始化
 
-# 数据库连接URL（用于PostgreSQL判断，默认为SQLite）
-DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///orders.db')
+# 数据库连接URL：本项目只支持 PostgreSQL。
+# 之前保留 SQLite 是历史包袱，容易让测试/正式环境出现两套行为。
+DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
+if not DATABASE_URL.startswith(('postgres://', 'postgresql://')):
+    logger.warning("未配置 PostgreSQL DATABASE_URL；应用启动时会拒绝使用 SQLite/空数据库。")
 
 # 用户信息缓存
 user_info_cache = {} 

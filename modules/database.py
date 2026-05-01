@@ -70,13 +70,19 @@ def add_balance_record(user_id, amount, type_name, reason, reference_id=None, ba
         return None
 
 # ===== 数据库 =====
+def ensure_postgres_configured():
+    """确保应用只连接 PostgreSQL，避免误回退到历史 SQLite 数据库。"""
+    if not DATABASE_URL.startswith(('postgres://', 'postgresql://')):
+        raise RuntimeError(
+            "DATABASE_URL 必须配置为 PostgreSQL 连接串；本项目已停用 SQLite。"
+        )
+
+
 def init_db():
-    """根据环境配置初始化数据库"""
-    logger.info(f"初始化数据库，使用连接: {DATABASE_URL[:10]}...")
-    if DATABASE_URL.startswith('postgres'):
-        init_postgres_db()
-    else:
-        init_sqlite_db()
+    """初始化 PostgreSQL 数据库。"""
+    ensure_postgres_configured()
+    logger.info("初始化 PostgreSQL 数据库...")
+    init_postgres_db()
     
     # 创建充值记录表和余额记录表
     logger.info("正在创建充值记录表和余额记录表...")
@@ -87,6 +93,10 @@ def init_db():
     logger.info("正在创建激活码表...")
     create_activation_code_table()
     logger.info("激活码表创建完成")
+
+    logger.info("正在创建/确认数据库索引...")
+    create_performance_indexes()
+    logger.info("数据库索引检查完成")
 
 def init_sqlite_db():
     """初始化SQLite数据库"""
@@ -235,13 +245,7 @@ def init_postgres_db():
     host = url.hostname
     port = url.port
     
-    conn = psycopg2.connect(
-        dbname=dbname,
-        user=user,
-        password=password,
-        host=host,
-        port=port
-    )
+    conn = get_postgres_connection()
     conn.autocommit = True
     c = conn.cursor()
     
@@ -371,12 +375,10 @@ def init_postgres_db():
 
 # 数据库执行函数
 def execute_query(query, params=(), fetch=False, return_cursor=False):
-    """执行数据库查询并返回结果"""
+    """执行 PostgreSQL 查询并返回结果。"""
+    ensure_postgres_configured()
     logger.debug(f"执行查询: {query[:50]}... 参数: {params}")
-    if DATABASE_URL.startswith('postgres'):
-        return execute_postgres_query(query, params, fetch, return_cursor)
-    else:
-        return execute_sqlite_query(query, params, fetch, return_cursor)
+    return execute_postgres_query(query, params, fetch, return_cursor)
 
 def execute_sqlite_query(query, params=(), fetch=False, return_cursor=False):
     """执行SQLite查询并返回结果"""
@@ -399,27 +401,23 @@ def execute_sqlite_query(query, params=(), fetch=False, return_cursor=False):
         logger.error(f"SQLite查询执行失败: {str(e)}", exc_info=True)
         raise
 
+def get_postgres_connection():
+    """创建 PostgreSQL 连接。后续可以在这里替换成连接池。"""
+    ensure_postgres_configured()
+    return psycopg2.connect(DATABASE_URL)
+
+
 def execute_postgres_query(query, params=(), fetch=False, return_cursor=False):
     """执行PostgreSQL查询并返回结果"""
-    url = urlparse(DATABASE_URL)
-    dbname = url.path[1:]
-    user = url.username
-    password = url.password
-    host = url.hostname
-    port = url.port
-    
-    conn = psycopg2.connect(
-        dbname=dbname,
-        user=user,
-        password=password,
-        host=host,
-        port=port
-    )
+    conn = get_postgres_connection()
     cursor = conn.cursor()
     
     # PostgreSQL使用%s作为参数占位符，而不是SQLite的?
     query = query.replace('?', '%s')
-    cursor.execute(query, params)
+    if params:
+        cursor.execute(query, params)
+    else:
+        cursor.execute(query)
     
     if return_cursor:
         conn.commit()
@@ -432,6 +430,26 @@ def execute_postgres_query(query, params=(), fetch=False, return_cursor=False):
     conn.commit()
     conn.close()
     return result
+
+def create_performance_indexes():
+    """创建常用查询索引；只做 IF NOT EXISTS，重复启动安全。"""
+    indexes = [
+        "CREATE INDEX IF NOT EXISTS idx_orders_status ON orders (status)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders (user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_web_user_id ON orders (web_user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_accepted_by ON orders (accepted_by)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_notified_status ON orders (notified, status)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders (created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_status_created_at ON orders (status, created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_balance_records_user_created ON balance_records (user_id, created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_balance_records_created_at ON balance_records (created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_recharge_requests_user_status ON recharge_requests (user_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_recharge_requests_status_created ON recharge_requests (status, created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_activation_codes_is_used ON activation_codes (is_used)",
+    ]
+    for query in indexes:
+        execute_query(query)
+
 
 # ===== 密码加密 =====
 def hash_password(password):
