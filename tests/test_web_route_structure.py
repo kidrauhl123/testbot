@@ -143,6 +143,36 @@ class WebRouteStructureTests(unittest.TestCase):
         self.assertNotIn("@app.route('/admin/api/users/<int:user_id>/credit'", source)
         self.assertNotIn("@app.route('/admin/api/users/<int:user_id>/custom-prices'", source)
 
+    def test_admin_order_routes_are_registered_by_order_admin_module(self):
+        from flask import Flask
+        from modules.web_order_admin_routes import register_order_admin_routes
+
+        def admin_required(func):
+            return func
+
+        app = Flask(__name__)
+        app.secret_key = "test-secret"
+
+        register_order_admin_routes(app, admin_required=admin_required)
+
+        routes = {rule.endpoint: (rule.rule, rule.methods) for rule in app.url_map.iter_rules()}
+        self.assertEqual(routes["admin_api_orders"][0], "/admin/api/orders")
+        self.assertIn("GET", routes["admin_api_orders"][1])
+        self.assertEqual(routes["admin_api_order_detail"][0], "/admin/api/orders/<int:order_id>")
+        self.assertIn("GET", routes["admin_api_order_detail"][1])
+        self.assertEqual(routes["admin_api_edit_order"][0], "/admin/api/orders/<int:order_id>")
+        self.assertIn("PUT", routes["admin_api_edit_order"][1])
+        self.assertEqual(routes["admin_api_batch_delete_orders"][0], "/admin/api/orders/batch-delete")
+        self.assertIn("POST", routes["admin_api_batch_delete_orders"][1])
+
+    def test_web_routes_delegates_order_admin_route_registration(self):
+        source = (PROJECT_ROOT / "modules" / "web_routes.py").read_text()
+        self.assertIn("register_order_admin_routes(app, admin_required)", source)
+        self.assertNotIn("@app.route('/admin/api/orders')", source)
+        self.assertNotIn("@app.route('/admin/api/orders/<int:order_id>')", source)
+        self.assertNotIn("@app.route('/admin/api/orders/<int:order_id>', methods=['PUT'])", source)
+        self.assertNotIn("@app.route('/admin/api/orders/batch-delete'", source)
+
     def test_full_web_routes_register_without_name_errors(self):
         from flask import Flask
         from modules.web_routes import register_routes

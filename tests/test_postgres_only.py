@@ -403,6 +403,7 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
             "modules/web_activation_routes.py",
             "modules/web_seller_routes.py",
             "modules/web_user_routes.py",
+            "modules/web_order_admin_routes.py",
             "modules/order_balance.py",
             "modules/recharge.py",
             "modules/activation_codes.py",
