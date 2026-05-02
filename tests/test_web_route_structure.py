@@ -278,6 +278,36 @@ class WebRouteStructureTests(unittest.TestCase):
         self.assertNotIn("@app.route('/', methods=['GET'])", source)
         self.assertNotIn("@app.route('/', methods=['POST'])", source)
 
+    def test_admin_required_decorator_lives_in_admin_auth_module(self):
+        from flask import Flask
+        from modules.web_admin_auth import admin_required
+
+        app = Flask(__name__)
+        app.secret_key = "test-secret"
+
+        @app.route("/admin-only")
+        @admin_required
+        def admin_only():
+            return "ok"
+
+        with app.test_client() as client:
+            response = client.get("/admin-only")
+            self.assertEqual(response.status_code, 403)
+            self.assertEqual(response.get_json(), {"error": "管理员权限不足"})
+
+            with client.session_transaction() as sess:
+                sess["is_admin"] = True
+            response = client.get("/admin-only")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.get_data(as_text=True), "ok")
+
+    def test_web_routes_imports_admin_required_without_nested_definition(self):
+        source = (PROJECT_ROOT / "modules" / "web_routes.py").read_text()
+        self.assertIn("from modules.web_admin_auth import admin_required", source)
+        self.assertNotIn("def admin_required", source)
+        self.assertNotIn("from functools import wraps", source)
+        self.assertNotIn("from flask import jsonify, session", source)
+
     def test_utility_routes_are_registered_by_utility_module(self):
         from flask import Flask
         from modules.web_utility_routes import register_utility_routes
