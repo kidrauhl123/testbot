@@ -1,3 +1,4 @@
+import ast
 import sys
 import unittest
 from pathlib import Path
@@ -328,6 +329,96 @@ class WebRouteStructureTests(unittest.TestCase):
         self.assertIn("register_utility_routes(app, notification_queue)", source)
         self.assertNotIn("@app.route('/test')", source)
         self.assertNotIn("@app.route('/check-orders')", source)
+
+    def test_web_routes_remains_composition_only(self):
+        source_path = PROJECT_ROOT / "modules" / "web_routes.py"
+        source = source_path.read_text()
+        tree = ast.parse(source)
+
+        trailing_whitespace_lines = [
+            line_number
+            for line_number, line in enumerate(source.splitlines(), start=1)
+            if line.rstrip() != line
+        ]
+        self.assertEqual(trailing_whitespace_lines, [])
+
+        import_from_modules = [
+            node.module
+            for node in tree.body
+            if isinstance(node, ast.ImportFrom)
+        ]
+        self.assertTrue(
+            all(isinstance(node, (ast.ImportFrom, ast.FunctionDef)) for node in tree.body),
+            "web_routes.py should only contain registrar imports plus register_routes",
+        )
+        self.assertEqual(
+            [type(node).__name__ for node in tree.body],
+            ["ImportFrom"] * 12 + ["FunctionDef"],
+        )
+        self.assertEqual(
+            import_from_modules,
+            [
+                "modules.web_auth_routes",
+                "modules.web_admin_auth",
+                "modules.web_recharge_routes",
+                "modules.web_activation_routes",
+                "modules.web_seller_routes",
+                "modules.web_user_routes",
+                "modules.web_order_admin_routes",
+                "modules.web_order_routes",
+                "modules.web_account_routes",
+                "modules.web_redeem_routes",
+                "modules.web_home_routes",
+                "modules.web_utility_routes",
+            ],
+        )
+
+        function_defs = [node for node in tree.body if isinstance(node, ast.FunctionDef)]
+        self.assertEqual([node.name for node in function_defs], ["register_routes"])
+        register_routes = function_defs[0]
+        self.assertEqual(register_routes.decorator_list, [])
+        self.assertEqual([arg.arg for arg in register_routes.args.args], ["app", "notification_queue"])
+        self.assertEqual(register_routes.args.defaults, [])
+        self.assertEqual(register_routes.args.vararg, None)
+        self.assertEqual(register_routes.args.kwarg, None)
+
+        nested_defs = [
+            node.name
+            for node in ast.walk(register_routes)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node is not register_routes
+        ]
+        self.assertEqual(nested_defs, [])
+
+        route_registration_hooks = [
+            node.attr
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Attribute) and node.attr in {"route", "add_url_rule"}
+        ]
+        self.assertEqual(route_registration_hooks, [])
+
+        register_calls = []
+        for statement in register_routes.body:
+            self.assertIsInstance(statement, ast.Expr)
+            self.assertIsInstance(statement.value, ast.Call)
+            self.assertIsInstance(statement.value.func, ast.Name)
+            register_calls.append(ast.unparse(statement.value))
+
+        self.assertEqual(
+            register_calls,
+            [
+                "register_auth_routes(app)",
+                "register_home_routes(app, notification_queue)",
+                "register_order_routes(app, notification_queue)",
+                "register_utility_routes(app, notification_queue)",
+                "register_account_routes(app)",
+                "register_user_routes(app, admin_required)",
+                "register_order_admin_routes(app, admin_required)",
+                "register_seller_routes(app, admin_required)",
+                "register_recharge_routes(app, notification_queue, admin_required)",
+                "register_redeem_routes(app)",
+                "register_activation_routes(app, admin_required)",
+            ],
+        )
 
     def test_full_web_routes_register_without_name_errors(self):
         from flask import Flask

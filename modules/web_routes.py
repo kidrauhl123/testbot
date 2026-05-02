@@ -25,7 +25,6 @@ def register_routes(app, notification_queue):
 
     register_user_routes(app, admin_required)
 
-        
     register_order_admin_routes(app, admin_required)
 
     register_seller_routes(app, admin_required)
