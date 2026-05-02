@@ -701,6 +701,7 @@
       display: flex;
       align-items: center;
       gap: 15px;
+      flex-wrap: wrap;
     }
     
     .view-toggle {
@@ -724,6 +725,13 @@
     }
     
     /* 表格视图样式 */
+    .orders-table-wrapper {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border-radius: 8px;
+    }
+
     .orders-table {
       width: 100%;
       border-collapse: collapse;
@@ -815,6 +823,22 @@
     .urge-btn:hover {
       background: rgba(52,152,219,0.2);
     }
+
+    .order-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .order-actions .detail-btn,
+    .order-actions .cancel-btn,
+    .order-actions .dispute-btn,
+    .order-actions .urge-btn {
+      margin-left: 0;
+      min-height: 32px;
+    }
     
     /* 价格显示样式 */
     .price-display {
@@ -901,6 +925,62 @@
       color: #888;
       text-align: right;
       font-style: italic;
+    }
+
+    @media (max-width: 600px) {
+      .card-header {
+        align-items: flex-start;
+        gap: 10px;
+      }
+
+      .header-actions {
+        width: 100%;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .view-toggle {
+        flex: 1 1 auto;
+        max-width: 160px;
+      }
+
+      .view-btn {
+        flex: 1;
+        min-height: 36px;
+      }
+
+      .search-box {
+        min-width: 0;
+      }
+
+      .search-input {
+        font-size: 16px;
+        padding-left: 12px;
+      }
+
+      .order-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .order-actions .detail-btn,
+      .order-actions .cancel-btn,
+      .order-actions .dispute-btn,
+      .order-actions .urge-btn {
+        width: 100%;
+        min-height: 38px;
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+
+      .orders-table-wrapper {
+        margin-top: 8px;
+      }
+
+      .orders-table {
+        min-width: 760px;
+      }
     }
   </style>
 </head>
@@ -999,8 +1079,8 @@
                   <h2>{% if session.is_admin %}系统订单状态{% else %}我的订单{% endif %}</h2>
                   <div class="header-actions">
                     <div class="view-toggle">
-                      <button id="gridViewBtn" class="view-btn" title="网格视图"><i class="fas fa-th"></i></button>
-                      <button id="tableViewBtn" class="view-btn active" title="表格视图"><i class="fas fa-list"></i></button>
+                      <button id="gridViewBtn" class="view-btn active" title="网格视图"><i class="fas fa-th"></i></button>
+                      <button id="tableViewBtn" class="view-btn" title="表格视图"><i class="fas fa-list"></i></button>
                     </div>
                     <div id="today-total" class="today-total"></div>
                   </div>
@@ -1516,7 +1596,12 @@
             ${o.accepted_at ? `<p class="time">接单时间：${o.accepted_at}</p>` : ''}
             ${o.completed_at ? `<p class="time">完成时间：${o.completed_at}</p>` : ''}
           </div>
-          ${o.can_cancel ? `<button class="cancel-btn" onclick="cancelOrder(${o.id}, this)">撤销订单</button>` : ''}
+          <div class="order-actions">
+            ${o.can_cancel ? `<button class="cancel-btn" onclick="cancelOrder(${o.id}, this)">撤销订单</button>` : ''}
+            <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
+            ${o.status === 'completed' ? `<button class="dispute-btn" onclick="disputeOrder(${o.id})">质疑</button>` : ''}
+            ${o.status === 'accepted' && canRequestUpdate(o) ? `<button class="urge-btn" onclick="urgeOrder(${o.id}, this)">催单</button>` : ''}
+          </div>
         </div>`;
       gridContainer.insertAdjacentHTML('beforeend', html);
     });
@@ -1525,6 +1610,7 @@
   // 渲染表格视图
   function renderTableView(container, orders) {
     let html = `
+      <div class="orders-table-wrapper">
       <table class="orders-table">
         <thead>
           <tr>
@@ -1568,6 +1654,7 @@
     html += `
         </tbody>
       </table>
+      </div>
     `;
     
     container.innerHTML = html;

@@ -139,6 +139,29 @@
     .header-actions {
       display: flex;
       gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .admin-order-toolbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      width: 100%;
+      justify-content: flex-end;
+    }
+
+    .admin-order-search {
+      width: min(100%, 280px);
+      flex: 0 1 280px;
+    }
+
+    .admin-order-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
     }
 
     .data-table {
@@ -441,6 +464,130 @@
         font-size: 12px;
       }
     }
+
+    @media (max-width: 600px) {
+      .content-header {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .admin-order-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+        justify-content: flex-start;
+      }
+
+      .admin-order-search {
+        width: 100%;
+        flex: 1 1 auto;
+        font-size: 16px;
+      }
+
+      .admin-order-toolbar .btn {
+        width: 100%;
+        min-height: 40px;
+      }
+
+      #orders-table-container .data-table {
+        display: table;
+        overflow-x: visible;
+        white-space: normal;
+        border-collapse: separate;
+        border-spacing: 0 12px;
+      }
+
+      #orders-table-container .data-table thead {
+        display: none;
+      }
+
+      #orders-table-container .data-table tbody,
+      #orders-table-container .data-table tr,
+      #orders-table-container .data-table td {
+        display: block;
+        width: 100%;
+      }
+
+      #orders-table-container .data-table tr {
+        background: #fff;
+        border: 1px solid #e9ecef;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        overflow: hidden;
+      }
+
+      #orders-table-container .data-table td {
+        border-bottom: 1px solid #f0f0f0;
+        min-height: 42px;
+        padding: 10px 12px 10px 104px;
+        position: relative;
+        text-align: right;
+        white-space: normal;
+        word-break: break-word;
+      }
+
+      #orders-table-container .data-table td:last-child {
+        border-bottom: 0;
+      }
+
+      #orders-table-container .data-table td::before {
+        content: attr(data-label);
+        color: #6c757d;
+        font-weight: 600;
+        left: 12px;
+        position: absolute;
+        text-align: left;
+        top: 10px;
+        width: 84px;
+      }
+
+      #orders-table-container .data-table td.order-select-cell {
+        padding-left: 12px;
+        text-align: left;
+      }
+
+      #orders-table-container .data-table td.order-select-cell::before {
+        content: '';
+      }
+
+      #orders-table-container .data-table td.loading,
+      #orders-table-container .data-table td.no-data,
+      #orders-table-container .data-table td.error {
+        padding: 28px 12px;
+        text-align: center;
+      }
+
+      #orders-table-container .data-table td.loading::before,
+      #orders-table-container .data-table td.no-data::before,
+      #orders-table-container .data-table td.error::before {
+        content: '';
+      }
+
+      .admin-order-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+
+      .admin-order-actions .btn {
+        width: 100%;
+        min-height: 38px;
+      }
+
+      .modal {
+        width: calc(100% - 24px);
+        max-height: calc(100vh - 24px);
+        overflow-y: auto;
+      }
+
+      .modal-footer {
+        flex-direction: column-reverse;
+      }
+
+      .modal-footer .btn {
+        width: 100%;
+        min-height: 40px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -529,8 +676,10 @@
         <div class="content-header">
           <h2><i class="fas fa-file-invoice-dollar"></i> 订单管理</h2>
           <div class="header-actions">
-            <input type="text" id="order-search" class="form-control" placeholder="搜索订单ID、账号、创建者..." style="width: 250px;">
-            <button id="batch-delete-btn" class="btn btn-danger">批量删除</button>
+            <div class="admin-order-toolbar">
+              <input type="text" id="order-search" class="form-control admin-order-search" placeholder="搜索订单ID、账号、创建者...">
+              <button id="batch-delete-btn" class="btn btn-danger">批量删除</button>
+            </div>
           </div>
         </div>
         <div id="orders-table-container">
@@ -1077,15 +1226,15 @@
         const statusClass = statusBadges[order.status] || 'badge-secondary';
         const row = document.createElement('tr');
         row.innerHTML = `
-          <td><input type="checkbox" class="order-checkbox" value="${order.id}"></td>
-          <td>${order.id}</td>
-          <td>${escapeHtml(order.account)}</td>
-          <td>${order.package}个月</td>
-          <td><span class="badge ${statusClass}">${escapeHtml(order.status_text)}</span></td>
-          <td>${escapeHtml(order.creator || 'N/A')}</td>
-          <td>${order.seller ? escapeHtml(order.seller.name || order.seller.username || order.seller.telegram_id || 'N/A') : 'N/A'}</td>
-          <td>${order.created_at}</td>
-          <td><button class="btn btn-primary btn-sm" onclick="editOrder(${order.id})">编辑</button></td>
+          <td class="order-select-cell"><input type="checkbox" class="order-checkbox" value="${order.id}" aria-label="选择订单 ${order.id}"></td>
+          <td data-label="订单ID">${order.id}</td>
+          <td data-label="账号">${escapeHtml(order.account)}</td>
+          <td data-label="套餐">${order.package}个月</td>
+          <td data-label="状态"><span class="badge ${statusClass}">${escapeHtml(order.status_text)}</span></td>
+          <td data-label="创建者">${escapeHtml(order.creator || 'N/A')}</td>
+          <td data-label="接单人">${order.seller ? escapeHtml(order.seller.name || order.seller.username || order.seller.telegram_id || 'N/A') : 'N/A'}</td>
+          <td data-label="创建时间">${order.created_at}</td>
+          <td data-label="操作"><div class="admin-order-actions"><button class="btn btn-primary btn-sm" onclick="editOrder(${order.id})">编辑</button></div></td>
         `;
         tbody.appendChild(row);
       });
