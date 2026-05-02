@@ -203,6 +203,33 @@ class WebRouteStructureTests(unittest.TestCase):
         self.assertNotIn("@app.route('/orders/dispute/<int:oid>'", source)
         self.assertNotIn("@app.route('/orders/urge/<int:oid>'", source)
 
+    def test_account_routes_are_registered_by_account_module(self):
+        from flask import Flask
+        from modules.web_account_routes import register_account_routes
+
+        app = Flask(__name__)
+        app.secret_key = "test-secret"
+
+        register_account_routes(app)
+
+        routes = {rule.endpoint: (rule.rule, rule.methods) for rule in app.url_map.iter_rules()}
+        self.assertEqual(routes["admin_dashboard"][0], "/admin")
+        self.assertIn("GET", routes["admin_dashboard"][1])
+        self.assertEqual(routes["user_dashboard"][0], "/dashboard")
+        self.assertIn("GET", routes["user_dashboard"][1])
+        self.assertEqual(routes["api_balance_records"][0], "/api/balance/records")
+        self.assertIn("GET", routes["api_balance_records"][1])
+        self.assertEqual(routes["api_get_user_prices"][0], "/api/user-prices")
+        self.assertIn("GET", routes["api_get_user_prices"][1])
+
+    def test_web_routes_delegates_account_route_registration(self):
+        source = (PROJECT_ROOT / "modules" / "web_routes.py").read_text()
+        self.assertIn("register_account_routes(app)", source)
+        self.assertNotIn("@app.route('/admin')", source)
+        self.assertNotIn("@app.route('/dashboard')", source)
+        self.assertNotIn("@app.route('/api/balance/records'", source)
+        self.assertNotIn("@app.route('/api/user-prices'", source)
+
     def test_full_web_routes_register_without_name_errors(self):
         from flask import Flask
         from modules.web_routes import register_routes
