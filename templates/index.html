@@ -928,9 +928,125 @@
     }
 
     @media (max-width: 600px) {
+      body {
+        overflow-x: hidden;
+        font-size: 14px;
+      }
+
+      .navbar {
+        padding: 10px 12px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+      }
+
+      .navbar-brand {
+        justify-content: center;
+        font-size: 17px;
+      }
+
+      .navbar-user {
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .user-dropdown,
+      .user-info {
+        width: 100%;
+        min-width: 0;
+      }
+
+      .user-info {
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      .mobile-safe-text,
+      .user-name {
+        min-width: 0;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+
+      .balance-badge {
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        text-align: center;
+        line-height: 1.5;
+      }
+
+      .recharge-btn {
+        margin-left: 0;
+      }
+
+      .main-container {
+        width: 100%;
+        max-width: 100%;
+        margin: 12px auto;
+        padding: 0 10px;
+      }
+
+      .container {
+        width: 100%;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .left, .right {
+        width: 100%;
+        min-width: 0;
+        flex-shrink: 1;
+      }
+
+      .card {
+        width: 100%;
+        padding: 16px;
+        margin-bottom: 12px;
+        border-radius: 12px;
+      }
+
+      .order-form-card,
+      .orders-panel-card {
+        overflow: hidden;
+      }
+
       .card-header {
+        flex-direction: column;
+        width: 100%;
         align-items: flex-start;
         gap: 10px;
+      }
+
+      .card-header h2 {
+        font-size: 17px;
+      }
+
+      .form-control {
+        font-size: 16px;
+        min-height: 44px;
+      }
+
+      .price-display {
+        width: 100%;
+        min-height: 44px;
+        font-size: 16px;
+      }
+
+      .form-actions {
+        width: 100%;
+      }
+
+      .submit-btn {
+        width: 100%;
+        min-height: 46px;
+        font-size: 16px;
+        margin-top: 8px;
       }
 
       .header-actions {
@@ -991,7 +1107,7 @@
     <div class="user-dropdown">
       <div class="user-info">
         <div class="user-avatar">{{ session.username[0]|upper }}</div>
-        <span class="user-name">{{ session.username }}</span>
+        <span class="mobile-safe-text user-name">{{ session.username }}</span>
         {% if session.is_admin %}
           <span class="admin-badge">管理员</span>
         {% endif %}
@@ -1024,7 +1140,7 @@
     
     {% if balance is defined %}
     <div id="balanceBadge" class="balance-badge {% if balance < 0 %}negative{% endif %}" style="cursor:pointer;">
-      余额: {{ balance }} 元
+      <span class="mobile-safe-text">余额: {{ balance }} 元</span>
       <a href="/recharge" class="recharge-btn">充值</a>
     </div>
     {% endif %}
@@ -1037,7 +1153,7 @@
 <div class="main-container">
     <div class="container">
         <div class="left">
-            <div class="card">
+            <div class="card order-form-card">
                 <div class="card-header">
                   <h2>充值下单</h2>
                 </div>
@@ -1068,13 +1184,15 @@
                     <label>备注 (可选)</label>
                     <input name="remark" class="form-control" placeholder="如有特殊要求请备注">
                   </div>
-                  <button type="submit" class="submit-btn">提交订单</button>
+                  <div class="form-actions">
+                    <button type="submit" class="submit-btn">提交订单</button>
+                  </div>
                 </form>
             </div>
         </div>
 
         <div class="right">
-            <div class="card">
+            <div class="card orders-panel-card">
                 <div class="card-header">
                   <h2>{% if session.is_admin %}系统订单状态{% else %}我的订单{% endif %}</h2>
                   <div class="header-actions">

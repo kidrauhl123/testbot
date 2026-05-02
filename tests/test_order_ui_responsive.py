@@ -59,6 +59,48 @@ class OrderUIResponsiveTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, source)
 
+    def test_index_homepage_core_layout_is_mobile_first(self):
+        source = self.read_template(INDEX_TEMPLATE)
+        start = source.find("@media (max-width: 600px)")
+        self.assertNotEqual(start, -1, "index should have a focused 600px mobile media block")
+        body = source[start:].split("</style>", 1)[0]
+
+        for marker in (
+            "body",
+            ".main-container",
+            ".container",
+            ".left, .right",
+            ".navbar",
+            ".navbar-user",
+            ".balance-badge",
+            ".card",
+            ".card-header",
+            ".submit-btn",
+            ".form-control",
+            ".price-display",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, body)
+
+        self.assertIn("overflow-x: hidden", body)
+        self.assertIn("margin: 12px auto", body)
+        self.assertIn("padding: 0 10px", body)
+        self.assertIn("flex-direction: column", body)
+        self.assertIn("width: 100%", body)
+        self.assertIn("font-size: 16px", body)
+
+    def test_index_homepage_markup_has_mobile_layout_hooks(self):
+        source = self.read_template(INDEX_TEMPLATE)
+
+        for marker in (
+            'class="card order-form-card"',
+            'class="card orders-panel-card"',
+            'class="form-actions"',
+            'class="mobile-safe-text"',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, source)
+
     def test_admin_order_toolbar_uses_responsive_classes_not_inline_widths(self):
         source = self.read_template(ADMIN_TEMPLATE)
 
