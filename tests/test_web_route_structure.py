@@ -56,6 +56,39 @@ class WebRouteStructureTests(unittest.TestCase):
         self.assertNotIn("@app.route('/admin/api/recharge/<int:request_id>/approve'", source)
         self.assertNotIn("@app.route('/admin/api/recharge/<int:request_id>/reject'", source)
 
+    def test_admin_activation_routes_are_registered_by_activation_module(self):
+        from flask import Flask
+        from modules.web_activation_routes import register_activation_routes
+
+        def admin_required(func):
+            return func
+
+        app = Flask(__name__)
+        app.secret_key = "test-secret"
+
+        register_activation_routes(app, admin_required=admin_required)
+
+        rules = {rule.endpoint: rule.rule for rule in app.url_map.iter_rules()}
+        self.assertEqual(rules["admin_activation_codes"], "/admin/activation-codes")
+        self.assertEqual(rules["admin_api_get_activation_codes"], "/admin/api/activation-codes")
+        self.assertEqual(rules["admin_api_create_activation_code"], "/admin/api/activation-codes")
+        self.assertEqual(
+            rules["admin_api_batch_delete_activation_codes"],
+            "/admin/api/activation-codes/batch-delete",
+        )
+        self.assertEqual(
+            rules["admin_api_export_activation_codes"],
+            "/admin/api/activation-codes/export",
+        )
+
+    def test_web_routes_delegates_activation_route_registration(self):
+        source = (PROJECT_ROOT / "modules" / "web_routes.py").read_text()
+        self.assertIn("register_activation_routes(app, admin_required)", source)
+        self.assertNotIn("@app.route('/admin/activation-codes'", source)
+        self.assertNotIn("@app.route('/admin/api/activation-codes'", source)
+        self.assertNotIn("@app.route('/admin/api/activation-codes/batch-delete'", source)
+        self.assertNotIn("@app.route('/admin/api/activation-codes/export'", source)
+
     def test_full_web_routes_register_without_name_errors(self):
         from flask import Flask
         from modules.web_routes import register_routes

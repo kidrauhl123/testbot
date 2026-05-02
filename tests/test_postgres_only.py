@@ -400,6 +400,7 @@ class PostgresOnlyDatabaseTests(unittest.TestCase):
             "modules/db_schema.py",
             "modules/web_auth_routes.py",
             "modules/web_recharge_routes.py",
+            "modules/web_activation_routes.py",
             "modules/order_balance.py",
             "modules/recharge.py",
             "modules/activation_codes.py",
