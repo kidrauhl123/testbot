@@ -10,10 +10,11 @@ from modules.constants import STATUS, STATUS_TEXT_ZH, WEB_PRICES, PLAN_OPTIONS, 
 from modules.web_auth_routes import login_required, register_auth_routes
 from modules.web_recharge_routes import register_recharge_routes
 from modules.web_activation_routes import register_activation_routes
+from modules.web_seller_routes import register_seller_routes
 from modules.database import (
-    execute_query, get_all_sellers, add_seller, remove_seller, toggle_seller_status,
+    execute_query,
     get_user_balance, get_user_credit_limit, set_user_balance, set_user_credit_limit, refund_order,
-    create_order_with_deduction_atomic, toggle_seller_admin,
+    create_order_with_deduction_atomic,
     get_balance_records, get_activation_code, mark_activation_code_used,
     get_user_custom_prices, set_user_custom_price, delete_user_custom_price,
     get_china_time, get_postgres_connection
@@ -783,66 +784,7 @@ def register_routes(app, notification_queue):
             "total": count
         })
         
-    @app.route('/admin/api/sellers', methods=['GET'])
-    @login_required
-    @admin_required
-    def admin_api_get_sellers():
-        sellers = get_all_sellers()
-        return jsonify([{
-            "telegram_id": s[0], "username": s[1], "first_name": s[2],
-            "is_active": s[3], "added_at": s[4], "added_by": s[5]
-        } for s in sellers])
-
-    @app.route('/admin/api/sellers', methods=['POST'])
-    @login_required
-    @admin_required
-    def admin_api_add_seller():
-        data = request.json
-        telegram_id = data.get('telegram_id')
-        if not telegram_id:
-            return jsonify({"error": "Telegram ID 不能为空"}), 400
-        
-        add_seller(
-            telegram_id, 
-            data.get('username'), 
-            data.get('first_name'), 
-            session['username']
-        )
-        return jsonify({"success": True})
-
-    @app.route('/admin/api/sellers/<int:telegram_id>', methods=['DELETE'])
-    @login_required
-    @admin_required
-    def admin_api_remove_seller(telegram_id):
-        remove_seller(telegram_id)
-        return jsonify({"success": True})
-
-    @app.route('/admin/api/sellers/<int:telegram_id>/toggle', methods=['POST'])
-    @login_required
-    @admin_required
-    def admin_api_toggle_seller(telegram_id):
-        toggle_seller_status(telegram_id)
-        return jsonify({"success": True})
-
-    @app.route('/admin/api/sellers/toggle_admin', methods=['POST'])
-    @login_required
-    @admin_required
-    def admin_api_toggle_seller_admin():
-        """切换卖家的管理员身份"""
-        data = request.get_json()
-        telegram_id = data.get('telegram_id')
-        
-        if not telegram_id:
-            return jsonify({"error": "Missing telegram_id"}), 400
-            
-        # 不允许修改超级管理员的身份
-        if str(telegram_id) == "1878943383":
-            return jsonify({"error": "Cannot modify superadmin status"}), 403
-            
-        if toggle_seller_admin(telegram_id):
-            return jsonify({"success": True})
-        else:
-            return jsonify({"error": "Operation failed"}), 500
+    register_seller_routes(app, admin_required)
 
     # 获取单个订单详情的API
     @app.route('/admin/api/orders/<int:order_id>')

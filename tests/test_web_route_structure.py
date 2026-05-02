@@ -89,6 +89,33 @@ class WebRouteStructureTests(unittest.TestCase):
         self.assertNotIn("@app.route('/admin/api/activation-codes/batch-delete'", source)
         self.assertNotIn("@app.route('/admin/api/activation-codes/export'", source)
 
+    def test_seller_routes_are_registered_by_seller_module(self):
+        from flask import Flask
+        from modules.web_seller_routes import register_seller_routes
+
+        def admin_required(func):
+            return func
+
+        app = Flask(__name__)
+        app.secret_key = "test-secret"
+
+        register_seller_routes(app, admin_required=admin_required)
+
+        rules = {rule.endpoint: rule.rule for rule in app.url_map.iter_rules()}
+        self.assertEqual(rules["admin_api_get_sellers"], "/admin/api/sellers")
+        self.assertEqual(rules["admin_api_add_seller"], "/admin/api/sellers")
+        self.assertEqual(rules["admin_api_remove_seller"], "/admin/api/sellers/<int:telegram_id>")
+        self.assertEqual(rules["admin_api_toggle_seller"], "/admin/api/sellers/<int:telegram_id>/toggle")
+        self.assertEqual(rules["admin_api_toggle_seller_admin"], "/admin/api/sellers/toggle_admin")
+
+    def test_web_routes_delegates_seller_route_registration(self):
+        source = (PROJECT_ROOT / "modules" / "web_routes.py").read_text()
+        self.assertIn("register_seller_routes(app, admin_required)", source)
+        self.assertNotIn("@app.route('/admin/api/sellers'", source)
+        self.assertNotIn("@app.route('/admin/api/sellers/<int:telegram_id>'", source)
+        self.assertNotIn("@app.route('/admin/api/sellers/<int:telegram_id>/toggle'", source)
+        self.assertNotIn("@app.route('/admin/api/sellers/toggle_admin'", source)
+
     def test_full_web_routes_register_without_name_errors(self):
         from flask import Flask
         from modules.web_routes import register_routes
