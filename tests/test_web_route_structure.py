@@ -29,6 +29,33 @@ class WebRouteStructureTests(unittest.TestCase):
         self.assertNotIn("@app.route('/register'", source)
         self.assertNotIn("@app.route('/logout'", source)
 
+    def test_recharge_routes_are_registered_by_recharge_module(self):
+        from flask import Flask
+        from modules.web_recharge_routes import register_recharge_routes
+
+        def admin_required(func):
+            return func
+
+        app = Flask(__name__)
+        app.secret_key = "test-secret"
+
+        register_recharge_routes(app, notification_queue=None, admin_required=admin_required)
+
+        rules = {rule.endpoint: rule.rule for rule in app.url_map.iter_rules()}
+        self.assertEqual(rules["recharge_page"], "/recharge")
+        self.assertEqual(rules["submit_recharge"], "/recharge")
+        self.assertEqual(rules["admin_recharge_requests"], "/admin/recharge-requests")
+        self.assertEqual(rules["approve_recharge"], "/admin/api/recharge/<int:request_id>/approve")
+        self.assertEqual(rules["reject_recharge"], "/admin/api/recharge/<int:request_id>/reject")
+
+    def test_web_routes_delegates_recharge_route_registration(self):
+        source = (PROJECT_ROOT / "modules" / "web_routes.py").read_text()
+        self.assertIn("register_recharge_routes(app, notification_queue, admin_required)", source)
+        self.assertNotIn("@app.route('/recharge'", source)
+        self.assertNotIn("@app.route('/admin/recharge-requests'", source)
+        self.assertNotIn("@app.route('/admin/api/recharge/<int:request_id>/approve'", source)
+        self.assertNotIn("@app.route('/admin/api/recharge/<int:request_id>/reject'", source)
+
     def test_full_web_routes_register_without_name_errors(self):
         from flask import Flask
         from modules.web_routes import register_routes
