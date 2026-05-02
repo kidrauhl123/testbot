@@ -278,6 +278,27 @@ class WebRouteStructureTests(unittest.TestCase):
         self.assertNotIn("@app.route('/', methods=['GET'])", source)
         self.assertNotIn("@app.route('/', methods=['POST'])", source)
 
+    def test_utility_routes_are_registered_by_utility_module(self):
+        from flask import Flask
+        from modules.web_utility_routes import register_utility_routes
+
+        app = Flask(__name__)
+        app.secret_key = "test-secret"
+
+        register_utility_routes(app, notification_queue=None)
+
+        routes = {rule.endpoint: (rule.rule, rule.methods) for rule in app.url_map.iter_rules()}
+        self.assertEqual(routes["test_route"][0], "/test")
+        self.assertIn("GET", routes["test_route"][1])
+        self.assertEqual(routes["manual_check_orders"][0], "/check-orders")
+        self.assertIn("GET", routes["manual_check_orders"][1])
+
+    def test_web_routes_delegates_utility_route_registration(self):
+        source = (PROJECT_ROOT / "modules" / "web_routes.py").read_text()
+        self.assertIn("register_utility_routes(app, notification_queue)", source)
+        self.assertNotIn("@app.route('/test')", source)
+        self.assertNotIn("@app.route('/check-orders')", source)
+
     def test_full_web_routes_register_without_name_errors(self):
         from flask import Flask
         from modules.web_routes import register_routes
