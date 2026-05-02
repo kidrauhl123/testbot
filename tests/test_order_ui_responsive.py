@@ -166,6 +166,52 @@ class OrderUIResponsiveTests(unittest.TestCase):
         self.assertIn("balanceText.textContent = `余额: ${balance}元${creditLimit > 0 ? ` (额度: ${creditLimit}元)` : ''}`;", source)
         self.assertNotIn("balanceBadge.textContent = `余额:", source)
 
+    def test_index_mobile_form_fields_use_phone_readable_type_sizes(self):
+        source = self.read_template(INDEX_TEMPLATE)
+        start = source.find("@media (max-width: 600px)")
+        self.assertNotEqual(start, -1, "index should have a focused 600px mobile media block")
+        body = source[start:].split("</style>", 1)[0]
+
+        for marker in (
+            "font-size: 17px",
+            "font-size: 18px",
+            "min-height: 52px",
+            "padding: 14px 15px",
+            ".form-group label",
+            ".form-control",
+            ".search-input",
+            ".price-display",
+            ".price-display small",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, body)
+
+        self.assertNotIn('font-size:12px', source)
+
+    def test_index_mobile_order_cards_use_phone_readable_type_sizes(self):
+        source = self.read_template(INDEX_TEMPLATE)
+        start = source.find("@media (max-width: 600px)")
+        self.assertNotEqual(start, -1, "index should have a focused 600px mobile media block")
+        body = source[start:].split("</style>", 1)[0]
+
+        for marker in (
+            ".order-list-item {",
+            "font-size: 18px",
+            ".order-list-item h4",
+            "font-size: 20px",
+            ".order-list-item p",
+            ".order-list-item p.price",
+            ".order-list-item p.time",
+            ".failed-reason",
+            ".status-badge",
+            "font-size: 16px",
+            "line-height: 1.65",
+            ".order-actions .detail-btn",
+            "min-height: 46px",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, body)
+
     def test_admin_order_toolbar_uses_responsive_classes_not_inline_widths(self):
         source = self.read_template(ADMIN_TEMPLATE)
 
