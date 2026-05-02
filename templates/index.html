@@ -949,7 +949,20 @@
         width: 100%;
         flex-direction: column;
         align-items: stretch;
-        gap: 8px;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      .navbar-account-row,
+      .navbar-balance-row {
+        width: 100%;
+        min-height: 48px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: rgba(255,255,255,0.16);
+        display: flex;
+        align-items: center;
+        justify-content: center;
         min-width: 0;
       }
 
@@ -962,6 +975,8 @@
       .user-info {
         justify-content: center;
         flex-wrap: wrap;
+        gap: 8px;
+        line-height: 1.45;
       }
 
       .mobile-safe-text,
@@ -972,17 +987,31 @@
         word-break: break-word;
       }
 
+      .admin-badge {
+        flex: 0 0 auto;
+      }
+
       .balance-badge {
         width: 100%;
-        justify-content: center;
+        justify-content: space-between;
         flex-wrap: wrap;
-        gap: 6px;
-        text-align: center;
+        gap: 10px;
+        text-align: left;
         line-height: 1.5;
+        padding: 0;
+        background: transparent;
+        box-shadow: none;
       }
 
       .recharge-btn {
         margin-left: 0;
+        min-height: 44px;
+        min-width: 96px;
+        padding: 11px 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
       }
 
       .main-container {
@@ -1055,14 +1084,46 @@
         gap: 10px;
       }
 
+      .orders-panel-card .card-header {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+        align-items: stretch;
+      }
+
+      .orders-panel-card .card-header h2 {
+        width: 100%;
+        line-height: 1.35;
+      }
+
+      .orders-panel-card .header-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+        width: 100%;
+      }
+
+      .orders-panel-card .today-total {
+        width: 100%;
+        min-height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
+
       .view-toggle {
-        flex: 1 1 auto;
-        max-width: 160px;
+        width: 100%;
+        max-width: none;
       }
 
       .view-btn {
         flex: 1;
-        min-height: 36px;
+        min-height: 40px;
+      }
+
+      .search-container {
+        gap: 8px;
       }
 
       .search-box {
@@ -1074,10 +1135,62 @@
         padding-left: 12px;
       }
 
+      .refresh-hint {
+        width: 100%;
+        text-align: left;
+        line-height: 1.45;
+      }
+
+      .order-list-container {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .order-list-item {
+        padding: 15px;
+        border-radius: 12px;
+        line-height: 1.55;
+      }
+
+      .order-list-item h4 {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        line-height: 1.35;
+      }
+
+      .order-list-item p {
+        margin-bottom: 8px;
+        line-height: 1.55;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+
+      .order-list-item p.account {
+        font-size: 14px;
+        line-height: 1.55;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        white-space: normal;
+        line-height: 1.25;
+      }
+
+      .time-info {
+        padding-top: 8px;
+      }
+
       .order-actions {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
+        margin-top: 12px;
       }
 
       .order-actions .detail-btn,
@@ -1104,14 +1217,15 @@
 <div class="navbar">
   <div class="navbar-brand">破天充值系统</div>
   <div class="navbar-user">
-    <div class="user-dropdown">
-      <div class="user-info">
-        <div class="user-avatar">{{ session.username[0]|upper }}</div>
-        <span class="mobile-safe-text user-name">{{ session.username }}</span>
-        {% if session.is_admin %}
-          <span class="admin-badge">管理员</span>
-        {% endif %}
-      </div>
+    <div class="navbar-account-row">
+      <div class="user-dropdown">
+        <div class="user-info">
+          <div class="user-avatar">{{ session.username[0]|upper }}</div>
+          <span class="mobile-safe-text user-name">{{ session.username }}</span>
+          {% if session.is_admin %}
+            <span class="admin-badge">管理员</span>
+          {% endif %}
+        </div>
       <div class="dropdown-menu">
         <div class="dropdown-menu-header">账户信息</div>
         {% if balance is defined %}
@@ -1137,11 +1251,14 @@
         </a>
       </div>
     </div>
+    </div>
     
     {% if balance is defined %}
-    <div id="balanceBadge" class="balance-badge {% if balance < 0 %}negative{% endif %}" style="cursor:pointer;">
-      <span class="mobile-safe-text">余额: {{ balance }} 元</span>
-      <a href="/recharge" class="recharge-btn">充值</a>
+    <div class="navbar-balance-row">
+      <div id="balanceBadge" class="balance-badge {% if balance < 0 %}negative{% endif %}" style="cursor:pointer;">
+        <span class="mobile-safe-text">余额: {{ balance }} 元</span>
+        <a href="/recharge" class="recharge-btn">充值</a>
+      </div>
     </div>
     {% endif %}
   </div>
@@ -1558,8 +1675,11 @@
     // 更新导航栏的余额显示
     const balanceBadge = document.querySelector('.balance-badge');
     if (balanceBadge) {
-      // 更新余额和透支额度的显示
-      balanceBadge.textContent = `余额: ${balance}元${creditLimit > 0 ? ` (额度: ${creditLimit}元)` : ''}`;
+      // 更新余额和透支额度的显示，但保留移动端充值按钮
+      const balanceText = balanceBadge.querySelector('.mobile-safe-text');
+      if (balanceText) {
+        balanceText.textContent = `余额: ${balance}元${creditLimit > 0 ? ` (额度: ${creditLimit}元)` : ''}`;
+      }
       
       // 根据余额正负设置不同的样式
       if (balance < 0) {

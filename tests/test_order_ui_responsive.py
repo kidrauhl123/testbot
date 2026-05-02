@@ -101,6 +101,71 @@ class OrderUIResponsiveTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, source)
 
+    def test_index_mobile_top_bar_uses_readable_separated_rows(self):
+        source = self.read_template(INDEX_TEMPLATE)
+        start = source.find("@media (max-width: 600px)")
+        self.assertNotEqual(start, -1, "index should have a focused 600px mobile media block")
+        body = source[start:].split("</style>", 1)[0]
+
+        for marker in (
+            'class="navbar-account-row"',
+            'class="navbar-balance-row"',
+            ".navbar-account-row",
+            ".navbar-balance-row",
+            "min-height: 48px",
+            "padding: 10px 12px",
+            "background: rgba(255,255,255,0.16)",
+            ".recharge-btn",
+            "min-height: 44px",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, source if marker.startswith('class=') else body)
+
+    def test_index_mobile_order_panel_header_avoids_crowded_single_line(self):
+        source = self.read_template(INDEX_TEMPLATE)
+        start = source.find("@media (max-width: 600px)")
+        self.assertNotEqual(start, -1, "index should have a focused 600px mobile media block")
+        body = source[start:].split("</style>", 1)[0]
+
+        for marker in (
+            ".orders-panel-card .card-header",
+            ".orders-panel-card .header-actions",
+            "display: grid",
+            "grid-template-columns: 1fr",
+            ".orders-panel-card .today-total",
+            ".refresh-hint",
+            "text-align: left",
+            "line-height: 1.45",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, body)
+
+    def test_index_mobile_order_cards_wrap_long_accounts_and_reduce_density(self):
+        source = self.read_template(INDEX_TEMPLATE)
+        start = source.find("@media (max-width: 600px)")
+        self.assertNotEqual(start, -1, "index should have a focused 600px mobile media block")
+        body = source[start:].split("</style>", 1)[0]
+
+        for marker in (
+            ".order-list-item",
+            ".order-list-item p",
+            ".order-list-item p.account",
+            "overflow-wrap: anywhere",
+            "word-break: break-word",
+            "line-height: 1.55",
+            ".status-badge",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, body)
+
+    def test_index_balance_refresh_preserves_mobile_recharge_link(self):
+        source = self.read_template(INDEX_TEMPLATE)
+        self.assertIn('id="balanceBadge"', source)
+        self.assertIn('class="recharge-btn"', source)
+        self.assertIn("const balanceText = balanceBadge.querySelector('.mobile-safe-text');", source)
+        self.assertIn("balanceText.textContent = `余额: ${balance}元${creditLimit > 0 ? ` (额度: ${creditLimit}元)` : ''}`;", source)
+        self.assertNotIn("balanceBadge.textContent = `余额:", source)
+
     def test_admin_order_toolbar_uses_responsive_classes_not_inline_widths(self):
         source = self.read_template(ADMIN_TEMPLATE)
 
