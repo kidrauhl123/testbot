@@ -116,6 +116,33 @@ class WebRouteStructureTests(unittest.TestCase):
         self.assertNotIn("@app.route('/admin/api/sellers/<int:telegram_id>/toggle'", source)
         self.assertNotIn("@app.route('/admin/api/sellers/toggle_admin'", source)
 
+    def test_user_admin_routes_are_registered_by_user_module(self):
+        from flask import Flask
+        from modules.web_user_routes import register_user_routes
+
+        def admin_required(func):
+            return func
+
+        app = Flask(__name__)
+        app.secret_key = "test-secret"
+
+        register_user_routes(app, admin_required=admin_required)
+
+        rules = {rule.endpoint: rule.rule for rule in app.url_map.iter_rules()}
+        self.assertEqual(rules["admin_api_users"], "/admin/api/users")
+        self.assertEqual(rules["admin_update_user_balance"], "/admin/api/users/<int:user_id>/balance")
+        self.assertEqual(rules["admin_update_user_credit"], "/admin/api/users/<int:user_id>/credit")
+        self.assertEqual(rules["admin_get_user_custom_prices"], "/admin/api/users/<int:user_id>/custom-prices")
+        self.assertEqual(rules["admin_set_user_custom_price"], "/admin/api/users/<int:user_id>/custom-prices")
+
+    def test_web_routes_delegates_user_route_registration(self):
+        source = (PROJECT_ROOT / "modules" / "web_routes.py").read_text()
+        self.assertIn("register_user_routes(app, admin_required)", source)
+        self.assertNotIn("@app.route('/admin/api/users'", source)
+        self.assertNotIn("@app.route('/admin/api/users/<int:user_id>/balance'", source)
+        self.assertNotIn("@app.route('/admin/api/users/<int:user_id>/credit'", source)
+        self.assertNotIn("@app.route('/admin/api/users/<int:user_id>/custom-prices'", source)
+
     def test_full_web_routes_register_without_name_errors(self):
         from flask import Flask
         from modules.web_routes import register_routes
