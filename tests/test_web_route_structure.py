@@ -230,6 +230,33 @@ class WebRouteStructureTests(unittest.TestCase):
         self.assertNotIn("@app.route('/api/balance/records'", source)
         self.assertNotIn("@app.route('/api/user-prices'", source)
 
+    def test_redeem_routes_are_registered_by_redeem_module(self):
+        from flask import Flask
+        from modules.web_redeem_routes import register_redeem_routes
+
+        app = Flask(__name__)
+        app.secret_key = "test-secret"
+
+        register_redeem_routes(app)
+
+        routes = {rule.endpoint: (rule.rule, rule.methods) for rule in app.url_map.iter_rules()}
+        self.assertEqual(routes["redeem_page"][0], "/redeem")
+        self.assertIn("GET", routes["redeem_page"][1])
+        self.assertEqual(routes["redeem_with_code"][0], "/redeem/<code>")
+        self.assertIn("GET", routes["redeem_with_code"][1])
+        self.assertEqual(routes["verify_activation_code"][0], "/api/verify-code")
+        self.assertIn("POST", routes["verify_activation_code"][1])
+        self.assertEqual(routes["process_redeem"][0], "/redeem")
+        self.assertIn("POST", routes["process_redeem"][1])
+
+    def test_web_routes_delegates_redeem_route_registration(self):
+        source = (PROJECT_ROOT / "modules" / "web_routes.py").read_text()
+        self.assertIn("register_redeem_routes(app)", source)
+        self.assertNotIn("@app.route('/redeem', methods=['GET'])", source)
+        self.assertNotIn("@app.route('/redeem/<code>'", source)
+        self.assertNotIn("@app.route('/api/verify-code'", source)
+        self.assertNotIn("@app.route('/redeem', methods=['POST'])", source)
+
     def test_full_web_routes_register_without_name_errors(self):
         from flask import Flask
         from modules.web_routes import register_routes
