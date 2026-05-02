@@ -1,0 +1,48 @@
+import sys
+import unittest
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+
+class WebRouteStructureTests(unittest.TestCase):
+    def test_auth_routes_are_registered_by_auth_module(self):
+        from flask import Flask
+        from modules.web_auth_routes import register_auth_routes
+
+        app = Flask(__name__)
+        app.secret_key = "test-secret"
+
+        register_auth_routes(app)
+
+        rules = {rule.endpoint: rule.rule for rule in app.url_map.iter_rules()}
+        self.assertEqual(rules["login"], "/login")
+        self.assertEqual(rules["register"], "/register")
+        self.assertEqual(rules["logout"], "/logout")
+
+    def test_web_routes_delegates_auth_route_registration(self):
+        source = (PROJECT_ROOT / "modules" / "web_routes.py").read_text()
+        self.assertIn("register_auth_routes(app)", source)
+        self.assertNotIn("@app.route('/login'", source)
+        self.assertNotIn("@app.route('/register'", source)
+        self.assertNotIn("@app.route('/logout'", source)
+
+    def test_full_web_routes_register_without_name_errors(self):
+        from flask import Flask
+        from modules.web_routes import register_routes
+
+        app = Flask(__name__)
+        app.secret_key = "test-secret"
+
+        register_routes(app, notification_queue=None)
+
+        endpoints = {rule.endpoint for rule in app.url_map.iter_rules()}
+        self.assertIn("login", endpoints)
+        self.assertIn("index", endpoints)
+        self.assertIn("admin_dashboard", endpoints)
+
+
+if __name__ == "__main__":
+    unittest.main()
