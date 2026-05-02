@@ -173,6 +173,36 @@ class WebRouteStructureTests(unittest.TestCase):
         self.assertNotIn("@app.route('/admin/api/orders/<int:order_id>', methods=['PUT'])", source)
         self.assertNotIn("@app.route('/admin/api/orders/batch-delete'", source)
 
+    def test_order_action_routes_are_registered_by_order_module(self):
+        from flask import Flask
+        from modules.web_order_routes import register_order_routes
+
+        app = Flask(__name__)
+        app.secret_key = "test-secret"
+
+        register_order_routes(app, notification_queue=None)
+
+        routes = {rule.endpoint: (rule.rule, rule.methods) for rule in app.url_map.iter_rules()}
+        self.assertEqual(routes["web_user_stats"][0], "/orders/stats/web/<user_id>")
+        self.assertIn("GET", routes["web_user_stats"][1])
+        self.assertEqual(routes["orders_recent"][0], "/orders/recent")
+        self.assertIn("GET", routes["orders_recent"][1])
+        self.assertEqual(routes["cancel_order"][0], "/orders/cancel/<int:oid>")
+        self.assertIn("POST", routes["cancel_order"][1])
+        self.assertEqual(routes["dispute_order"][0], "/orders/dispute/<int:oid>")
+        self.assertIn("POST", routes["dispute_order"][1])
+        self.assertEqual(routes["urge_order"][0], "/orders/urge/<int:oid>")
+        self.assertIn("POST", routes["urge_order"][1])
+
+    def test_web_routes_delegates_order_route_registration(self):
+        source = (PROJECT_ROOT / "modules" / "web_routes.py").read_text()
+        self.assertIn("register_order_routes(app, notification_queue)", source)
+        self.assertNotIn("@app.route('/orders/stats/web/<user_id>'", source)
+        self.assertNotIn("@app.route('/orders/recent'", source)
+        self.assertNotIn("@app.route('/orders/cancel/<int:oid>'", source)
+        self.assertNotIn("@app.route('/orders/dispute/<int:oid>'", source)
+        self.assertNotIn("@app.route('/orders/urge/<int:oid>'", source)
+
     def test_full_web_routes_register_without_name_errors(self):
         from flask import Flask
         from modules.web_routes import register_routes
