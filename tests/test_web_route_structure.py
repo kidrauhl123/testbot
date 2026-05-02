@@ -257,6 +257,27 @@ class WebRouteStructureTests(unittest.TestCase):
         self.assertNotIn("@app.route('/api/verify-code'", source)
         self.assertNotIn("@app.route('/redeem', methods=['POST'])", source)
 
+    def test_home_routes_are_registered_by_home_module(self):
+        from flask import Flask
+        from modules.web_home_routes import register_home_routes
+
+        app = Flask(__name__)
+        app.secret_key = "test-secret"
+
+        register_home_routes(app, notification_queue=None)
+
+        routes = {rule.endpoint: (rule.rule, rule.methods) for rule in app.url_map.iter_rules()}
+        self.assertEqual(routes["index"][0], "/")
+        self.assertIn("GET", routes["index"][1])
+        self.assertEqual(routes["create_order"][0], "/")
+        self.assertIn("POST", routes["create_order"][1])
+
+    def test_web_routes_delegates_home_route_registration(self):
+        source = (PROJECT_ROOT / "modules" / "web_routes.py").read_text()
+        self.assertIn("register_home_routes(app, notification_queue)", source)
+        self.assertNotIn("@app.route('/', methods=['GET'])", source)
+        self.assertNotIn("@app.route('/', methods=['POST'])", source)
+
     def test_full_web_routes_register_without_name_errors(self):
         from flask import Flask
         from modules.web_routes import register_routes
