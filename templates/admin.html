@@ -157,6 +157,20 @@
       flex: 0 1 280px;
     }
 
+    .admin-order-pagination {
+      align-items: center;
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+
+    .admin-order-pagination .page-info {
+      color: #6c757d;
+      font-size: 14px;
+    }
+
     .admin-order-actions {
       display: flex;
       gap: 8px;
@@ -474,19 +488,26 @@
 
       .admin-order-toolbar {
         align-items: stretch;
+        background: rgba(255,255,255,0.96);
         flex-direction: column;
         justify-content: flex-start;
+        padding: 10px 0;
+        position: sticky;
+        top: 0;
+        z-index: 20;
       }
 
       .admin-order-search {
         width: 100%;
         flex: 1 1 auto;
-        font-size: 16px;
+        font-size: 17px;
+        min-height: 48px;
       }
 
       .admin-order-toolbar .btn {
+        font-size: 17px;
         width: 100%;
-        min-height: 40px;
+        min-height: 48px;
       }
 
       #orders-table-container .data-table {
@@ -518,8 +539,9 @@
 
       #orders-table-container .data-table td {
         border-bottom: 1px solid #f0f0f0;
-        min-height: 42px;
-        padding: 10px 12px 10px 104px;
+        font-size: 15px;
+        min-height: 48px;
+        padding: 12px 12px 12px 112px;
         position: relative;
         text-align: right;
         white-space: normal;
@@ -537,8 +559,8 @@
         left: 12px;
         position: absolute;
         text-align: left;
-        top: 10px;
-        width: 84px;
+        top: 12px;
+        width: 92px;
       }
 
       #orders-table-container .data-table td.order-select-cell {
@@ -570,7 +592,22 @@
 
       .admin-order-actions .btn {
         width: 100%;
-        min-height: 38px;
+        min-height: 44px;
+      }
+
+      .admin-order-pagination {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .admin-order-pagination .btn {
+        font-size: 16px;
+        min-height: 44px;
+        width: 100%;
+      }
+
+      .admin-order-pagination .page-info {
+        text-align: center;
       }
 
       .modal {
@@ -585,7 +622,7 @@
 
       .modal-footer .btn {
         width: 100%;
-        min-height: 40px;
+        min-height: 44px;
       }
     }
   </style>
@@ -1012,6 +1049,9 @@
   let sellerDataLoaded = false;
   let balanceDataLoaded = false;
   let allUsers = []; // 存储所有用户数据
+  const adminOrderPageSize = 50;
+  let adminOrderOffset = 0;
+  let adminOrderSearchTimer = null;
 
   // 转义HTML
   function escapeHtml(str) {
@@ -1186,8 +1226,8 @@
   async function loadOrders() {
     try {
       console.log("开始加载订单数据...");
-      const container = document.getElementById('orders-table-container');
       const tbody = document.getElementById('orders-table-body');
+      const orderSearchInput = document.getElementById('order-search');
       if (!tbody) {
         console.error("找不到orders-table-body元素");
         return;
@@ -1195,21 +1235,31 @@
       
       tbody.innerHTML = '<tr><td colspan="9" class="loading">加载中...</td></tr>';
       
-      const response = await fetch('/admin/api/orders?limit=1000');
+      const params = new URLSearchParams();
+      params.set('limit', adminOrderPageSize);
+      params.set('offset', adminOrderOffset);
+      const searchValue = orderSearchInput ? orderSearchInput.value.trim() : '';
+      if (searchValue) {
+        params.set('search', searchValue);
+      }
+
+      const response = await fetch(`/admin/api/orders?${params.toString()}`);
       if (!response.ok) {
         console.error("加载订单数据失败:", response.status, response.statusText);
         tbody.innerHTML = '<tr><td colspan="9" class="loading">加载失败，请刷新重试</td></tr>';
+        renderAdminOrderPagination(0, 0);
         return;
       }
       
       const data = await response.json();
       const orders = data.orders || [];
-      console.log("成功获取订单数据:", orders);
+      const total = data.total || 0;
       
       tbody.innerHTML = '';
       
       if (orders.length === 0) {
         tbody.innerHTML = '<tr><td colspan="9" class="loading">暂无订单数据</td></tr>';
+        renderAdminOrderPagination(total, orders.length);
         return;
       }
       
@@ -1239,14 +1289,38 @@
         tbody.appendChild(row);
       });
       
-      console.log("订单数据加载完成");
+      renderAdminOrderPagination(total, orders.length);
+      console.log(`订单数据加载完成：${orders.length}/${total}`);
     } catch (e) {
       console.error('加载订单失败', e);
       const tbody = document.getElementById('orders-table-body');
       if (tbody) {
         tbody.innerHTML = '<tr><td colspan="9" class="loading">加载失败，请刷新重试</td></tr>';
       }
+      renderAdminOrderPagination(0, 0);
     }
+  }
+
+  function renderAdminOrderPagination(total, currentCount) {
+    const pagination = document.querySelector('#orders .pagination');
+    if (!pagination) return;
+
+    if (!total) {
+      pagination.innerHTML = '';
+      return;
+    }
+
+    const start = adminOrderOffset + 1;
+    const end = adminOrderOffset + currentCount;
+    const hasPrev = adminOrderOffset > 0;
+    const hasNext = adminOrderOffset + currentCount < total;
+
+    pagination.className = 'pagination admin-order-pagination';
+    pagination.innerHTML = `
+      <button class="btn btn-secondary" ${hasPrev ? '' : 'disabled'} data-order-page="prev">上一页</button>
+      <span class="page-info">${start}-${end} / 共 ${total} 条</span>
+      <button class="btn btn-secondary" ${hasNext ? '' : 'disabled'} data-order-page="next">下一页</button>
+    `;
   }
 
   // 已被替换为openModal和closeModal函数
@@ -1801,6 +1875,8 @@
     const selectAllCheckbox = document.getElementById('select-all-orders');
     const batchDeleteBtn = document.getElementById('batch-delete-btn');
     const ordersTableContainer = document.getElementById('orders-table-container');
+    const orderSearchInput = document.getElementById('order-search');
+    const orderPagination = document.querySelector('#orders .pagination');
 
     if (selectAllCheckbox) {
       selectAllCheckbox.addEventListener('change', (e) => {
@@ -1850,6 +1926,29 @@
           const allChecked = Array.from(allCheckboxes).every(cb => cb.checked);
           selectAllCheckbox.checked = allChecked;
         }
+      });
+    }
+
+    if (orderSearchInput) {
+      orderSearchInput.addEventListener('input', () => {
+        clearTimeout(adminOrderSearchTimer);
+        adminOrderSearchTimer = setTimeout(() => {
+          adminOrderOffset = 0;
+          loadOrders();
+        }, 250);
+      });
+    }
+
+    if (orderPagination) {
+      orderPagination.addEventListener('click', (e) => {
+        const button = e.target.closest('[data-order-page]');
+        if (!button || button.disabled) return;
+        if (button.dataset.orderPage === 'prev') {
+          adminOrderOffset = Math.max(0, adminOrderOffset - adminOrderPageSize);
+        } else {
+          adminOrderOffset += adminOrderPageSize;
+        }
+        loadOrders();
       });
     }
 

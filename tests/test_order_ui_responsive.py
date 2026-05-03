@@ -12,28 +12,32 @@ class OrderUIResponsiveTests(unittest.TestCase):
     def read_template(self, path):
         return path.read_text(encoding="utf-8")
 
-    def test_index_order_view_defaults_to_mobile_card_mode(self):
+    def test_index_order_view_is_card_only_without_switcher(self):
         source = self.read_template(INDEX_TEMPLATE)
 
-        self.assertIn("let viewMode = 'grid';", source)
-        self.assertRegex(
-            source,
-            r'id="gridViewBtn"[^>]*class="[^"]*active[^"]*"',
-            "grid/card view button should be active when JS defaults to grid view",
-        )
-        self.assertNotRegex(
-            source,
-            r'id="tableViewBtn"[^>]*class="[^"]*active[^"]*"',
-            "table view button must not be initially active when grid is the default",
-        )
+        for removed_marker in (
+            "view-toggle",
+            "gridViewBtn",
+            "tableViewBtn",
+            "toggleViewMode",
+            "viewMode",
+            "renderTableView",
+            "orders-table-wrapper",
+            "orders-table",
+        ):
+            with self.subTest(removed_marker=removed_marker):
+                self.assertNotIn(removed_marker, source)
+
+        self.assertIn("function renderOrderCards(container, orders)", source)
+        self.assertIn("renderOrderCards(container, ordersToShow);", source)
 
     def test_index_order_cards_expose_full_action_group(self):
         source = self.read_template(INDEX_TEMPLATE)
 
         self.assertIn('class="order-actions"', source)
-        grid_block = re.search(r"function renderGridView\(container, orders\) \{(?P<body>.*?)function renderTableView", source, re.S)
-        self.assertIsNotNone(grid_block, "renderGridView should remain present before renderTableView")
-        body = grid_block.group("body")
+        card_block = re.search(r"function renderOrderCards\(container, orders\) \{(?P<body>.*?)function loadMoreOrders", source, re.S)
+        self.assertIsNotNone(card_block, "renderOrderCards should be the only index order renderer")
+        body = card_block.group("body")
 
         for marker in (
             "cancelOrder(${o.id}, this)",
@@ -45,7 +49,7 @@ class OrderUIResponsiveTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, body)
 
-    def test_index_has_mobile_rules_for_order_controls_and_tables(self):
+    def test_index_has_mobile_rules_for_order_controls_and_cards(self):
         source = self.read_template(INDEX_TEMPLATE)
 
         self.assertRegex(source, r"@media\s*\(max-width:\s*600px\)")
@@ -53,8 +57,8 @@ class OrderUIResponsiveTests(unittest.TestCase):
             ".header-actions",
             ".search-box",
             ".order-actions",
-            ".orders-table-wrapper",
-            ".orders-table",
+            ".order-list-container",
+            ".order-list-item",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, source)
@@ -173,10 +177,10 @@ class OrderUIResponsiveTests(unittest.TestCase):
         body = source[start:].split("</style>", 1)[0]
 
         for marker in (
+            "font-size: 16px",
             "font-size: 17px",
-            "font-size: 18px",
-            "min-height: 52px",
-            "padding: 14px 15px",
+            "min-height: 50px",
+            "padding: 13px 14px",
             ".form-group label",
             ".form-control",
             ".search-input",
@@ -196,18 +200,18 @@ class OrderUIResponsiveTests(unittest.TestCase):
 
         for marker in (
             ".order-list-item {",
-            "font-size: 18px",
+            "font-size: 16px",
             ".order-list-item h4",
-            "font-size: 20px",
+            "font-size: 19px",
             ".order-list-item p",
             ".order-list-item p.price",
             ".order-list-item p.time",
             ".failed-reason",
             ".status-badge",
-            "font-size: 16px",
-            "line-height: 1.65",
+            "font-size: 15px",
+            "line-height: 1.6",
             ".order-actions .detail-btn",
-            "min-height: 46px",
+            "min-height: 44px",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, body)
@@ -251,6 +255,51 @@ class OrderUIResponsiveTests(unittest.TestCase):
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, source)
+    def test_admin_mobile_order_controls_are_phone_sized(self):
+        source = self.read_template(ADMIN_TEMPLATE)
+        start = source.find("@media (max-width: 600px)")
+        self.assertNotEqual(start, -1, "admin should have focused 600px mobile order rules")
+        body = source[start:].split("</style>", 1)[0]
+
+        for marker in (
+            ".admin-order-toolbar",
+            "position: sticky",
+            ".admin-order-search",
+            "font-size: 17px",
+            "min-height: 48px",
+            ".admin-order-toolbar .btn",
+            "min-height: 48px",
+            "#orders-table-container .data-table td",
+            "font-size: 15px",
+            "min-height: 48px",
+            "padding: 12px 12px 12px 112px",
+            "#orders-table-container .data-table td::before",
+            "width: 92px",
+            ".admin-order-actions .btn",
+            "min-height: 44px",
+            ".modal-footer .btn",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, body)
+
+        self.assertNotIn("font-size: 12px", body)
+        self.assertNotIn("min-height: 38px", body)
+        self.assertNotIn("min-height: 40px", body)
+
+    def test_order_loading_uses_smaller_paginated_payloads(self):
+        index_source = self.read_template(INDEX_TEMPLATE)
+        admin_source = self.read_template(ADMIN_TEMPLATE)
+
+        self.assertIn("fetch('/orders/recent?limit=50')", index_source)
+        self.assertNotIn("/orders/recent?limit=200", index_source)
+        self.assertIn("const adminOrderPageSize = 50;", admin_source)
+        self.assertIn("params.set('limit', adminOrderPageSize);", admin_source)
+        self.assertIn("params.set('offset', adminOrderOffset);", admin_source)
+        self.assertIn("const searchValue = orderSearchInput ? orderSearchInput.value.trim() : '';", admin_source)
+        self.assertIn("fetch(`/admin/api/orders?${params.toString()}`)", admin_source)
+        self.assertIn("renderAdminOrderPagination(total, orders.length);", admin_source)
+        self.assertNotIn("limit=1000", admin_source)
+        self.assertNotIn('console.log("成功获取订单数据:", orders);', admin_source)
 
 
 if __name__ == "__main__":

@@ -696,73 +696,11 @@
       font-weight: 600;
     }
 
-    /* 视图切换按钮样式 */
     .header-actions {
       display: flex;
       align-items: center;
       gap: 15px;
       flex-wrap: wrap;
-    }
-    
-    .view-toggle {
-      display: flex;
-      background: rgba(0,0,0,0.05);
-      border-radius: 6px;
-      overflow: hidden;
-    }
-    
-    .view-btn {
-      border: none;
-      background: transparent;
-      padding: 6px 10px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    
-    .view-btn.active {
-      background: rgba(102,126,234,0.8);
-      color: white;
-    }
-    
-    /* 表格视图样式 */
-    .orders-table-wrapper {
-      width: 100%;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      border-radius: 8px;
-    }
-
-    .orders-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-      background: white;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    }
-    
-    .orders-table th {
-      background: rgba(102,126,234,0.1);
-      padding: 12px;
-      text-align: left;
-      font-weight: 600;
-      color: #555;
-      border-bottom: 2px solid rgba(102,126,234,0.2);
-    }
-    
-    .orders-table td {
-      padding: 12px;
-      border-bottom: 1px solid rgba(0,0,0,0.05);
-      vertical-align: middle;
-    }
-    
-    .orders-table tr:last-child td {
-      border-bottom: none;
-    }
-    
-    .orders-table tr:hover {
-      background: rgba(102,126,234,0.05);
     }
     
     .detail-btn {
@@ -1054,36 +992,36 @@
       }
 
       .card-header h2 {
-        font-size: 20px;
+        font-size: 19px;
         line-height: 1.35;
       }
 
       .form-group label {
-        font-size: 17px;
+        font-size: 16px;
         line-height: 1.45;
-        margin-bottom: 8px;
+        margin-bottom: 7px;
       }
 
       .form-control {
-        font-size: 18px;
-        min-height: 52px;
+        font-size: 17px;
+        min-height: 50px;
         line-height: 1.5;
-        padding: 14px 15px;
+        padding: 13px 14px;
       }
 
       textarea.form-control {
-        min-height: 96px;
+        min-height: 88px;
       }
 
       .price-display {
         width: 100%;
-        min-height: 52px;
-        font-size: 18px;
+        min-height: 50px;
+        font-size: 17px;
         line-height: 1.55;
       }
 
       .price-display small {
-        font-size: 16px;
+        font-size: 15px;
         line-height: 1.5;
       }
 
@@ -1093,8 +1031,8 @@
 
       .submit-btn {
         width: 100%;
-        min-height: 54px;
-        font-size: 18px;
+        min-height: 52px;
+        font-size: 17px;
         margin-top: 8px;
       }
 
@@ -1134,30 +1072,19 @@
         line-height: 1.45;
       }
 
-      .view-toggle {
-        width: 100%;
-        max-width: none;
-      }
-
-      .view-btn {
-        flex: 1;
-        min-height: 44px;
-        font-size: 16px;
-      }
-
       .search-container {
         gap: 8px;
       }
 
       .search-box {
         min-width: 0;
-        font-size: 17px;
-        min-height: 48px;
+        font-size: 16px;
+        min-height: 46px;
       }
 
       .search-input {
-        font-size: 17px;
-        min-height: 48px;
+        font-size: 16px;
+        min-height: 46px;
         line-height: 1.5;
         padding-left: 12px;
       }
@@ -1175,10 +1102,10 @@
       }
 
       .order-list-item {
-        padding: 18px;
+        padding: 16px;
         border-radius: 12px;
-        line-height: 1.65;
-        font-size: 18px;
+        line-height: 1.6;
+        font-size: 16px;
       }
 
       .order-list-item h4 {
@@ -1205,8 +1132,8 @@
       .order-list-item p.creator,
       .order-list-item p.remark,
       .failed-reason {
-        font-size: 17px;
-        line-height: 1.65;
+        font-size: 16px;
+        line-height: 1.6;
         overflow-wrap: anywhere;
         word-break: break-word;
       }
@@ -1217,7 +1144,7 @@
         min-height: 30px;
         white-space: normal;
         line-height: 1.3;
-        font-size: 16px;
+        font-size: 15px;
       }
 
       .time-info {
@@ -1237,17 +1164,9 @@
       .order-actions .urge-btn,
       .order-actions button {
         width: 100%;
-        min-height: 46px;
-        padding: 10px 12px;
-        font-size: 16px;
-      }
-
-      .orders-table-wrapper {
-        margin-top: 8px;
-      }
-
-      .orders-table {
-        min-width: 760px;
+        min-height: 44px;
+        padding: 9px 11px;
+        font-size: 15px;
       }
     }
   </style>
@@ -1352,10 +1271,6 @@
                 <div class="card-header">
                   <h2>{% if session.is_admin %}系统订单状态{% else %}我的订单{% endif %}</h2>
                   <div class="header-actions">
-                    <div class="view-toggle">
-                      <button id="gridViewBtn" class="view-btn active" title="网格视图"><i class="fas fa-th"></i></button>
-                      <button id="tableViewBtn" class="view-btn" title="表格视图"><i class="fas fa-list"></i></button>
-                    </div>
                     <div id="today-total" class="today-total"></div>
                   </div>
                 </div>
@@ -1365,7 +1280,7 @@
                     <button id="searchBtn" class="search-btn"><i class="fas fa-search"></i></button>
                     <button id="clearSearchBtn" class="clear-search-btn"><i class="fas fa-times"></i></button>
                   </div>
-                  <div class="refresh-hint">(显示全部最新订单，每5秒自动更新)</div>
+                  <div class="refresh-hint">(显示最近订单，每5秒自动更新)</div>
                 </div>
                 <div id="orders-container">加载中...</div>
                 <div id="load-more-container" style="text-align:center; margin-top: 20px; display:none;">
@@ -1389,7 +1304,6 @@
   let userId = '{{ session.user_id }}'; // 当前用户ID
   let isAdmin = {{ 'true' if session.is_admin else 'false' }}; // 是否是管理员
   let lastOrdersHash = ''; // 用于检测订单变化的哈希
-  let viewMode = 'grid'; // 默认视图模式：grid 或 table
   
   // 默认价格，会被用户定制价格覆盖
   const WEB_PRICES = {
@@ -1509,10 +1423,6 @@
         card.style.transform = 'translateY(0)';
       }, 100 * index);
     });
-    
-    // 绑定视图切换按钮事件
-    document.getElementById('gridViewBtn').addEventListener('click', () => toggleViewMode('grid'));
-    document.getElementById('tableViewBtn').addEventListener('click', () => toggleViewMode('table'));
     
     // 给订单添加类名，用于添加图标
     setTimeout(() => {
@@ -1751,7 +1661,7 @@
         showRefreshIndicator();
       }
       
-      const resp = await fetch('/orders/recent?limit=200');
+      const resp = await fetch('/orders/recent?limit=50');
       const newOrders = await resp.json();
       
       // 检查订单是否有变化
@@ -1831,12 +1741,8 @@
     // 只显示指定数量的订单
     const ordersToShow = orders.slice(0, displayedOrders);
     
-    // 根据视图模式渲染
-    if (viewMode === 'grid') {
-      renderGridView(container, ordersToShow);
-    } else {
-      renderTableView(container, ordersToShow);
-    }
+    // 仅保留卡片视图，减少移动端认知负担和渲染分支
+    renderOrderCards(container, ordersToShow);
     
     // 显示或隐藏"加载更多"按钮
     if (orders.length > displayedOrders) {
@@ -1848,8 +1754,8 @@
     }
   }
   
-  // 渲染网格视图
-  function renderGridView(container, orders) {
+  // 渲染订单卡片
+  function renderOrderCards(container, orders) {
     // 创建网格容器
     container.innerHTML = '<div class="order-list-container"></div>';
     const gridContainer = container.querySelector('.order-list-container');
@@ -1884,58 +1790,7 @@
     });
   }
   
-  // 渲染表格视图
-  function renderTableView(container, orders) {
-    let html = `
-      <div class="orders-table-wrapper">
-      <table class="orders-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>账号</th>
-            <th>套餐</th>
-            <th>价格</th>
-            <th>状态</th>
-            <th>提交时间</th>
-            <th>接单时间</th>
-            <th>完成时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-    `;
-    
-    orders.forEach(o => {
-      const cls = 'status-' + o.status.replace('已','').toLowerCase();
-      
-      html += `
-        <tr data-order-id="${o.id}">
-          <td>${o.id}</td>
-          <td>${escapeHtml(o.account)}</td>
-          <td>${escapeHtml(o.package)}个月</td>
-          <td><span class="table-price">¥${USER_PRICES[o.package] || 'N/A'}</span></td>
-          <td><span class="status-badge ${cls}">${o.status_text}</span></td>
-          <td>${o.created_at}</td>
-          <td>${o.accepted_at || '-'}</td>
-          <td>${o.completed_at || '-'}</td>
-          <td>
-            ${o.can_cancel ? `<button class="cancel-btn" onclick="cancelOrder(${o.id}, this)">撤销</button>` : ''}
-            <button class="detail-btn" onclick="showOrderDetail(${o.id})">详情</button>
-            ${o.status === 'completed' ? `<button class="dispute-btn" onclick="disputeOrder(${o.id})">质疑</button>` : ''}
-            ${o.status === 'accepted' && canRequestUpdate(o) ? `<button class="urge-btn" onclick="urgeOrder(${o.id})">催单</button>` : ''}
-          </td>
-        </tr>
-      `;
-    });
-    
-    html += `
-        </tbody>
-      </table>
-      </div>
-    `;
-    
-    container.innerHTML = html;
-  }
+
 
   // 加载更多订单
   function loadMoreOrders() {
@@ -2099,18 +1954,6 @@
       startAutoRefresh();
     }
   });
-
-  // 切换视图模式
-  function toggleViewMode(mode) {
-    viewMode = mode;
-    
-    // 更新按钮状态
-    document.getElementById('gridViewBtn').classList.toggle('active', mode === 'grid');
-    document.getElementById('tableViewBtn').classList.toggle('active', mode === 'table');
-    
-    // 重新渲染订单
-    renderOrders(allOrders);
-  }
 
   // 当用户离开页面时停止自动刷新
   window.addEventListener('beforeunload', function() {
