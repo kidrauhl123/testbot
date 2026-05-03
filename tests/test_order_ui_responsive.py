@@ -105,25 +105,34 @@ class OrderUIResponsiveTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, source)
 
-    def test_index_mobile_top_bar_uses_readable_separated_rows(self):
+    def test_index_mobile_top_bar_uses_unified_compact_navbar(self):
         source = self.read_template(INDEX_TEMPLATE)
         start = source.find("@media (max-width: 600px)")
         self.assertNotEqual(start, -1, "index should have a focused 600px mobile media block")
         body = source[start:].split("</style>", 1)[0]
 
-        for marker in (
+        for removed_marker in (
             'class="navbar-account-row"',
             'class="navbar-balance-row"',
             ".navbar-account-row",
             ".navbar-balance-row",
-            "min-height: 48px",
-            "padding: 10px 12px",
             "background: rgba(255,255,255,0.16)",
+        ):
+            with self.subTest(removed_marker=removed_marker):
+                self.assertNotIn(removed_marker, source if removed_marker.startswith('class=') else body)
+
+        for marker in (
+            ".navbar",
+            "justify-content: space-between",
+            ".navbar-user",
+            "flex-direction: row",
+            "flex-wrap: wrap",
+            ".balance-badge",
             ".recharge-btn",
-            "min-height: 44px",
+            "min-height: 40px",
         ):
             with self.subTest(marker=marker):
-                self.assertIn(marker, source if marker.startswith('class=') else body)
+                self.assertIn(marker, body)
 
     def test_index_mobile_order_panel_header_avoids_crowded_single_line(self):
         source = self.read_template(INDEX_TEMPLATE)
@@ -285,6 +294,22 @@ class OrderUIResponsiveTests(unittest.TestCase):
         self.assertNotIn("font-size: 12px", body)
         self.assertNotIn("min-height: 38px", body)
         self.assertNotIn("min-height: 40px", body)
+
+    def test_index_recent_orders_render_path_does_not_filter_to_today_only(self):
+        source = self.read_template(INDEX_TEMPLATE)
+        load_orders = re.search(r"async function loadOrders\([^)]*\) \{(?P<body>.*?)function showRefreshIndicator", source, re.S)
+        self.assertIsNotNone(load_orders, "loadOrders should be present before renderOrders")
+        body = load_orders.group("body")
+
+        self.assertIn("allOrders = newOrders;", body)
+        self.assertIn("let filteredOrders = allOrders;", body)
+        self.assertIn("filteredOrders = allOrders.filter(order =>", body)
+        self.assertIn("renderOrders(filteredOrders);", body)
+        self.assertIn("updateTodayTotal(allOrders);", body)
+        self.assertNotIn("仅显示今日订单", body)
+        self.assertNotIn("const todayOrders", body)
+        self.assertNotIn("let filteredOrders = todayOrders", body)
+        self.assertNotIn("todayOrders.filter", body)
 
     def test_order_loading_uses_smaller_paginated_payloads(self):
         index_source = self.read_template(INDEX_TEMPLATE)
