@@ -103,6 +103,44 @@
       margin-right: 6px;
       font-size: 20px;
     }
+    .nav-brand-lockup::before {
+      content: none;
+      margin-right: 0;
+    }
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      background: linear-gradient(135deg, #667eea 0%, #8b5cf6 100%);
+      box-shadow: 0 6px 14px rgba(102,126,234,0.25);
+      flex: 0 0 auto;
+    }
+    .brand-copy {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.15;
+    }
+    .brand-title {
+      color: #667eea;
+      font-weight: 800;
+    }
+    .brand-subtitle {
+      margin-top: 2px;
+      font-size: 11px;
+      color: #8b5cf6;
+      font-weight: 600;
+      opacity: 0.82;
+    }
+    .wallet-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
     .navbar-user {
       display: flex;
       align-items: center;
@@ -872,40 +910,156 @@
         line-height: 1.6;
       }
 
-      .navbar {
-        padding: 10px 12px;
-        justify-content: space-between;
+      .app-mobile-nav {
+        padding: 12px 12px 14px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+          "brand profile"
+          "wallet wallet";
+        gap: 10px 12px;
         align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
+        background: linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(248,250,255,0.92) 100%);
+        border-radius: 0 0 22px 22px;
+        border-bottom: 1px solid rgba(255,255,255,0.65);
+        box-shadow: 0 12px 30px rgba(79,70,229,0.16);
       }
 
-      .navbar-brand {
+      .nav-brand-lockup {
+        grid-area: brand;
+        min-width: 0;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .brand-mark {
+        width: 40px;
+        height: 40px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        background: linear-gradient(135deg, #667eea 0%, #8b5cf6 100%);
+        box-shadow: 0 8px 18px rgba(102,126,234,0.32);
+        flex: 0 0 auto;
+      }
+
+      .brand-copy {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        line-height: 1.15;
+      }
+
+      .brand-title {
         font-size: 17px;
-        min-height: 40px;
+        font-weight: 800;
+        color: #312e81;
+        letter-spacing: -0.02em;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .brand-subtitle {
+        margin-top: 3px;
+        font-size: 12px;
+        color: #7c3aed;
+        font-weight: 700;
+        opacity: 0.86;
       }
 
       .navbar-user {
-        flex: 1 1 auto;
-        flex-direction: row;
-        flex-wrap: wrap;
-        justify-content: flex-end;
+        display: contents;
+      }
+
+      .user-dropdown {
+        grid-area: profile;
+        justify-self: end;
+        min-width: 0;
+      }
+
+      .nav-profile-pill {
+        min-height: 42px;
+        padding: 5px 7px 5px 5px;
+        border-radius: 999px;
+        background: rgba(99,102,241,0.09);
+        border: 1px solid rgba(99,102,241,0.14);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.65);
+        gap: 6px;
+        max-width: 132px;
+      }
+
+      .nav-profile-pill .user-avatar {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+        background: linear-gradient(135deg, #4f46e5 0%, #9333ea 100%);
+      }
+
+      .nav-profile-pill .user-name {
+        max-width: 62px;
+        font-size: 14px;
+        color: #312e81;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .admin-badge {
+        flex: 0 0 auto;
+        padding: 3px 7px;
+        font-size: 11px;
+      }
+
+      .wallet-chip {
+        grid-area: wallet;
+        min-width: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
         align-items: center;
-        gap: 8px;
-        min-width: 0;
+        gap: 10px;
+        padding: 10px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, rgba(17,153,142,0.12) 0%, rgba(56,239,125,0.10) 100%);
+        border: 1px solid rgba(17,153,142,0.16);
       }
 
-      .user-dropdown,
-      .user-info {
+      .balance-badge {
         min-width: 0;
-      }
-
-      .user-info {
-        justify-content: center;
-        flex-wrap: wrap;
+        justify-content: flex-start;
         gap: 8px;
+        text-align: left;
         line-height: 1.45;
-        min-height: 40px;
+        padding: 0;
+        background: none;
+        box-shadow: none;
+        color: #047857;
+        font-size: 15px;
+      }
+
+      .balance-badge::before {
+        width: 30px;
+        height: 30px;
+        margin-right: 0;
+        border-radius: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(16,185,129,0.14);
+        flex: 0 0 auto;
+      }
+
+      .balance-badge.negative {
+        color: #dc2626;
+        background: none;
+      }
+
+      .balance-badge.negative::before {
+        background: rgba(239,68,68,0.12);
       }
 
       .mobile-safe-text,
@@ -916,31 +1070,19 @@
         word-break: break-word;
       }
 
-      .admin-badge {
-        flex: 0 0 auto;
-      }
-
-      .balance-badge {
-        width: 100%;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 10px;
-        text-align: left;
-        line-height: 1.5;
-        padding: 0;
-        background: transparent;
-        box-shadow: none;
-      }
-
+      .nav-action-pill,
       .recharge-btn {
         margin-left: 0;
-        min-height: 44px;
-        min-width: 96px;
-        padding: 11px 16px;
+        min-height: 42px;
+        min-width: 84px;
+        padding: 10px 14px;
+        border-radius: 14px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         flex: 0 0 auto;
+        font-size: 14px;
+        box-shadow: 0 8px 18px rgba(255,94,98,0.24);
       }
 
       .main-container {
@@ -1162,11 +1304,17 @@
   </style>
 </head>
 <body>
-<div class="navbar">
-  <div class="navbar-brand">破天充值系统</div>
+<div class="navbar app-mobile-nav">
+  <div class="navbar-brand nav-brand-lockup">
+    <span class="brand-mark"><i class="fas fa-bolt"></i></span>
+    <span class="brand-copy">
+      <span class="brand-title">破天充值</span>
+      <span class="brand-subtitle">快速下单 · 自动刷新</span>
+    </span>
+  </div>
   <div class="navbar-user">
     <div class="user-dropdown">
-      <div class="user-info">
+      <div class="user-info nav-profile-pill">
         <div class="user-avatar">{{ session.username[0]|upper }}</div>
         <span class="mobile-safe-text user-name">{{ session.username }}</span>
         {% if session.is_admin %}
@@ -1200,8 +1348,10 @@
     </div>
 
     {% if balance is defined %}
-    <div id="balanceBadge" class="balance-badge {% if balance < 0 %}negative{% endif %}" style="cursor:pointer;">
-      <span class="mobile-safe-text">余额: {{ balance }} 元</span>
+    <div class="wallet-chip">
+      <div id="balanceBadge" class="balance-badge {% if balance < 0 %}negative{% endif %}" style="cursor:pointer;">
+        <span class="mobile-safe-text">余额: {{ balance }} 元</span>
+      </div>
       <a href="/recharge" class="recharge-btn">充值</a>
     </div>
     {% endif %}

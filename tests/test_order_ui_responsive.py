@@ -105,7 +105,7 @@ class OrderUIResponsiveTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, source)
 
-    def test_index_mobile_top_bar_uses_unified_compact_navbar(self):
+    def test_index_mobile_top_bar_uses_redesigned_app_header(self):
         source = self.read_template(INDEX_TEMPLATE)
         start = source.find("@media (max-width: 600px)")
         self.assertNotEqual(start, -1, "index should have a focused 600px mobile media block")
@@ -116,23 +116,31 @@ class OrderUIResponsiveTests(unittest.TestCase):
             'class="navbar-balance-row"',
             ".navbar-account-row",
             ".navbar-balance-row",
-            "background: rgba(255,255,255,0.16)",
+            "background: transparent",
+            "width: 100%;\n        justify-content: space-between;\n        flex-wrap: wrap",
         ):
             with self.subTest(removed_marker=removed_marker):
                 self.assertNotIn(removed_marker, source if removed_marker.startswith('class=') else body)
 
         for marker in (
-            ".navbar",
-            "justify-content: space-between",
-            ".navbar-user",
-            "flex-direction: row",
-            "flex-wrap: wrap",
-            ".balance-badge",
-            ".recharge-btn",
-            "min-height: 40px",
+            'class="navbar app-mobile-nav"',
+            "nav-brand-lockup",
+            'class="brand-mark"',
+            'class="brand-copy"',
+            "nav-profile-pill",
+            'class="wallet-chip"',
+            'class="recharge-btn"',
+            ".app-mobile-nav",
+            "grid-template-columns: minmax(0, 1fr) auto",
+            "background: linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(248,250,255,0.92) 100%)",
+            "border-radius: 0 0 22px 22px",
+            ".wallet-chip",
+            "box-shadow: 0 12px 30px rgba(79,70,229,0.16)",
+            ".nav-action-pill",
+            "min-height: 42px",
         ):
             with self.subTest(marker=marker):
-                self.assertIn(marker, body)
+                self.assertIn(marker, source if marker.startswith('class=') else body)
 
     def test_index_mobile_order_panel_header_avoids_crowded_single_line(self):
         source = self.read_template(INDEX_TEMPLATE)
